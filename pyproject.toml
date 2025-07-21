@@ -19,9 +19,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://raederan.github.io/panelini/"
+Homepage = "https://opensemanticworld.github.io/panelini/"
 Repository = "https://github.com/opensemanticworld/panelini"
-Documentation = "https://raederan.github.io/panelini/"
+Documentation = "https://opensemanticworld.github.io/panelini/"
 
 [dependency-groups]
 dev = [
