@@ -1,11 +1,11 @@
 site_name: panelini
 repo_url: https://github.com/opensemanticworld/panelini
-site_url: https://raederan.github.io/panelini
+site_url: https://opensemanticworld.github.io/panelini
 site_description: Panelini is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, panelini offers an easy-to-use solution that enhances productivity and aesthetics.
 site_author: Andreas Räder
 edit_uri: edit/main/docs/
-repo_name: raederan/panelini
-copyright: Maintained by <a href="https://raederan.com">raederan</a>.
+repo_name: opensemanticworld/panelini
+copyright: Maintained by <a href="https://github.com/opensemanticworld/panelini">opensemanticworld</a>.
 
 nav:
   - Home: index.md
