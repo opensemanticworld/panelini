@@ -1,0 +1,52 @@
+site_name: panelini
+repo_url: https://github.com/opensemanticworld/panelini
+site_url: https://raederan.github.io/panelini
+site_description: Panelini is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, panelini offers an easy-to-use solution that enhances productivity and aesthetics.
+site_author: Andreas Räder
+edit_uri: edit/main/docs/
+repo_name: raederan/panelini
+copyright: Maintained by <a href="https://raederan.com">raederan</a>.
+
+nav:
+  - Home: index.md
+  - Modules: modules.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["src/panelini"]
+theme:
+  name: material
+  feature:
+    tabs: true
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/opensemanticworld/panelini
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/panelini
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
