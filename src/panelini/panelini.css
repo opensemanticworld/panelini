@@ -1,0 +1,57 @@
+:root {
+  --content-spacing: 17px;
+}
+
+.header {
+  position: relative;
+  background-image: url("/assets/generated_04_cut.svg");
+  background-size: cover;
+  background-position: top;
+}
+
+.content {
+  background-image: url("/assets/generated_07_cut.svg");
+  background-size: cover;
+  background-position: top;
+  padding-top: var(--content-spacing);
+  height: 100%;
+}
+
+.sidebar {
+  border-radius: 0px;
+  box-shadow: none;
+  outline: none;
+}
+
+.left-sidebar {
+  border-right: 1px solid var(--border-color);
+}
+
+.right-sidebar {
+  border-left: 1px solid var(--border-color);
+}
+
+.sidebar-card {
+  align-self: center;
+  margin-bottom: var(--content-spacing);
+  flex: none;
+}
+
+.main {
+  margin-left: var(--content-spacing);
+}
+
+div.bk-btn-group button.bk-btn.bk-btn-default {
+  border: none !important;
+}
+
+.grid-stack-item-content {
+  margin-bottom: var(--content-spacing) !important;
+  margin-right: var(--content-spacing) !important;
+  background-color: color-mix(in srgb, var(--background-color), transparent) !important;
+}
+
+/* Hide all elments including class hidden */
+.hidden {
+  display: none;
+}
