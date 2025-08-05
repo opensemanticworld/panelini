@@ -29,6 +29,7 @@ _ROOT = Path(__file__).parent
 _ASSETS = _ROOT / "assets"
 _PANELINI_CSS = _ROOT / "panelini.css"
 _FAVICON_URL = _ASSETS / "favicon.ico"
+_LOGO = _ASSETS / "logo1.png"
 
 
 panel.extension("gridstack")
@@ -102,15 +103,16 @@ class Panelini(param.Parameterized):
                     align="center",
                     max_width=140,
                     objects=[
-                        panel.pane.PNG("/assets/isclogo.png", link_url="/"),
+                        panel.pane.PNG("/assets/panelinilogo.png", link_url="/", height=50),
                     ],
                 ),
                 panel.Column(
                     align="center",
                     sizing_mode="stretch_width",
                     objects=[
+                        # TODO: make title a param default to "Panelini"
                         panel.pane.HTML(
-                            "<h1>Substitute Expert</h1>",
+                            "<h1>Panelini</h1>",
                         ),
                     ],
                 ),
@@ -193,7 +195,8 @@ class Panelini(param.Parameterized):
                     panel.widgets.Button(name="Button 3", button_type="primary"),
                 ],
             ),
-            panel.Spacer(height=self._sidebar_card_spacer_heigth, sizing_mode="stretch_height"),  # Spacer for layout
+            panel.Spacer(height=self._sidebar_card_spacer_heigth),  # Spacer for layout
+            # panel.Spacer(height=self._sidebar_card_spacer_heigth, sizing_mode="stretch_height"),  # Spacer for layout
         ]
 
     def _set_left_sidebar(self):
