@@ -10,6 +10,7 @@
 ## Table of Contents <!-- omit in toc -->
 
 - [Features](#features)
+- [Commands](#commands)
 
 ## Features
 
@@ -18,3 +19,11 @@
 - **Dynamic Content:** Efficiently manage and display dynamic content using robust Python Panel components.
 - **Extensible:** Easily extend and integrate with other Python libraries and tools.
 - **Published on PyPI:** Install effortlessly using pip.
+
+## Commands
+
+Panel command to serve with static content
+
+```bash
+panel serve src/panelini/panelini.py --dev --port 5006 --static-dirs assets="src/panelini/assets"
+```

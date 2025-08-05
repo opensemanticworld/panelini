@@ -4,13 +4,13 @@
 
 .header {
   position: relative;
-  background-image: url("/assets/generated_04_cut.svg");
+  background-image: url("/assets/header.svg");
   background-size: cover;
   background-position: top;
 }
 
 .content {
-  background-image: url("/assets/generated_07_cut.svg");
+  background-image: url("/assets/content.svg");
   background-size: cover;
   background-position: top;
   padding-top: var(--content-spacing);

@@ -289,7 +289,8 @@ if __name__ == "__main__":
     app = Panelini()
     panel.serve(
         app,
+        static_dirs={"/assets": str(_ASSETS)},
+        ico_path=str(_FAVICON_URL),
         port=5006,
         title="Panelini",
-        ico_path=str(_FAVICON_URL),
     )
