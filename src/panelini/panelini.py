@@ -20,16 +20,21 @@ a left as well as right sidebar and also the main area.
 ##################### CONTENT AREA #####################
 """
 
+import os
 from pathlib import Path
 
 import panel
 import param
 
+# from .utils.helper import get_os_abs_path
+
 _ROOT = Path(__file__).parent
 _ASSETS = _ROOT / "assets"
 _PANELINI_CSS = _ROOT / "panelini.css"
 _FAVICON_URL = _ASSETS / "favicon.ico"
-_LOGO = _ASSETS / "logo1.png"
+_LOGO = _ASSETS / "panelinilogo.png"
+_HEADER_BACKGROUND_IMAGE = _ASSETS / "header.svg"
+_CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 
 
 panel.extension("gridstack")
@@ -38,12 +43,59 @@ panel.extension("gridstack")
 class Panelini(param.Parameterized):
     """Main class for the Panelini application."""
 
-    # allow Panel objects as input parameter called main
-    main_objects = param.List(
+    logo = param.ClassSelector(
+        # TODO: Implement util function that checks if path is valid
+        # default=get_os_abs_path(_LOGO),
+        default=str(_LOGO),
+        class_=str,
+        doc="Logo image for the application.",
+    )
+    """Logo image for the application."""
+
+    header_background_image = param.ClassSelector(
+        default=str(_HEADER_BACKGROUND_IMAGE),
+        class_=str,
+        doc="Background image for the header section.",
+    )
+    """Background image for the header section."""
+
+    content_background_image = param.ClassSelector(
+        default=str(_CONTENT_BACKGROUND_IMAGE),
+        class_=str,
+        doc="Background image for the content section.",
+    )
+    """Background image for the content section."""
+
+    # BEGIN TODO: MAKE FOLLOWING PARAMS EDITABLE IN INSTANCES
+    main = param.List(
         default=[],
         doc="List of Panel objects to be displayed in the application.",
         item_type=panel.viewable.Viewable,
     )
+    """List of Panel objects to be displayed in the application."""
+
+    sidebar_left = param.ClassSelector(
+        default=None,
+        class_=panel.Column,
+        doc="Left sidebar for the application.",
+    )
+    """Left sidebar for the application."""
+
+    sidebar_right = param.ClassSelector(
+        default=None,
+        class_=panel.Card,
+        doc="Right sidebar for the application.",
+    )
+    """Right sidebar for the application."""
+    # ENDOF MAKE FOLLOWING PARAMS EDITABLE IN INSTANCES
+
+    # NOT NECESSARY YET - mechanism of existing class vars tbd: logo, title, ...
+    # header = param.List(
+    #     default=[],
+    #     doc="List of Panel objects to be displayed in the header.",
+    #     item_type=panel.viewable.Viewable,
+    # )
+    # """List of Panel objects to be displayed in the header."""
 
     def __init__(self, **params):
         # def __init__(self, servable=False, **params):
@@ -65,6 +117,15 @@ class Panelini(param.Parameterized):
     def _load_css(self) -> None:
         """Load custom CSS for the application."""
         panel.config.raw_css.append(_PANELINI_CSS.read_text())
+
+        # Set header background image
+        panel.config.raw_css.append(
+            f".header {{ background-image: url(/assets/{os.path.basename(self.header_background_image)}); }}"
+        )
+        # Set content background image
+        panel.config.raw_css.append(
+            f".content {{ background-image: url(/assets/{os.path.basename(self.content_background_image)}); }}"
+        )
 
         # Header: 1st section of the panel
         self._set_header()
@@ -103,7 +164,7 @@ class Panelini(param.Parameterized):
                     align="center",
                     max_width=140,
                     objects=[
-                        panel.pane.PNG("/assets/panelinilogo.png", link_url="/", height=50),
+                        panel.pane.image.Image(str(self.logo), link_url="/", height=50),
                     ],
                 ),
                 panel.Column(
@@ -240,7 +301,7 @@ class Panelini(param.Parameterized):
         self._main = panel.Column(
             css_classes=["main", "gridstack"],
             sizing_mode="stretch_both",
-            objects=self.main_objects,
+            objects=self.main,
         )
 
         # """Set content in main area of the GridStack."""
@@ -284,12 +345,17 @@ class Panelini(param.Parameterized):
         return self._panel
 
 
-Panelini().servable(title="Panelini")
+Panelini(
+    logo="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/src/panelini/assets/panelinilogo.png",
+    # logo="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg",
+).servable(
+    title="Panelini",
+)
 
 
 if __name__ == "__main__":
     """Run the Panelini application."""
-    app = Panelini()
+    app = Panelini(logo="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg")
     panel.serve(
         app,
         static_dirs={"/assets": str(_ASSETS)},

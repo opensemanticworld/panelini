@@ -4,13 +4,11 @@
 
 .header {
   position: relative;
-  background-image: url("/assets/header.svg");
   background-size: cover;
   background-position: top;
 }
 
 .content {
-  background-image: url("/assets/content.svg");
   background-size: cover;
   background-position: top;
   padding-top: var(--content-spacing);
@@ -54,4 +52,10 @@ div.bk-btn-group button.bk-btn.bk-btn-default {
 /* Hide all elments including class hidden */
 .hidden {
   display: none;
+}
+
+/* Hide dotted outline of buttons */
+button:focus,
+button:active {
+  outline: none !important;
 }

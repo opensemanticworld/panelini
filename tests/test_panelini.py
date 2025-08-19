@@ -10,3 +10,33 @@ def test_panelini_instantiation():
     """Test instantiation of the Panelini class."""
     instance = Panelini()
     assert isinstance(instance, Panelini)
+
+
+def test_panelini_header_logo():
+    """Test the logo in the header."""
+    instance = Panelini(
+        logo="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg"
+    )
+    assert instance.logo == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg"
+
+
+def test_panelini_header_background():
+    """Test the background image in the header."""
+    instance = Panelini(
+        header_background_image="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/header.svg"
+    )
+    assert (
+        instance.header_background_image
+        == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/header.svg"
+    )
+
+
+def test_panelini_content_background():
+    """Test the background image in the content area."""
+    instance = Panelini(
+        content_background_image="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/content.svg"
+    )
+    assert (
+        instance.content_background_image
+        == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/content.svg"
+    )
