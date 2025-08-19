@@ -66,6 +66,12 @@ class Panelini(param.Parameterized):
     )
     """Background image for the content section."""
 
+    title = param.String(
+        default="Panelini",
+        doc="Title of the application.",
+    )
+    """Title of the application."""
+
     # BEGIN TODO: MAKE FOLLOWING PARAMS EDITABLE IN INSTANCES
     main = param.List(
         default=[],
@@ -173,7 +179,7 @@ class Panelini(param.Parameterized):
                     objects=[
                         # TODO: make title a param default to "Panelini"
                         panel.pane.HTML(
-                            "<h1>Panelini</h1>",
+                            f"<h1>{self.title}</h1>",
                         ),
                     ],
                 ),
