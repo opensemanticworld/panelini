@@ -1,0 +1,76 @@
+:root {
+  --content-spacing: 17px;
+}
+
+.navbar {
+  /* position: relative; */
+  background-size: cover;
+  background-position: top;
+}
+
+.content {
+  background-size: cover;
+  background-position: top;
+  padding-top: var(--content-spacing);
+  height: 100%;
+}
+
+.sidebar {
+  border-radius: 0px;
+  box-shadow: none;
+  outline: none;
+}
+
+.left-sidebar {
+  border-right: 1px solid var(--border-color);
+}
+
+.right-sidebar {
+  border-left: 1px solid var(--border-color);
+}
+
+.sidebar-card {
+  align-self: center;
+  margin-bottom: var(--content-spacing);
+  flex: none;
+}
+
+.main {
+  margin-left: var(--content-spacing);
+}
+
+div.bk-btn-group button.bk-btn.bk-btn-default {
+  border: none !important;
+}
+
+.grid-stack-item-content {
+  margin-bottom: var(--content-spacing) !important;
+  margin-right: var(--content-spacing) !important;
+  background-color: color-mix(in srgb, var(--background-color), transparent) !important;
+}
+
+/* Hide all elments including class hidden */
+.hidden {
+  display: none;
+}
+
+/* Hide dotted outline of buttons */
+button:focus,
+button:active {
+  outline: none !important;
+}
+
+
+/* TODO: Test on Mobile, only worked in browsers yet */
+/* Move header to footer for mobile */
+@media (max-width: 768px) {
+  .header {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .footer {
+    display: none;
+  }
+}
