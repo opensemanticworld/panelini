@@ -1,1 +1,1 @@
-::: panelini.foo
+::: panelini.panelini
