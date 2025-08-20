@@ -2,8 +2,8 @@
   --content-spacing: 17px;
 }
 
-.header {
-  position: relative;
+.navbar {
+  /* position: relative; */
   background-size: cover;
   background-position: top;
 }
@@ -58,4 +58,19 @@ div.bk-btn-group button.bk-btn.bk-btn-default {
 button:focus,
 button:active {
   outline: none !important;
+}
+
+
+/* TODO: Test on Mobile, only worked in browsers yet */
+/* Move header to footer for mobile */
+@media (max-width: 768px) {
+  .header {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .footer {
+    display: none;
+  }
 }

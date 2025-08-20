@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/opensemanticworld/panelini/branch/main/graph/badge.svg)](https://codecov.io/gh/opensemanticworld/panelini)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)
 
-[![Panelini Banner](https://github.com/opensemanticworld/panelini/blob/init/img/panelinibanner.svg)](https://github.com/opensemanticworld/panelini)
+[![Panelini Banner](https://github.com/opensemanticworld/panelini/blob/main/img/panelinibanner.svg)](https://github.com/opensemanticworld/panelini)
 
 ``panelini`` is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, ``panelini`` offers an easy-to-use solution that enhances productivity and aesthetics.
 
