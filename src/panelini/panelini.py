@@ -22,9 +22,10 @@ $$$$$$$$$$$$$$$$$$$$$ HEADER AREA $$$$$$$$$$$$$$$$$$$$$$
 
 import os
 from pathlib import Path
+from typing import Any
 
 import panel
-import param
+import param  # type: ignore[import-untyped]
 
 # from .utils.helper import get_os_abs_path
 
@@ -40,7 +41,7 @@ _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 panel.extension("gridstack")
 
 
-class Panelini(param.Parameterized):
+class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     """Main class for the Panelini application."""
 
     # $$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$
@@ -127,8 +128,7 @@ class Panelini(param.Parameterized):
     """Maximum width of the sidebars as integer in px."""
     # $$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$
 
-    def __init__(self, **params):
-        # def __init__(self, servable=False, **params):
+    def __init__(self, **params: Any) -> None:
         super().__init__(**params)
         # self.servable = servable
         self._load_css()
@@ -172,7 +172,7 @@ class Panelini(param.Parameterized):
 
     # $$$$$$$$$$$$$$$$$$$$$$$$ ENDOF UTILS $$$$$$$$$$$$$$$$$$$$$$$$
 
-    def _set_sidebar_config(self):
+    def _set_sidebar_config(self) -> None:
         """Set the configuration for the sidebars."""
         self._sidebar_max_width = int(self.sidebars_max_width)
         self._sidebar_inner_width = int(self.sidebars_max_width * 0.91)
@@ -180,7 +180,7 @@ class Panelini(param.Parameterized):
         # self._sidebar_card_elem_width = int(self.sidebars_max_width * 0.80)
         self._sidebar_card_spacer_height = int(self.sidebars_max_width * 0.06)
 
-    def _set_sidebar_right(self):
+    def _set_sidebar_right(self) -> None:
         """Set the sidebar with the defined objects."""
         self._sidebar_right = panel.Column(
             css_classes=["card", "sidebar", "right-sidebar"],
@@ -195,7 +195,7 @@ class Panelini(param.Parameterized):
         self._extend_css_classes(self._sidebar_right.objects, ["card", "sidebar-card", "right-sidebar-card"])
         self._extend_sidebar_object_width(self._sidebar_right.objects)
 
-    def _toggle_sidebar_right(self, event):
+    def _toggle_sidebar_right(self, event: Any) -> None:
         """Toggle the visibility of the sidebar."""
         # Private cause of _sidebar_right object must exist to use this method
         # When making this public, consider enabling sidebar_right_enabled initially
@@ -205,7 +205,7 @@ class Panelini(param.Parameterized):
         else:
             self._sidebar_right.visible = True
 
-    def _set_sidebar_left(self):
+    def _set_sidebar_left(self) -> None:
         """Set the left sidebar with the defined objects."""
         # Set full left sidebar
         self._sidebar_left = panel.Column(
@@ -221,7 +221,7 @@ class Panelini(param.Parameterized):
         self._extend_css_classes(self._sidebar_left.objects, ["card", "sidebar-card", "left-sidebar-card"])
         self._extend_sidebar_object_width(self._sidebar_left.objects)
 
-    def _toggle_sidebar_left(self, event):
+    def _toggle_sidebar_left(self, event: Any) -> None:
         """Toggle the visibility of the sidebar."""
         # Private cause of _sidebar_left object must exist to use this method
         # When making this public, consider enabling sidebar_left_enabled initially
@@ -231,7 +231,7 @@ class Panelini(param.Parameterized):
         else:
             self._sidebar_left.visible = True
 
-    def _set_main(self):
+    def _set_main(self) -> None:
         """Set main area Column"""
         self._main = panel.Column(
             # self._main = panel.layout.base.ListLike(
@@ -240,7 +240,7 @@ class Panelini(param.Parameterized):
             objects=self.get_main(),
         )
 
-    def _set_content(self):
+    def _set_content(self) -> None:
         """Set the layout of the content area."""
         self._content = panel.Row(
             css_classes=["content"],
@@ -259,7 +259,7 @@ class Panelini(param.Parameterized):
             self._set_sidebar_right()
             self._content.objects.append(self._sidebar_right)
 
-    def _set_footer(self):
+    def _set_footer(self) -> None:
         """Set the footer layout with objects."""
         self._footer = panel.Row(
             css_classes=["footer", "navbar"],
@@ -267,7 +267,7 @@ class Panelini(param.Parameterized):
             objects=self._navbar_objects,
         )
 
-    def _set_header(self):
+    def _set_header(self) -> None:
         """Set the header layout with objects."""
         self._header = panel.Row(
             css_classes=["header", "navbar"],
@@ -275,7 +275,7 @@ class Panelini(param.Parameterized):
             objects=self._navbar_objects,
         )
 
-    def _set_navbar_objects(self):
+    def _set_navbar_objects(self) -> None:
         """Get the navbar objects."""
         self._navbar_objects = []
         # Sidebar left
@@ -340,7 +340,7 @@ class Panelini(param.Parameterized):
                 )
             )
 
-    def _build_panel(self):
+    def _build_panel(self) -> None:
         """Update the main panel with the current layout."""
         # copy header as footer
         self._panel = panel.Column(
@@ -349,61 +349,63 @@ class Panelini(param.Parameterized):
             objects=[self._header, self._content, self._footer],
         )
 
-    def set_sidebar_right(self, objects) -> None:
+    def set_sidebar_right(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the right sidebar objects."""
         self.sidebar_right = objects
 
-    def get_sidebar_right(self) -> list:
+    def get_sidebar_right(self) -> list[panel.viewable.Viewable]:
         """Get the right sidebar objects."""
-        return self.sidebar_right
+        # Return typed
+        return list(self.sidebar_right)
 
-    def set_sidebar(self, objects) -> None:
+    def set_sidebar(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the left sidebar objects."""
         self.sidebar = objects
+        return None
 
-    def get_sidebar(self) -> list:
+    def get_sidebar(self) -> list[panel.viewable.Viewable]:
         """Get the sidebar objects."""
-        return self.sidebar
+        return list(self.sidebar)
 
-    def set_main(self, objects) -> None:
+    def set_main(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the main objects."""
         self.main = objects
 
-    def get_main(self) -> list:
+    def get_main(self) -> list[panel.viewable.Viewable]:
         """Get the main objects."""
-        return self.main
+        return list(self.main)
 
     # TODO: Add tests for functions below
-    def servable(self, *args, **kwargs):
+    def servable(self, *args: Any, **kwargs: Any) -> panel.viewable.Viewable:
         """Make the application servable."""
         return self.__panel__().servable(*args, **kwargs)
 
-    def serve(self, *args, **kwargs):
+    def serve(self, *args: Any, **kwargs: Any) -> Any:
         """Serve the application."""
-        return panel.serve(self, *args, ico_path=str(_FAVICON_URL), static_dirs={"/assets": str(_ASSETS)}, **kwargs)
+        return panel.serve(self, ico_path=str(_FAVICON_URL), static_dirs={"/assets": str(_ASSETS)}, **kwargs)
 
-    def __panel__(self):
+    def __panel__(self) -> panel.viewable.Viewable:
         """Return the main panel for the application."""
         return self._panel
 
     # TODO: Test this functions below
     # How to check if rendered panel has been updated?
     @param.depends("main", watch=True)
-    def _update_main_panel(self):
+    def _update_main_panel(self) -> None:
         """Update the panel with the current layout."""
         self._set_main()
         self._set_content()
         self._build_panel()
 
     @param.depends("sidebar", watch=True)
-    def _update_left_sidebar_panel(self):
+    def _update_left_sidebar_panel(self) -> None:
         """Update the panel with the current layout."""
         self._set_sidebar_left()
         self._set_content()
         self._build_panel()
 
     @param.depends("sidebar_right", watch=True)
-    def _update_right_sidebar_panel(self):
+    def _update_right_sidebar_panel(self) -> None:
         """Update the panel with the current layout."""
         self._set_sidebar_right()
         self._set_content()
