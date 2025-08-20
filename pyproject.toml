@@ -1,6 +1,6 @@
 [project]
 name = "panelini"
-version = "0.1.1"
+version = "0.1.2"
 description = "Panelini is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, panelini offers an easy-to-use solution that enhances productivity and aesthetics."
 authors = [{ name = "Andreas Räder", email = "andreas.raeder@isc.fraunhofer.de" }]
 readme = "README.md"
@@ -19,8 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "panel>=1.4.5",
-    "pydantic>=2.11.7",
-    "watchfiles>=1.1.0",
+    "param>=2.2.1",
 ]
 
 [project.urls]
@@ -40,6 +39,7 @@ dev = [
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
+    "watchfiles>=1.1.0",
 ]
 
 [build-system]
