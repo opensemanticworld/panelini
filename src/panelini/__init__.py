@@ -2,7 +2,7 @@
 
 import importlib.metadata
 
-from .panelini import Panelini
+from .main import Panelini
 
 __version__ = importlib.metadata.version("panelini")
 

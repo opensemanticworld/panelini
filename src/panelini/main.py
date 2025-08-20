@@ -31,7 +31,7 @@ import param  # type: ignore[import-untyped]
 
 _ROOT = Path(__file__).parent
 _ASSETS = _ROOT / "assets"
-_PANELINI_CSS = _ROOT / "panelini.css"
+_MAIN_CSS = _ROOT / "main.css"
 _FAVICON_URL = _ASSETS / "favicon.ico"
 _LOGO = _ASSETS / "panelinilogo.png"
 _HEADER_BACKGROUND_IMAGE = _ASSETS / "header.svg"
@@ -144,7 +144,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _load_css(self) -> None:
         """Load custom CSS for the application."""
-        panel.config.raw_css.append(_PANELINI_CSS.read_text())
+        panel.config.raw_css.append(_MAIN_CSS.read_text())
 
         # Set navbar background image
         panel.config.raw_css.append(
@@ -376,7 +376,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         return list(self.main)
 
     # TODO: Add tests for functions below
-    def servable(self, *args: Any, **kwargs: Any) -> panel.viewable.Viewable:
+    def servable(self, *args: Any, **kwargs: Any) -> Any:
         """Make the application servable."""
         return self.__panel__().servable(*args, **kwargs)
 

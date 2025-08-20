@@ -7,7 +7,7 @@ from panel import Card, Column, Row, Spacer
 from panel.layout.gridstack import GridStack
 from panel.pane import Markdown
 
-from panelini.panelini import Panelini
+from panelini.main import Panelini
 
 
 def test_panelini_instantiation():

@@ -1,1 +1,1 @@
-::: panelini.panelini
+::: panelini.main
