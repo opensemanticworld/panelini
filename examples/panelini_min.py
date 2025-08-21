@@ -6,12 +6,26 @@ from panel.pane import Markdown
 from panelini import Panelini
 
 # Minimal Example to run Panelini
-panel_card_obj = Card(
-    objects=[Markdown("# 📊 Welcome to Panelini! 🖥️")],
-    title="Panel Example Card",
-    width=300,
-    height=200,
+main_objects = [
+    # Use panel components to build your layout
+    Card(
+        objects=[Markdown("# 📊 Welcome to Panelini! 🖥️", disable_anchors=True)],
+        title="Panel Example Card",
+        width=300,
+        max_height=200,
+    )
+]
+# Create an instance of Panelini
+app = Panelini(
+    title="Hello Panelini",
+    # main = [main_objects] # init objects here
 )
+# Or set objects outside
+app.main_set(objects=main_objects)
+# Use servable when using CLI "panel serve" command
+app.servable()
 
-app = Panelini(main_objects=[panel_card_obj])
-app.serve(port=5010, title="Panelini")
+
+if __name__ == "__main__":
+    # Serve app as you would in panel
+    app.serve(port=5010)

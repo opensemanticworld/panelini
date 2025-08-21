@@ -1270,12 +1270,13 @@ wheels = [
 
 [[package]]
 name = "panelini"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "panel", version = "1.4.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "panel", version = "1.7.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "param" },
+    { name = "watchfiles" },
 ]
 
 [package.dev-dependencies]
@@ -1290,13 +1291,13 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "tox-uv" },
-    { name = "watchfiles" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "panel", specifier = ">=1.4.5" },
     { name = "param", specifier = ">=2.2.1" },
+    { name = "watchfiles", specifier = ">=1.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1311,7 +1312,6 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "ruff", specifier = ">=0.11.5" },
     { name = "tox-uv", specifier = ">=1.11.3" },
-    { name = "watchfiles", specifier = ">=1.1.0" },
 ]
 
 [[package]]

@@ -1,7 +1,12 @@
-"""
-Test cases for the Panelini application.
-[See panel git for serve_component tests](https://github.com/holoviz/panel/blob/3eaee8f710c010f203b897cb6c67a7f15697d608/panel/tests/ui/template/test_editabletemplate.py#L9) # noqa
-"""
+"""Test cases for the Panelini application."""
+
+# TODO: serve tests
+# [See panel git for serve_component tests](https://github.com/holoviz/panel/blob/3eaee8f710c010f203b897cb6c67a7f15697d608/panel/tests/ui/template/test_editabletemplate.py#L9) # noqa[E509]
+# TODO: Playwright tests
+# TODO: Util def tests
+
+import os
+from pathlib import Path
 
 from panel import Card, Column, Row, Spacer
 from panel.layout.gridstack import GridStack
@@ -9,41 +14,55 @@ from panel.pane import Markdown
 
 from panelini.main import Panelini
 
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
+_TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_TESTS_DIR)
+_SRC_PANELINI_DIR = os.path.join(_ROOT_DIR, "src", "panelini")
+_ASSETS_DIR = os.path.join(_SRC_PANELINI_DIR, "assets")
 
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN INIT TESTCASES $$$$$$$$$$$$$$$$$$$$$$$$$$$
 def test_panelini_instantiation():
     """Test instantiation of the Panelini class."""
     instance = Panelini()
     assert isinstance(instance, Panelini)
 
 
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF INIT TESTCASES $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVAR TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
 def test_panelini_classvar_header_logo():
     """Test the logo in the header."""
-    instance = Panelini(
-        logo="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg"
-    )
-    assert instance.logo == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/panelinibanner.svg"
+    logo_path = Path(os.path.join(_ASSETS_DIR, "panelinilogo.png"))
+    logo_str = str(logo_path)
+    instance_path = Panelini(logo=logo_path)
+    instance_str = Panelini(logo=logo_str)
+    assert instance_path.logo == logo_path
+    assert instance_str.logo == logo_str
 
 
 def test_panelini_classvar_header_background():
     """Test the background image in the header."""
-    instance = Panelini(
-        header_background_image="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/header.svg"
-    )
-    assert (
-        instance.header_background_image
-        == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/header.svg"
-    )
+    header_background_image_path = Path(os.path.join(_ASSETS_DIR, "header.svg"))
+    header_background_image_str = str(header_background_image_path)
+    instance_path = Panelini(header_background_image=header_background_image_path)
+    instance_str = Panelini(header_background_image=header_background_image_str)
+    assert instance_path.header_background_image == header_background_image_path
+    assert instance_str.header_background_image == header_background_image_str
 
 
 def test_panelini_classvar_content_background():
     """Test the background image in the content area."""
-    instance = Panelini(
-        content_background_image="/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/content.svg"
-    )
-    assert (
-        instance.content_background_image
-        == "/usr/local/docker-container/_dev/github/opensemanticworld/panelini/img/content.svg"
-    )
+    content_background_image_path = Path(os.path.join(_ASSETS_DIR, "content.svg"))
+    content_background_image_str = str(content_background_image_path)
+    instance_path = Panelini(content_background_image=content_background_image_path)
+    instance_str = Panelini(content_background_image=content_background_image_str)
+    assert instance_path.content_background_image == content_background_image_path
+    assert instance_str.content_background_image == content_background_image_str
 
 
 def test_panelini_classvar_title():
@@ -91,7 +110,10 @@ def test_panelini_classvar_sidebar_visible():
 
 def test_panelini_classvar_sidebar_right_visible():
     """Test the right sidebar visible state."""
-    instance = Panelini(sidebar_right_enabled=True, sidebar_right_visible=True)
+    instance = Panelini(
+        sidebar_right_enabled=True,
+        sidebar_right_visible=True,
+    )
     assert instance.sidebar_right_visible is True
     assert instance._sidebar_right.visible is True
 
@@ -107,7 +129,7 @@ def test_panelini_classvar_sidebars_max_width():
         assert True
     else:
         raise AssertionError()
-    # Test below the lower boundary 500
+    # Test below the upper boundary 500
     try:
         Panelini(sidebars_max_width=501)
     except ValueError:
@@ -116,8 +138,18 @@ def test_panelini_classvar_sidebars_max_width():
         raise AssertionError()
 
 
-def test_panelini_method_set_sidebar_config():
-    """Test the set_sidebar_config method."""
+def test_panelini_classvar_footer():
+    """Test the footer content."""
+    instance = Panelini(footer=[Markdown("## Footer")])
+    assert isinstance(instance.footer, list)
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVAR TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PRIV DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+def test_panelini_method__sidebar_config_set():
+    """Test the _sidebar_config_set method."""
     sidebars_max_width = 300
     instance = Panelini(sidebars_max_width=sidebars_max_width)
     assert instance._sidebar_inner_width == int(sidebars_max_width * 0.91)
@@ -125,93 +157,94 @@ def test_panelini_method_set_sidebar_config():
     assert instance._sidebar_card_spacer_height == int(sidebars_max_width * 0.06)
 
 
-def test_panelini_method_set_sidebar_right():
-    """Test the set_sidebar_right method."""
-    # Right sidebar must be enabled, cause default is False
+def test_panelini_method__sidebar_right_set():
+    """Test the _sidebar_right_set method."""
     instance = Panelini(sidebar_right_enabled=True)
     assert isinstance(instance._sidebar_right, Column)
 
 
-def test_panelini_method_toggle_sidebar_right():
-    """Test the toggle_sidebar_right method."""
+def test_panelini_method__sidebar_right_toggle():
+    """Test the _sidebar_right_toggle method."""
     instance = Panelini(sidebar_right_enabled=True)
     # Default visible = False
     assert instance._sidebar_right.visible is False
     # Toggle once should be visible = True
-    instance._toggle_sidebar_right(event=None)
+    instance._sidebar_right_toggle(event=None)
     assert instance._sidebar_right.visible is True
     # Toggle again should be visible = False
-    instance._toggle_sidebar_right(event=None)
+    instance._sidebar_right_toggle(event=None)
     assert instance._sidebar_right.visible is False
 
 
-def test_panelini_method_set_sidebar_left():
-    """Test the set_sidebar_left method."""
+def test_panelini_method__sidebar_left_set():
+    """Test the _sidebar_left_set method."""
     # Left sidebar must be enabled, cause default is False
     instance = Panelini(sidebar_enabled=True)
     assert isinstance(instance._sidebar_left, Column)
 
 
-def test_panelini_method_toggle_sidebar_left():
-    """Test the toggle_sidebar_left method."""
+def test_panelini_method__sidebar_left_toggle():
+    """Test the _sidebar_left_toggle method."""
     instance = Panelini(sidebar_enabled=True)
     # Default visible = True
     assert instance._sidebar_left.visible is True
     # Toggle once should be visible = False
-    instance._toggle_sidebar_left(event=None)
+    instance._sidebar_left_toggle(event=None)
     assert instance._sidebar_left.visible is False
     # Toggle again should be visible = True
-    instance._toggle_sidebar_left(event=None)
+    instance._sidebar_left_toggle(event=None)
     assert instance._sidebar_left.visible is True
 
 
-def test_panelini_method_set_main():
-    """Test the _set_main method."""
+def test_panelini_method__main_set():
+    """Test the _main_set method."""
     instance = Panelini()
     assert isinstance(instance._main, Column)
 
 
-def test_panelini_method_set_content():
-    """Test the _set_content method."""
+def test_panelini_method__content_set():
+    """Test the _content_set method."""
     instance = Panelini()
     assert isinstance(instance._content, Row)
 
 
-def test_panelini_method_set_navbar_objects():
-    """Test the _set_navbar_objects method."""
+def test_panelini_method__navbar_objects_set():
+    """Test the _set_navbar_objects method, only Column objects allowed."""
     instance = Panelini()
-    # Check if _navbar_objects is a list and consists of Column elements
-    assert isinstance(instance._navbar_objects, list)
-    for obj in instance._navbar_objects:
+    assert isinstance(instance._navbar, list)
+    for obj in instance._navbar:
         assert isinstance(obj, Column)
 
 
-def test_panelini_method_build_panel():
-    """Test the _build_panel method."""
+def test_panelini_method__panel_set():
+    """Test the _build_panel method and its css_classes."""
     instance = Panelini()
     assert isinstance(instance._panel, Column)
-    # Check if _panel has css_classes=["panel"]
     assert "panel" in instance._panel.css_classes
 
 
-def test_panelini_methods_public_set_and_get_sidebar_right():
-    """Test the set_sidebar_right as well as get_sidebar_right methods."""
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PRIV DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PUBL DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+def test_panelini_methods_sidebar_right_set_and_get():
+    """Test the sidebar_right_set as well as sidebar_right_get methods."""
     instance = Panelini(sidebar_right_enabled=True)
     sidebar_right = [Card(title="sidebar right test")]
-    instance.set_sidebar_right(sidebar_right)
-    assert instance.get_sidebar_right() == sidebar_right
+    instance.sidebar_right_set(sidebar_right)
+    assert instance.sidebar_right_get() == sidebar_right
 
 
-def test_panelini_methods_public_set_and_get_sidebar():
-    """Test the set_sidebar as well as get_sidebar methods."""
+def test_panelini_methods_sidebar_set_and_get():
+    """Test the sidebar_set as well as sidebar_get methods."""
     instance = Panelini(sidebar_enabled=True)
     sidebar = [Card(title="sidebar left test")]
-    instance.set_sidebar(sidebar)
-    assert instance.get_sidebar() == sidebar
+    instance.sidebar_set(sidebar)
+    assert instance.sidebar_get() == sidebar
 
 
-def test_panelini_methods_public_set_and_get_main_():
-    """Test the set_main as well as get_main methods."""
+def test_panelini_methods_main_set_and_get():
+    """Test the main_set as well as main_get methods."""
     instance = Panelini()
     gstack = GridStack(sizing_mode="stretch_both", min_height=600)
 
@@ -222,6 +255,9 @@ def test_panelini_methods_public_set_and_get_main_():
     gstack[0:2, 9:12] = Spacer(styles={"background": "purple"})
 
     # Edit main objects using set and get functions
-    instance.set_main([gstack])
+    instance.main_set([gstack])
 
-    assert instance.get_main() == [gstack]
+    assert instance.main_get() == [gstack]
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$

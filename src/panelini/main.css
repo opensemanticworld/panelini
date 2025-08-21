@@ -61,16 +61,16 @@ button:active {
 }
 
 
-/* TODO: Test on Mobile, only worked in browsers yet */
+/* TODO: Test on Mobile, only worked in browsers yet
 /* Move header to footer for mobile */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
   .header {
     display: none;
   }
-}
+} */
 
-@media (min-width: 769px) {
+/* @media (min-width: 769px) {
   .footer {
     display: none;
   }
-}
+} */
