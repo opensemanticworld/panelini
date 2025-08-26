@@ -3,7 +3,7 @@
 [![opensemanticworld.github.io/panelini/](https://img.shields.io/badge/panelini-docs-blue
 )](https://opensemanticworld.github.io/panelini/)
 [![PyPI Version](https://img.shields.io/pypi/v/panelini)](https://pypi.org/project/panelini/)
-[![Release](https://img.shields.io/github/v/release/opensemanticworld/panelini)](https://img.shields.io/github/v/release/opensemanticworld/panelini)
+[![Release](https://img.shields.io/github/v/release/opensemanticworld/panelini)](https://github.com/opensemanticworld/panelini/releases)
 [![Build status](https://img.shields.io/github/actions/workflow/status/opensemanticworld/panelini/main.yml?branch=main)](https://github.com/opensemanticworld/panelini/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/opensemanticworld/panelini/branch/main/graph/badge.svg)](https://codecov.io/gh/opensemanticworld/panelini)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)
@@ -50,28 +50,29 @@ A minimal example to run ``Panelini`` can be found in the `examples/panelini_min
 Below is a simple code snippet to get you started:
 
 ```python
+from panel import Card
 from panelini import Panelini
 
-# Minimal Example to run Panelini
-main_objects = [
-    # Use panel components to build your layout
-    Card(
-        objects=[Markdown("# 📊 Welcome to Panelini! 🖥️", disable_anchors=True)],
-        title="Panel Example Card",
-        width=300,
-        max_height=200,
-    )
-]
 # Create an instance of Panelini
 app = Panelini(
-    title="Hello Panelini",
-    # main = [main_objects] # init objects here
+    title="📊 Welcome to Panelini! 🖥️",
+    # main = main_objects # init objects here
 )
 # Or set objects outside
-app.main_set(objects=main_objects)
-# Use servable when using CLI "panel serve" command
+app.main_set(
+    # Use panel components to build your layout
+    objects=[
+        Card(
+            title="Set complete main objects",
+            objects=["Some content goes here"],
+            width=300,
+            max_height=200,
+        )
+    ]
+)
+# Servable for debugging using command
+# panel serve <panelini_min.py --dev
 app.servable()
-
 
 if __name__ == "__main__":
     # Serve app as you would in panel

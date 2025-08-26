@@ -8,7 +8,7 @@
 import os
 from pathlib import Path
 
-from panel import Card, Column, Row, Spacer
+from panel import Card, Column, Row, Spacer, config
 from panel.layout.gridstack import GridStack
 from panel.pane import Markdown
 
@@ -35,7 +35,7 @@ def test_panelini_instantiation():
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVAR TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
-def test_panelini_classvar_header_logo():
+def test_panelini_classvar_logo():
     """Test the logo in the header."""
     logo_path = Path(os.path.join(_ASSETS_DIR, "panelinilogo.png"))
     logo_str = str(logo_path)
@@ -45,17 +45,33 @@ def test_panelini_classvar_header_logo():
     assert instance_str.logo == logo_str
 
 
-def test_panelini_classvar_header_background():
+def test_panelini_classvar_logo_link_url():
+    """Test the logo link URL in the header."""
+    logo_link_url = "/"
+    instance = Panelini(logo_link_url=logo_link_url)
+    assert instance.logo_link_url == logo_link_url
+
+
+def test_panelini_classvar_title():
+    instance = Panelini(title="Panelini Test Title")
+    assert instance.title == "Panelini Test Title"
+
+
+def test_panelini_classvar_header_background_image():
     """Test the background image in the header."""
     header_background_image_path = Path(os.path.join(_ASSETS_DIR, "header.svg"))
     header_background_image_str = str(header_background_image_path)
     instance_path = Panelini(header_background_image=header_background_image_path)
+    """Test the background image in the content area."""
+    instance = Panelini(title="Panelini TEST")
+    assert instance.title == "Panelini TEST"
+
     instance_str = Panelini(header_background_image=header_background_image_str)
     assert instance_path.header_background_image == header_background_image_path
     assert instance_str.header_background_image == header_background_image_str
 
 
-def test_panelini_classvar_content_background():
+def test_panelini_classvar_content_background_image():
     """Test the background image in the content area."""
     content_background_image_path = Path(os.path.join(_ASSETS_DIR, "content.svg"))
     content_background_image_str = str(content_background_image_path)
@@ -65,10 +81,10 @@ def test_panelini_classvar_content_background():
     assert instance_str.content_background_image == content_background_image_str
 
 
-def test_panelini_classvar_title():
-    """Test the background image in the content area."""
-    instance = Panelini(title="Panelini TEST")
-    assert instance.title == "Panelini TEST"
+def test_panelini_classvar_static_dir():
+    """Test the assets as static directory."""
+    instance = Panelini(static_dir="/assets")
+    assert instance.static_dir == "/assets"
 
 
 def test_panelini_classvar_main():
@@ -144,16 +160,30 @@ def test_panelini_classvar_footer():
     assert isinstance(instance.footer, list)
 
 
+def test_panelini_classvar_footer_enabled():
+    """Test the footer enabled state."""
+    instance = Panelini(footer_enabled=True)
+    assert instance.footer_enabled is True
+
+
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVAR TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PRIV DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+def test_panelini_method__css_main_load():
+    """Test the _css_main_load method."""
+    instance = Panelini()
+    instance._css_main_load()
+    assert len(config.raw_css) > 0
+
+
 def test_panelini_method__sidebar_config_set():
     """Test the _sidebar_config_set method."""
     sidebars_max_width = 300
     instance = Panelini(sidebars_max_width=sidebars_max_width)
     assert instance._sidebar_inner_width == int(sidebars_max_width * 0.91)
     assert instance._sidebar_object_width == int(sidebars_max_width * 0.88)
+    assert instance._sidebar_card_elem_width == int(sidebars_max_width * 0.80)
     assert instance._sidebar_card_spacer_height == int(sidebars_max_width * 0.06)
 
 
@@ -208,8 +238,27 @@ def test_panelini_method__content_set():
     assert isinstance(instance._content, Row)
 
 
-def test_panelini_method__navbar_objects_set():
-    """Test the _set_navbar_objects method, only Column objects allowed."""
+def test_panelini_method__footer_set():
+    """Test the _footer_set method."""
+    instance = Panelini(footer_enabled=True)
+    assert isinstance(instance._footer, Row)
+    try:
+        instance_no_footer = Panelini(footer_enabled=False)
+        assert instance_no_footer._footer is None
+    except AttributeError:
+        pass
+    else:
+        raise AssertionError()
+
+
+def test_panelini_method__header_set():
+    """Test the _header_set method."""
+    instance = Panelini()
+    assert isinstance(instance._header, Row)
+
+
+def test_panelini_method__navbar_set():
+    """Test the _set_navbar method, only Column objects allowed."""
     instance = Panelini()
     assert isinstance(instance._navbar, list)
     for obj in instance._navbar:
@@ -241,6 +290,15 @@ def test_panelini_methods_sidebar_set_and_get():
     sidebar = [Card(title="sidebar left test")]
     instance.sidebar_set(sidebar)
     assert instance.sidebar_get() == sidebar
+
+
+def test_panelini_methods_main_add_and_remove():
+    """Test the main_add method."""
+    instance = Panelini()
+    instance.main_add([Card(title="main add test card")])
+    assert instance._main.objects[-1].title == "main add test card"
+    instance.main_remove_index(0)
+    assert instance._main.objects == []
 
 
 def test_panelini_methods_main_set_and_get():

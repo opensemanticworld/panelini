@@ -39,6 +39,10 @@
   margin-left: var(--content-spacing);
 }
 
+.main-object {
+  margin-bottom: var(--content-spacing);
+}
+
 div.bk-btn-group button.bk-btn.bk-btn-default {
   border: none !important;
 }

@@ -30,8 +30,7 @@ import panel
 import param  # type: ignore[import-untyped]
 from panel.io.server import Server, StoppableThread
 
-# from .utils.helper import get_os_abs_path
-
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _ROOT = Path(__file__).parent
 _ASSETS = _ROOT / "assets"
 _MAIN_CSS = _ROOT / "main.css"
@@ -40,18 +39,20 @@ _LOGO = _ASSETS / "panelinilogo.png"
 _HEADER_BACKGROUND_IMAGE = _ASSETS / "header.svg"
 _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
 
 class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     """Main class for the Panelini application."""
 
-    # $$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
     logo = param.ClassSelector(
         class_=(str, Path),
         default=_LOGO,
         doc="Logo image for the application. Can be a string path or pathlib.Path.",
     )
 
-    logo_url = param.String(
+    logo_link_url = param.String(
         default="/",
         doc="Logo provided link to given URL.",
     )
@@ -122,17 +123,45 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         bounds=(100, 500),
         doc="Maximum width of the sidebars as integer in px.",
     )
+
     footer = param.List(
         default=[],
         item_type=panel.viewable.Viewable,
         doc="List of Panel objects to be displayed in the footer.",
     )
+
     footer_enabled = param.Boolean(
         default=False,
         doc="Enable or disable the footer.",
     )
-    # $$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$
 
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN UTILS $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+    # TODO: Outsource to utils directory in separate python files
+    # TODO: Write test for this function below, also check different panel objects than Card
+    def _css_classes_extend(self, objects: list[panel.viewable.Viewable], css_classes: list[str]) -> None:
+        """Add CSS classes to a list of Panel objects."""
+        for obj in objects:
+            if isinstance(obj, panel.viewable.Viewable):
+                obj.css_classes.extend(css_classes)
+
+    def _css_classes_set(self, objects: list[panel.viewable.Viewable], css_classes: list[str]) -> None:
+        """Set CSS classes for a list of Panel objects, avoiding duplicates."""
+        for obj in objects:
+            if isinstance(obj, panel.viewable.Viewable):
+                obj.css_classes += list(set(obj.css_classes).union(css_classes))
+
+    # TODO: Write test for this function below, also check different panel objects than Card
+    def _sidebar_object_width_extend(self, objects: list[panel.viewable.Viewable]) -> None:
+        """Extend the width of sidebar cards."""
+        for obj in objects:
+            if isinstance(obj, panel.viewable.Viewable):
+                obj.width = self._sidebar_object_width
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF UTILS $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN INIT $$$$$$$$$$$$$$$$$$$$$$$$$$$$
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
         # self.servable = servable
@@ -146,6 +175,13 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._content_set()
         self._panel_set()
 
+    def __panel__(self) -> panel.viewable.Viewable:
+        """Return the main panel for the application."""
+        return self._panel
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF INIT $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PRIV DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
     def _css_main_load(self) -> None:
         """Load custom CSS for the application."""
         panel.config.raw_css.append(_MAIN_CSS.read_text())
@@ -159,36 +195,19 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             f".content {{ background-image: url(/assets/{os.path.basename(self.content_background_image)}); }}"
         )
 
-    # $$$$$$$$$$$$$$$$$$$$$$$$ BEGIN UTILS $$$$$$$$$$$$$$$$$$$$$$$$
-    # TODO: Write test for this function below, also check different panel objects than Card
-    def _css_classes_extend(self, objects: list[panel.viewable.Viewable], css_classes: list[str]) -> None:
-        """Add CSS classes to a list of Panel objects."""
-        for obj in objects:
-            if isinstance(obj, panel.viewable.Viewable):
-                obj.css_classes.extend(css_classes)
-
-    # TODO: Write test for this function below, also check different panel objects than Card
-    def _sidebar_object_width_extend(self, objects: list[panel.viewable.Viewable]) -> None:
-        """Extend the width of sidebar cards."""
-        for obj in objects:
-            if isinstance(obj, panel.viewable.Viewable):
-                obj.width = self._sidebar_object_width
-
-    # $$$$$$$$$$$$$$$$$$$$$$$$ ENDOF UTILS $$$$$$$$$$$$$$$$$$$$$$$$
-
     def _sidebar_config_set(self) -> None:
         """Set the configuration for the sidebars."""
         self._sidebar_max_width = int(self.sidebars_max_width)
         self._sidebar_inner_width = int(self.sidebars_max_width * 0.91)
         self._sidebar_object_width = int(self.sidebars_max_width * 0.88)
-        # self._sidebar_card_elem_width = int(self.sidebars_max_width * 0.80)
+        self._sidebar_card_elem_width = int(self.sidebars_max_width * 0.80)
         self._sidebar_card_spacer_height = int(self.sidebars_max_width * 0.06)
 
     def _sidebar_right_set(self) -> None:
         """Set the sidebar with the defined objects."""
         self._sidebar_right = panel.Column(
             css_classes=["card", "sidebar", "right-sidebar"],
-            sizing_mode="stretch_both",
+            # sizing_mode="stretch_both",
             max_width=self.sidebars_max_width,
             visible=self.sidebar_right_visible,  # Initially hidden
             objects=self.sidebar_right_get(),
@@ -232,20 +251,21 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             self._sidebar_left.visible = True
 
     def _main_set(self) -> None:
-        """Set main area Column"""
-        self._main = panel.Column(
-            # self._main = panel.layout.base.ListLike(
-            css_classes=["main", "gridstack"],
-            sizing_mode="stretch_both",
-            objects=self.main_get(),
-        )
+        """Set or update main area Column."""
+        if hasattr(self, "_main") and hasattr(self._main, "objects"):
+            self._main.objects = self.main_get()
+        else:
+            self._main: panel.Column = panel.Column(
+                css_classes=["main", "gridstack"],
+                objects=self.main_get(),
+            )
 
     def _content_set(self) -> None:
         """Set the layout of the content area."""
         self._content = panel.Row(
             css_classes=["content"],
             objects=[],  # Appended below, parts conditionally
-            sizing_mode="stretch_height",
+            sizing_mode="scale_both",
         )
 
         # Left sidebar
@@ -304,7 +324,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
                 align="center",
                 max_width=140,
                 objects=[
-                    panel.pane.image.Image(str(self.logo), link_url=self.logo_url, height=50),
+                    panel.pane.image.Image(str(self.logo), link_url=self.logo_link_url, height=50),
                 ],
             )
         )
@@ -341,7 +361,6 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _panel_set(self) -> None:
         """Update the main panel with the current layout."""
-        # copy header as footer
         self._panel = panel.Column(
             css_classes=["panel"],
             sizing_mode="scale_both",
@@ -355,74 +374,19 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._panel.objects.append(self._content)
 
         # Footer if enabled
-        if self.footer:
+        if self.footer_enabled:
             self._footer_set()
             self._panel.objects.append(self._footer)
 
-    def sidebar_right_set(self, objects: list[panel.viewable.Viewable]) -> None:
-        """Set the right sidebar objects."""
-        self.sidebar_right = objects
-
-    def sidebar_right_get(self) -> list[panel.viewable.Viewable]:
-        """Get the right sidebar objects."""
-        # Return typed
-        return list(self.sidebar_right)
-
-    def sidebar_set(self, objects: list[panel.viewable.Viewable]) -> None:
-        """Set the left sidebar objects."""
-        self.sidebar = objects
-        return None
-
-    def sidebar_get(self) -> list[panel.viewable.Viewable]:
-        """Get the sidebar objects."""
-        return list(self.sidebar)
-
-    def main_set(self, objects: list[panel.viewable.Viewable]) -> None:
-        """Set the main objects."""
-        self.main = objects
-
-    def main_get(self) -> list[panel.viewable.Viewable]:
-        """Get the main objects."""
-        return list(self.main)
-
-    # TODO: Add tests for serve functions below
-    def servable(self, **kwargs: Any) -> panel.viewable.Viewable:
-        """Make the application servable with additional parameters."""
-        return panel.viewable.Viewable.servable(
-            self._panel,
-            title=self.title,
-            **kwargs,
-        )
-
-    def serve(self, **kwargs: Any) -> StoppableThread | Server:
-        """Serve the application."""
-        return panel.io.server.serve(
-            self.__panel__(),
-            title=str(self.title),
-            ico_path=str(_FAVICON_URL),
-            static_dirs={"/assets": self.static_dir},
-            **kwargs,
-        )
-
-    # def servable(self, *args: Any, **kwargs: Any) -> Any:
-    #     """Make the application servable."""
-    #     return self.__panel__().servable(*args, **kwargs)
-
-    # TODO: Test param depended functions below
-    # How to check if rendered panel has been updated?
-    # Using playwrite for different browsers could be an option
-    # @param.depends("header", watch=True)
-    # def _panel_update_header(self) -> None:
-    #     """Update the panel with the current layout of the header."""
-    #     self._header_set()
-    #     self._panel_set()
-
+    # TODO: Add tests of param.depends functions
     @param.depends("main", watch=True)
     def _panel_update_main(self) -> None:
         """Update the panel with the current layout of the main content."""
         self._main_set()
+        # self._css_classes_set(self._main.objects, ["main-object"])
         self._content_set()
         self._panel_set()
+        print("TRIGGER: Main panel updated")
 
     @param.depends("sidebar", watch=True)
     def _panel_update_sidebar_left(self) -> None:
@@ -444,9 +408,77 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._footer_set()
         self._panel_set()
 
-    def __panel__(self) -> panel.viewable.Viewable:
-        """Return the main panel for the application."""
-        return self._panel
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PRIV DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
+    def sidebar_right_set(self, objects: list[panel.viewable.Viewable]) -> None:
+        """Set the right sidebar objects."""
+        self.sidebar_right = objects
+
+    def sidebar_right_get(self) -> list[panel.viewable.Viewable]:
+        """Get the right sidebar objects."""
+        return list(self.sidebar_right)
+
+    def sidebar_set(self, objects: list[panel.viewable.Viewable]) -> None:
+        """Set the left sidebar objects."""
+        self.sidebar = objects
+
+    def sidebar_get(self) -> list[panel.viewable.Viewable]:
+        """Get the sidebar objects."""
+        return list(self.sidebar)
+
+    # TODO: define main_clear function and test
+
+    def main_remove_index(self, index: int) -> None:
+        """Remove an object from the main content area by index."""
+        if 0 <= index < len(self.main):
+            del self.main[index]
+            self.param.trigger("main")
+
+    def main_add(self, objects: list[panel.viewable.Viewable]) -> None:
+        """Add objects to the main content area and update the dashboard, applying CSS instantly."""
+        self.main.extend(objects)
+        self._css_classes_set(objects, ["main-object"])
+        self.param.trigger("main")
+
+    def main_set(self, objects: list[panel.viewable.Viewable]) -> None:
+        """Set the main objects and apply CSS instantly."""
+        self.main = objects
+        self._css_classes_set(objects, ["main-object"])
+        self.param.trigger("main")
+
+    def main_get(self) -> list[panel.viewable.Viewable]:
+        """Get the main objects."""
+        return list(self.main)
+
+    # TODO: Add tests for serve functions below
+    def servable(self, **kwargs: Any) -> panel.viewable.Viewable:
+        """Make the application servable with additional parameters."""
+        kwargs["title"] = kwargs.get("title", self.title)
+        return panel.viewable.Viewable.servable(
+            self._panel,
+            **kwargs,
+        )
+
+    def serve(self, **kwargs: Any) -> StoppableThread | Server:
+        """Serve the application."""
+        return panel.io.server.serve(
+            self.__panel__(),
+            title=str(self.title),
+            ico_path=str(_FAVICON_URL),
+            static_dirs={"/assets": self.static_dir},
+            **kwargs,
+        )
+        # TODO: Access parameters maybe better via kwargs, to be tested
+        # kwargs["title"] = str(self.title)
+        # kwargs["ico_path"] = str(_FAVICON_URL)
+        # kwargs["static_dirs"] = {"/assets": self.static_dir}
+        # return panel.io.server.serve(
+        #     self.__panel__(),
+        #     **kwargs,
+        # )
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
 servable = Panelini()
@@ -455,5 +487,5 @@ servable.servable()
 
 if __name__ == "__main__":
     """Run the Panelini application."""
-    app = Panelini(logo=_LOGO)
+    app = Panelini()
     app.serve(port=2222)
