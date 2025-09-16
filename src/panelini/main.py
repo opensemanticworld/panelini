@@ -29,6 +29,8 @@ from typing import Any
 import panel
 import param  # type: ignore[import-untyped]
 from panel.io.server import Server, StoppableThread
+from panel.layout.gridstack import GridStack
+from pydantic import BaseModel
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _ROOT = Path(__file__).parent
@@ -40,6 +42,46 @@ _HEADER_BACKGROUND_IMAGE = _ASSETS / "header.svg"
 _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN WEBDESKTOP DEV $$$$$$$$$$$$$$$$$$$$$$$$$$$
+# panel.extension("gridstack")  # TODO: maybe move to global settings
+
+
+class GridStackItem(BaseModel):
+    """Data model for a GridStack item."""
+
+    x: int
+    y: int
+    width: int
+    height: int
+    content: Any  # Can be a Panel object or any other content
+
+
+class PaneliniDesktop(param.Parameterized):  # type: ignore[no-any-unimported]
+    """Main class for the Panelini web-based desktop application using Panel GridStack."""
+
+    def __init__(self, **params: Any) -> None:
+        super().__init__(**params)
+        self._gridstack = GridStack()
+        self._gridstack[:, 0:3] = panel.Spacer(styles={"background": "red"})
+
+    # def set_gridstack_objects(self, objects: list[panel.viewable.Viewable]) -> None:
+    #     """Set the objects in the GridStack layout."""
+    #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
+    #         self._gridstack.objects = objects
+
+    # def get_gridstack_objects(self) -> list[panel.viewable.Viewable]:
+    #     """Get the objects in the GridStack layout."""
+    #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
+    #         return list(self._gridstack.objects)
+    #     return []
+
+    def get_gridstack(self) -> GridStack:
+        """Get the GridStack layout."""
+        return self._gridstack
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF WEBDESKTOP DEV $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
 class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
@@ -481,7 +523,27 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
-servable = Panelini()
+servable = Panelini(sidebar_visible=False)
+
+# Buttons for dynamic interaction testing
+# def add_spacer(event: Any) -> None:
+
+# GridStack example objects
+pdesk = PaneliniDesktop()
+
+gstack = GridStack(ncols=12, nrows=12, sizing_mode="stretch_both")
+# Static specs
+# ncols as well as nrows are static
+# both values are set to 12, which lead to a maximum of 12x12=144 grid cells
+
+# for i in range(12):
+#     for j in range(12):
+#         gstack[i, j] = panel.Spacer(styles={"background": f"rgb({20 * i},{20 * j},100)"})
+
+print(gstack.grid)
+
+servable.main_set([gstack])
+
 servable.servable()
 
 
