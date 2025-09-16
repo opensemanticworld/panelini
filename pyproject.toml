@@ -17,7 +17,6 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "osw>=0.33.0",
     "panel>=1.7.1",
     "param>=2.2.1",
     "watchfiles>=1.1.0",
@@ -33,6 +32,7 @@ ai = [
     "langchain>=0.3.27",
     "langchain-community>=0.3.27",
     "langchain-openai>=0.3.32",
+    "osw>=0.33.0",
 ]
 dev = [
     "pytest>=7.2.0",
