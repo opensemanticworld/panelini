@@ -636,7 +636,9 @@ btn_add_gstack_object = panel.widgets.Button(
     name="Add sample GridStack objects", button_type="success", on_click=btn_add_gstack_objects_event
 )
 
-
+# TODO: Next step is to implment ids, uuids and remove object the object itself by reference and x-button
+# Ask the user if the object really should be deleted when clicking the x-button as modal dialog
+# Also add a modal dialog if no space is available to add a new object, then advice to make space or delete objects
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF DEBUG DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
