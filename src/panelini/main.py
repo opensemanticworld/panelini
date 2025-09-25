@@ -32,7 +32,8 @@ import panel
 import param  # type: ignore[import-untyped]
 from panel.io.server import Server, StoppableThread
 from panel.layout.gridstack import GridStack
-from pydantic import BaseModel
+
+# from pydantic import BaseModel
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _ROOT = Path(__file__).parent
@@ -49,13 +50,13 @@ _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 # panel.extension("gridstack")  # TODO: maybe move to global settings
 
 
-class WebDesktopItem(BaseModel):
-    """Data model for a WebDesktop item."""
+# class WebDesktopItem(BaseModel):
+#     """Data model for a WebDesktop item."""
 
-    element_id: str  # Unique identifier for the item on the web-desktop
-    uuid: str  # Unique universal identifier, as content reference
-    coords: tuple[list[int], list[int]]  # (row_indices, col_indices)
-    content: panel.Card  # Can be a Panel object or any other content
+#     element_id: str  # Unique identifier for the item on the web-desktop
+#     uuid: str  # Unique universal identifier, as content reference
+#     coords: tuple[list[int], list[int]]  # (row_indices, col_indices)
+#     content: panel.Card  # Can be a Panel object or any other content
 
 
 # class PaneliniWebDesktop(param.Parameterized):  # type: ignore[no-any-unimported]
