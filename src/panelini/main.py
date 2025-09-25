@@ -24,8 +24,10 @@ a left as well as right sidebar and also the main area.
 
 import os
 from pathlib import Path
-from typing import Any
+from pprint import pprint
+from typing import Any, Optional
 
+import numpy as np
 import panel
 import param  # type: ignore[import-untyped]
 from panel.io.server import Server, StoppableThread
@@ -47,38 +49,37 @@ _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
 # panel.extension("gridstack")  # TODO: maybe move to global settings
 
 
-class GridStackItem(BaseModel):
-    """Data model for a GridStack item."""
+class WebDesktopItem(BaseModel):
+    """Data model for a WebDesktop item."""
 
-    x: int
-    y: int
-    width: int
-    height: int
-    content: Any  # Can be a Panel object or any other content
+    element_id: str  # Unique identifier for the item on the web-desktop
+    uuid: str  # Unique universal identifier, as content reference
+    coords: tuple[list[int], list[int]]  # (row_indices, col_indices)
+    content: panel.Card  # Can be a Panel object or any other content
 
 
-class PaneliniDesktop(param.Parameterized):  # type: ignore[no-any-unimported]
-    """Main class for the Panelini web-based desktop application using Panel GridStack."""
+# class PaneliniWebDesktop(param.Parameterized):  # type: ignore[no-any-unimported]
+#     """Main class for the Panelini web-based desktop application using Panel GridStack."""
 
-    def __init__(self, **params: Any) -> None:
-        super().__init__(**params)
-        self._gridstack = GridStack()
-        self._gridstack[:, 0:3] = panel.Spacer(styles={"background": "red"})
+#     def __init__(self, **params: Any) -> None:
+#         super().__init__(**params)
+#         self._gridstack = GridStack()
+#         self._gridstack[:, 0:3] = panel.Spacer(styles={"background": "red"})
 
-    # def set_gridstack_objects(self, objects: list[panel.viewable.Viewable]) -> None:
-    #     """Set the objects in the GridStack layout."""
-    #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
-    #         self._gridstack.objects = objects
+#     # def set_gridstack_objects(self, objects: list[panel.viewable.Viewable]) -> None:
+#     #     """Set the objects in the GridStack layout."""
+#     #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
+#     #         self._gridstack.objects = objects
 
-    # def get_gridstack_objects(self) -> list[panel.viewable.Viewable]:
-    #     """Get the objects in the GridStack layout."""
-    #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
-    #         return list(self._gridstack.objects)
-    #     return []
+#     # def get_gridstack_objects(self) -> list[panel.viewable.Viewable]:
+#     #     """Get the objects in the GridStack layout."""
+#     #     if hasattr(self, "_gridstack") and isinstance(self._gridstack, GridStack):
+#     #         return list(self._gridstack.objects)
+#     #     return []
 
-    def get_gridstack(self) -> GridStack:
-        """Get the GridStack layout."""
-        return self._gridstack
+#     def get_gridstack(self) -> GridStack:
+#         """Get the GridStack layout."""
+#         return self._gridstack
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF WEBDESKTOP DEV $$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -523,25 +524,157 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
-servable = Panelini(sidebar_visible=False)
+servable = Panelini(sidebar_visible=True)
 
 # Buttons for dynamic interaction testing
-# def add_spacer(event: Any) -> None:
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN DEBUG DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+class Not2DArrayError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Input must be a 2D array.")
+
+
+def largest_zero_window(arr: np.ndarray) -> Optional[tuple[int, int, int, int]]:
+    """
+    Find the largest all-zero rectangular window in a 2D binary array.
+
+    Parameters:
+        arr: 2D numpy array with values {0,1}. Non-zero values are treated as 1.
+
+    Returns:
+        (y0, x0, y1, x1) inclusive indices as Python ints.
+        Returns None if no zero exists in the array.
+    """
+    A = np.asarray(arr)
+    if A.ndim != 2:
+        raise Not2DArrayError()
+    rows, cols = A.shape
+    if rows == 0 or cols == 0:
+        return None
+
+    heights = np.zeros(cols, dtype=int)
+    best_area = 0
+    best_rect: Optional[tuple[int, int, int, int]] = None
+
+    for r in range(rows):
+        # Update histogram of consecutive zeros up to row r
+        heights = np.where(A[r] == 0, heights + 1, 0)
+
+        # Largest rectangle in histogram for this row
+        stack: list[tuple[int, int]] = []  # elements are (start_index, height)
+        for c in range(cols + 1):
+            h = heights[c] if c < cols else 0
+            start = c
+            while stack and stack[-1][1] > h:
+                idx, height = stack.pop()
+                start = idx
+                width = c - idx
+                area = int(height) * int(width)
+                if area > best_area:
+                    y0 = r - int(height) + 1
+                    x0 = idx
+                    y1 = r
+                    x1 = c - 1
+                    best_area = area
+                    best_rect = (int(y0), int(x0), int(y1), int(x1))
+                # keep the first found on ties
+            stack.append((start, h))
+
+    return best_rect
+
+
+# Button to print GridStack objects
+def btn_print_gstack_objects_event(event: Any) -> None:
+    """Print the GridStack objects to the console for debugging."""
+    print("GridStack objects:")
+    pprint(gstack.objects)
+
+
+btn_print_gstack_objects = panel.widgets.Button(
+    name="Print GridStack objects", button_type="primary", on_click=btn_print_gstack_objects_event
+)
+
+
+# Button to clear GridStack objects
+def btn_clear_main_event(event: Any) -> None:
+    """Clear the GridStack objects."""
+    servable.main_set([])
+    print("GridStack objects cleared.")
+
+
+btn_clear_main = panel.widgets.Button(
+    name="Clear GridStack objects", button_type="danger", on_click=btn_clear_main_event
+)
+
+
+# Button to add sample GridStack objects
+def btn_add_gstack_objects_event(event: Any) -> None:
+    """Add sample GridStack objects for testing."""
+
+    free_elem = largest_zero_window(gstack.grid)
+
+    if free_elem is not None:
+        print("Largest free grid space:", free_elem)
+        # COPY ONLY FOR TESTING
+        # TODO: HANDLE THIS IN CLASS!
+
+        gstack[free_elem[0] : free_elem[2] + 1, free_elem[1] : free_elem[3] + 1] = panel.Spacer(
+            styles={"background": "blue"}
+        )
+        print(gstack.grid)
+        servable.main_set([gstack])
+    else:
+        print("No free grid space available to add new object.")
+        return
+
+
+btn_add_gstack_object = panel.widgets.Button(
+    name="Add sample GridStack objects", button_type="success", on_click=btn_add_gstack_objects_event
+)
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF DEBUG DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
 
 # GridStack example objects
-pdesk = PaneliniDesktop()
-
+# pdesk = PaneliniDesktop()
 gstack = GridStack(ncols=12, nrows=12, sizing_mode="stretch_both")
 # Static specs
 # ncols as well as nrows are static
 # both values are set to 12, which lead to a maximum of 12x12=144 grid cells
 
+# gstack[y0:y1, x0:x1] = <panel object>
+# -> gstack object (y0, x0, y1, x1)
+
+gstack[:, 0:3] = panel.Spacer(styles={"background": "red"})
+gstack[3:6, 4:5] = panel.Spacer(styles={"background": "green"})
+
 # for i in range(12):
+#     if i == 1 or i == 2 or i == 10 or i == 11:  # Just for testing, skip row 1 and 10
+#         continue
 #     for j in range(12):
-#         gstack[i, j] = panel.Spacer(styles={"background": f"rgb({20 * i},{20 * j},100)"})
+#         if j == 1 or j == 10:  # Just for testing, skip column 1 and 10
+#             continue
+
+#         gstack[i, j] = panel.Card(
+#             header=f"{i},{j}",
+#             collapsible=False,
+#             # styles={"background": f"rgb({20 * i},{20 * j},100)", "color": "white"},
+#         )
 
 print(gstack.grid)
+pprint(gstack.objects)
 
+
+# Add buttons to the left sidebar for testing
+servable.sidebar_set([
+    btn_print_gstack_objects,
+    btn_add_gstack_object,
+    btn_clear_main,
+])
 servable.main_set([gstack])
 
 servable.servable()
