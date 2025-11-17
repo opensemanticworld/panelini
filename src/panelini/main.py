@@ -239,9 +239,12 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         class InvalidMainTypeError(Exception):
             """Custom exception for invalid main_type."""
 
-            def __init__(self, main_type) -> None:
+            def __init__(self, main_type: Any) -> None:
                 """Initialize the exception with the invalid main_type."""
                 super().__init__(f"Invalid main_type: {main_type}")
+
+        # Container dict to update visbility of main objects without removing them
+        self._main_container_dict: dict[panel.viewable.Viewable, panel.Column] = {}
 
         # Load custom CSS
         self._css_main_load()
@@ -482,7 +485,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         # self._css_classes_set(self._main.objects, ["main-object"])
         self._content_set()
         self._panel_set()
-        print("TRIGGER: Main panel updated")
+        # print("TRIGGER: Main panel updated")
 
     @param.depends("sidebar", watch=True)
     def _panel_update_sidebar_left(self) -> None:
@@ -539,9 +542,27 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def main_set(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the main objects and apply CSS instantly."""
-        self.main = objects
+        # self.main = objects
+
+        # Clear visibility of all current main objects without removing them
+        # in order to not destroy javascript links of multiple used panels
+
+        for child in self.main:
+            if child[0] not in objects:
+                child.visible = False
+
+        # Reselect visibility of given main objects
+        for obj in objects:
+            if obj not in self._main_container_dict:
+                self._main_container_dict[obj] = panel.Column(obj)
+
+            if self._main_container_dict[obj] not in self.main:
+                self.main.append(self._main_container_dict[obj])
+
+            self._main_container_dict[obj].visible = True
+
         self._css_classes_set(objects, ["main-object"])
-        # self.param.trigger("main")  # TODO: Check if needed, seems to work without
+        self.param.trigger("main")  # TODO: Check if needed, seems to work without
 
     def main_get(self) -> list[panel.viewable.Viewable]:
         """Get the main objects."""
