@@ -25,7 +25,7 @@ a left as well as right sidebar and also the main area.
 import os
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import panel
@@ -90,6 +90,12 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     """Main class for the Panelini application."""
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
+    main_type = param.ObjectSelector(
+        default="column",
+        objects=["column", "gridstack"],
+        doc="Type of main area layout.",
+    )
+
     logo = param.ClassSelector(
         class_=(str, Path),
         default=_LOGO,
@@ -205,19 +211,55 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF UTILS $$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN SUBCLASSES $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+    class Container(panel.Column):
+        """Container subclass to handle UI containers and its content."""
+
+        uiid = param.String(
+            default="uiid",
+            doc="Unique identifier for the container UI element.",
+        )
+        uuids = param.List(
+            default=[],
+            doc="List of unique universal identifiers for the container content.",
+        )
+
+        def __init__(self, **params: Any) -> None:
+            super().__init__(**params)
+            self.css_classes = ["container"]
+            self.sizing_mode = "stretch_both"
+
+    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF SUBCLASSES $$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN INIT $$$$$$$$$$$$$$$$$$$$$$$$$$$$
     def __init__(self, **params: Any) -> None:
+        # Initialize the Panelini application with provided parameters.
         super().__init__(**params)
-        # self.servable = servable
+
+        class InvalidMainTypeError(Exception):
+            """Custom exception for invalid main_type."""
+
+            def __init__(self, main_type) -> None:
+                """Initialize the exception with the invalid main_type."""
+                super().__init__(f"Invalid main_type: {main_type}")
+
+        # Load custom CSS
         self._css_main_load()
         # Navbar: 1st section of the panel
         self._navbar_set()
         self._header_set()
+
         # Content: 2nd section of the panel
         self._sidebar_config_set()
-        self._main_set()
-        self._content_set()
-        self._panel_set()
+        match self.main_type:
+            case "column":
+                self._main_set_column()
+                self._content_set()
+            case "gridstack":
+                self._main_set_gridstack()
+                self._content_set()
+            case _:
+                raise InvalidMainTypeError(self.main_type)
 
     def __panel__(self) -> panel.viewable.Viewable:
         """Return the main panel for the application."""
@@ -294,12 +336,22 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         else:
             self._sidebar_left.visible = True
 
-    def _main_set(self) -> None:
+    def _main_set_column(self) -> None:
         """Set or update main area Column."""
         if hasattr(self, "_main") and hasattr(self._main, "objects"):
             self._main.objects = self.main_get()
         else:
             self._main: panel.Column = panel.Column(
+                css_classes=["main", "column"],
+                objects=self.main_get(),
+            )
+
+    def _main_set_gridstack(self) -> None:
+        """Set or update main area GridStack."""
+        if hasattr(self, "_main") and hasattr(self._main, "objects"):
+            self._main.objects = self.main_get()
+        else:
+            self._main = GridStack(
                 css_classes=["main", "gridstack"],
                 objects=self.main_get(),
             )
@@ -426,7 +478,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     @param.depends("main", watch=True)
     def _panel_update_main(self) -> None:
         """Update the panel with the current layout of the main content."""
-        self._main_set()
+        self._main_set_column()
         # self._css_classes_set(self._main.objects, ["main-object"])
         self._content_set()
         self._panel_set()
@@ -483,13 +535,13 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         """Add objects to the main content area and update the dashboard, applying CSS instantly."""
         self.main.extend(objects)
         self._css_classes_set(objects, ["main-object"])
-        self.param.trigger("main")
+        # self.param.trigger("main")
 
     def main_set(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the main objects and apply CSS instantly."""
         self.main = objects
         self._css_classes_set(objects, ["main-object"])
-        self.param.trigger("main")
+        # self.param.trigger("main")  # TODO: Check if needed, seems to work without
 
     def main_get(self) -> list[panel.viewable.Viewable]:
         """Get the main objects."""
@@ -538,7 +590,7 @@ class Not2DArrayError(Exception):
         super().__init__("Input must be a 2D array.")
 
 
-def largest_zero_window(arr: np.ndarray) -> Optional[tuple[int, int, int, int]]:
+def largest_zero_window(arr: np.ndarray) -> tuple[int, int, int, int] | None:
     """
     Find the largest all-zero rectangular window in a 2D binary array.
 
@@ -558,7 +610,7 @@ def largest_zero_window(arr: np.ndarray) -> Optional[tuple[int, int, int, int]]:
 
     heights = np.zeros(cols, dtype=int)
     best_area = 0
-    best_rect: Optional[tuple[int, int, int, int]] = None
+    best_rect: tuple[int, int, int, int] | None = None
 
     for r in range(rows):
         # Update histogram of consecutive zeros up to row r
@@ -605,6 +657,8 @@ def btn_clear_main_event(event: Any) -> None:
     servable.main_set([])
     print("GridStack objects cleared.")
 
+    gstack.objects.clear()
+
 
 btn_clear_main = panel.widgets.Button(
     name="Clear GridStack objects", button_type="danger", on_click=btn_clear_main_event
@@ -612,6 +666,8 @@ btn_clear_main = panel.widgets.Button(
 
 
 # Button to add sample GridStack objects
+# TODO: Debug and fix problem of sidebar functionality once adding objects
+# Problem could be css classes
 def btn_add_gstack_objects_event(event: Any) -> None:
     """Add sample GridStack objects for testing."""
 
@@ -670,6 +726,8 @@ gstack[3:6, 4:5] = panel.Spacer(styles={"background": "green"})
 
 print(gstack.grid)
 pprint(gstack.objects)
+print(f"GridStack shape: {gstack.grid.shape}")
+print(f"GridStack Objects Type: {type(gstack.objects)}")
 
 
 # Add buttons to the left sidebar for testing
