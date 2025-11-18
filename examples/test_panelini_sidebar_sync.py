@@ -15,7 +15,9 @@ if __name__ == "__main__":
 
     my_panelini = Panelini()
     my_panelini.sidebar_set([button_1, button_2, checkbox_group_1])
-    my_panelini.main_set([right_container_1])
+    my_panelini.main_set([
+        right_container_1,  # right_container_2
+    ])
 
     def button_1_callback(event):
         checkbox_group_1.value = ["Banana", "Strawberry"]
