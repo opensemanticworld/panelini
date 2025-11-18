@@ -166,6 +166,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         super().__init__(**params)
         # self.servable = servable
         self._css_main_load()
+        self._main_container_dict: dict[panel.viewable.Viewable, panel.Column] = {}
         # Navbar: 1st section of the panel
         self._navbar_set()
         self._header_set()
@@ -252,13 +253,25 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _main_set(self) -> None:
         """Set or update main area Column."""
-        if hasattr(self, "_main") and hasattr(self._main, "objects"):
-            self._main.objects = self.main_get()
-        else:
-            self._main: panel.Column = panel.Column(
-                css_classes=["main", "gridstack"],
-                objects=self.main_get(),
-            )
+
+        new_objects = self.main_get()
+
+        # Init _main and set css_classes
+        if not (hasattr(self, "_main") and hasattr(self._main, "objects")):
+            self._main: panel.Column = panel.Column(css_classes=["main", "main-object"])
+
+        # Hide old objects in _main
+        for child in self._main:
+            if child[0] not in new_objects:
+                child.visible = False
+
+        # Add new objects to _main and make them visible
+        for obj in new_objects:
+            if obj not in self._main_container_dict:
+                self._main_container_dict[obj] = panel.Column(obj)
+            if self._main_container_dict[obj] not in self._main:
+                self._main.append(self._main_container_dict[obj])
+            self._main_container_dict[obj].visible = True
 
     def _content_set(self) -> None:
         """Set the layout of the content area."""
@@ -386,7 +399,6 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         # self._css_classes_set(self._main.objects, ["main-object"])
         self._content_set()
         self._panel_set()
-        print("TRIGGER: Main panel updated")
 
     @param.depends("sidebar", watch=True)
     def _panel_update_sidebar_left(self) -> None:
