@@ -252,12 +252,15 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _main_set(self) -> None:
         """Set or update main area Column."""
+
+        new_objects = self.main_get()
+
         if hasattr(self, "_main") and hasattr(self._main, "objects"):
-            self._main.objects = self.main_get()
+            self._main.objects = new_objects
         else:
             self._main: panel.Column = panel.Column(
                 css_classes=["main", "gridstack"],
-                objects=self.main_get(),
+                objects=new_objects,
             )
 
     def _content_set(self) -> None:
