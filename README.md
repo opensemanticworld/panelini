@@ -13,7 +13,7 @@
 
 ``panelini`` is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, ``panelini`` offers an easy-to-use solution that enhances productivity and aesthetics.
 
-![Panelini Minimal Application Layout](./img/panelini-min.svg)
+[![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/7e8e0748df02ad05cfe1b22617a7ee00e813f6ae/img/panelini-min.svg)](https://github.com/opensemanticworld/panelini)
 
 ## 📦 Table of Contents <!-- omit in toc -->
 
