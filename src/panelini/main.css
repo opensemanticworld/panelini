@@ -29,7 +29,7 @@
   border-left: 1px solid var(--border-color);
 }
 
-.sidebar-card {
+.sidebar-object {
   align-self: center;
   margin-bottom: var(--content-spacing);
   flex: none;

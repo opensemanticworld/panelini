@@ -299,6 +299,15 @@ def test_panelini_methods_main_add():
     assert instance._main.objects[-1][0].title == "main add test card"
 
 
+def test_panelini_methods_main_clear():
+    """Test the main_clear method."""
+    instance = Panelini()
+    instance.main_add([Card(title="main clear test card")])
+    assert len(instance._main.objects) > 0
+    instance.main_clear()
+    assert instance._main.objects == [instance._main_empty_column]
+
+
 def test_panelini_methods_main_set_and_get():
     """Test the main_set as well as main_get methods."""
     instance = Panelini()
