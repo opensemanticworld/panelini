@@ -292,11 +292,13 @@ def test_panelini_methods_sidebar_set_and_get():
     assert instance.sidebar_get() == sidebar
 
 
-def test_panelini_methods_main_add():
+def test_panelini_methods_main_add_and_remove():
     """Test the main_add method."""
     instance = Panelini()
     instance.main_add([Card(title="main add test card")])
-    assert instance._main.objects[-1][0].title == "main add test card"
+    assert instance._main.objects[-1].title == "main add test card"
+    instance.main_remove_index(0)
+    assert instance._main.objects == []
 
 
 def test_panelini_methods_main_clear():
