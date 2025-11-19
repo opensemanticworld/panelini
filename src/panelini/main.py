@@ -164,6 +164,9 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN INIT $$$$$$$$$$$$$$$$$$$$$$$$$$$$
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
+        # Empty Column to trigger panel rendering when clearing
+        self._main_empty_column = panel.Column(visible=False)
+
         # self.servable = servable
         self._css_main_load()
         # Navbar: 1st section of the panel
@@ -171,8 +174,50 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._header_set()
         # Content: 2nd section of the panel
         self._sidebar_config_set()
+
+        if self.sidebar_right_enabled:
+            self._sidebar_right = panel.Column(
+                css_classes=["sidebar", "right-sidebar"],
+                visible=self.sidebar_right_visible,
+                max_width=self._sidebar_max_width,
+                sizing_mode="stretch_both",
+                objects=self.sidebar_right_get(),
+            )
+            self._sidebar_right_set()
+
+        if self.sidebar_enabled:
+            self._sidebar_left = panel.Column(
+                css_classes=["sidebar", "left-sidebar"],
+                visible=self.sidebar_visible,
+                max_width=self._sidebar_max_width,
+                sizing_mode="stretch_both",
+                objects=self.sidebar_get(),
+            )
+            self._sidebar_left_set()
+
+        self._main = panel.Column(
+            css_classes=["main", "main-column"],
+            sizing_mode="scale_both",
+            objects=[self._main_empty_column],
+        )
         self._main_set()
+
+        self._content = panel.Row(
+            css_classes=["content"],
+            objects=[
+                self._header,
+                self._sidebar_left,
+                self._main,
+            ],  # Appended below, parts conditionally
+            sizing_mode="scale_both",
+        )
         self._content_set()
+
+        self._panel = panel.Column(
+            css_classes=["panel"],
+            sizing_mode="scale_both",
+            objects=[],  # Appended below, parts conditionally
+        )
         self._panel_set()
 
     def __panel__(self) -> panel.viewable.Viewable:
@@ -205,15 +250,11 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _sidebar_right_set(self) -> None:
         """Set the sidebar with the defined objects."""
-        self._sidebar_right = panel.Column(
-            css_classes=["card", "sidebar", "right-sidebar"],
-            # sizing_mode="stretch_both",
-            max_width=self.sidebars_max_width,
-            visible=self.sidebar_right_visible,  # Initially hidden
-            objects=self.sidebar_right_get(),
-        )
+
+        self._sidebar_right.objects.clear()
+        self._sidebar_right.objects = self.sidebar_right_get()
         # Extend right sidebar objects with css_classes and card width
-        self._css_classes_extend(self._sidebar_right.objects, ["card", "sidebar-card", "right-sidebar-card"])
+        self._css_classes_extend(self._sidebar_right.objects, ["right-sidebar-object"])
         self._sidebar_object_width_extend(self._sidebar_right.objects)
 
     def _sidebar_right_toggle(self, event: Any) -> None:
@@ -223,21 +264,18 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         # or set it automatically to enabled or at least check if _sidebar_right exists
         if self._sidebar_right.visible:
             self._sidebar_right.visible = False
+            # print("§§§ HIDE SIDEBAR §§§")
         else:
             self._sidebar_right.visible = True
+            # print("§§§ SHOW SIDEBAR §§§")
 
     def _sidebar_left_set(self) -> None:
         """Set the left sidebar with the defined objects."""
         # Set full left sidebar
-        self._sidebar_left = panel.Column(
-            css_classes=["card", "sidebar", "left-sidebar"],
-            visible=self.sidebar_visible,  # Initially visible
-            sizing_mode="stretch_both",
-            max_width=self._sidebar_max_width,
-            objects=self.sidebar_get(),
-        )
+        self._sidebar_left.objects.clear()
+        self._sidebar_left.objects = self.sidebar_get()
         # Extend sidebar objects with css_classes and card width
-        self._css_classes_extend(self._sidebar_left.objects, ["card", "sidebar-card", "left-sidebar-card"])
+        self._css_classes_extend(self._sidebar_left.objects, ["left-sidebar-object"])
         self._sidebar_object_width_extend(self._sidebar_left.objects)
 
     def _sidebar_left_toggle(self, event: Any) -> None:
@@ -247,33 +285,21 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         # or set it automatically to enabled or at least check if _sidebar_left exists
         if self._sidebar_left.visible:
             self._sidebar_left.visible = False
+            # print("§§§ HIDE SIDEBAR §§§")
         else:
             self._sidebar_left.visible = True
+            # print("§§§ SHOW SIDEBAR §§§")
 
     def _main_set(self) -> None:
-        """Set or update main area Column."""
-        if hasattr(self, "_main") and hasattr(self._main, "objects"):
-            self._main.objects = self.main_get()
-        else:
-            self._main: panel.Column = panel.Column(
-                css_classes=["main", "gridstack"],
-                objects=self.main_get(),
-            )
+        """Set main area Column."""
+        # clear objects without losing reference to self._main
+        self._main.objects.clear()
+        self._main.objects = self.main
 
     def _content_set(self) -> None:
         """Set the layout of the content area."""
-        self._content = panel.Row(
-            css_classes=["content"],
-            objects=[],  # Appended below, parts conditionally
-            sizing_mode="scale_both",
-        )
-
-        # Left sidebar
-        if self.sidebar_enabled:
-            self._sidebar_left_set()
-            self._content.objects.append(self._sidebar_left)
-
-        # Main content
+        self._content.objects.clear()
+        self._content.objects.append(self._sidebar_left)
         self._content.objects.append(self._main)
 
         # Right sidebar
@@ -361,19 +387,10 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def _panel_set(self) -> None:
         """Update the main panel with the current layout."""
-        self._panel = panel.Column(
-            css_classes=["panel"],
-            sizing_mode="scale_both",
-            objects=[],  # Appended below, parts conditionally
-        )
 
-        # Header
+        self._panel.objects.clear()
         self._panel.objects.append(self._header)
-
-        # Content
         self._panel.objects.append(self._content)
-
-        # Footer if enabled
         if self.footer_enabled:
             self._footer_set()
             self._panel.objects.append(self._footer)
@@ -383,10 +400,9 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     def _panel_update_main(self) -> None:
         """Update the panel with the current layout of the main content."""
         self._main_set()
-        # self._css_classes_set(self._main.objects, ["main-object"])
         self._content_set()
         self._panel_set()
-        print("TRIGGER: Main panel updated")
+        # print("TRIGGER: _panel_update_main")
 
     @param.depends("sidebar", watch=True)
     def _panel_update_sidebar_left(self) -> None:
@@ -394,6 +410,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._sidebar_left_set()
         self._content_set()
         self._panel_set()
+        # print("TRIGGER: _panel_update_sidebar_left")
 
     @param.depends("sidebar_right", watch=True)
     def _panel_update_sidebar_right(self) -> None:
@@ -401,12 +418,14 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._sidebar_right_set()
         self._content_set()
         self._panel_set()
+        # print("TRIGGER: _panel_update_sidebar_right")
 
     @param.depends("footer", watch=footer_enabled)
     def _panel_update_footer(self) -> None:
         """Update the panel with the current layout of the footer."""
         self._footer_set()
         self._panel_set()
+        # print("TRIGGER: _panel_update_footer")
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PRIV DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
@@ -417,6 +436,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def sidebar_right_get(self) -> list[panel.viewable.Viewable]:
         """Get the right sidebar objects."""
+        self._css_classes_extend(self.sidebar_right, ["sidebar-object"])
         return list(self.sidebar_right)
 
     def sidebar_set(self, objects: list[panel.viewable.Viewable]) -> None:
@@ -425,6 +445,8 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def sidebar_get(self) -> list[panel.viewable.Viewable]:
         """Get the sidebar objects."""
+        self._css_classes_extend(self.sidebar, ["sidebar-object"])
+
         return list(self.sidebar)
 
     # TODO: define main_clear function and test
@@ -437,18 +459,24 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def main_add(self, objects: list[panel.viewable.Viewable]) -> None:
         """Add objects to the main content area and update the dashboard, applying CSS instantly."""
+        self._css_classes_extend(objects, ["main-object"])
         self.main.extend(objects)
-        self._css_classes_set(objects, ["main-object"])
-        self.param.trigger("main")
 
     def main_set(self, objects: list[panel.viewable.Viewable]) -> None:
         """Set the main objects and apply CSS instantly."""
+        # print(f"$$$ BEFORE $$$ main_set: {self.main}")
+        # self._css_classes_extend(objects, ["main-object"])
         self.main = objects
-        self._css_classes_set(objects, ["main-object"])
-        self.param.trigger("main")
+        # print(f"$$$ AFTER $$$ main_set: {self.main}")
+        # self.param.trigger("main")
+
+    def main_clear(self) -> None:
+        """Clear all objects from the main content area and update the dashboard."""
+        self.main = [self._main_empty_column]
 
     def main_get(self) -> list[panel.viewable.Viewable]:
         """Get the main objects."""
+        self._css_classes_extend(self.main, ["main-object"])
         return list(self.main)
 
     # TODO: Add tests for serve functions below
