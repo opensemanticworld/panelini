@@ -15,7 +15,18 @@ app.main_set(
     objects=[
         Card(
             title="Set complete main objects",
-            objects=["Some content goes here"],
+            objects=["Some main content goes here"],
+            width=300,
+            max_height=200,
+        )
+    ]
+)
+
+app.sidebar_set(
+    objects=[
+        Card(
+            title="Set complete sidebar objects",
+            objects=["Some sidebar content goes here"],
             width=300,
             max_height=200,
         )
