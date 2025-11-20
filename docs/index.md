@@ -97,6 +97,7 @@ panel serve src/panelini/main.py --dev --port 5006 --static-dirs assets="src/pan
 
 - [Andreas Räder](https://github.com/raederan)
 - [Linus Schenk](https://github.com/cptnsloww)
+- [Matthias A. Popp](https://github.com/MatPoppFHG)
 
 ## 📜 Content Attribution
 
