@@ -473,6 +473,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
     def main_clear(self) -> None:
         """Clear all objects from the main content area and update the dashboard."""
+        # Uses empty column to trigger panel rendering without the need of refreshing the browser
         self.main = [self._main_empty_column]
 
     def main_get(self) -> list[panel.viewable.Viewable]:
