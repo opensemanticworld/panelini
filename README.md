@@ -9,9 +9,9 @@
 [![Commit activity](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)
 [![License](https://img.shields.io/github/license/opensemanticworld/panelini)](https://github.com/opensemanticworld/panelini/blob/fa449c31d48088bbdbf14072746bb68360131ddb/LICENSE)
 
-[![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/fa449c31d48088bbdbf14072746bb68360131ddb/img/panelinibanner.svg)](https://github.com/opensemanticworld/panelini)
+[![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/ceb5e9ca820f6706653255bdf9ab8db6ed6c5e83/img/panelinibanner.png)](https://github.com/opensemanticworld/panelini)
 
-``panelini`` is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, ``panelini`` offers an easy-to-use solution that enhances productivity and aesthetics.
+``panelini`` is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, this package offers an easy-to-use solution that enhances productivity and aesthetics.
 
 [![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/7e8e0748df02ad05cfe1b22617a7ee00e813f6ae/img/panelini-min.svg)](https://github.com/opensemanticworld/panelini)
 
