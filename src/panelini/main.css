@@ -37,6 +37,7 @@
 
 .main {
   margin-left: var(--content-spacing);
+  margin-right: var(--content-spacing);
 }
 
 .main-object {

@@ -295,6 +295,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         """Set main area Column."""
         # clear objects without losing reference to self._main
         self._main.objects.clear()
+        self._css_classes_extend(self.main, ["main-object"])
         self._main.objects = self.main
 
     def _content_set(self) -> None:
