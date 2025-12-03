@@ -36,8 +36,8 @@ _ASSETS = _ROOT / "assets"
 _MAIN_CSS = _ROOT / "main.css"
 _FAVICON_URL = _ASSETS / "favicon.ico"
 _LOGO = _ASSETS / "panelinilogo.png"
-_HEADER_BACKGROUND_IMAGE = _ASSETS / "header.svg"
-_CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.svg"
+_HEADER_BACKGROUND_IMAGE = _ASSETS / "header.jpg"
+_CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.jpg"
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
