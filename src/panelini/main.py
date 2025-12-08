@@ -512,10 +512,6 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
-servable = Panelini()
-servable.servable()
-
-
 if __name__ == "__main__":
     """Run the Panelini application."""
     app = Panelini()
