@@ -485,6 +485,8 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # TODO: Add tests for serve functions below
     def servable(self, **kwargs: Any) -> panel.viewable.Viewable:
         """Make the application servable with additional parameters."""
+        # TODO: Map parameters from signature of panel.io.server.serve
+        # https://panel.holoviz.org/tutorials/intermediate/serve.html
         kwargs["title"] = kwargs.get("title", self.title)
         return panel.viewable.Viewable.servable(
             self._panel,
