@@ -1,6 +1,8 @@
 import argparse
 import sys
+from inspect import signature
 
+from bokeh.command.subcommands import all as bokeh_commands
 from bokeh.command.subcommands.serve import Serve as BkServe
 from bokeh.command.util import die
 from bokeh.util.strings import nice_join
@@ -12,6 +14,7 @@ from panel.command.convert import Convert
 from panel.command.oauth_secret import OAuthSecret
 from panel.command.serve import Serve
 from panel.config import config
+from panel.io.server import serve as panel_serve
 
 from panelini import Panelini
 
@@ -19,12 +22,27 @@ app = Panelini()
 
 _DESCRIPTION = """\
 Reimplementation of the 'panel' comand line tool without serving capabilities.
+API serve: https://panel.holoviz.org/api/panel.io.server.html
+Docs basic_auth: https://panel.holoviz.org/how_to/authentication/basic.html
 """
 
 
-def main(args: list[str] | None = None) -> argparse.Namespace:
-    from bokeh.command.subcommands import all as bokeh_commands
+def _remove_none_and_invoke(parsed_args):
+    # remove invoke from parsed_args
+    if "invoke" in parsed_args:
+        delattr(parsed_args, "invoke")
+    # Clear none values
+    for key in list(vars(parsed_args).keys()):
+        if getattr(parsed_args, key) is None:
+            delattr(parsed_args, key)
+    return parsed_args
 
+
+def _build_parser(serve_via_python: bool = False) -> tuple[argparse.ArgumentParser, list]:
+    """
+    Build the argument parser for the CLI.
+    Additional serve commands allowed when serve app via panel function in python.
+    """
     parser = argparse.ArgumentParser(
         prog="panel",
         epilog="See '<command> --help' to read about a specific subcommand.",
@@ -39,59 +57,69 @@ def main(args: list[str] | None = None) -> argparse.Namespace:
         if command is not BkServe:
             subs.add_parser(command.name, help=command.help)
 
-    # TODO: First try only using Serve
-    # for extra in Serve:
     for extra in (Bundle, Compile, Convert, OAuthSecret, Serve):
+        if serve_via_python and extra is Serve:
+            serve_signature = signature(panel_serve)
+            serve_params = serve_signature.parameters
+            print(f"\nserve_params: {serve_params}\n")
         commands.append(extra)
         subparser = subs.add_parser(extra.name, help=extra.help)
         subcommand = extra(parser=subparser)
         subparser.set_defaults(invoke=subcommand.invoke)
+    return parser, commands
 
-    if len(sys.argv) == 1:
+
+def get_parsed_args(args: list[str] | None = None, serve_via_panel: bool = False) -> argparse.Namespace:
+    """Parse valid command line arguments and return the parsed arguments as dictionary."""
+    parser, commands = _build_parser(serve_via_python=serve_via_panel)
+    print(f"parser:\n{parser}\n")
+    print(f"commands:\n{commands}\n")
+    argv = sys.argv if args is None else args
+
+    if len(argv) == 1:
         all_commands = sorted([c.name for c in commands])
         die(f"ERROR: Must specify subcommand, one of: {nice_join(all_commands)}")
-    elif len(sys.argv) > 1 and any(sys.argv[1] == c.name for c in commands):
-        sys.argv = transform_cmds(sys.argv)
 
-        # TODO: First try only using serve
-        # if sys.argv[1] in ("serve"):
-        if sys.argv[1] in ("bundle", "compile", "convert", "serve", "oauth-secret", "help"):
-            parsed_args = parser.parse_args(sys.argv[1:])
+    if len(argv) > 1 and any(argv[1] == c.name for c in commands):
+        argv = transform_cmds(argv)
+        if argv[1] in ("bundle", "compile", "convert", "serve", "oauth-secret", "help"):
+            parsed_args = parser.parse_args(argv[1:])
+            parsed_args = _remove_none_and_invoke(parsed_args)
             try:
-                # ret = parsed_args.invoke(parsed_args)
                 return parsed_args
             except Exception as e:
                 if config.autoreload or config.log_level in ("DEBUG", "INFO"):
                     raise
                 die("ERROR: " + str(e))
         else:
-            # ret = bokeh_entry_point()
-            return parsed_args
-    else:
-        parser.parse_args(sys.argv[1:])
-        sys.exit(1)
-
-    # if ret is False:
-    #     sys.exit(1)
-    # elif ret is not True and isinstance(ret, int) and ret != 0:
-    #     sys.exit(ret)
+            return parser.parse_args(argv[1:])
+    parser.parse_args(argv[1:])
+    sys.exit(1)
 
 
-parsed_args = main(sys.argv)
-# remove from parsed_args: invoke=<bound method Serve.invoke of <panel.command.serve.Serve object at 0x7fdbb82e9f40>>
+# Set static serve arg at first position after script name
+sys.argv.insert(1, "serve")
+print(f"\nsys.argv before parsing:\n{sys.argv}\n")
+parsed_args = get_parsed_args(args=sys.argv, serve_via_panel=True)
+print(f"\nparsed_args:\n{parsed_args}\n")
 
-# remove invoke from parsed_args
-remove_attr_list = ["invoke", "static_dirs", "ico_path", "title"]
+# app.serve(**vars(parsed_args))
 
-for attr in remove_attr_list:
-    if hasattr(parsed_args, attr):
-        delattr(parsed_args, attr)
+# # remove invoke from parsed_args
+# remove_attr_list = ["invoke", "static_dirs", "ico_path", "title"]
+
+# for attr in remove_attr_list:
+#     if hasattr(parsed_args, attr):
+#         delattr(parsed_args, attr)
 
 
-cli_kwargs = {k: v for k, v in vars(parsed_args).items() if v is not None}
-print(f"Serving with args: {cli_kwargs}")
+# cli_kwargs = {k: v for k, v in vars(parsed_args).items() if v is not None}
+# print(f"Serving with args: {cli_kwargs}")
 # panel.io.server.serve(app, title="Panelini", **cli_kwargs)
-app.serve(**cli_kwargs)
+
+#
+
+# app.serve(**cli_kwargs)
 
 # # parser = argparse.ArgumentParser(description="Serve a Panelini app.")
 # # parser.add_argument("-p", "--port", type=int, default=5623, help="Port to serve the app on.")
@@ -122,40 +150,41 @@ app.serve(**cli_kwargs)
 # #     serve()
 
 
-# def _build_serve_parser(skip=None) -> argparse.ArgumentParser:
-#     """ "
-#     Build an argument parser for the Panel serve function.
-#     """
+def _build_panel_serve_parser() -> argparse.ArgumentParser:
+    """ "
+    Build an argument parser for the Panel serve function.
+    #"""
 
-#     if skip is None:
-#         skip = {"panel", "title", "ico_path", "static_dirs"}
-#     parser = argparse.ArgumentParser(description="Serve Panel app")
-#     sig = signature(panel.io.server.serve)
-#     print(sig.parameters)
+    # parser = argparse.ArgumentParser(description="Serve Panel app")
+    # sig = signature(panel_serve)
+    # # remove kwargs from signature
 
-#     # Params you *already* set explicitly in your wrapper
+    # print(sig.parameters)
 
-#     for name, param in sig.parameters.items():
-#         if name in skip:
-#             continue
+    # # Params you *already* set explicitly in your wrapper
 
-#         cli_name = f"--{name.replace('_', '-')}"
-#         # Try to infer type from default
-#         if param.default is _empty:
-#             arg_type = str
-#             default = None
-#         else:
-#             default = param.default
-#             arg_type = type(default)
+    # for name, param in sig.parameters.items():
+    #     if name in skip:
+    #         continue
 
-#         # Special-case bools: use flags
-#         if arg_type is bool:
-#             if default is False:
-#                 parser.add_argument(cli_name, action="store_true", help=f"{name} (bool)")
-#             else:
-#                 parser.add_argument(cli_name, action="store_false", help=f"{name} (bool)")
-#         else:
-#             parser.add_argument(cli_name, type=arg_type, default=None, help=f"{name} ({arg_type.__name__})")
+    #     cli_name = f"--{name.replace('_', '-')}"
+    #     # Try to infer type from default
+    #     if param.default is _empty:
+    #         arg_type = str
+    #         default = None
+    #     else:
+    #         default = param.default
+    #         arg_type = type(default)
+
+    #     # Special-case bools: use flags
+    #     if arg_type is bool:
+    #         if default is False:
+    #             parser.add_argument(cli_name, action="store_true", help=f"{name} (bool)")
+    #         else:
+    #             parser.add_argument(cli_name, action="store_false", help=f"{name} (bool)")
+    #     else:
+    #         parser.add_argument(cli_name, type=arg_type, default=None, help=f"{name} ({arg_type.__name__})")
+
 
 #     return parser
 
@@ -175,12 +204,11 @@ app.serve(**cli_kwargs)
 # print(f"Serving with args: {cli_kwargs}")
 
 
-# # Docs basic_auth: https://panel.holoviz.org/how_to/authentication/basic.html
+# #
 
 # # Test example
 # # credentials_dict = {"admin": "admin"}
 # # panel.io.server.serve(app, title="Panelini", basic_auth=credentials_dict, cookie_secret="panelini")
 
-# # API serve: https://panel.holoviz.org/api/panel.io.server.html
 # panel.io.server.serve(app, title="Panelini", **cli_kwargs)
 # app.serve(**cli_kwargs)
