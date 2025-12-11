@@ -22,13 +22,12 @@ a left as well as right sidebar and also the main area.
 # ##################### CONTENT AREA #####################
 # $$$$$$$$$$$$$$$$$$$$$ FOOTER AREA $$$$$$$$$$$$$$$$$$$$$$
 
-import os
+import base64
 from pathlib import Path
 from typing import Any
 
 import panel
 import param  # type: ignore[import-untyped]
-from panel.io.server import Server, StoppableThread
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _ROOT = Path(__file__).parent
@@ -40,6 +39,25 @@ _HEADER_BACKGROUND_IMAGE = _ASSETS / "header.jpg"
 _CONTENT_BACKGROUND_IMAGE = _ASSETS / "content.jpg"
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+class ImageFileNotFoundError(FileNotFoundError):
+    """Custom error for missing image files."""
+
+    def __init__(self, image_path: str) -> None:
+        """Initialize the error with the missing image path."""
+        super().__init__(f"The image file at {image_path} was not found.")
+
+
+def image_to_base64(image_path: str) -> str:
+    """Convert an image file to a base64-encoded string."""
+    # Ensure path exists
+    if Path(image_path).is_file():
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+        return f"data:image/{Path(image_path).suffix[1:]};base64,{encoded_string}"
+    else:
+        raise ImageFileNotFoundError(image_path)
 
 
 class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
@@ -230,16 +248,17 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PRIV DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
     def _css_main_load(self) -> None:
         """Load custom CSS for the application."""
+        # Convert background_image to base64 and embed in CSS
+
         panel.config.raw_css.append(_MAIN_CSS.read_text())
 
         # Set navbar background image
-        panel.config.raw_css.append(
-            f".navbar {{ background-image: url(/assets/{os.path.basename(self.header_background_image)}); }}"
-        )
+        header_img_base64 = image_to_base64(str(self.header_background_image))
+        panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
+
         # Set content background image
-        panel.config.raw_css.append(
-            f".content {{ background-image: url(/assets/{os.path.basename(self.content_background_image)}); }}"
-        )
+        content_img_base64 = image_to_base64(str(self.content_background_image))
+        panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
 
     def _sidebar_config_set(self) -> None:
         """Set the configuration for the sidebars."""
@@ -491,23 +510,14 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             **kwargs,
         )
 
-    def serve(self, **kwargs: Any) -> StoppableThread | Server:
-        """Serve the application."""
-        return panel.io.server.serve(
-            self.__panel__(),
-            title=str(self.title),
-            ico_path=str(_FAVICON_URL),
-            static_dirs={"/assets": self.static_dir},
-            **kwargs,
-        )
-        # TODO: Access parameters maybe better via kwargs, to be tested
-        # kwargs["title"] = str(self.title)
-        # kwargs["ico_path"] = str(_FAVICON_URL)
-        # kwargs["static_dirs"] = {"/assets": self.static_dir}
-        # return panel.io.server.serve(
-        #     self.__panel__(),
-        #     **kwargs,
-        # )
+    # TODO: Access parameters maybe better via kwargs, to be tested
+    # kwargs["title"] = str(self.title)
+    # kwargs["ico_path"] = str(_FAVICON_URL)
+    # kwargs["static_dirs"] = {"/assets": self.static_dir}
+    # return panel.io.server.serve(
+    #     self.__panel__(),
+    #     **kwargs,
+    # )
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
@@ -515,4 +525,8 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 if __name__ == "__main__":
     """Run the Panelini application."""
     app = Panelini()
-    app.serve(port=2222)
+    # app.serve(port=2222)
+    panel.io.server.serve(
+        app.__panel__(),
+        port=2233,
+    )

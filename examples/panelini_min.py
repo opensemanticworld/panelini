@@ -1,6 +1,6 @@
 """Minimal example to run Panelini."""
 
-from panel import Card
+import panel as pn
 
 from panelini import Panelini
 
@@ -13,7 +13,7 @@ app = Panelini(
 app.main_set(
     # Use panel components to build your layout
     objects=[
-        Card(
+        pn.Card(
             title="Set complete main objects",
             objects=["Some main content goes here"],
             width=300,
@@ -24,7 +24,7 @@ app.main_set(
 
 app.sidebar_set(
     objects=[
-        Card(
+        pn.Card(
             title="Set complete sidebar objects",
             objects=["Some sidebar content goes here"],
             width=300,
@@ -40,4 +40,4 @@ app.servable()
 
 if __name__ == "__main__":
     # Serve app as you would in panel
-    app.serve(port=5010)
+    pn.io.server.serve(app, port=5010)

@@ -30,5 +30,5 @@ if __name__ == "__main__":
     button_1.on_click(button_1_callback)
     button_2.on_click(button_2_callback)
 
-    my_panelini.serve(port=5007)
+    pn.io.server.serve(my_panelini, port=5010)
     # my_panelini.servable()
