@@ -12,7 +12,7 @@ from panel import Card, Column, Row, Spacer, config
 from panel.layout.gridstack import GridStack
 from panel.pane import Markdown
 
-from panelini.main import Panelini
+from panelini.main import Panelini, image_to_base64
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +29,14 @@ def test_panelini_instantiation():
     """Test instantiation of the Panelini class."""
     instance = Panelini()
     assert isinstance(instance, Panelini)
+
+
+def test_method_image_to_base64():
+    """Test the image_to_base64 method for encoding an image."""
+    header_base64 = image_to_base64(os.path.join(_ASSETS_DIR, "header.jpg"))
+    content_base64 = image_to_base64(os.path.join(_ASSETS_DIR, "content.jpg"))
+    assert content_base64.startswith("data:image/jpg;base64,")
+    assert header_base64.startswith("data:image/jpg;base64,")
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF INIT TESTCASES $$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -59,7 +67,7 @@ def test_panelini_classvar_title():
 
 def test_panelini_classvar_header_background_image():
     """Test the background image in the header."""
-    header_background_image_path = Path(os.path.join(_ASSETS_DIR, "header.svg"))
+    header_background_image_path = Path(os.path.join(_ASSETS_DIR, "header.jpg"))
     header_background_image_str = str(header_background_image_path)
     instance_path = Panelini(header_background_image=header_background_image_path)
     """Test the background image in the content area."""
@@ -73,7 +81,7 @@ def test_panelini_classvar_header_background_image():
 
 def test_panelini_classvar_content_background_image():
     """Test the background image in the content area."""
-    content_background_image_path = Path(os.path.join(_ASSETS_DIR, "content.svg"))
+    content_background_image_path = Path(os.path.join(_ASSETS_DIR, "content.jpg"))
     content_background_image_str = str(content_background_image_path)
     instance_path = Panelini(content_background_image=content_background_image_path)
     instance_str = Panelini(content_background_image=content_background_image_str)

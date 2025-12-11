@@ -52,7 +52,7 @@ A minimal example to run ``Panelini`` can be found in the `examples/panelini_min
 Below is a simple code snippet to get you started:
 
 ```python
-from panel import Card
+import panel as pn
 from panelini import Panelini
 
 # Create an instance of Panelini
@@ -64,7 +64,7 @@ app = Panelini(
 app.main_set(
     # Use panel components to build your layout
     objects=[
-        Card(
+        pn.Card(
             title="Set complete main objects",
             objects=["Some content goes here"],
             width=300,
@@ -78,7 +78,7 @@ app.servable()
 
 if __name__ == "__main__":
     # Serve app as you would in panel
-    app.serve(port=5010)
+    pn.io.server.serve(app, port=2233)
 ```
 
 > See [examples directory](https://github.com/opensemanticworld/panelini/tree/main/examples) for more usage scenarios.
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 Panel command to serve with static content
 
 ```bash
-panel serve src/panelini/main.py --dev --port 5006 --static-dirs assets="src/panelini/assets" --ico-path src/panelini/assets/favicon.ico
+panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src/panelini/assets" --ico-path src/panelini/assets/favicon.ico
 ```
 
 > When using `panel serve`, make sure to specify the correct paths for your static assets and favicon.

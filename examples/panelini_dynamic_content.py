@@ -70,4 +70,4 @@ app.servable()
 
 if __name__ == "__main__":
     # Serve app as you would in panel
-    app.serve(port=5010)
+    pn.io.server.serve(app, port=5010)
