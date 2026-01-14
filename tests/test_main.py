@@ -117,12 +117,16 @@ def test_panelini_classvar_sidebar_enabled():
     """Test the sidebar enabled state."""
     instance = Panelini(sidebar_enabled=True)
     assert instance.sidebar_enabled is True
+    instance = Panelini(sidebar_enabled=False)
+    assert instance.sidebar_enabled is False
 
 
 def test_panelini_classvar_sidebar_right_enabled():
     """Test the right sidebar enabled state."""
     instance = Panelini(sidebar_right_enabled=True)
     assert instance.sidebar_right_enabled is True
+    instance = Panelini(sidebar_right_enabled=False)
+    assert instance.sidebar_right_enabled is False
 
 
 def test_panelini_classvar_sidebar_visible():
@@ -130,6 +134,9 @@ def test_panelini_classvar_sidebar_visible():
     instance = Panelini(sidebar_visible=True)
     assert instance.sidebar_visible is True
     assert instance._sidebar_left.visible is True
+    instance = Panelini(sidebar_visible=False)
+    assert instance.sidebar_visible is False
+    assert instance._sidebar_left.visible is False
 
 
 def test_panelini_classvar_sidebar_right_visible():
@@ -140,6 +147,12 @@ def test_panelini_classvar_sidebar_right_visible():
     )
     assert instance.sidebar_right_visible is True
     assert instance._sidebar_right.visible is True
+    instance = Panelini(
+        sidebar_right_enabled=True,
+        sidebar_right_visible=False,
+    )
+    assert instance.sidebar_right_visible is False
+    assert instance._sidebar_right.visible is False
 
 
 def test_panelini_classvar_sidebars_max_width():
@@ -172,6 +185,8 @@ def test_panelini_classvar_footer_enabled():
     """Test the footer enabled state."""
     instance = Panelini(footer_enabled=True)
     assert instance.footer_enabled is True
+    instance = Panelini(footer_enabled=False)
+    assert instance.footer_enabled is False
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVAR TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$

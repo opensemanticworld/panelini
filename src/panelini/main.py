@@ -225,11 +225,11 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             css_classes=["content"],
             objects=[
                 self._header,
-                self._sidebar_left,
                 self._main,
-            ],  # Appended below, parts conditionally
+            ],
             sizing_mode="scale_both",
         )
+        # Appended below, parts conditionally in _content_set function
         self._content_set()
 
         self._panel = panel.Column(
@@ -320,7 +320,12 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     def _content_set(self) -> None:
         """Set the layout of the content area."""
         self._content.objects.clear()
-        self._content.objects.append(self._sidebar_left)
+
+        # Left sidebar
+        if self.sidebar_enabled:
+            self._content.objects.append(self._sidebar_left)
+
+        # Main area
         self._content.objects.append(self._main)
 
         # Right sidebar
@@ -347,8 +352,9 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     def _navbar_set(self) -> None:
         """Set the navbar objects, only type Column is allowed in tests."""
         self._navbar = []
+        spacer_width = 60
 
-        # Button: Toggle Left Sidebar (=sidebar)
+        # Left sidebar toggle button
         if self.sidebar_enabled:
             self._navbar.append(
                 panel.Column(
@@ -364,6 +370,8 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
                     ],
                 ),
             )
+        else:
+            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width)))
 
         # Logo
         self._navbar.append(
@@ -389,7 +397,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             )
         )
 
-        # Button: Toggle Right Sidebar if enabled
+        # Sidebar right toggle button
         if self.sidebar_right_enabled:
             self._navbar.append(
                 panel.Column(
@@ -405,6 +413,8 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
                     ],
                 )
             )
+        else:
+            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width)))
 
     def _panel_set(self) -> None:
         """Update the main panel with the current layout."""
@@ -470,8 +480,6 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
 
         return list(self.sidebar)
 
-    # TODO: define main_clear function and test
-
     def main_remove_index(self, index: int) -> None:
         """Remove an object from the main content area by index."""
         if 0 <= index < len(self.main):
@@ -501,32 +509,18 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._css_classes_extend(self.main, ["main-object"])
         return list(self.main)
 
-    # TODO: Add tests for serve functions below
     def servable(self, **kwargs: Any) -> panel.viewable.Viewable:
         """Make the application servable with additional parameters."""
         kwargs["title"] = kwargs.get("title", self.title)
-        return panel.viewable.Viewable.servable(
-            self._panel,
-            **kwargs,
-        )
-
-    # TODO: Access parameters maybe better via kwargs, to be tested
-    # kwargs["title"] = str(self.title)
-    # kwargs["ico_path"] = str(_FAVICON_URL)
-    # kwargs["static_dirs"] = {"/assets": self.static_dir}
-    # return panel.io.server.serve(
-    #     self.__panel__(),
-    #     **kwargs,
-    # )
+        return panel.viewable.Viewable.servable(self._panel, **kwargs)
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
 if __name__ == "__main__":
     """Run the Panelini application."""
-    app = Panelini()
-    # app.serve(port=2222)
+    app = Panelini(title="Welcome to Panelini! 🖥️", sidebar_enabled=False)
     panel.io.server.serve(
-        app.__panel__(),
+        app.servable(),
         port=2233,
     )
