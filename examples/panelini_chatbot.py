@@ -2,20 +2,22 @@
 
 import os
 
-import panel
+import panel as pn
+from dotenv import load_dotenv
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
-from panel import Card
 
 from panelini import Panelini
 
+# Load environment variables from a .env file
+load_dotenv()
+
 LLM = AzureChatOpenAI(
-    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/"),
-    api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-08-01-preview"),
+    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+    api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
     model="gpt-4o-2024-08-06",
-    # cache=SQLiteCache("openai_cache.db"),
 )
 
 
@@ -54,16 +56,12 @@ class HistoryToolAgent:
             verbose=True,
             return_intermediate_steps=True,
         )
-        # agent_executor.invoke({"input": "what is LangChain?"})
         self.chat_history = []
 
     async def invoke(self, prompt):
-        # return graph.invoke({"question": prompt})
-        # return tools_llm.invoke(prompt)
-        # return agent_executor.invoke({"input": prompt})
+        """Invoke the agent with the given prompt and chat history."""
         res = await self.agent_executor.ainvoke({"input": prompt, "chat_history": self.chat_history})
-        #  print("Whole result of invoke", res)
-        #  print("Useful parts of result: ", res["intermediate_steps"])
+
         self.chat_history.extend([
             HumanMessage(content=prompt),
             str(res["intermediate_steps"]),  # TODO: find proper Type for intermediate steps
@@ -78,7 +76,7 @@ async def get_response(contents, user, instance):
     This function is called when the user sends a message in the chat interface.
     """
     response = await agent.invoke(contents)
-    response_message = panel.chat.ChatMessage(
+    response_message = pn.chat.ChatMessage(
         object=response["output"],
         user="🤖 Assistant",
         show_edit_icon=False,
@@ -93,7 +91,7 @@ chat_history = []
 tools = []
 agent = HistoryToolAgent(tools=tools)
 
-chat_interface = panel.chat.ChatInterface(
+chat_interface = pn.chat.ChatInterface(
     callback=get_response,
     # max_width=500,
     user="🧑 User",
@@ -120,7 +118,7 @@ app = Panelini(
 app.main_set(
     # Use panel components to build your layout
     objects=[
-        Card(
+        pn.Card(
             title="Set complete main objects",
             objects=[chat_interface],
             width=400,
@@ -131,4 +129,4 @@ app.main_set(
 
 if __name__ == "__main__":
     # Serve app as you would in panel
-    app.serve(port=5010)
+    pn.serve(app.servable(), port=5011)
