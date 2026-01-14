@@ -65,6 +65,13 @@ button:active {
   outline: none !important;
 }
 
+/* .chat-interface {
+  border: none;
+} */
+
+.bk-panel-models-layout-Column.left {
+  display: none;
+}
 
 /* TODO: Test on Mobile, only worked in browsers yet
 /* Move header to footer for mobile */

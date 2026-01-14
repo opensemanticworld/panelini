@@ -14,6 +14,8 @@ from panelini import Panelini
 # Load environment variables from a .env file
 load_dotenv()
 
+
+# Environment variables must be available in .evn file or system environment
 LLM = AzureChatOpenAI(
     azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
     api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
@@ -22,11 +24,11 @@ LLM = AzureChatOpenAI(
 
 
 class HistoryToolAgent:
-    def __init__(self, tools, prompt_template=None):
+    def __init__(self, llm=LLM, tools=None, prompt_template=None):
         """
         a class including necessary functions to orchestrate a llm tool agent with history
         """
-
+        self.llm = llm
         self.tools = tools
         self.prompt_template = prompt_template
         if self.prompt_template is None:
@@ -48,7 +50,7 @@ class HistoryToolAgent:
             ])
 
         # Construct the Tools agent
-        self.langchain_agent = create_tool_calling_agent(LLM, tools, self.prompt_template)
+        self.langchain_agent = create_tool_calling_agent(self.llm, tools, self.prompt_template)
         # Create an agent executor by passing in the agent and tools
         self.agent_executor = AgentExecutor(
             agent=self.langchain_agent,
@@ -93,40 +95,40 @@ agent = HistoryToolAgent(tools=tools)
 
 chat_interface = pn.chat.ChatInterface(
     callback=get_response,
-    # max_width=500,
     user="🧑 User",
-    show_avatar=False,
     min_width=330,
     show_send=True,
-    min_height=330,
     show_rerun=False,
     show_undo=False,
-    show_clear=True,
     show_timestamp=False,
     show_button_name=False,
     show_reaction_icons=False,
-    # sizing_mode="stretch_height",
     callback_exception="verbose",
+    css_classes=["chat-interface"],
 )
 
 # Create an instance of Panelini
 app = Panelini(
     title="📊 Welcome to Panelini! 🖥️",
-    # main = main_objects # init objects here
+    sidebar_enabled=False,
 )
-# Or set objects outside
+
+# Set the main objects of the Panelini app
 app.main_set(
-    # Use panel components to build your layout
     objects=[
         pn.Card(
-            title="Set complete main objects",
+            hide_header=True,
+            collapsible=False,
+            width=500,
             objects=[chat_interface],
-            width=400,
-            max_height=400,
         )
     ]
 )
 
+chat_interface.send("Minions Ipsum is simply dummy text of the printing and typesetting industry.")
+
+servable = app.servable()
+
 if __name__ == "__main__":
     # Serve app as you would in panel
-    pn.serve(app.servable(), port=5011)
+    pn.serve(servable, port=5011)
