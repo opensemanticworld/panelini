@@ -1,0 +1,1 @@
+"""Entrypoint of visnetwork panel."""
