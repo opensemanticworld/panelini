@@ -96,7 +96,20 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       make test
       ```
 
-9. Before raising a pull request you should also run tox.
+9. (Optional) Run UI tests with Playwright to test browser interactions:
+
+      ```bash
+      make test-ui
+      ```
+
+      This will:
+      - Install Playwright browsers automatically
+      - Run UI tests in headed mode (visible browser) with slow motion
+      - Pause on errors for debugging (--pdb flag)
+
+      **Note:** UI tests are automatically skipped in CI environments but can be run locally for manual testing and debugging.
+
+10. Before raising a pull request you should also run tox.
    This will run the tests across different versions of Python:
 
       ```bash
@@ -106,7 +119,7 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       This requires you to have multiple versions of python installed.
       This step is also triggered in the CI/CD pipeline, so you could also choose to skip this step locally.
 
-10. Commit your changes and push your branch to GitHub:
+11. Commit your changes and push your branch to GitHub:
 
       ```bash
       git add .
@@ -114,7 +127,7 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       git push origin name-of-your-bugfix-or-feature
       ```
 
-11. Submit a pull request through the GitHub website.
+12. Submit a pull request through the GitHub website.
 
 ## Pull Request Guidelines
 

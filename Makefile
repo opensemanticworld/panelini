@@ -20,6 +20,13 @@ test: ## Test the code with pytest
 	@echo "🚀 Testing code: Running pytest"
 	@uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml
 
+.PHONY: test-ui
+test-ui: ## Run UI tests with Playwright
+	@echo "🚀 Installing Playwright browsers"
+	@uv run playwright install
+	@echo "🚀 Running UI tests with Playwright"
+	@uv run pytest tests/panels/panel/jsoneditor/panel_frontend_test.py --headed --slowmo 1000 --pdb
+
 .PHONY: build
 build: clean-build ## Build wheel file
 	@echo "🚀 Creating wheel file"
