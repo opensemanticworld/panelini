@@ -6,6 +6,9 @@
 </template>
 
 <script>
+// Import JSONEditor and make it available globally
+import { JSONEditor } from "@json-editor/json-editor";
+window.JSONEditor = JSONEditor;
 
 export default {
   name: 'dm-json-form3',
@@ -84,9 +87,7 @@ export default {
     },
   },
 
-  async mounted() {
-    await import("jsoneditor");
-
+  mounted() {
     // default options
     this._options = {...{
       "theme": "bootstrap4",

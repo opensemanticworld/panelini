@@ -10,43 +10,20 @@ from panel.custom import AnyWidgetComponent
 
 pn.extension()
 
-bundled_assets_dir = Path(__file__).parent / "vue" / "dist" / "default"
+bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
 
 
 class JsonEditor(AnyWidgetComponent):
     """A JSON-SCHEMA based form editor using
     https://github.com/json-editor/json-editor"""
 
-    _esm = (bundled_assets_dir / "jsoneditor_vue.mjs").read_text()
+    _esm = (bundled_assets_dir / "jsoneditor_vue.mjs").read_text(encoding="utf-8")
 
     _stylesheets: ClassVar = [
         # includes bootstrap and spectre
-        (bundled_assets_dir / "jsoneditor_vue.css").read_text(),
-        # v5 does not work properly:
-        # "https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css",
-        # does not work:
-        # 'https://use.fontawesome.com/releases/v5.12.1/css/all.css',
-        # "https://unpkg.com/spectre.css/dist/spectre-icons.min.css",
+        (bundled_assets_dir / "jsoneditor_vue.css").read_text(encoding="utf-8"),
     ]
-    _importmap: ClassVar = {
-        "imports": {
-            "vue": "https://esm.sh/vue@3",
-            # works with `import {JSONEditor} from "@json-editor/json-editor"`:
-            # "@json-editor/json-editor": "https://esm.sh/@json-editor/json-editor@latest",
-            # works with `import("@json-editor/json-editor")`:
-            # "@json-editor/json-editor": (
-            #   "https://cdn.jsdelivr.net/npm/@json-editor/json-editor",
-            #   "@latest/dist/jsoneditor.min.js"
-            # ),
-            # works with `import("jsoneditor")`:
-            "jsoneditor": "https://cdn.jsdelivr.net/npm/@json-editor/json-editor@latest/dist/jsoneditor.min.js",
-        }
-    }
-    # __javascript__= [
-    #     "https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js",
-    #     "https://unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js",
-    #     "https://cdn.jsdelivr.net/npm/@json-editor/json-editor@latest/dist/jsoneditor.min.js"
-    # ]
+
     value = param.Dict()
     options = param.Dict(
         default={
