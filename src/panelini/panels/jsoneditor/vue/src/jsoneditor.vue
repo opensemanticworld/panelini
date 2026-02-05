@@ -90,7 +90,7 @@ export default {
   mounted() {
     // default options
     this._options = {...{
-      "theme": "bootstrap4",
+      "theme": "bootstrap5",
       "iconlib": "spectre",
       "remove_button_labels": true,
       "ajax": true,

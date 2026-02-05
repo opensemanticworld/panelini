@@ -18,7 +18,7 @@ export function render({ model, el }) {
   //debugger
   let options = model.get("options");
   options = options || {
-    "theme": 'bootstrap4',
+    "theme": 'bootstrap5',
     "iconlib": 'spectre',
     schema: {
       "title": "Editor Test",

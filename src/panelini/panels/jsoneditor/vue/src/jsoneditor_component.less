@@ -1,4 +1,10 @@
+// Scope Bootstrap CSS to prevent conflicts with Panel
 .bootstrap-wrapper {
+    // Reset inherited styles from Panel
+    all: revert;
+
     @import (less) "../node_modules/bootstrap/dist/css/bootstrap.min.css";
+
+    // Spectre icons (scoped within bootstrap-wrapper)
+    @import (less) "../node_modules/spectre.css/dist/spectre-icons.min.css";
 }
-@import "../node_modules/spectre.css/dist/spectre-icons.min.css";

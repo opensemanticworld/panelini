@@ -35,12 +35,12 @@ def test_component(page: Page, port):
     page.locator("[for=root\\[testxy\\]]").click()
     assert app.jsoneditor.get_value() == {"testxy": "test123"}
 
-    # click save button (button element with text "Save")
-    page.locator("button:has-text('Save')").click()
+    # click the Panel save button (not the JSON editor's internal save button)
+    page.locator("button.bk-btn:has-text('Save')").click()
 
     time.sleep(0.5)  # wait for save action to complete
-    # check if the span with class "je-object__title" contains "Updated Title"
-    assert page.locator(".je-object__title").text_content() == "Updated Title"
+    # check if the title span contains "Updated Title" (target span, not button)
+    assert page.locator(".je-object__title > span").text_content() == "Updated Title"
 
     assert page.locator("#root\\[testxy\\]").input_value() == "test123"
 
