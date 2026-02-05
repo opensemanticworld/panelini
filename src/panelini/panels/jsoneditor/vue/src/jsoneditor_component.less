@@ -1,10 +1,15 @@
-// Scope Bootstrap CSS to prevent conflicts with Panel
+// Import Bootstrap and Spectre CSS (scoped to .bootstrap-wrapper via postcss-prefixwrap)
+@import (inline) "../node_modules/bootstrap/dist/css/bootstrap.min.css";
+@import (inline) "../node_modules/spectre.css/dist/spectre-icons.min.css";
+
+// Inherit background from parent to align with Panel styles
 .bootstrap-wrapper {
-    // Reset inherited styles from Panel
-    all: revert;
+    background: inherit;
+}
 
-    @import (less) "../node_modules/bootstrap/dist/css/bootstrap.min.css";
-
-    // Spectre icons (scoped within bootstrap-wrapper)
-    @import (less) "../node_modules/spectre.css/dist/spectre-icons.min.css";
+// Override Bootstrap card background (postcss-prefixwrap will add .bootstrap-wrapper prefix)
+// This comes after Bootstrap imports, so it wins the cascade
+.card {
+    --bs-card-bg: transparent !important;
+    background: inherit !important;
 }

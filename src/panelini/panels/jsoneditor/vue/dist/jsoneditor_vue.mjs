@@ -15571,7 +15571,30 @@ const wm = {
     }
   },
   mounted() {
-    this._options = { theme: "bootstrap5", iconlib: "spectre", remove_button_labels: !0, ajax: !0, ajax_cache_responses: !1, disable_collapse: !1, disable_edit_json: !0, disable_properties: !1, use_default_values: !0, required_by_default: !1, display_required_only: !0, show_opt_in: !1, show_errors: "always", disable_array_reorder: !1, disable_array_delete_all_rows: !1, disable_array_delete_last_row: !1, keep_oneof_values: !1, no_additional_properties: !0, case_sensitive_property_search: !1, ...this.options }, console.debug("Options: ", this._options), this.editor = new mo.JSONEditor(this.$el, this._options), console.debug("Editor: ", this.editor), this.init();
+    this._options = {
+      theme: "bootstrap5",
+      iconlib: "spectre",
+      object_background: "",
+      // prevent forced bg-light class
+      remove_button_labels: !0,
+      ajax: !0,
+      ajax_cache_responses: !1,
+      disable_collapse: !1,
+      disable_edit_json: !0,
+      disable_properties: !1,
+      use_default_values: !0,
+      required_by_default: !1,
+      display_required_only: !0,
+      show_opt_in: !1,
+      show_errors: "always",
+      disable_array_reorder: !1,
+      disable_array_delete_all_rows: !1,
+      disable_array_delete_last_row: !1,
+      keep_oneof_values: !1,
+      no_additional_properties: !0,
+      case_sensitive_property_search: !1,
+      ...this.options
+    }, console.debug("Options: ", this._options), this.editor = new mo.JSONEditor(this.$el, this._options), console.debug("Editor: ", this.editor), this.init();
   },
   emits: ["onChange", "onReady"]
 }, jm = {

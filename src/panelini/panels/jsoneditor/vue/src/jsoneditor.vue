@@ -92,6 +92,7 @@ export default {
     this._options = {...{
       "theme": "bootstrap5",
       "iconlib": "spectre",
+      "object_background": "", // prevent forced bg-light class
       "remove_button_labels": true,
       "ajax": true,
       "ajax_cache_responses": false,
@@ -124,9 +125,3 @@ export default {
   emits: ['onChange', 'onReady'],
 };
 </script>
-
-<!-- <style lang="less">
-.bootstrap-wrapper {
-  @import (less) url('https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/css/bootstrap.min.css');
-}
-</style> -->
