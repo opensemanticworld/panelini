@@ -3,6 +3,6 @@
 ## Build
 
 ```bash
-npm i
+npm install
 npm run build
 ```
