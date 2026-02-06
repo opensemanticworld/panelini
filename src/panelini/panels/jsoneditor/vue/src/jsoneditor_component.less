@@ -13,3 +13,268 @@
     --bs-card-bg: transparent !important;
     background: inherit !important;
 }
+
+table {
+    --bs-table-bg: transparent !important;
+}
+
+.je-form-input-label {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: bold;
+}
+
+.je-form-input-description {
+    display: inline-block;
+    margin: 0;
+    font-size: 0.8em;
+    font-style: italic;
+}
+
+.je-indented-panel {
+    padding: 5px;
+    margin: 10px;
+    border-radius: 3px;
+    border: 1px solid #ddd;
+}
+
+.je-child-editor-holder {
+    margin-bottom: 8px;
+}
+
+.je-header-button-holder {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 0.8em;
+    vertical-align: middle;
+}
+
+.je-table {
+    margin-bottom: 5px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Upload Editor preview image */
+.je-upload-preview img {
+    float: left;
+    margin: 0 0.5rem 0.5rem 0;
+    max-width: 100%;
+    max-height: 5rem;
+}
+
+.je-dropzone {
+    position: relative;
+    margin: 0.5rem 0;
+    border: 2px dashed black;
+    width: 100%;
+    height: 60px;
+    background: teal;
+    transition: all 0.5s;
+}
+
+.je-dropzone:before {
+    position: absolute;
+    content: attr(data-text);
+    color: rgba(0, 0, 0, 0.6);
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.je-dropzone.valid-dropzone {
+    background: green;
+}
+
+.je-dropzone.invalid-dropzone {
+    background: red;
+}
+
+
+/* GENERAL STYLE */
+
+/* add margin to row set of json editor forms */
+.row>div:not([style*="display: none;"]) {
+    margin-bottom: 1rem;
+}
+
+/* add margin to comment / change description */
+.oo-ui-fieldLayout-body {
+    margin: 0.5rem 0;
+}
+
+/* add space between burger menu and select properties */
+.icon-menu {
+    padding: 8px 0 8px 0;
+    margin: 0 6px;
+}
+
+/* button radius: "select properties" */
+.btn-group>.btn-group:not(:first-child)>.btn,
+.btn-group>.btn:nth-child(n+3),
+.btn-group>:not(.btn-check)+.btn {
+    border-top-left-radius: 0.2rem;
+    border-bottom-left-radius: 0.2rem;
+    margin-left: 6px;
+}
+
+/* space between category header and "select properties" button */
+.btn-group>.btn-group:not(:first-child),
+.btn-group>:not(.btn-check:first-child)+.btn {
+    margin-left: calc(var(--bs-border-width)*8);
+}
+
+/* vertical align of "select properties" button ->  */
+.btn-group,
+.btn-group-vertical {
+    /*vertical-align: unset;*/
+    margin-bottom: 10px;
+}
+
+/* border of "select properties" dialog ->  */
+.je-modal {
+    box-shadow: rgba(0, 0, 0, 0.19) 0px 10px 20px, rgba(0, 0, 0, 0.23) 0px 6px 6px !important;
+}
+
+/* vertical align of section-collapse button ->  */
+.json-editor-btn-collapse {
+    margin-bottom: 5px;
+}
+
+/* space between category header and description */
+.card-title {
+    margin-bottom: 8px;
+}
+
+/* space after "select properties" and button border */
+button.json-editor-btn-edit_properties::after {
+    margin-right: 8px;
+}
+
+/* remove unnecessary border under "Text" "Lang code" and between "value required" and "add button" */
+.table> :not(caption)>*>* {
+    border-bottom-width: 0;
+}
+
+/* button size - delete/ add property instance  */
+.btn-group-vertical>.btn,
+.btn-group>.btn {
+    flex: 0.1 1 auto;
+}
+
+/* button radius - add property instance */
+.btn-group>.btn-group:not(:last-child)>.btn,
+.btn-group>.btn.dropdown-toggle-split:first-child,
+.btn-group>.btn:not(:last-child):not(.dropdown-toggle) {
+    border-top-right-radius: 0.2rem;
+    border-bottom-right-radius: 0.2rem;
+}
+
+/* space between array property label and "add" btn */
+.btn-group {
+    margin-left: 5px !important;
+    margin-bottom: 0px !important;
+}
+
+/* margin input field - select properties dropdown */
+.property-selector-input {
+    margin: .5rem .3rem;
+}
+
+/* uniform font size and style */
+.je-ready .h2,
+.je-ready .h3,
+.je-ready .form-label,
+.je-ready thead {
+    font-size: 1.0rem;
+    font-weight: bold;
+}
+
+/* fix schema select dropdown icon style */
+.je-switcher {
+    padding-right: 33px !important;
+}
+
+/* FIXES */
+
+/* fix autocomplete result lists are not visible in table layouts */
+.je-ready table {
+    overflow-x: unset;
+}
+.je-ready .table-responsive {
+    overflow-x: unset;
+}
+
+/* Extensions */
+
+/* xxl modal - leave a 5% border (!=fullsreen) to inducate it's still a popup */
+.modal-xxl {
+    min-width: 95%;
+    height: 95%;
+}
+.modal-xxl .modal-content {
+    height: 95%;
+}
+.modal-xxl .modal-body {
+    overflow-y: auto;
+}
+
+.modal-warning .modal-content {
+    --bs-border-opacity: 1;
+    border-color: rgba(var(--bs-warning-rgb),var(--bs-border-opacity)) !important;
+    border-width: 0.1rem;
+}
+
+.modal-danger .modal-content {
+    --bs-border-opacity: 1;
+    border-color: rgba(var(--bs-danger-rgb),var(--bs-border-opacity)) !important;
+    border-width: 0.1rem;
+}
+
+/* DARKMODE */
+
+/* transfer bg-color from json-editor.min.js to this file */
+.je-modal {
+    background-color: #fff;
+}
+
+/* add bs5 dark mode support for class je-modal */
+html[data-bs-theme="dark"] .je-modal {
+    background-color: #212529;
+}
+
+/* dark mode for json text editor */
+html[data-bs-theme="dark"] .jsoneditors {
+    filter: invert(0.9);
+}
+
+/* dark mode for signature canvas */
+html[data-bs-theme="dark"] .signature {
+    filter: invert(0.9);
+}
+
+/* dark mode for selectize.js */
+html[data-bs-theme="dark"] .selectize-control {
+    filter: invert(0.86);
+}
+html[data-bs-theme="dark"] .selectize-control .item {
+    filter: invert(1.0);
+}
+
+/* dark mode for choices.js */
+html[data-bs-theme="dark"] .choices {
+    filter: invert(0.86);
+}
+html[data-bs-theme="dark"] .choices__item {
+    filter: invert(0.9);
+}
+html[data-bs-theme="dark"] .choices__list div{
+    background-color: unset;
+}
+.choices-dropdown {
+    z-index: 2;
+}
+
+/* dark mode for flatpickr */
+html[data-bs-theme="dark"] .flatpickr-calendar {
+    filter: invert(0.9);
+}
