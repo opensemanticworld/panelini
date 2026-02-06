@@ -65,7 +65,10 @@ export default {
           deleteNode: true,
           deleteEdge: true,
         },
-        interaction: { multiselect: true },
+        interaction: {
+          multiselect: true,
+          selectable: true,
+        },
         nodes: {
           shape: "dot",
           size: 10,
@@ -100,11 +103,21 @@ export default {
       const network = this.network;
       const nodesDataSet = this.nodesDataSet;
 
-      // Click event
+      // Click event (only fires when nodes are clicked)
       network.on('click', (params) => {
         if (params.nodes.length > 0) {
           this.sendEvent("click", params);
         }
+      });
+
+      // Select node event (fires when a node is selected)
+      network.on('selectNode', (params) => {
+        this.sendEvent("selectNode", params);
+      });
+
+      // Deselect node event (fires when clicking away from selected nodes)
+      network.on('deselectNode', (params) => {
+        this.sendEvent("deselectNode", params);
       });
 
       // Double click event

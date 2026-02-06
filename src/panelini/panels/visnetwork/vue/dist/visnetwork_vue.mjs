@@ -23846,7 +23846,10 @@ const DL = (A, e) => {
           deleteNode: !0,
           deleteEdge: !0
         },
-        interaction: { multiselect: !0 },
+        interaction: {
+          multiselect: !0,
+          selectable: !0
+        },
         nodes: {
           shape: "dot",
           size: 10
@@ -23865,6 +23868,10 @@ const DL = (A, e) => {
       const A = this.network, e = this.nodesDataSet;
       A.on("click", (t) => {
         t.nodes.length > 0 && this.sendEvent("click", t);
+      }), A.on("selectNode", (t) => {
+        this.sendEvent("selectNode", t);
+      }), A.on("deselectNode", (t) => {
+        this.sendEvent("deselectNode", t);
       }), A.on("doubleClick", (t) => {
         if (t.nodes.length === 1) {
           if (A.isCluster(t.nodes[0])) {
