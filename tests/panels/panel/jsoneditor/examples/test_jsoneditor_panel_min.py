@@ -9,14 +9,12 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-# pytest ./tests/ui/panel/panel_frontend_test.py --headed --slowmo 1000
+from examples.panels.jsoneditor.jsoneditor_panel_min import App
 
 
 # Skip in CI environments, run locally via command line
 @pytest.mark.skipif(os.getenv("CI") is not None, reason="Playwright tests do not run in CI")
 def test_component(page: Page, port):
-    from panel_app import App
-
     app = App()
     url = f"http://localhost:{port}"
 
@@ -33,6 +31,7 @@ def test_component(page: Page, port):
     # see https://stackoverflow.com/questions/1466103/escape-square-brackets-when-assigning-a-class-name-to-an-element
     page.locator("#root\\[testxy\\]").fill("test123")
     page.locator("[for=root\\[testxy\\]]").click()
+    time.sleep(0.5)  # wait for change event to propagate
     assert app.jsoneditor.get_value() == {"testxy": "test123"}
 
     # click the Panel save button (not the JSON editor's internal save button)

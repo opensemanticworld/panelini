@@ -1,10 +1,4 @@
-
-//import {Vue} from "https://esm.sh/vue@3";
 import { createApp, ref } from "vue"; //"https://esm.sh/vue@3";
-//import {Vue} from "https://unpkg.com/vue@3/dist/vue.global.js"
-//import {JSONEditor} from "https://esm.sh/@json-editor/json-editor@latest"
-//import {JSONEditor} from "@json-editor/json-editor"
-//import {JSONEditor} from "jsoneditor"
 import JsonEditorComponent from "@/jsoneditor.vue" //"jsoneditor.js"
 import "@/jsoneditor_component.less"
 
