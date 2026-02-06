@@ -53,11 +53,21 @@ class JsonEditor(AnyWidgetComponent):
         """Set the value of the JSON editor."""
         self.value = value
 
-    def set_schema(self, schema: dict, keep_value: bool = True) -> None:
-        """Set the schema of the JSON editor."""
+    def set_schema(self, schema: dict, startval: dict | None = None, keep_value: bool = False) -> None:
+        """Set the schema of the JSON editor.
+
+        Args:
+            schema: The new JSON schema.
+            startval: Initial value to set with the new schema. If provided, this
+                      takes precedence over keep_value.
+            keep_value: If True and startval is None, keep the current value.
+                        Defaults to False.
+        """
         # override options param to trigger change event
         new_options = {**self.options, "schema": schema}
-        if keep_value:
+        if startval is not None:
+            new_options["startval"] = startval
+        elif keep_value:
             new_options["startval"] = self.get_value()
         else:
             new_options["startval"] = None
