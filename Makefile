@@ -25,7 +25,7 @@ test-ui: ## Run UI tests with Playwright
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Running UI tests with Playwright"
-	@uv run pytest tests/panels/panel/jsoneditor/panel_frontend_test.py --headed --slowmo 1000 --pdb
+	@uv run pytest --headed --slowmo 1000 --pdb
 
 .PHONY: build
 build: clean-build ## Build wheel file
