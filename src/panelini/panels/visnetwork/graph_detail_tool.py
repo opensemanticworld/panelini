@@ -3,16 +3,33 @@
 from io import StringIO
 from typing import Any, Optional
 
-import pandas as pd  # type: ignore[import-untyped]
 import panel as pn
-import plotly.express as px  # type: ignore[import-not-found]
 
 from panelini.panels.jsoneditor import JsonEditor
 
 from .utils import data_url_to_bytes
 from .visnetwork import VisNetwork
 
-pn.extension("plotly")
+# Optional dependencies for CSV visualization
+_HAS_PANDAS = False
+_HAS_PLOTLY = False
+pd: Any = None
+px: Any = None
+
+try:
+    import pandas as pd  # type: ignore[import-untyped,no-redef]
+
+    _HAS_PANDAS = True
+except ImportError:
+    pass
+
+try:
+    import plotly.express as px  # type: ignore[import-untyped,no-redef]
+
+    _HAS_PLOTLY = True
+    pn.extension("plotly")
+except ImportError:
+    pass
 
 
 class GraphDetailTool:
@@ -205,6 +222,16 @@ class GraphDetailTool:
         Args:
             data_url: Data URL containing CSV content.
         """
+        if not _HAS_PANDAS:
+            self.visualizations_col.append(
+                pn.pane.Markdown(
+                    "### CSV Preview\n\n"
+                    "*pandas is required for CSV visualization. "
+                    "Install with: `pip install panelini[plotting]`*"
+                )
+            )
+            return
+
         try:
             csv_bytes = data_url_to_bytes(data_url)
             csv_str = csv_bytes.decode("utf-8")
@@ -221,6 +248,14 @@ class GraphDetailTool:
 
             if len(numeric_cols) == 0:
                 self.visualizations_col.append(pn.pane.Markdown("*(No numeric columns found for plotting.)*"))
+                return
+
+            if not _HAS_PLOTLY:
+                self.visualizations_col.append(
+                    pn.pane.Markdown(
+                        "*(plotly is required for CSV plotting. Install with: `pip install panelini[plotting]`)*"
+                    )
+                )
                 return
 
             # Default selections

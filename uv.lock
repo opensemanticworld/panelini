@@ -2408,11 +2408,15 @@ name = "panelini"
 version = "0.7.2"
 source = { editable = "." }
 dependencies = [
-    { name = "pandas" },
     { name = "panel" },
     { name = "param" },
-    { name = "plotly" },
     { name = "watchfiles" },
+]
+
+[package.optional-dependencies]
+plotting = [
+    { name = "pandas" },
+    { name = "plotly" },
 ]
 
 [package.dev-dependencies]
@@ -2438,12 +2442,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'plotting'", specifier = ">=2.0.0" },
     { name = "panel", specifier = ">=1.7.1" },
     { name = "param", specifier = ">=2.2.1" },
-    { name = "plotly", specifier = ">=5.0.0" },
+    { name = "plotly", marker = "extra == 'plotting'", specifier = ">=5.0.0" },
     { name = "watchfiles", specifier = ">=1.1.0" },
 ]
+provides-extras = ["plotting"]
 
 [package.metadata.requires-dev]
 ai = [

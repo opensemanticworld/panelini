@@ -20,6 +20,10 @@ dependencies = [
     "panel>=1.7.1",
     "param>=2.2.1",
     "watchfiles>=1.1.0",
+]
+
+[project.optional-dependencies]
+plotting = [
     "pandas>=2.0.0",
     "plotly>=5.0.0",
 ]
@@ -131,4 +135,4 @@ branch = true
 source = ["src"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles"]
+DEP002 = ["watchfiles", "pandas", "plotly"]
