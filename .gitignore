@@ -1,5 +1,8 @@
 docs/source
 
+# Node.js
+node_modules/
+
 # From https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
 
 # Byte-compiled / optimized / DLL files
@@ -15,6 +18,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# Include pre-built Vue assets for custom panels
+!src/panelini/panels/*/vue/dist/
 downloads/
 eggs/
 .eggs/
