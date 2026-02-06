@@ -5,8 +5,6 @@ from typing import Any, Optional
 
 import panel as pn
 
-from panelini.panels.jsoneditor import JsonEditor
-
 from .utils import data_url_to_bytes
 from .visnetwork import VisNetwork
 
@@ -55,7 +53,7 @@ class GraphDetailTool:
         """
         self.nodes = nodes if nodes is not None else []
         self.edges = edges if edges is not None else []
-        self.current_node_jsoneditor: Optional[JsonEditor] = None
+        self.current_node_jsoneditor: Optional[pn.widgets.JSONEditor] = None
         self._panel: Optional[pn.Row] = None
         self.visnetwork_panel: VisNetwork
         self.disable_edit_button: pn.widgets.Button
@@ -175,14 +173,8 @@ class GraphDetailTool:
         self.detail_col.append(pn.pane.Markdown(f"### Node ID: {current_node_dict['id']}"))
 
         # JSON Editor for node properties
-        self.current_node_jsoneditor = JsonEditor(
+        self.current_node_jsoneditor = pn.widgets.JSONEditor(
             value=current_node_dict,
-            options={
-                "schema": {
-                    "type": "object",
-                    "properties": {},
-                },
-            },
         )
         self.current_node_jsoneditor.param.watch(self.update_node_callback, "value")
         self.detail_col.append(self.current_node_jsoneditor)
