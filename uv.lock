@@ -2418,6 +2418,10 @@ plotting = [
     { name = "pandas" },
     { name = "plotly" },
 ]
+standard = [
+    { name = "pandas" },
+    { name = "plotly" },
+]
 
 [package.dev-dependencies]
 ai = [
@@ -2432,6 +2436,8 @@ dev = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
+    { name = "pandas" },
+    { name = "plotly" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -2439,16 +2445,21 @@ dev = [
     { name = "ruff" },
     { name = "tox-uv" },
 ]
+plotting = [
+    { name = "pandas" },
+    { name = "plotly" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "pandas", marker = "extra == 'plotting'", specifier = ">=2.0.0" },
     { name = "panel", specifier = ">=1.7.1" },
+    { name = "panelini", extras = ["plotting"], marker = "extra == 'standard'" },
     { name = "param", specifier = ">=2.2.1" },
     { name = "plotly", marker = "extra == 'plotting'", specifier = ">=5.0.0" },
     { name = "watchfiles", specifier = ">=1.1.0" },
 ]
-provides-extras = ["plotting"]
+provides-extras = ["plotting", "standard"]
 
 [package.metadata.requires-dev]
 ai = [
@@ -2463,12 +2474,18 @@ dev = [
     { name = "mkdocs-material", specifier = ">=8.5.10" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26.1" },
     { name = "mypy", specifier = ">=0.991" },
+    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "plotly", specifier = ">=5.0.0" },
     { name = "pre-commit", specifier = ">=2.20.0" },
     { name = "pytest", specifier = ">=7.2.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "pytest-playwright", specifier = ">=0.7.2" },
     { name = "ruff", specifier = ">=0.11.5" },
     { name = "tox-uv", specifier = ">=1.11.3" },
+]
+plotting = [
+    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "plotly", specifier = ">=5.0.0" },
 ]
 
 [[package]]

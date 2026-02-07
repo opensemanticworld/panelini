@@ -27,6 +27,9 @@ plotting = [
     "pandas>=2.0.0",
     "plotly>=5.0.0",
 ]
+standard = [
+    "panelini[plotting]",
+]
 
 [project.urls]
 Homepage = "https://opensemanticworld.github.io/panelini/"
@@ -40,7 +43,12 @@ ai = [
     "langchain-openai>=0.3.32",
     "osw>=0.33.0",
 ]
+plotting = [
+    "pandas>=2.0.0",
+    "plotly>=5.0.0",
+]
 dev = [
+    { include-group = "plotting" },
     "pytest>=7.2.0",
     "pre-commit>=2.20.0",
     "tox-uv>=1.11.3",
@@ -135,4 +143,4 @@ branch = true
 source = ["src"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles", "pandas", "plotly"]
+DEP002 = ["watchfiles", "panelini"]

@@ -8,6 +8,9 @@ import panel as pn
 from .utils import data_url_to_bytes
 from .visnetwork import VisNetwork
 
+pn.extension("tabulator")  # For tables
+pn.extension("jsoneditor")  # For viewing/editing node details
+
 # Optional dependencies for CSV visualization
 _HAS_PANDAS = False
 _HAS_PLOTLY = False
@@ -22,7 +25,7 @@ except ImportError:
     pass
 
 try:
-    import plotly.express as px  # type: ignore[import-untyped,no-redef]
+    import plotly.express as px  # type: ignore[import-not-found,import-untyped,no-redef,unused-ignore]
 
     _HAS_PLOTLY = True
     pn.extension("plotly")
