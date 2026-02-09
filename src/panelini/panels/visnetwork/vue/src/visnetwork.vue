@@ -41,11 +41,17 @@ export default {
 
   data() {
     return {
-      network: null,
+      // Don't store network in reactive data - it has private fields that break with Proxy
       nodesDataSet: null,
       edgesDataSet: null,
-      _options: {}
+      _options: {},
+      _manipulationCallbacks: null
     };
+  },
+
+  // Store network as a non-reactive property
+  created() {
+    this.network = null;
   },
 
   methods: {
@@ -54,16 +60,68 @@ export default {
       this.nodesDataSet = new DataSet(this.nodes);
       this.edgesDataSet = new DataSet(this.edges);
 
-      // Default options
+      // Store manipulation callbacks separately
+      this._manipulationCallbacks = {
+        addNode: (nodeData, callback) => {
+          // Assign default label if not present
+          nodeData.label = nodeData.label || `Node ${nodeData.id}`;
+          // Callback tells vis-network to add the node
+          callback(nodeData);
+          // Emit updated nodes after the callback completes
+          setTimeout(() => {
+            this.$emit('change:nodes', this.nodesDataSet.get());
+          }, 0);
+        },
+        addEdge: (edgeData, callback) => {
+          // Prevent self-loops if desired
+          if (edgeData.from === edgeData.to) {
+            callback(null);
+            return;
+          }
+          // Callback tells vis-network to add the edge
+          callback(edgeData);
+          // Emit updated edges after the callback completes
+          setTimeout(() => {
+            this.$emit('change:edges', this.edgesDataSet.get());
+          }, 0);
+        },
+        editEdge: (edgeData, callback) => {
+          // Prevent self-loops if desired
+          if (edgeData.from === edgeData.to) {
+            callback(null);
+            return;
+          }
+          // Callback tells vis-network to update the edge
+          callback(edgeData);
+          // Emit updated edges after the callback completes
+          setTimeout(() => {
+            this.$emit('change:edges', this.edgesDataSet.get());
+          }, 0);
+        },
+        deleteNode: (nodeData, callback) => {
+          // Callback tells vis-network to delete the node
+          callback(nodeData);
+          // Emit updated nodes after the callback completes
+          setTimeout(() => {
+            this.$emit('change:nodes', this.nodesDataSet.get());
+          }, 0);
+        },
+        deleteEdge: (edgeData, callback) => {
+          // Callback tells vis-network to delete the edge
+          callback(edgeData);
+          // Emit updated edges after the callback completes
+          setTimeout(() => {
+            this.$emit('change:edges', this.edgesDataSet.get());
+          }, 0);
+        },
+      };
+
+      // Default options with proper manipulation callbacks
       const defaultOptions = {
         manipulation: {
-          enabled: true,
-          initiallyActive: true,
-          addNode: true,
-          addEdge: true,
-          editEdge: true,
-          deleteNode: true,
-          deleteEdge: true,
+          enabled: false,
+          initiallyActive: false,
+          ...this._manipulationCallbacks
         },
         interaction: {
           multiselect: true,
@@ -293,17 +351,49 @@ export default {
     // Methods called from bridge layer
     setNodes(nodes) {
       if (this.nodesDataSet) {
-        // Clear and update with new nodes
-        this.nodesDataSet.clear();
-        this.nodesDataSet.add(nodes);
+        // Get current node IDs
+        const currentIds = this.nodesDataSet.getIds();
+        const newIds = nodes.map(n => n.id);
+
+        // Remove nodes that are no longer in the new list
+        const toRemove = currentIds.filter(id => !newIds.includes(id));
+        if (toRemove.length > 0) {
+          this.nodesDataSet.remove(toRemove);
+        }
+
+        // Update existing nodes and add new ones
+        this.nodesDataSet.update(nodes);
       }
     },
 
     setEdges(edges) {
       if (this.edgesDataSet) {
-        this.edgesDataSet.clear();
-        this.edgesDataSet.add(edges);
+        // Get current edge IDs
+        const currentIds = this.edgesDataSet.getIds();
+        const newIds = edges.map(e => e.id).filter(id => id !== undefined);
+
+        // Remove edges that are no longer in the new list
+        const toRemove = currentIds.filter(id => !newIds.includes(id));
+        if (toRemove.length > 0) {
+          this.edgesDataSet.remove(toRemove);
+        }
+
+        // Update existing edges and add new ones
+        this.edgesDataSet.update(edges);
       }
+    },
+
+    updatePositions(){
+      console.log("update_positions requested");
+      // Update all node positions from the network
+      for (let node of this.nodesDataSet.get()) {
+        const pos = this.network.getPosition(node.id);
+        node.x = pos.x;
+        node.y = pos.y;
+        this.nodesDataSet.update(node);
+      }
+      // Sync back to Python
+      this.emitNodesAndEdges()
     },
 
     setOptions(options) {
@@ -316,11 +406,37 @@ export default {
     setManipulationState(state) {
       if (!this.network) return;
 
+      // Ignore empty state (used for change detection in Python)
+      if (!state || state === "") return;
+
+      console.log("Setting manipulation state:", state);
+
       if (state === "disableEditMode") {
-        this.network.disableEditMode();
+        this.network.setOptions({
+          manipulation: {
+            enabled: false,
+            ...this._manipulationCallbacks
+          }
+        });
       } else if (state === "addNodeMode") {
+        // Enable manipulation
+        this.network.setOptions({
+          manipulation: {
+            enabled: true,
+            ...this._manipulationCallbacks
+          }
+        });
+        // Enter add node mode
         this.network.addNodeMode();
       } else if (state === "addEdgeMode") {
+        // Enable manipulation
+        this.network.setOptions({
+          manipulation: {
+            enabled: true,
+            ...this._manipulationCallbacks
+          }
+        });
+        // Enter add edge mode
         this.network.addEdgeMode();
       }
     }

@@ -72,6 +72,13 @@ export function render({ model, el }) {
     root.setEdges(model.get("edges"));
   });
 
+  //model.on('change:_request_positions', update_positions);
+
+  model.on("change:_request_positions", () => {
+    console.debug("Python->JS: _request_positions changed");
+    root.updatePositions();
+  });
+
   model.on("change:options", () => {
     console.debug("Python->JS: options changed");
     root.setOptions(model.get("options"));

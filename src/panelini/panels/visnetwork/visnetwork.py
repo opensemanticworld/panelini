@@ -38,6 +38,7 @@ class VisNetwork(AnyWidgetComponent):
 
     # Internal event data (for JavaScript -> Python communication)
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
+    _request_positions = param.Integer(default=0, doc="Increment to request position update from JS")
 
     def __init__(
         self,
@@ -171,6 +172,10 @@ class VisNetwork(AnyWidgetComponent):
         """Enable add edge mode."""
         self.manipulation_state = ""
         self.manipulation_state = "addEdgeMode"
+
+    def request_position_update(self):
+        """Request JavaScript to update all node positions from the network."""
+        self._request_positions += 1
 
     def get_nodes(self) -> list[dict[str, Any]]:
         """Get the current list of nodes."""

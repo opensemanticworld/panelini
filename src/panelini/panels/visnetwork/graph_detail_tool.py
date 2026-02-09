@@ -119,7 +119,16 @@ class GraphDetailTool:
         """
         print(f"Network event callback: {event_name}", event_params_dict)
         if event_name == "click":
-            self.click_callback(event_params_dict)
+            # For click events, check if multiple nodes are selected
+            node_ids = event_params_dict.get("nodes", [])
+            if len(node_ids) > 1:
+                self.select_callback(event_params_dict)
+            else:
+                self.click_callback(event_params_dict)
+        elif event_name in ["selectNode", "selectEdge"]:
+            self.select_callback(event_params_dict)
+        elif event_name == "dragEnd":
+            self.drag_end_callback(event_params_dict)
 
     def click_callback(self, event: dict[str, Any]) -> None:
         """Callback for click events on the network.
@@ -131,6 +140,30 @@ class GraphDetailTool:
         node_ids = event.get("nodes", [])
         for node_id in node_ids:
             self.show_node_details(node_id)
+
+    def select_callback(self, event):
+        """
+        Callback for selectNode events on the visjs-network.
+        Shows multi-node editor when multiple nodes are selected.
+        """
+        print("Nodes selected:", event)
+        node_ids = event.get("nodes", None)
+        if node_ids:
+            if len(node_ids) > 1:
+                self.show_multi_node_editor(node_ids)
+            elif len(node_ids) == 1:
+                self.show_node_details(node_ids[0])
+
+    def drag_end_callback(self, event):
+        """
+        Callback for dragEnd events on the visjs-network.
+        Refreshes tabulators if they are currently displayed.
+        """
+        print("Drag ended:", event)
+        # Only refresh if tabulators are currently active
+        if hasattr(self, "comparison_tabulator") and hasattr(self, "set_all_tabulator"):
+            print("Refreshing tabulators after drag")
+            self._refresh_tabulators()
 
     def update_node_callback(self, event: Any) -> None:
         """Callback for node updates from the JSON editor.
@@ -186,12 +219,14 @@ class GraphDetailTool:
 
         # Rebuild visualizations column
         self.visualizations_col.clear()
+        has_visualizations = False
 
         # Images
         if "image" in current_node_dict:
             try:
                 image_bytes = data_url_to_bytes(current_node_dict["image"])
                 self.visualizations_col.append(pn.pane.Image(image_bytes))
+                has_visualizations = True
             except Exception as e:
                 self.visualizations_col.append(pn.pane.Markdown(f"*Error loading image: {e}*"))
 
@@ -202,14 +237,267 @@ class GraphDetailTool:
             # CSV files
             if data.startswith("data:text/csv") or data.startswith("data:application/vnd.ms-excel"):
                 self._show_csv_visualization(data)
+                has_visualizations = True
 
             # Text files
             elif data.startswith("data:text/plain"):
                 self._show_text_visualization(data)
+                has_visualizations = True
 
             # PDF files
             elif data.startswith("data:application/pdf"):
                 self._show_pdf_visualization(data)
+                has_visualizations = True
+
+        # If no visualizations available, show the Details tab instead
+        if not has_visualizations:
+            self.visualizations_col.append(pn.pane.Markdown("## No Visualizations Available"))
+            # Switch to Details tab (index 1)
+            self.detail_tabs.active = 1
+        else:
+            # Switch to Visualization tab (index 0) if visualizations are available
+            self.detail_tabs.active = 0
+
+    def show_multi_node_editor(self, node_ids):
+        """
+        Show tabulator editor for multiple selected nodes.
+        """
+        print("Showing multi-node editor for:", node_ids)
+
+        # Request position update from JavaScript to ensure x,y coordinates are current
+        self.visnetwork_panel.request_position_update()
+
+        self.detail_col.clear()
+        self.visualizations_col.clear()
+        self.detail_col.append(pn.pane.Markdown(f"### Multiple Nodes Selected ({len(node_ids)} nodes)"))
+
+        # Switch to Details tab (index 1) to show the multi-node editor
+        self.detail_tabs.active = 1
+
+        selected_nodes = [node for node in self.visnetwork_panel.nodes if node["id"] in node_ids]
+
+        # Build DataFrame with common properties
+        table_data = []
+        for node in selected_nodes:
+            row = {
+                "id": node.get("id"),
+                "label": node.get("label", ""),
+                "x": node.get("x"),  # None if not set
+                "y": node.get("y"),  # None if not set
+                "fixed": node.get("fixed", False),
+                "shape": node.get("shape", ""),
+                "color": str(node.get("color", "")),
+            }
+            table_data.append(row)
+
+        df = pd.DataFrame(table_data)
+
+        # Create comparison tabulator (editable per row)
+        self.detail_col.append(pn.pane.Markdown("#### Node Comparison Table"))
+        self.detail_col.append(pn.pane.Markdown("*Edit cells to update individual nodes*"))
+
+        comparison_tabulator = pn.widgets.Tabulator(
+            df,
+            editors={
+                "id": None,  # Not editable
+                "label": {"type": "input"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "fixed": {"type": "tickCross"},
+                "shape": {"type": "input"},
+                "color": {"type": "input"},
+            },
+            width=700,
+            height=min(400, 50 + len(node_ids) * 30),
+        )
+
+        # Store reference to tabulator for callbacks
+        self.comparison_tabulator = comparison_tabulator
+
+        # Watch for edits on individual cells
+        comparison_tabulator.on_edit(self.on_tabulator_cell_edit)
+        self.detail_col.append(comparison_tabulator)
+
+        # Create "set for all" tabulator (single row, applies to all)
+        self.detail_col.append(pn.pane.Markdown("#### Set Value for All Selected Nodes"))
+        self.detail_col.append(pn.pane.Markdown("*Edit cells here to apply value to ALL selected nodes*"))
+
+        # Build set-all row: show common values or empty string when values differ
+        set_all_row = {}
+        properties = ["id", "label", "x", "y", "fixed", "shape", "color"]
+        for prop in properties:
+            values = [row[prop] for row in table_data]
+            first_val = values[0]
+            if all(v == first_val for v in values):
+                set_all_row[prop] = first_val
+            else:
+                # Values differ - show empty string for text fields, None for others
+                if prop in ["label", "shape", "color"]:
+                    set_all_row[prop] = ""
+                else:
+                    set_all_row[prop] = None
+
+        set_all_df = pd.DataFrame([set_all_row])
+        set_all_tabulator = pn.widgets.Tabulator(
+            set_all_df,
+            editors={
+                "id": None,  # Not editable
+                "label": {"type": "input"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "fixed": {"type": "tickCross"},
+                "shape": {"type": "input"},
+                "color": {"type": "input"},
+            },
+            width=700,
+            height=100,
+        )
+
+        # Store references for callbacks
+        self._current_selected_node_ids = node_ids
+        self.set_all_tabulator = set_all_tabulator
+
+        set_all_tabulator.on_edit(self.on_set_all_cell_edit)
+        self.detail_col.append(set_all_tabulator)
+
+    def on_tabulator_cell_edit(self, event):
+        """
+        Callback when a cell is edited in the comparison tabulator.
+        Updates the specific node.
+        """
+        print("Tabulator cell edited:", event)
+        row_index = event.row  # This is the row index (integer)
+        column = event.column
+        value = event.value
+
+        # Get the actual row data from the tabulator
+        row_data = self.comparison_tabulator.value.iloc[row_index]
+        node_id = row_data["id"]
+
+        # Convert numpy/pandas types to native Python types for JSON serialization
+        value = self._convert_to_python_type(value)
+
+        print(f"Editing row {row_index}, node {node_id}, column {column} = {value}")
+
+        # Update the node - create NEW list AND NEW dict objects to trigger change detection
+        nodes = list(self.visnetwork_panel.nodes)
+        for i, node in enumerate(nodes):
+            if node["id"] == node_id:
+                # Create a new dict with the updated property
+                updated_node = dict(node)  # to not only mutate original dict
+                updated_node[column] = value
+                # Set fixed=True when updating x/y positions
+                if column in ["x", "y"]:
+                    updated_node["fixed"] = True
+                nodes[i] = updated_node
+                print(f"Updated node {node_id}: {column} = {value}")
+                break
+        self.visnetwork_panel.nodes = nodes
+
+        # Refresh both tabulators to show updated values
+        self._refresh_tabulators()
+
+    def on_set_all_cell_edit(self, event):
+        """
+        Callback when a cell is edited in the set-all tabulator.
+        Updates ALL selected nodes with the new value.
+        """
+        print("Set-all cell edited:", event)
+        print(f"  Column: {event.column}, Value: {event.value}, Type: {type(event.value)}")
+
+        column = event.column
+        value = event.value
+
+        # Convert numpy/pandas types to native Python types for JSON serialization
+        value = self._convert_to_python_type(value)
+
+        print(f"Setting {column} = {value} (type: {type(value)}) for all selected nodes")
+
+        # Update all selected nodes - create NEW list AND NEW dict objects
+        nodes = list(self.visnetwork_panel.nodes)
+        for i, node in enumerate(nodes):
+            if node["id"] in self._current_selected_node_ids:
+                # Create a new dict with the updated property
+                updated_node = dict(node)
+                updated_node[column] = value
+                # Set fixed=True when updating x/y positions
+                if column in ["x", "y"]:
+                    updated_node["fixed"] = True
+                nodes[i] = updated_node
+                print(f"Updated node {node['id']}: {column} = {value}")
+        self.visnetwork_panel.nodes = nodes
+
+        # Refresh both tabulators to show updated values
+        self._refresh_tabulators()
+
+    def _refresh_tabulators(self):
+        """
+        Refresh both tabulators with current node data from visnetwork.
+        """
+        if not hasattr(self, "comparison_tabulator") or not hasattr(self, "set_all_tabulator"):
+            return
+
+        # Get current selected nodes
+        selected_nodes = [node for node in self.visnetwork_panel.nodes if node["id"] in self._current_selected_node_ids]
+
+        # Rebuild table data
+        table_data = []
+        for node in selected_nodes:
+            row = {
+                "id": node.get("id"),
+                "label": node.get("label", ""),
+                "x": node.get("x"),  # None if not set
+                "y": node.get("y"),  # None if not set
+                "fixed": node.get("fixed", False),
+                "shape": node.get("shape", ""),
+                "color": str(node.get("color", "")),
+            }
+            table_data.append(row)
+
+        # Update comparison tabulator
+        df = pd.DataFrame(table_data)
+        self.comparison_tabulator.value = df
+
+        # Update set-all tabulator
+        # Show NaN when values differ across nodes, otherwise show the common value
+        if table_data:
+            set_all_row = {}
+            properties = ["id", "label", "x", "y", "fixed", "shape", "color"]
+
+            for prop in properties:
+                values = [row[prop] for row in table_data]
+                # Check if all values are the same
+                first_val = values[0]
+                if all(v == first_val for v in values):
+                    set_all_row[prop] = first_val
+                else:
+                    # Values differ - show empty string for text fields, None for others
+                    if prop in ["label", "shape", "color"]:
+                        set_all_row[prop] = ""
+                    else:
+                        set_all_row[prop] = None
+
+            set_all_df = pd.DataFrame([set_all_row])
+            self.set_all_tabulator.value = set_all_df
+
+    def _convert_to_python_type(self, value):
+        """
+        Convert numpy/pandas types to native Python types for JSON serialization.
+        """
+        import numpy as np
+
+        if isinstance(value, (np.integer, np.int64, np.int32)):
+            return int(value)
+        elif isinstance(value, (np.floating, np.float64, np.float32)):
+            return float(value)
+        elif isinstance(value, (np.bool_, bool)):
+            return bool(value)
+        elif isinstance(value, (np.str_, str)):
+            return str(value)
+        elif pd.isna(value):
+            return None
+        else:
+            return value
 
     def _show_csv_visualization(self, data_url: str) -> None:
         """Show CSV data visualization with table and plot.
