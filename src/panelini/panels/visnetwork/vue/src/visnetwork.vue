@@ -439,6 +439,374 @@ export default {
         // Enter add edge mode
         this.network.addEdgeMode();
       }
+    },
+
+    // =========================================================================
+    // Incremental Graph Update Methods
+    // =========================================================================
+
+    handleGraphAction(actionData) {
+      if (!actionData || !actionData.action) return;
+
+      const { action, payload } = actionData;
+
+      switch (action) {
+        case 'addNode':
+          this.addSingleNode(payload);
+          break;
+        case 'addEdge':
+          this.addSingleEdge(payload);
+          break;
+        case 'updateNode':
+          this.updateNode(payload);
+          break;
+        case 'updateEdge':
+          this.updateEdge(payload);
+          break;
+        case 'removeNode':
+          this.removeSingleNode(typeof payload === 'object' ? payload.id : payload);
+          break;
+        case 'removeEdge':
+          this.removeSingleEdge(payload);
+          break;
+        case 'clear':
+          this.clearGraph();
+          break;
+        case 'batch':
+          this.executeBatch(payload);
+          break;
+        case 'mergeNodes':
+          this.mergeNodes(payload.sourceId, payload.targetId, payload.mergeProperties);
+          break;
+        case 'updateNodes':
+          this.updateNodes(payload);
+          break;
+        case 'updateNodeState':
+          this.updateNodeState(payload.nodeIds, payload.state);
+          break;
+        case 'executeStep':
+          this.executeStep(payload);
+          break;
+      }
+    },
+
+    // Execute a step from a playbook sequence (flat JSON format).
+    // After executing all actions, emitNodesAndEdges() syncs the DataSet state
+    // back to Python via model.set("nodes"/edges") -> param framework.
+    // This keeps Python's self.nodes/self.edges in sync with the JS DataSets,
+    // avoiding the need for manual state tracking on the Python side.
+    executeStep(stepData) {
+      if (!stepData || !stepData.actions) return;
+
+      for (const actionData of stepData.actions) {
+        this.executeAction(actionData);
+      }
+
+      // Sync DataSet changes back to Python (nodes/edges params)
+      //this.emitNodesAndEdges();
+    },
+
+    // Execute a single action in flat format (properties at root level)
+    executeAction(actionData) {
+      if (!actionData || !actionData.action) return;
+
+      switch (actionData.action) {
+        case 'addNode':
+          this.addNodeFromAction(actionData);
+          break;
+        case 'addEdge':
+          this.addEdgeFromAction(actionData);
+          break;
+        case 'updateNode':
+          this.updateNodeFromAction(actionData);
+          break;
+        case 'updateNodeState':
+          this.updateNodeState(actionData.nodeIds, actionData.state);
+          break;
+        case 'mergeNodes':
+          this.mergeNodes(actionData.sourceId, actionData.targetId, true);
+          break;
+        case 'removeNode':
+          this.removeSingleNode(actionData.id);
+          break;
+        case 'pause':
+        case 'complete':
+          // These are handled by Python side for timing
+          break;
+      }
+    },
+
+    // Add node from flat action format with type-based styling
+    addNodeFromAction(actionData) {
+      const nodeType = actionData.type || 'instance';
+      const initialState = actionData.state || (nodeType === 'instance' ? 'new' : 'stored');
+
+      const node = {
+        id: actionData.id,
+        label: actionData.label,
+        nodeType: nodeType,
+        nodeState: initialState,
+        color: {
+          background: this.getNodeColor(nodeType),
+          border: this.getStateBorderColor(initialState)
+        },
+        borderWidth: this.getStateBorderWidth(initialState)
+      };
+
+      if (this.nodesDataSet) {
+        this.nodesDataSet.add(node);
+      }
+    },
+
+    // Add edge from flat action format
+    addEdgeFromAction(actionData) {
+      const edge = {
+        id: actionData.id || `${actionData.from}-${actionData.to}-${actionData.label || 'link'}`,
+        from: actionData.from,
+        to: actionData.to,
+        label: actionData.label || '',
+        dashes: actionData.dashed || false
+      };
+
+      if (this.edgesDataSet) {
+        this.edgesDataSet.add(edge);
+      }
+    },
+
+    // Update node from flat action format
+    updateNodeFromAction(actionData) {
+      if (!this.nodesDataSet) return;
+
+      const updateData = { id: actionData.id };
+      if (actionData.label !== undefined) updateData.label = actionData.label;
+      if (actionData.state !== undefined) {
+        const node = this.nodesDataSet.get(actionData.id);
+        updateData.nodeState = actionData.state;
+        updateData.color = {
+          background: node?.color?.background,
+          border: this.getStateBorderColor(actionData.state)
+        };
+        updateData.borderWidth = this.getStateBorderWidth(actionData.state);
+      }
+
+      this.nodesDataSet.update(updateData);
+    },
+
+    getNodeColor(type) {
+      if (type === 'class') return '#ff9999';
+      if (type === 'input') return '#999999';
+      return '#69b3a2';  // instance
+    },
+
+    updateNodes(nodesData) {
+      if (this.nodesDataSet && Array.isArray(nodesData)) {
+        this.nodesDataSet.update(nodesData);
+      }
+    },
+
+    updateNodeState(nodeIds, state) {
+      if (!this.nodesDataSet || !Array.isArray(nodeIds)) return;
+
+      const borderColor = this.getStateBorderColor(state);
+      const borderWidth = this.getStateBorderWidth(state);
+
+      nodeIds.forEach(nodeId => {
+        const node = this.nodesDataSet.get(nodeId);
+        if (node) {
+          this.nodesDataSet.update({
+            id: nodeId,
+            nodeState: state,
+            color: {
+              background: node.color?.background,
+              border: borderColor
+            },
+            borderWidth: borderWidth
+          });
+        }
+      });
+    },
+
+    getStateBorderColor(state) {
+      if (state === 'new') return '#ff0000';
+      if (state === 'modified') return '#ffcc00';
+      return '#333333';  // stored
+    },
+
+    getStateBorderWidth(state) {
+      return (state === 'new' || state === 'modified') ? 3 : 2;
+    },
+
+    addSingleNode(nodeData) {
+      if (this.nodesDataSet && nodeData) {
+        this.nodesDataSet.add(nodeData);
+      }
+    },
+
+    addSingleEdge(edgeData) {
+      if (this.edgesDataSet && edgeData) {
+        this.edgesDataSet.add(edgeData);
+      }
+    },
+
+    updateNode(nodeData) {
+      if (this.nodesDataSet && nodeData && nodeData.id !== undefined) {
+        this.nodesDataSet.update(nodeData);
+      }
+    },
+
+    updateEdge(edgeData) {
+      if (!this.edgesDataSet || !edgeData) return;
+
+      if (edgeData.id !== undefined) {
+        this.edgesDataSet.update(edgeData);
+      } else if (edgeData.from !== undefined && edgeData.to !== undefined) {
+        // Find edge by from/to and update
+        const existingEdge = this.edgesDataSet.get().find(
+          e => e.from === edgeData.from && e.to === edgeData.to
+        );
+        if (existingEdge) {
+          this.edgesDataSet.update({ ...edgeData, id: existingEdge.id });
+        }
+      }
+    },
+
+    removeSingleNode(nodeId) {
+      if (this.nodesDataSet && nodeId !== undefined) {
+        this.nodesDataSet.remove(nodeId);
+      }
+    },
+
+    removeSingleEdge(edgeData) {
+      if (!this.edgesDataSet) return;
+
+      if (typeof edgeData === 'object') {
+        if (edgeData.id !== undefined) {
+          this.edgesDataSet.remove(edgeData.id);
+        } else if (edgeData.from !== undefined && edgeData.to !== undefined) {
+          const existingEdge = this.edgesDataSet.get().find(
+            e => e.from === edgeData.from && e.to === edgeData.to
+          );
+          if (existingEdge) {
+            this.edgesDataSet.remove(existingEdge.id);
+          }
+        }
+      } else {
+        this.edgesDataSet.remove(edgeData);
+      }
+    },
+
+    clearGraph() {
+      if (this.nodesDataSet) {
+        this.nodesDataSet.clear();
+      }
+      if (this.edgesDataSet) {
+        this.edgesDataSet.clear();
+      }
+    },
+
+    executeBatch(actions) {
+      if (!Array.isArray(actions)) return;
+
+      const nodesToAdd = [];
+      const nodesToUpdate = [];
+      const nodesToRemove = [];
+      const edgesToAdd = [];
+      const edgesToUpdate = [];
+      const edgesToRemove = [];
+
+      // Collect all operations
+      actions.forEach(item => {
+        const { action, payload } = item;
+
+        switch (action) {
+          case 'addNode':
+            nodesToAdd.push(payload);
+            break;
+          case 'addEdge':
+            edgesToAdd.push(payload);
+            break;
+          case 'updateNode':
+            nodesToUpdate.push(payload);
+            break;
+          case 'updateEdge':
+            edgesToUpdate.push(payload);
+            break;
+          case 'removeNode':
+            const nodeId = typeof payload === 'object' ? payload.id : payload;
+            nodesToRemove.push(nodeId);
+            break;
+          case 'removeEdge':
+            if (typeof payload === 'object' && payload.id !== undefined) {
+              edgesToRemove.push(payload.id);
+            } else if (typeof payload === 'object') {
+              const edge = this.edgesDataSet.get().find(
+                e => e.from === payload.from && e.to === payload.to
+              );
+              if (edge) edgesToRemove.push(edge.id);
+            } else {
+              edgesToRemove.push(payload);
+            }
+            break;
+        }
+      });
+
+      // Execute in optimal order: remove first, then update, then add
+      if (nodesToRemove.length > 0) this.nodesDataSet.remove(nodesToRemove);
+      if (edgesToRemove.length > 0) this.edgesDataSet.remove(edgesToRemove);
+      if (nodesToUpdate.length > 0) this.nodesDataSet.update(nodesToUpdate);
+      if (edgesToUpdate.length > 0) this.edgesDataSet.update(edgesToUpdate);
+      if (nodesToAdd.length > 0) this.nodesDataSet.add(nodesToAdd);
+      if (edgesToAdd.length > 0) this.edgesDataSet.add(edgesToAdd);
+    },
+
+    mergeNodes(sourceId, targetId, mergeProperties = true) {
+      if (!this.nodesDataSet || !this.edgesDataSet) return;
+
+      const sourceNode = this.nodesDataSet.get(sourceId);
+      const targetNode = this.nodesDataSet.get(targetId);
+
+      if (!sourceNode || !targetNode) return;
+
+      // Optionally merge properties
+      if (mergeProperties) {
+        const mergedProps = { ...sourceNode };
+        delete mergedProps.id;
+        this.nodesDataSet.update({ id: targetId, ...mergedProps });
+      }
+
+      // Redirect edges
+      const allEdges = this.edgesDataSet.get();
+      const edgesToUpdate = [];
+      const edgesToRemove = [];
+
+      allEdges.forEach(edge => {
+        let newFrom = edge.from;
+        let newTo = edge.to;
+
+        if (edge.from === sourceId) newFrom = targetId;
+        if (edge.to === sourceId) newTo = targetId;
+
+        // Skip self-loops
+        if (newFrom === newTo) {
+          edgesToRemove.push(edge.id);
+        } else if (newFrom !== edge.from || newTo !== edge.to) {
+          edgesToUpdate.push({ id: edge.id, from: newFrom, to: newTo });
+        }
+      });
+
+      // Apply edge updates
+      if (edgesToUpdate.length > 0) {
+        this.edgesDataSet.update(edgesToUpdate);
+      }
+      if (edgesToRemove.length > 0) {
+        this.edgesDataSet.remove(edgesToRemove);
+      }
+
+      // Remove source node
+      this.nodesDataSet.remove(sourceId);
+
+      // Emit changes
+      this.emitNodesAndEdges();
     }
   },
 

@@ -88,4 +88,13 @@ export function render({ model, el }) {
     console.debug("Python->JS: manipulation_state changed");
     root.setManipulationState(model.get("manipulation_state"));
   });
+
+  // Listen for graph action commands (incremental updates)
+  model.on("change:_graph_action", () => {
+    console.debug("Python->JS: graph action received");
+    const actionData = model.get("_graph_action");
+    if (actionData && actionData.action) {
+      root.handleGraphAction(actionData);
+    }
+  });
 }
