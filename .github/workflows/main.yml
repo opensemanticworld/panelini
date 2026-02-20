@@ -46,8 +46,8 @@ jobs:
       - name: Install Playwright browsers
         run: uv run playwright install --with-deps chromium
 
-      - name: Run tests
-        run: uv run python -m pytest tests --cov --cov-config=pyproject.toml --cov-report=xml
+      - name: Run full tests including headless ui tests
+        run: make test-full
 
       - name: Check typing
         run: uv run mypy

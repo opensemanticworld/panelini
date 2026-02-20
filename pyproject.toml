@@ -82,6 +82,7 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["ui: UI tests requiring Playwright (browser)"]
 
 [tool.ruff]
 target-version = "py39"
