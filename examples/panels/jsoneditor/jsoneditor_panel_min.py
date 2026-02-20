@@ -23,7 +23,7 @@ class App(pn.viewable.Viewer):
         print("Save button clicked")
         print("Current value:", self.jsoneditor.get_value())
         # Update the schema or any other logic as needed
-        self.jsoneditor.set_schema({**self.jsoneditor.options["schema"], "title": "Updated Title"})
+        self.jsoneditor.set_schema({**self.jsoneditor.options["schema"], "title": "Updated Title"}, keep_value=True)
 
     def __panel__(self):
         return self._view

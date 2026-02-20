@@ -8,7 +8,7 @@
 <script>
 // Import JSONEditor and make it available globally
 import { JSONEditor } from "@json-editor/json-editor";
-window.JSONEditor = JSONEditor;
+window.JSONFormEditor = JSONEditor;
 
 export default {
   name: 'dm-json-form3',
