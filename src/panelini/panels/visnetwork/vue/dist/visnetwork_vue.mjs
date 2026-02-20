@@ -25231,7 +25231,7 @@ const GV = (t, e) => {
         nodes: this.nodesDataSet,
         edges: this.edgesDataSet
       };
-      this.network = new _(e, g, this._options), this.setupEventListeners(), this.setupDragDrop(), this.$emit("ready", !0);
+      this.network = new _(e, g, this._options), e._visNetwork = this.network, this.setupEventListeners(), this.setupDragDrop(), this.$emit("ready", !0);
     },
     setupEventListeners() {
       const t = this.network, e = this.nodesDataSet;

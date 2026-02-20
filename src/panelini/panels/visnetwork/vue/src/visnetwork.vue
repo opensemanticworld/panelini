@@ -155,6 +155,9 @@ export default {
 
       this.network = new Network(container, data, this._options);
 
+      // Expose network instance on the container for external access (e.g. testing)
+      container._visNetwork = this.network;
+
       // Setup event listeners
       this.setupEventListeners();
       this.setupDragDrop();
