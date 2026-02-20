@@ -126,9 +126,14 @@ architecture
 :hidden:
 
 panels/index
-panels/jsoneditor
-panels/visnetwork
-panels/graph_detail_tool
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Components
+:hidden:
+
+components
 ```
 
 ```{toctree}
@@ -137,6 +142,4 @@ panels/graph_detail_tool
 :hidden:
 
 modules
-components
-apidocs/index
 ```

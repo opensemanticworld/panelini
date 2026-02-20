@@ -337,3 +337,9 @@ The components module is currently in planning stage. No implementations exist y
 ## Full Auto-Generated Reference
 
 For complete class signatures, method arguments, and docstrings, see the [auto-generated API documentation](apidocs/index).
+
+```{toctree}
+:hidden:
+
+apidocs/index
+```

@@ -1,3 +1,5 @@
+:orphan:
+
 # GraphDetailTool
 
 The `GraphDetailTool` is a complete UI wrapper around `VisNetwork` that adds node detail visualization, JSON editing, and multi-node selection capabilities.

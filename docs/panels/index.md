@@ -54,3 +54,11 @@ All panels follow these design principles:
 - **Vue.js frontend**: Each panel has a Vue.js wrapper around its JavaScript library
 - **Callback-driven**: User interactions are communicated via event callbacks
 - **Bundled assets**: JavaScript and CSS are pre-built and shipped with the package
+
+```{toctree}
+:maxdepth: 1
+:hidden:
+
+jsoneditor
+visnetwork
+```
