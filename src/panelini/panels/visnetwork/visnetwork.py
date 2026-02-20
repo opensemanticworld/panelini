@@ -363,10 +363,19 @@ class VisNetwork(AnyWidgetComponent):
             step: Step dict with 'actions' list and optional 'status'.
                   Actions use flat format matching the JS playbook notation.
 
+        Supported action fields:
+            addNode: id, label, type, state, json_data (dict, shown as YAML tooltip on hover)
+            updateNode: id, label, state, json_data (dict, updates YAML tooltip)
+            addEdge: from, to, label, dashed
+            updateNodeState: nodeIds, state
+            mergeNodes: sourceId, targetId
+            removeNode: id
+
         Example:
             graph.execute_step({
                 "actions": [
-                    {"action": "addNode", "id": "n1", "label": "Node 1", "type": "instance"},
+                    {"action": "addNode", "id": "n1", "label": "Node 1", "type": "instance",
+                     "json_data": {"temperature": 25.0, "unit": "celsius"}},
                     {"action": "addEdge", "from": "n1", "to": "n2", "label": "connects"},
                     {"action": "updateNodeState", "nodeIds": ["n1"], "state": "stored"},
                 ],

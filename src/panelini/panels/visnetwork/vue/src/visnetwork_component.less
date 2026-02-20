@@ -12,3 +12,14 @@
     border-radius: 4px;
   }
 }
+
+// Override vis-network tooltip styling for multi-line YAML content
+div.vis-tooltip {
+  position: absolute;
+  white-space: pre;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  max-width: 500px;
+  max-height: 400px;
+  overflow: auto;
+}

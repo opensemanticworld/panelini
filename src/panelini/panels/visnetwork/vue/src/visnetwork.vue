@@ -6,6 +6,7 @@
 
 <script>
 import { Network, DataSet } from "vis-network/standalone";
+import yaml from "js-yaml";
 
 export default {
   name: 'visnetwork-component',
@@ -126,6 +127,8 @@ export default {
         interaction: {
           multiselect: true,
           selectable: true,
+          hover: true,
+          tooltipDelay: 300,
         },
         nodes: {
           shape: "dot",
@@ -133,8 +136,11 @@ export default {
         },
       };
 
-      // Merge options
+      // Merge options (deep-merge interaction to preserve hover/tooltip defaults)
       this._options = { ...defaultOptions, ...this.options };
+      if (this.options.interaction) {
+        this._options.interaction = { ...defaultOptions.interaction, ...this.options.interaction };
+      }
 
       // Set container size
       const container = this.$refs.networkContainer;
@@ -536,6 +542,14 @@ export default {
       }
     },
 
+    // Build a YAML-formatted tooltip title string from json_data
+    buildNodeTitle(jsonData) {
+      if (!jsonData || typeof jsonData !== 'object' || Object.keys(jsonData).length === 0) {
+        return undefined;
+      }
+      return yaml.dump(jsonData, { indent: 2, lineWidth: -1 });
+    },
+
     // Add node from flat action format with type-based styling
     addNodeFromAction(actionData) {
       const nodeType = actionData.type || 'instance';
@@ -552,6 +566,13 @@ export default {
         },
         borderWidth: this.getStateBorderWidth(initialState)
       };
+
+      // Store json_data and generate YAML tooltip if present
+      if (actionData.json_data !== undefined) {
+        node.json_data = actionData.json_data;
+        const title = this.buildNodeTitle(actionData.json_data);
+        if (title !== undefined) node.title = title;
+      }
 
       if (this.nodesDataSet) {
         this.nodesDataSet.add(node);
@@ -587,6 +608,13 @@ export default {
           border: this.getStateBorderColor(actionData.state)
         };
         updateData.borderWidth = this.getStateBorderWidth(actionData.state);
+      }
+
+      // Update json_data and regenerate YAML tooltip if present
+      if (actionData.json_data !== undefined) {
+        updateData.json_data = actionData.json_data;
+        const title = this.buildNodeTitle(actionData.json_data);
+        updateData.title = title !== undefined ? title : undefined;
       }
 
       this.nodesDataSet.update(updateData);

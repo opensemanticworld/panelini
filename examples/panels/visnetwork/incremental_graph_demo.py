@@ -39,6 +39,17 @@ SEQUENCE = [
                 "id": "e",
                 "label": "A tensile test experiment #1\nconducted by Dr. Jane Doe,\nExample Lab Corp.",
                 "type": "instance",
+                "json_data": {
+                    "experiment_type": "tensile test",
+                    "experiment_id": 1,
+                    "conductor": "Dr. Jane Doe",
+                    "organization": "Example Lab Corp.",
+                    "parameters": {
+                        "temperature": 23.0,
+                        "humidity": 45,
+                        "unit_system": "SI",
+                    },
+                },
             },
             {
                 "action": "addEdge",
@@ -69,6 +80,11 @@ SEQUENCE = [
                 "id": "p",
                 "label": "Dr. Jane Doe,\nExample Lab Corp.",
                 "type": "instance",
+                "json_data": {
+                    "full_name": "Dr. Jane Doe",
+                    "role": "Researcher",
+                    "email": "jane.doe@example-lab.com",
+                },
             },
             {
                 "action": "updateNode",
@@ -94,7 +110,17 @@ SEQUENCE = [
                 "label": "Example Lab Corp.",
                 "type": "instance",
             },
-            {"action": "updateNode", "id": "p", "label": "Dr. Jane Doe"},
+            {
+                "action": "updateNode",
+                "id": "p",
+                "label": "Dr. Jane Doe",
+                "json_data": {
+                    "full_name": "Dr. Jane Doe",
+                    "role": "Researcher",
+                    "email": "jane.doe@example-lab.com",
+                    "organization": "Example Lab Corp.",
+                },
+            },
             {"action": "addEdge", "from": "p", "to": "o", "label": "organization"},
         ],
         "status": "Adding organization and refining relationships...",
