@@ -2415,10 +2415,14 @@ dependencies = [
 
 [package.optional-dependencies]
 plotting = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas" },
     { name = "plotly" },
 ]
 standard = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas" },
     { name = "plotly" },
 ]
@@ -2452,11 +2456,14 @@ plotting = [
 
 [package.metadata]
 requires-dist = [
+    { name = "numpy", marker = "extra == 'plotting'", specifier = ">=1.24.0" },
+    { name = "numpy", marker = "extra == 'standard'", specifier = ">=1.24.0" },
     { name = "pandas", marker = "extra == 'plotting'", specifier = ">=2.0.0" },
+    { name = "pandas", marker = "extra == 'standard'", specifier = ">=2.0.0" },
     { name = "panel", specifier = ">=1.7.1" },
-    { name = "panelini", extras = ["plotting"], marker = "extra == 'standard'" },
     { name = "param", specifier = ">=2.2.1" },
     { name = "plotly", marker = "extra == 'plotting'", specifier = ">=5.0.0" },
+    { name = "plotly", marker = "extra == 'standard'", specifier = ">=5.0.0" },
     { name = "watchfiles", specifier = ">=1.1.0" },
 ]
 provides-extras = ["plotting", "standard"]

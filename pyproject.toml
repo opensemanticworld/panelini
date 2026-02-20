@@ -24,11 +24,14 @@ dependencies = [
 
 [project.optional-dependencies]
 plotting = [
+    "numpy>=1.24.0",
     "pandas>=2.0.0",
     "plotly>=5.0.0",
 ]
 standard = [
-    "panelini[plotting]",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "plotly>=5.0.0",
 ]
 
 [project.urls]
@@ -144,5 +147,4 @@ branch = true
 source = ["src"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles", "panelini"]
-DEP003 = ["numpy"]
+DEP002 = ["watchfiles"]
