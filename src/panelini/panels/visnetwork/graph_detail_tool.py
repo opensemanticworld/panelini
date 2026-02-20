@@ -141,20 +141,20 @@ class GraphDetailTool:
         for node_id in node_ids:
             self.show_node_details(node_id)
 
-    def select_callback(self, event):
+    def select_callback(self, event: dict[str, Any]) -> None:
         """
         Callback for selectNode events on the visjs-network.
         Shows multi-node editor when multiple nodes are selected.
         """
         print("Nodes selected:", event)
-        node_ids = event.get("nodes", None)
+        node_ids = event.get("nodes")
         if node_ids:
             if len(node_ids) > 1:
                 self.show_multi_node_editor(node_ids)
             elif len(node_ids) == 1:
                 self.show_node_details(node_ids[0])
 
-    def drag_end_callback(self, event):
+    def drag_end_callback(self, event: dict[str, Any]) -> None:
         """
         Callback for dragEnd events on the visjs-network.
         Refreshes tabulators if they are currently displayed.
@@ -258,7 +258,7 @@ class GraphDetailTool:
             # Switch to Visualization tab (index 0) if visualizations are available
             self.detail_tabs.active = 0
 
-    def show_multi_node_editor(self, node_ids):
+    def show_multi_node_editor(self, node_ids: list[str]) -> None:
         """
         Show tabulator editor for multiple selected nodes.
         """
@@ -360,7 +360,7 @@ class GraphDetailTool:
         set_all_tabulator.on_edit(self.on_set_all_cell_edit)
         self.detail_col.append(set_all_tabulator)
 
-    def on_tabulator_cell_edit(self, event):
+    def on_tabulator_cell_edit(self, event: Any) -> None:
         """
         Callback when a cell is edited in the comparison tabulator.
         Updates the specific node.
@@ -397,7 +397,7 @@ class GraphDetailTool:
         # Refresh both tabulators to show updated values
         self._refresh_tabulators()
 
-    def on_set_all_cell_edit(self, event):
+    def on_set_all_cell_edit(self, event: Any) -> None:
         """
         Callback when a cell is edited in the set-all tabulator.
         Updates ALL selected nodes with the new value.
@@ -430,7 +430,7 @@ class GraphDetailTool:
         # Refresh both tabulators to show updated values
         self._refresh_tabulators()
 
-    def _refresh_tabulators(self):
+    def _refresh_tabulators(self) -> None:
         """
         Refresh both tabulators with current node data from visnetwork.
         """
@@ -480,7 +480,7 @@ class GraphDetailTool:
             set_all_df = pd.DataFrame([set_all_row])
             self.set_all_tabulator.value = set_all_df
 
-    def _convert_to_python_type(self, value):
+    def _convert_to_python_type(self, value: Any) -> Any:
         """
         Convert numpy/pandas types to native Python types for JSON serialization.
         """

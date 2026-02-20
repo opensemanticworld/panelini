@@ -176,7 +176,7 @@ class VisNetwork(AnyWidgetComponent):
         self.manipulation_state = ""
         self.manipulation_state = "addEdgeMode"
 
-    def request_position_update(self):
+    def request_position_update(self) -> None:
         """Request JavaScript to update all node positions from the network."""
         self._request_positions += 1
 
@@ -433,7 +433,7 @@ class VisNetwork(AnyWidgetComponent):
         if edge_id is not None and edge.get("id") == edge_id:
             return True
         if from_id is not None and to_id is not None:
-            return edge.get("from") == from_id and edge.get("to") == to_id
+            return bool(edge.get("from") == from_id and edge.get("to") == to_id)
         return False
 
     def _apply_batch_to_local_state(self, actions: list[dict[str, Any]]) -> None:
