@@ -21,7 +21,7 @@ test: ## Test the primary code with pytest
 	@uv run pytest -m "not ui" --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-ui
-test-ui-headless: ## Run UI tests with Playwright in headless mode
+test-ui: ## Run UI tests with Playwright in headless mode
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Running UI tests with Playwright (headless)"
