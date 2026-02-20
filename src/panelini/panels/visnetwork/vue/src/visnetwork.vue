@@ -350,7 +350,9 @@ export default {
     },
 
     emitNodesAndEdges() {
-      this.$emit('change:nodes', this.nodesDataSet.get());
+      // Strip title (DOM element, not JSON-serializable) -- regenerable from json_data
+      const nodes = this.nodesDataSet.get().map(({ title, ...rest }) => rest);
+      this.$emit('change:nodes', nodes);
       this.$emit('change:edges', this.edgesDataSet.get());
     },
 
@@ -542,12 +544,47 @@ export default {
       }
     },
 
-    // Build a YAML-formatted tooltip title string from json_data
+    // Build a colored YAML tooltip as a DOM element from json_data.
+    // vis-network's Popup.setText() uses innerText for strings (no HTML),
+    // but supports DOM Elements via appendChild -- so we return a <pre> element.
     buildNodeTitle(jsonData) {
       if (!jsonData || typeof jsonData !== 'object' || Object.keys(jsonData).length === 0) {
         return undefined;
       }
-      return yaml.dump(jsonData, { indent: 2, lineWidth: -1 });
+      const yamlStr = yaml.dump(jsonData, { indent: 2, lineWidth: -1 });
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'margin:0; font-family:Consolas,Monaco,monospace; font-size:12px; white-space:pre;';
+
+      for (const line of yamlStr.split('\n')) {
+        if (!line) continue;
+        const match = line.match(/^(\s*)(- )?([^:]+?)(:)(.*)$/);
+        if (match) {
+          const [, indent, dash, key, colon, rest] = match;
+          pre.appendChild(document.createTextNode(indent + (dash || '')));
+          const keySpan = document.createElement('span');
+          keySpan.style.color = '#0550ae';
+          keySpan.textContent = key;
+          pre.appendChild(keySpan);
+          pre.appendChild(document.createTextNode(colon));
+          if (rest.trim()) {
+            const valSpan = document.createElement('span');
+            const trimmed = rest.trim();
+            if (/^\d+(\.\d+)?$/.test(trimmed)) {
+              valSpan.style.color = '#0a3069';
+            } else if (trimmed === 'true' || trimmed === 'false' || trimmed === 'null') {
+              valSpan.style.color = '#cf222e';
+            } else {
+              valSpan.style.color = '#116329';
+            }
+            valSpan.textContent = rest;
+            pre.appendChild(valSpan);
+          }
+          pre.appendChild(document.createTextNode('\n'));
+        } else {
+          pre.appendChild(document.createTextNode(line + '\n'));
+        }
+      }
+      return pre;
     },
 
     // Add node from flat action format with type-based styling

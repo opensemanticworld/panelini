@@ -25335,7 +25335,8 @@ const GV = (t, e) => {
       this.$emit("network-event", { event_name: t, event_params: g });
     },
     emitNodesAndEdges() {
-      this.$emit("change:nodes", this.nodesDataSet.get()), this.$emit("change:edges", this.edgesDataSet.get());
+      const t = this.nodesDataSet.get().map(({ title: e, ...g }) => g);
+      this.$emit("change:nodes", t), this.$emit("change:edges", this.edgesDataSet.get());
     },
     // Methods called from bridge layer
     setNodes(t) {
@@ -25458,10 +25459,33 @@ const GV = (t, e) => {
             break;
         }
     },
-    // Build a YAML-formatted tooltip title string from json_data
+    // Build a colored YAML tooltip as a DOM element from json_data.
+    // vis-network's Popup.setText() uses innerText for strings (no HTML),
+    // but supports DOM Elements via appendChild -- so we return a <pre> element.
     buildNodeTitle(t) {
-      if (!(!t || typeof t != "object" || Object.keys(t).length === 0))
-        return ZV.dump(t, { indent: 2, lineWidth: -1 });
+      if (!t || typeof t != "object" || Object.keys(t).length === 0)
+        return;
+      const e = ZV.dump(t, { indent: 2, lineWidth: -1 }), g = document.createElement("pre");
+      g.style.cssText = "margin:0; font-family:Consolas,Monaco,monospace; font-size:12px; white-space:pre;";
+      for (const A of e.split(`
+`)) {
+        if (!A) continue;
+        const i = A.match(/^(\s*)(- )?([^:]+?)(:)(.*)$/);
+        if (i) {
+          const [, I, C, n, r, o] = i;
+          g.appendChild(document.createTextNode(I + (C || "")));
+          const s = document.createElement("span");
+          if (s.style.color = "#0550ae", s.textContent = n, g.appendChild(s), g.appendChild(document.createTextNode(r)), o.trim()) {
+            const a = document.createElement("span"), l = o.trim();
+            /^\d+(\.\d+)?$/.test(l) ? a.style.color = "#0a3069" : l === "true" || l === "false" || l === "null" ? a.style.color = "#cf222e" : a.style.color = "#116329", a.textContent = o, g.appendChild(a);
+          }
+          g.appendChild(document.createTextNode(`
+`));
+        } else
+          g.appendChild(document.createTextNode(A + `
+`));
+      }
+      return g;
     },
     // Add node from flat action format with type-based styling
     addNodeFromAction(t) {
