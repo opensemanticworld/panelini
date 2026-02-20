@@ -144,3 +144,4 @@ source = ["src"]
 
 [tool.deptry.per_rule_ignores]
 DEP002 = ["watchfiles", "panelini"]
+DEP003 = ["numpy"]
