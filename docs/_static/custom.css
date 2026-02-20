@@ -1,0 +1,191 @@
+/* panelini docs — petrol + warm beige palette
+   Light brand: #0d7377   Dark brand: #2fb4b0
+   Beige surface: #faf7f2  Beige border: #e5dfd6 */
+
+/* ── Global overrides ─────────────────────────────────────────────── */
+
+/* Warm off-white page background in light mode */
+body:not([data-theme="dark"]) {
+    --color-background-primary: #faf7f2;
+    --color-background-secondary: #f3ede4;
+    --color-background-border: #e5dfd6;
+}
+
+/* Sidebar brand logo */
+.sidebar-brand img {
+    max-height: 60px;
+    width: auto;
+}
+
+/* ── API Reference ────────────────────────────────────────────────── */
+
+/* --- Top-level class / exception / function signature --- */
+dl.py > dt.sig {
+    padding: 0.6em 0.85em;
+    border-radius: 4px;
+    border-left: 4px solid var(--color-brand-primary);
+    background: var(--color-background-secondary);
+    font-size: 0.9em;
+    line-height: 1.65;
+    overflow-x: auto;
+}
+
+/* "class" / "exception" keyword label */
+dl.py > dt.sig > em.property {
+    color: var(--color-brand-primary);
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* Module prefix: fade it so the actual name pops */
+dt.sig .sig-prename.descclassname {
+    opacity: 0.45;
+    font-weight: 400;
+}
+
+/* The class/function name itself */
+dt.sig .sig-name.descname {
+    font-weight: 700;
+    color: var(--color-foreground-primary);
+}
+
+/* Parameters inside the parentheses */
+dt.sig em.sig-param {
+    font-style: normal;
+    font-weight: 400;
+}
+
+/* Bases line ("Bases: ...") */
+dl.py > dd > p:first-child > code.xref {
+    font-size: 0.88em;
+}
+
+/* Description block under a signature */
+dl.py > dd {
+    margin-left: 1.25em;
+    padding-top: 0.35em;
+    padding-bottom: 0.2em;
+}
+
+/* --- Nested members (attributes, methods inside a class) --- */
+dl.py dl.py {
+    margin-top: 0.5em;
+    margin-bottom: 0;
+}
+
+/* Member signatures: compact, no left-border noise */
+dl.py dl.py > dt.sig {
+    padding: 0.3em 0.6em;
+    border-left: 3px solid var(--color-background-border);
+    border-radius: 3px;
+    background: transparent;
+    font-size: 0.87em;
+}
+
+dl.py dl.py > dt.sig:hover {
+    background: var(--color-background-secondary);
+    border-left-color: var(--color-brand-primary);
+}
+
+/* Member descriptions: tight */
+dl.py dl.py > dd {
+    margin-left: 1em;
+    padding-top: 0.15em;
+    padding-bottom: 0.35em;
+}
+
+/* Attribute value strings like 'List(...)' — subdued */
+dl.py dl.py > dd > p:first-child:last-child {
+    opacity: 0.55;
+    font-size: 0.88em;
+}
+
+/* --- Rubric headings (Initialization, etc.) --- */
+p.rubric {
+    font-size: 0.82em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 1.6em;
+    margin-bottom: 0.3em;
+    color: var(--color-foreground-muted);
+    border-bottom: 1px solid var(--color-background-border);
+    padding-bottom: 0.25em;
+}
+
+/* --- Summary tables (autosummary) --- */
+table.autosummary {
+    width: 100%;
+    font-size: 0.9em;
+    border-collapse: collapse;
+}
+
+table.autosummary td {
+    padding: 0.45em 0.7em;
+    vertical-align: top;
+    border-bottom: 1px solid var(--color-background-border);
+}
+
+table.autosummary td:first-child {
+    white-space: nowrap;
+    font-weight: 600;
+    width: 35%;
+}
+
+table.autosummary tr:last-child td {
+    border-bottom: none;
+}
+
+/* --- Viewcode [source] links --- */
+.viewcode-link {
+    font-size: 0.75em;
+    font-weight: 400;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+dt.sig:hover .viewcode-link {
+    opacity: 0.6;
+}
+
+dt.sig:hover .viewcode-link:hover {
+    opacity: 1;
+}
+
+/* --- Signature overflow — wrap gracefully --- */
+dt.sig {
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Return arrow */
+.sig-return-icon {
+    opacity: 0.4;
+    padding: 0 0.25em;
+}
+
+/* Header-link pilcrow — hide unless hovering the heading */
+a.headerlink {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+*:hover > a.headerlink {
+    opacity: 0.3;
+}
+
+a.headerlink:hover {
+    opacity: 0.7 !important;
+}
+
+/* --- "API" section heading — the generic h3 inside autodoc pages --- */
+section > section > section#api > h3 {
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-foreground-muted);
+    border-bottom: 1px solid var(--color-background-border);
+    padding-bottom: 0.4em;
+    margin-top: 2em;
+}

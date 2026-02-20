@@ -55,6 +55,8 @@ jobs:
   deploy-docs:
     needs: publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -62,5 +64,15 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
-      - name: Deploy documentation
-        run: uv run mkdocs gh-deploy --force
+      - name: Build documentation
+        run: uv run sphinx-build -b html docs docs/_build/html -W
+
+      - name: Create .nojekyll file
+        run: touch docs/_build/html/.nojekyll
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/_build/html
+          force_orphan: true

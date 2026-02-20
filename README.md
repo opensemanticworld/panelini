@@ -98,6 +98,7 @@ panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src
 - [Andreas Räder](https://github.com/raederan)
 - [Linus Schenk](https://github.com/cptnsloww)
 - [Matthias A. Popp](https://github.com/MatPoppFHG)
+- [Simon Stier](https://github.com/simontaurus)
 
 ## 📜 Content Attribution
 
