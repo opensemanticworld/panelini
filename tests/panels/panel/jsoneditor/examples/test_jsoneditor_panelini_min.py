@@ -2,18 +2,14 @@
 # playwright install
 # pytest panel_frontend_test.py --headed --slowmo 1000
 
-import os
 import time
 
 import panel as pn
-import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_panelini_min import app, jsoneditor_panel
 
 
-# Skip in CI environments, run locally via command line
-@pytest.mark.skipif(os.getenv("CI") is not None, reason="Playwright tests do not run in CI")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 

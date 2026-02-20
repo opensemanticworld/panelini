@@ -2,17 +2,14 @@
 # playwright install
 # pytest test_visnetwork_json_data.py --headed --slowmo 1000
 
-import os
 import time
 
 import panel as pn
-import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
 
 
-@pytest.mark.skipif(os.getenv("CI") is not None, reason="Playwright tests do not run in CI")
 def test_json_data_tooltip(page: Page, port):
     """Test that hovering over a node with json_data shows a YAML tooltip."""
     url = f"http://localhost:{port}"

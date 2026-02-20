@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+
       - name: Run tests
         run: uv run python -m pytest tests --cov --cov-config=pyproject.toml --cov-report=xml
 

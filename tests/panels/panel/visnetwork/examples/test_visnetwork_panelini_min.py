@@ -2,18 +2,14 @@
 # playwright install
 # pytest test_visnetwork_panelini_min.py --headed --slowmo 1000
 
-import os
 import time
 
 import panel as pn
-import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_panelini_min import app, visnetwork_panel
 
 
-# Skip in CI environments, run locally via command line
-@pytest.mark.skipif(os.getenv("CI") is not None, reason="Playwright tests do not run in CI")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 
