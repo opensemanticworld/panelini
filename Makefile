@@ -59,11 +59,11 @@ build-and-publish: build publish ## Build and publish.
 
 .PHONY: docs-test
 docs-test: ## Test if documentation can be built without warnings or errors
-	@uv run mkdocs build -s
+	@uv run sphinx-build -b html docs docs/_build/html -W --keep-going
 
 .PHONY: docs
 docs: ## Build and serve the documentation
-	@uv run mkdocs serve
+	@uv run sphinx-autobuild docs docs/_build/html --port 8000 --open-browser
 
 .PHONY: help
 help:

@@ -1,4 +1,4 @@
-# 📊 panelini 🐍<!-- omit in toc -->
+# 📊 panelini 🐍
 
 [![opensemanticworld.github.io/panelini/](https://img.shields.io/badge/panelini-docs-blue
 )](https://opensemanticworld.github.io/panelini/)
@@ -15,7 +15,7 @@
 
 [![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/7e8e0748df02ad05cfe1b22617a7ee00e813f6ae/img/panelini-min.svg)](https://github.com/opensemanticworld/panelini)
 
-## 📦 Table of Contents <!-- omit in toc -->
+## 📦 Table of Contents
 
 - [📄 Features](#-features)
 - [🚀 Install](#-install)
@@ -98,7 +98,45 @@ panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src
 - [Andreas Räder](https://github.com/raederan)
 - [Linus Schenk](https://github.com/cptnsloww)
 - [Matthias A. Popp](https://github.com/MatPoppFHG)
+- [Simon Stier](https://github.com/simontaurus)
 
 ## 📜 Content Attribution
 
 The authors initially generated the logo and banner for this repository using DALL-E 3 and later modified it to better align with the project's vision.
+
+```{toctree}
+:maxdepth: 2
+:caption: Getting Started
+:hidden:
+
+self
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Architecture
+:hidden:
+
+architecture
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Panels
+:hidden:
+
+panels/index
+panels/jsoneditor
+panels/visnetwork
+panels/graph_detail_tool
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: API Reference
+:hidden:
+
+modules
+components
+apidocs/index
+```

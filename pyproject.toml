@@ -59,9 +59,12 @@ dev = [
     "mypy>=0.991",
     "pytest-cov>=4.0.0",
     "ruff>=0.11.5",
-    "mkdocs>=1.4.2",
-    "mkdocs-material>=8.5.10",
-    "mkdocstrings[python]>=0.26.1",
+    "sphinx>=7.2.0",
+    "furo>=2024.1.29",
+    "myst-parser>=3.0.0",
+    "sphinx-autodoc2>=0.5.0",
+    "sphinx-autobuild>=2024.2.4",
+    "sphinxcontrib-mermaid>=1.0.0",
     "pytest-playwright>=0.7.2",
 ]
 
