@@ -58,7 +58,7 @@ export default {
   methods: {
     initNetwork() {
       // Create DataSets
-      this.nodesDataSet = new DataSet(this.nodes);
+      this.nodesDataSet = new DataSet(this.enrichNodesWithTitles(this.nodes));
       this.edgesDataSet = new DataSet(this.edges);
 
       // Store manipulation callbacks separately
@@ -369,8 +369,8 @@ export default {
           this.nodesDataSet.remove(toRemove);
         }
 
-        // Update existing nodes and add new ones
-        this.nodesDataSet.update(nodes);
+        // Update existing nodes and add new ones (enrich with tooltips if json_data present)
+        this.nodesDataSet.update(this.enrichNodesWithTitles(nodes));
       }
     },
 
@@ -542,6 +542,17 @@ export default {
           // These are handled by Python side for timing
           break;
       }
+    },
+
+    // Enrich nodes that have json_data with a colored YAML tooltip (title DOM element)
+    enrichNodesWithTitles(nodes) {
+      return nodes.map(node => {
+        if (node.json_data && !node.title) {
+          const title = this.buildNodeTitle(node.json_data);
+          if (title) return { ...node, title };
+        }
+        return node;
+      });
     },
 
     // Build a colored YAML tooltip as a DOM element from json_data.

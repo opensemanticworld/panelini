@@ -25172,7 +25172,7 @@ const GV = (t, e) => {
   },
   methods: {
     initNetwork() {
-      this.nodesDataSet = new Ai(this.nodes), this.edgesDataSet = new Ai(this.edges), this._manipulationCallbacks = {
+      this.nodesDataSet = new Ai(this.enrichNodesWithTitles(this.nodes)), this.edgesDataSet = new Ai(this.edges), this._manipulationCallbacks = {
         addNode: (A, i) => {
           A.label = A.label || `Node ${A.id}`, i(A), setTimeout(() => {
             this.$emit("change:nodes", this.nodesDataSet.get());
@@ -25342,7 +25342,7 @@ const GV = (t, e) => {
     setNodes(t) {
       if (this.nodesDataSet) {
         const e = this.nodesDataSet.getIds(), g = t.map((i) => i.id), A = e.filter((i) => !g.includes(i));
-        A.length > 0 && this.nodesDataSet.remove(A), this.nodesDataSet.update(t);
+        A.length > 0 && this.nodesDataSet.remove(A), this.nodesDataSet.update(this.enrichNodesWithTitles(t));
       }
     },
     setEdges(t) {
@@ -25458,6 +25458,16 @@ const GV = (t, e) => {
             this.removeSingleNode(t.id);
             break;
         }
+    },
+    // Enrich nodes that have json_data with a colored YAML tooltip (title DOM element)
+    enrichNodesWithTitles(t) {
+      return t.map((e) => {
+        if (e.json_data && !e.title) {
+          const g = this.buildNodeTitle(e.json_data);
+          if (g) return { ...e, title: g };
+        }
+        return e;
+      });
     },
     // Build a colored YAML tooltip as a DOM element from json_data.
     // vis-network's Popup.setText() uses innerText for strings (no HTML),
