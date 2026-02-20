@@ -15522,7 +15522,7 @@ const _m = (l, u) => {
     y[w] = _;
   return y;
 };
-window.JSONEditor = mo.JSONEditor;
+window.JSONFormEditor = mo.JSONEditor;
 const wm = {
   name: "dm-json-form3",
   components: {},
