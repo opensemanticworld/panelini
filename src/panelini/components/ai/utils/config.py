@@ -15,6 +15,18 @@ _ENV_VAR_RE = re.compile(r"\$\{([^}]+)}")
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "default_config.yml"
 
 
+def parse_model_value(value: str) -> tuple[str, str]:
+    """Parse a LiteLLM-style ``prefix/model-name`` string.
+
+    Returns ``(prefix, model_name)`` when *value* contains a ``/``,
+    or ``("", value)`` for bare model names.
+    """
+    if "/" in value:
+        prefix, _, model_name = value.partition("/")
+        return prefix, model_name
+    return "", value
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     """A single model available under a provider.
@@ -165,10 +177,19 @@ def load_config(path: Path | None = None) -> AppConfig:
         raw_env_vars: dict[str, str] = prov_data.get("env_vars", {})
         resolved_env_vars = {k: _resolve_env_var(v) for k, v in raw_env_vars.items()}
 
+        # Derive client_type: explicit value takes precedence, then infer
+        # from the first model's LiteLLM prefix, then fall back to key.
+        explicit_client_type = prov_data.get("client_type")
+        if explicit_client_type:
+            client_type = explicit_client_type
+        else:
+            prefix, _ = parse_model_value(models[0].value)
+            client_type = prefix or key
+
         providers[key] = ProviderConfig(
             key=key,
             display_name=prov_data.get("display_name", key),
-            client_type=prov_data.get("client_type", key),
+            client_type=client_type,
             env_vars=resolved_env_vars,
             models=models,
         )

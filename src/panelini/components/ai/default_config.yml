@@ -10,9 +10,9 @@ providers:
       endpoint: "${ANTHROPIC_ENDPOINT}"
     models:
       - name: "Claude Sonnet 4.5"
-        value: "claude-sonnet-4-5"
+        value: "anthropic/claude-sonnet-4-5"
       - name: "Claude Haiku 4.5"
-        value: "claude-haiku-4-5"
+        value: "anthropic/claude-haiku-4-5"
 
   azure_openai:
     display_name: "Azure OpenAI"
@@ -23,4 +23,4 @@ providers:
       api_version: "${AZURE_OPENAI_API_VERSION}"
     models:
       - name: "GPT-4o"
-        value: "gpt-4o-2024-11-20"
+        value: "azure_openai/gpt-4o-2024-11-20"

@@ -131,9 +131,9 @@ providers:
       endpoint: "${ANTHROPIC_ENDPOINT}"
     models:
       - name: "Claude Sonnet 4.5"
-        value: "claude-sonnet-4-5"
+        value: "anthropic/claude-sonnet-4-5"
       - name: "Claude Haiku 4.5"
-        value: "claude-haiku-4-5"
+        value: "anthropic/claude-haiku-4-5"
 
   azure_openai:
     display_name: "Azure OpenAI"
@@ -144,8 +144,10 @@ providers:
       api_version: "${AZURE_OPENAI_API_VERSION}"
     models:
       - name: "GPT-4o"
-        value: "gpt-4o-2024-11-20"
+        value: "azure_openai/gpt-4o-2024-11-20"
 ```
+
+Model values use the [LiteLLM naming convention](https://docs.litellm.ai/docs/providers): `provider_prefix/model-id`. The prefix is stripped before passing the model name to LangChain. When `client_type` is omitted, it is derived directly from the first model's prefix. Bare model names (without a prefix) still work when `client_type` is set explicitly.
 
 Environment variables referenced with `${VAR_NAME}` are resolved at load time. A `ValueError` is raised if a referenced variable is not set.
 

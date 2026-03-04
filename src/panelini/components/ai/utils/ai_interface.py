@@ -10,7 +10,7 @@ from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_openai import AzureChatOpenAI
 
-from .config import ModelConfig, ProviderConfig
+from .config import ModelConfig, ProviderConfig, parse_model_value
 
 # ---------------------------------------------------------------------------
 # Provider registry: maps client_type strings to factory functions.
@@ -108,8 +108,10 @@ class AiInterface:
         self.conversation_history: list[BaseMessage] = []
         self.system_message = system_message
 
-        # Extract model name string from ModelConfig if needed
-        model_name_str = model_name.value if isinstance(model_name, ModelConfig) else model_name
+        # Extract model name string from ModelConfig if needed, then strip
+        # any LiteLLM provider prefix so LangChain receives bare model names.
+        raw_value = model_name.value if isinstance(model_name, ModelConfig) else model_name
+        _, model_name_str = parse_model_value(raw_value)
 
         # Initialize the appropriate model
         base_model = self._initialize_model(
