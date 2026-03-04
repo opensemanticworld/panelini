@@ -133,7 +133,7 @@ panels/index
 :caption: Components
 :hidden:
 
-components
+components/index
 ```
 
 ```{toctree}

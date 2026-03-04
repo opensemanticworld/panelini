@@ -19,6 +19,8 @@
   border-radius: 0px;
   box-shadow: none;
   outline: none;
+  overflow-y: auto;
+  background-color: var(--background-color, #ffffff);
 }
 
 .left-sidebar {

@@ -8,6 +8,9 @@ This page provides an overview of all public modules, classes, and functions in 
 # Core framework
 from panelini import Panelini
 
+# Core with AI component enabled
+app = Panelini(title="My App", use_ai=True)
+
 # Panels (standalone, no Panelini dependency)
 from panelini.panels.jsoneditor import JsonEditor
 from panelini.panels.visnetwork import VisNetwork, GraphDetailTool
@@ -125,6 +128,18 @@ The {py:class}`~panelini.main.Panelini` class provides methods for managing layo
 * - `sidebars_max_width`
   - `Integer`
   - Maximum width of sidebars in pixels (default: `300`, bounds: 100--500).
+* - `use_ai`
+  - `Boolean`
+  - Enable the AI chat component (default: `False`). Requires `panelini[ai]`.
+* - `ai_system_message`
+  - `String`
+  - System message for the AI backend (default: `"You are a helpful assistant."`).
+* - `ai_welcome_message`
+  - `String`
+  - Initial greeting shown in the AI chat. Uses a built-in default if `None`.
+* - `ai_config_path`
+  - `str | Path`
+  - Path to a custom `config.yml` for the AI component. Auto-discovered if `None`.
 ```
 
 ### Utility Functions
@@ -324,12 +339,80 @@ See the {doc}`Panels section <panels/index>` for usage guides and examples.
 
 ## Components
 
-Panelini-dependent building blocks that require the Panelini framework. See {doc}`Components <components>` for details.
+Panelini-dependent building blocks that require the Panelini framework. See {doc}`Components <components/index>` for details.
 
-```{admonition} Status
-:class: note
+### `panelini.components.ai` -- AI Chat Component
 
-The components module is currently in planning stage. No implementations exist yet. Contributions welcome.
+Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI Chat guide <components/ai>` for usage and configuration.
+
+**Frontend:**
+
+```{list-table}
+:header-rows: 1
+:widths: 30 70
+
+* - Class
+  - Description
+* - `panelini.components.ai.frontend.Frontend`
+  - UI layer for the AI chat component. Exposes `sidebar_objects` and `main_objects` properties for integration into Panelini.
+```
+
+**Backend:**
+
+```{list-table}
+:header-rows: 1
+:widths: 30 70
+
+* - Class
+  - Description
+* - `panelini.components.ai.backend.AiBackend`
+  - Business logic for provider/model management, tool execution, message processing, and conversation history.
+```
+
+**AI Interface:**
+
+```{list-table}
+:header-rows: 1
+:widths: 30 70
+
+* - Class / Function
+  - Description
+* - `panelini.components.ai.utils.ai_interface.AiInterface`
+  - Provider-agnostic LLM interface supporting streaming, tool binding, and conversation history. Built on LangChain.
+* - `panelini.components.ai.utils.ai_interface.create_interface(...)`
+  - Factory function to create an `AiInterface` for any configured provider.
+```
+
+**Configuration:**
+
+```{list-table}
+:header-rows: 1
+:widths: 30 70
+
+* - Class / Function
+  - Description
+* - `panelini.components.ai.utils.config.AppConfig`
+  - Top-level application configuration (providers dict, `default_provider` property).
+* - `panelini.components.ai.utils.config.ProviderConfig`
+  - Frozen dataclass for a single LLM provider (key, display_name, client_type, env_vars, models).
+* - `panelini.components.ai.utils.config.ModelConfig`
+  - Frozen dataclass for a single model (name, value).
+* - `panelini.components.ai.utils.config.load_config(path=None)`
+  - Load and validate a YAML configuration file. Auto-discovers `config.yml`/`config.yaml` if path is `None`.
+```
+
+**Tools:**
+
+```{list-table}
+:header-rows: 1
+:widths: 30 70
+
+* - Class
+  - Description
+* - `panelini.components.ai.tools.basic_tools.GetCurrentTimeTool`
+  - Returns the current date and time with timezone support.
+* - `panelini.components.ai.tools.basic_tools.UpdatePreviewTool`
+  - Renders markdown content in the preview pane.
 ```
 
 ---

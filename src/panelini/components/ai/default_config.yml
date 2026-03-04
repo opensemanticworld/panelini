@@ -1,0 +1,26 @@
+# Default AI provider configuration for Panelini.
+# Override by setting PANELINI_AI_CONFIG_PATH to point to your own config.yml.
+
+providers:
+  anthropic:
+    display_name: "Anthropic"
+    client_type: "anthropic"
+    env_vars:
+      api_key: "${ANTHROPIC_API_KEY}"
+      endpoint: "${ANTHROPIC_ENDPOINT}"
+    models:
+      - name: "Claude Sonnet 4.5"
+        value: "claude-sonnet-4-5"
+      - name: "Claude Haiku 4.5"
+        value: "claude-haiku-4-5"
+
+  azure_openai:
+    display_name: "Azure OpenAI"
+    client_type: "azure_openai"
+    env_vars:
+      api_key: "${AZURE_OPENAI_API_KEY}"
+      endpoint: "${AZURE_OPENAI_ENDPOINT}"
+      api_version: "${AZURE_OPENAI_API_VERSION}"
+    models:
+      - name: "GPT-4o"
+        value: "gpt-4o-2024-11-20"

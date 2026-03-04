@@ -8,6 +8,7 @@
 import os
 from pathlib import Path
 
+import pytest
 from panel import Card, Column, Row, Spacer, config
 from panel.layout.gridstack import GridStack
 from panel.pane import Markdown
@@ -351,3 +352,42 @@ def test_panelini_methods_main_set_and_get():
 
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN USE_AI TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$
+def test_panelini_use_ai_false_no_import():
+    """Panelini(use_ai=False) works without AI dependencies."""
+    instance = Panelini(use_ai=False)
+    assert instance.use_ai is False
+    assert not hasattr(instance, "_ai_frontend")
+
+
+def test_panelini_use_ai_true_initializes(tmp_path):
+    """Panelini(use_ai=True) initializes AI frontend into sidebar and main."""
+    pytest.importorskip("langchain")
+
+    # Write a minimal config that requires no real env vars
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(
+        "providers:\n"
+        "  test:\n"
+        '    display_name: "Test"\n'
+        '    client_type: "anthropic"\n'
+        "    env_vars:\n"
+        '      api_key: "fake-key"\n'
+        '      endpoint: "https://localhost"\n'
+        "    models:\n"
+        '      - name: "Test Model"\n'
+        '        value: "test-model"\n'
+    )
+
+    instance = Panelini(use_ai=True, ai_config_path=str(cfg))
+    assert instance.use_ai is True
+    assert hasattr(instance, "_ai_frontend")
+    # Sidebar should have AI objects
+    assert len(instance.sidebar) > 0
+    # Main should have AI objects
+    assert len(instance.main) > 0
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF USE_AI TESTS $$$$$$$$$$$$$$$$$$$$$$$$$$$

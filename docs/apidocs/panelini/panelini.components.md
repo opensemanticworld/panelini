@@ -6,3 +6,13 @@
 ```{autodoc2-docstring} panelini.components
 :allowtitles:
 ```
+
+## Subpackages
+
+```{toctree}
+:titlesonly:
+:maxdepth: 3
+
+panelini.components.ai
+panelini.components.migration
+```

@@ -23,29 +23,30 @@ graph TB
 
     subgraph components [" Components "]
         direction TB
-        planned(["planned"])
+        ai(["AI Chat"])
     end
 
     init --> main
     gdt --> vn
     gdt -.-> je
+    ai -.-> main
 
     classDef coreNode fill:#1e293b,stroke:#334155,color:#f8fafc
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
-    classDef plannedNode fill:#94a3b8,stroke:#64748b,color:#ffffff
+    classDef componentNode fill:#6366f1,stroke:#4f46e5,color:#ffffff
 
     class init,main,css coreNode
     class je,vn,gdt,utils panelNode
-    class planned plannedNode
+    class ai componentNode
 ```
 
-The panelini package has two layers:
+The panelini package has three layers:
 
 - **Core** (`main.py`): The `Panelini` class provides the application layout framework
 - **Panels** (`panels/`): Independent, reusable components that work with or without Panelini
-- **Components** (`components/`): Panelini-dependent components (planned for future development)
+- **Components** (`components/`): Panelini-dependent building blocks (e.g., the AI chat component)
 
-Panels are designed to be **standalone** -- they can be used directly in any Panel application without importing the Panelini framework.
+Panels are designed to be **standalone** -- they can be used directly in any Panel application without importing the Panelini framework. Components integrate into Panelini and are installed as optional extras.
 
 ## Dashboard Layout
 
