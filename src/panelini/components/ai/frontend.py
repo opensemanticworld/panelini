@@ -158,6 +158,7 @@ class Frontend:
         # Create chat interface
         self.chat_interface = pn.chat.ChatInterface(
             callback=self._handle_message,
+            callback_user="🤖 Assistant",
             placeholder_text="💭 Thinking...",
             placeholder_threshold=0.2,
             user="🧑 User",
