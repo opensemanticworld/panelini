@@ -1,0 +1,65 @@
+// bootstrap-icons is loaded at runtime via wunderbaum_component.js -> document.head
+// to ensure @font-face works (Panel _stylesheets may use shadow DOM where fonts break)
+@import (inline) "../node_modules/wunderbaum/dist/wunderbaum.css";
+
+// Override wunderbaum's default white background + border (defined on :root,:host)
+:root, :host {
+  --wb-background-color: transparent;
+  --wb-alternate-row-color: transparent;
+  --wb-alternate-row-color-hover: rgba(0, 0, 0, 0.03);
+  --wb-border-color: transparent;
+  --wb-focus-border-color: transparent;
+}
+
+.wunderbaum-wrapper {
+  position: relative;
+  width: 100%;
+
+  .tree-container {
+    width: 100%;
+    border-radius: 4px;
+
+    // Wunderbaum's root element needs explicit width to render in shadow DOM
+    div.wunderbaum {
+      width: stretch;
+      width: -webkit-fill-available;
+      width: -moz-available;
+      // Override wunderbaum's white background + border
+      --wb-background-color: transparent;
+      --wb-alternate-row-color: transparent;
+      --wb-alternate-row-color-hover: rgba(0, 0, 0, 0.03);
+      border-color: transparent;
+    }
+  }
+
+  .wb-context-menu {
+    position: absolute;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 160px;
+    font-size: 14px;
+
+    .wb-context-menu-item {
+      padding: 6px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      &:hover {
+        background-color: #0969da;
+        color: #ffffff;
+      }
+
+      i {
+        width: 16px;
+        text-align: center;
+      }
+    }
+  }
+}
