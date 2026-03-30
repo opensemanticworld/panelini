@@ -1,4 +1,4 @@
-"""Frontend UI layer for the AI chat component."""
+"""Frontend UI layer for the AI chat panel."""
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -22,12 +22,11 @@ Feel free to ask me anything!
 What would you like to work on?"""
 
 
-class Frontend:
-    """Frontend class for the AI chat component.
+class AiChat:
+    """Standalone AI chat panel.
 
-    This is a *component* — it does **not** create its own :class:`Panelini`
-    instance.  Instead it exposes :attr:`sidebar_objects` and
-    :attr:`main_objects` that the caller can feed into an existing Panelini.
+    Can be used independently in any Panel app or integrated into Panelini.
+    Exposes :attr:`sidebar_objects` and :attr:`main_objects` widget lists.
     """
 
     def __init__(
@@ -35,6 +34,7 @@ class Frontend:
         system_message: str = "You are a helpful assistant.",
         welcome_message: str | None = None,
         config_path: Path | None = None,
+        tools: list | None = None,
     ) -> None:
         """Initialize the AI chat frontend.
 
@@ -43,6 +43,8 @@ class Frontend:
             welcome_message: Initial greeting shown in the chat. Uses a
                 default if *None*.
             config_path: Optional path to a custom config.yml file.
+            tools: Optional list of custom ``BaseTool`` instances to make
+                available alongside the built-in tools.
         """
         # Initialize backend
         self.backend = AiBackend(
@@ -103,7 +105,11 @@ class Frontend:
         self.tool_checkboxes: dict[str, dict[str, Any]] = {}
         self.tool_checkbox_group = pn.Column(sizing_mode="stretch_width")
 
-        for tool in AVAILABLE_TOOLS:
+        all_tools = list(AVAILABLE_TOOLS)
+        if tools:
+            all_tools.extend(tools)
+
+        for tool in all_tools:
             # Enable "get_current_time" tool by default
             default_enabled = tool.name == "get_current_time"
             checkbox = pn.widgets.Checkbox(
@@ -308,7 +314,7 @@ class Frontend:
             preview_card,
             sizing_mode="stretch_both",
             min_height=600,
-            margin=(10, 15, 10, 15),
+            margin=(0, 15, 10, 15),
         )
 
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]

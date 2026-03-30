@@ -1,11 +1,11 @@
-"""Minimal example: launch the Panelini AI chat component.
+"""Minimal example: launch the AI chat panel inside Panelini.
 
 Prerequisites
 -------------
 1. ``pip install panelini[ai]``
 2. Set the required environment variables for your chosen provider
-   (see ``src/panelini/components/ai/default_config.yml``).
-3. Run this script: ``python examples/components/ai_chat_min.py``
+   (see ``src/panelini/panels/ai/default_config.yml``).
+3. Run this script: ``python examples/panels/ai/ai_chat_panelini_min.py``
 """
 
 from dotenv import load_dotenv

@@ -1,4 +1,4 @@
-"""Shared fixtures for AI component tests."""
+"""Shared fixtures for AI panel tests."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 # Skip the entire directory when langchain is not installed
 langchain = pytest.importorskip("langchain")
 
-from panelini.components.ai.utils.config import AppConfig, ModelConfig, ProviderConfig  # noqa: E402
+from panelini.panels.ai.utils.config import AppConfig, ModelConfig, ProviderConfig  # noqa: E402
 
 
 @pytest.fixture()
@@ -79,7 +79,7 @@ def mock_ai_interface(sample_provider: ProviderConfig) -> Any:
     """Return a mock-friendly AiInterface (not connected to any real LLM)."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from panelini.components.ai.utils.ai_interface import AiInterface
+    from panelini.panels.ai.utils.ai_interface import AiInterface
 
     iface = MagicMock(spec=AiInterface)
     iface.provider = sample_provider

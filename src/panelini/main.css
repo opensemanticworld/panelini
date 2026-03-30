@@ -11,7 +11,6 @@
 .content {
   background-size: cover;
   background-position: top;
-  padding-top: var(--content-spacing);
   height: 100%;
 }
 
@@ -20,7 +19,21 @@
   box-shadow: none;
   outline: none;
   overflow-y: auto;
-  background-color: var(--background-color, #ffffff);
+  background-color: transparent;
+  padding-top: var(--content-spacing);
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
 }
 
 .left-sidebar {
@@ -40,6 +53,7 @@
 .main {
   margin-left: var(--content-spacing);
   margin-right: var(--content-spacing);
+  padding-top: var(--content-spacing);
 }
 
 .main-object {

@@ -8,6 +8,7 @@ from panelini import Panelini
 app = Panelini(
     title="📊 Welcome to Panelini! 🖥️",
     # main = main_objects # init objects here
+    sidebar_right_enabled=True,
 )
 # Or set objects outside
 app.main_set(
@@ -22,16 +23,110 @@ app.main_set(
     ]
 )
 
-app.sidebar_set(
-    objects=[
-        pn.Card(
-            title="Set complete sidebar objects",
-            objects=["Some sidebar content goes here"],
-            width=300,
-            max_height=200,
-        )
-    ]
-)
+
+sidebar_objects = [
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+    pn.Card(
+        title="Set complete sidebar objects",
+        objects=["Some sidebar content goes here"],
+        width=300,
+        max_height=200,
+    ),
+]
+
+app.sidebar_set(sidebar_objects)
+
+app.sidebar_right_set(sidebar_objects.copy())
+
 
 # Servable for debugging using command
 # panel serve <panelini_min.py --dev

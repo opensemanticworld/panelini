@@ -1,4 +1,4 @@
-"""Tests for panelini.components.ai.tools.basic_tools."""
+"""Tests for panelini.panels.ai.tools.basic_tools."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from panelini.components.ai.tools.basic_tools import (
+from panelini.panels.ai.tools.basic_tools import (
     AVAILABLE_TOOLS,
     get_current_time_tool,
     update_preview_tool,
@@ -25,7 +25,7 @@ class TestGetCurrentTimeTool:
         assert "Current time (US/Eastern):" in result
 
     def test_async_run(self) -> None:
-        result = asyncio.get_event_loop().run_until_complete(get_current_time_tool._arun())
+        result = asyncio.run(get_current_time_tool._arun())
         assert "Current time" in result
 
 
@@ -39,7 +39,7 @@ class TestUpdatePreviewTool:
         assert result.startswith("PREVIEW_UPDATE::Preview::")
 
     def test_async_run(self) -> None:
-        result = asyncio.get_event_loop().run_until_complete(update_preview_tool._arun(content="md", title="T"))
+        result = asyncio.run(update_preview_tool._arun(content="md", title="T"))
         assert result == "PREVIEW_UPDATE::T::md"
 
 

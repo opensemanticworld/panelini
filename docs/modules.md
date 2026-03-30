@@ -337,13 +337,9 @@ See the {doc}`Panels section <panels/index>` for usage guides and examples.
 
 ---
 
-## Components
+## AI Chat Panel
 
-Panelini-dependent building blocks that require the Panelini framework. See {doc}`Components <components/index>` for details.
-
-### `panelini.components.ai` -- AI Chat Component
-
-Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI Chat guide <components/ai>` for usage and configuration.
+Standalone AI chat panel, usable in any Panel app or with Panelini. Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI Chat guide <panels/ai>` for full documentation.
 
 **Frontend:**
 
@@ -353,8 +349,8 @@ Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI 
 
 * - Class
   - Description
-* - `panelini.components.ai.frontend.Frontend`
-  - UI layer for the AI chat component. Exposes `sidebar_objects` and `main_objects` properties for integration into Panelini.
+* - `panelini.panels.ai.frontend.AiChat`
+  - Standalone AI chat panel. Exposes `sidebar_objects` and `main_objects` properties for integration into any Panel app or Panelini.
 ```
 
 **Backend:**
@@ -365,7 +361,7 @@ Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI 
 
 * - Class
   - Description
-* - `panelini.components.ai.backend.AiBackend`
+* - `panelini.panels.ai.backend.AiBackend`
   - Business logic for provider/model management, tool execution, message processing, and conversation history.
 ```
 
@@ -377,9 +373,9 @@ Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI 
 
 * - Class / Function
   - Description
-* - `panelini.components.ai.utils.ai_interface.AiInterface`
+* - `panelini.panels.ai.utils.ai_interface.AiInterface`
   - Provider-agnostic LLM interface supporting streaming, tool binding, and conversation history. Built on LangChain.
-* - `panelini.components.ai.utils.ai_interface.create_interface(...)`
+* - `panelini.panels.ai.utils.ai_interface.create_interface(...)`
   - Factory function to create an `AiInterface` for any configured provider.
 ```
 
@@ -391,13 +387,13 @@ Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI 
 
 * - Class / Function
   - Description
-* - `panelini.components.ai.utils.config.AppConfig`
+* - `panelini.panels.ai.utils.config.AppConfig`
   - Top-level application configuration (providers dict, `default_provider` property).
-* - `panelini.components.ai.utils.config.ProviderConfig`
+* - `panelini.panels.ai.utils.config.ProviderConfig`
   - Frozen dataclass for a single LLM provider (key, display_name, client_type, env_vars, models).
-* - `panelini.components.ai.utils.config.ModelConfig`
+* - `panelini.panels.ai.utils.config.ModelConfig`
   - Frozen dataclass for a single model (name, value).
-* - `panelini.components.ai.utils.config.load_config(path=None)`
+* - `panelini.panels.ai.utils.config.load_config(path=None)`
   - Load and validate a YAML configuration file. Auto-discovers `config.yml`/`config.yaml` if path is `None`.
 ```
 
@@ -409,9 +405,9 @@ Requires the `ai` optional extra (`pip install panelini[ai]`). See the {doc}`AI 
 
 * - Class
   - Description
-* - `panelini.components.ai.tools.basic_tools.GetCurrentTimeTool`
+* - `panelini.panels.ai.tools.basic_tools.GetCurrentTimeTool`
   - Returns the current date and time with timezone support.
-* - `panelini.components.ai.tools.basic_tools.UpdatePreviewTool`
+* - `panelini.panels.ai.tools.basic_tools.UpdatePreviewTool`
   - Renders markdown content in the preview pane.
 ```
 

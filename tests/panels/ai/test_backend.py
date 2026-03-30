@@ -1,4 +1,4 @@
-"""Tests for panelini.components.ai.backend."""
+"""Tests for panelini.panels.ai.backend."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from panelini.components.ai.backend import AiBackend
-from panelini.components.ai.utils.config import ModelConfig, ProviderConfig
+from panelini.panels.ai.backend import AiBackend
+from panelini.panels.ai.utils.config import ModelConfig, ProviderConfig
 
 pytestmark = pytest.mark.ai
 
@@ -74,7 +74,7 @@ class TestHistory:
 
 class TestTools:
     def test_update_tools(self, backend: AiBackend) -> None:
-        from panelini.components.ai.tools.basic_tools import get_current_time_tool
+        from panelini.panels.ai.tools.basic_tools import get_current_time_tool
 
         count = backend.update_tools([get_current_time_tool])
         assert count == 1

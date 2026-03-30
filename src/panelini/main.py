@@ -272,13 +272,13 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
             ImportError: If the AI dependencies are not installed.
         """
         try:
-            from panelini.components.ai.frontend import Frontend
+            from panelini.panels.ai import AiChat
         except ImportError as exc:
             msg = "AI dependencies are not installed. Install with: pip install panelini[ai]"
             raise ImportError(msg) from exc
 
         config_path = Path(self.ai_config_path) if isinstance(self.ai_config_path, str) else self.ai_config_path
-        self._ai_frontend = Frontend(
+        self._ai_frontend = AiChat(
             system_message=self.ai_system_message,
             welcome_message=self.ai_welcome_message,
             config_path=config_path,

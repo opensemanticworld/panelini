@@ -1,4 +1,4 @@
-"""Tests for panelini.components.ai.utils.config."""
+"""Tests for panelini.panels.ai.utils.config."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from panelini.components.ai.utils.config import (
+from panelini.panels.ai.utils.config import (
     AppConfig,
     ModelConfig,
     ProviderConfig,
@@ -88,7 +88,7 @@ class TestLoadConfig:
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://localhost")
         monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-01-01")
 
-        from panelini.components.ai.utils.config import _DEFAULT_CONFIG_PATH
+        from panelini.panels.ai.utils.config import _DEFAULT_CONFIG_PATH
 
         cfg = load_config(_DEFAULT_CONFIG_PATH)
         assert len(cfg.providers) >= 1

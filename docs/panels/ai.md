@@ -1,14 +1,14 @@
-# AI Chat Component
+# AI Chat Panel
 
-The AI chat component adds an LLM-powered chat interface to any Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.
+The AI chat panel adds an LLM-powered chat interface to any Panel application or Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.
 
 ## Overview
 
 ```{mermaid}
 graph TB
-    subgraph ai [" AI Component "]
+    subgraph ai [" AI Chat Panel "]
         direction TB
-        frontend(["Frontend"])
+        frontend(["AiChat"])
         backend(["AiBackend"])
         iface(["AiInterface"])
         config(["Config Loader"])
@@ -43,9 +43,9 @@ graph TB
     class anthropic,azure providerNode
 ```
 
-The component is structured in layers:
+The panel is structured in layers:
 
-- **Frontend** -- UI widgets (chat interface, sidebar controls, preview pane)
+- **AiChat** -- UI widgets (chat interface, sidebar controls, preview pane)
 - **AiBackend** -- Business logic (provider management, tool execution, message routing)
 - **AiInterface** -- Provider-agnostic LLM wrapper (LangChain-based)
 - **Config** -- YAML configuration with environment variable resolution
@@ -53,7 +53,7 @@ The component is structured in layers:
 
 ## Installation
 
-The AI component is an optional extra:
+The AI chat panel is an optional extra:
 
 ```bash
 uv add panelini[ai]
@@ -78,6 +78,22 @@ app.servable()
 
 That's it. The `use_ai=True` flag adds the chat interface to the main area and provider/model controls to the left sidebar.
 
+### Standalone Usage (without Panelini)
+
+```python
+import panel as pn
+
+from panelini.panels.ai import AiChat
+
+chat = AiChat(
+    system_message="You are a helpful assistant.",
+)
+
+# Use sidebar_objects and main_objects in any Panel layout
+app = pn.Row(*chat.main_objects)
+app.servable()
+```
+
 ### Configuration Parameters
 
 ```python
@@ -99,7 +115,7 @@ app = Panelini(
   - Description
 * - `use_ai`
   - `Boolean`
-  - Enable the AI chat component (default: `False`).
+  - Enable the AI chat panel (default: `False`).
 * - `ai_system_message`
   - `String`
   - System message for the AI backend (default: `"You are a helpful assistant."`).
@@ -113,7 +129,7 @@ app = Panelini(
 
 ## Provider Configuration
 
-Providers and models are defined in a YAML configuration file. The component searches for configuration in this order:
+Providers and models are defined in a YAML configuration file. The panel searches for configuration in this order:
 
 1. `PANELINI_AI_CONFIG_PATH` environment variable
 2. Walk upward from the working directory looking for `config.yml` or `config.yaml`
@@ -170,7 +186,7 @@ Environment variables referenced with `${VAR_NAME}` are resolved at load time. A
 
 ## UI Layout
 
-When `use_ai=True`, the component injects two areas into the Panelini dashboard:
+When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
 
 ### Sidebar Controls
 
@@ -190,7 +206,7 @@ The main area receives a two-column layout:
 
 ## Tools
 
-The component includes a tool system based on LangChain's `BaseTool`. Tools are toggled via sidebar checkboxes.
+The panel includes a tool system based on LangChain's `BaseTool`. Tools are toggled via sidebar checkboxes.
 
 ### Built-in Tools
 
@@ -213,7 +229,15 @@ The component includes a tool system based on LangChain's `BaseTool`. Tools are 
 
 ### Adding Custom Tools
 
-Create a LangChain `BaseTool` subclass and register it in the `AVAILABLE_TOOLS` list:
+Custom tools can be passed directly to `AiChat` via the `tools` parameter. They appear as additional checkboxes in the sidebar alongside the built-in tools:
+
+```python
+from panelini.panels.ai import AiChat
+
+chat = AiChat(tools=[MyTool()])
+```
+
+To create a custom tool, subclass LangChain's `BaseTool`:
 
 ```python
 from langchain_core.tools import BaseTool
@@ -236,12 +260,14 @@ class MyTool(BaseTool):
         return self._run(query=query)
 ```
 
+See ``examples/panels/ai/ai_chat_custom_tool.py`` for a complete working example with a LocalStorage tool.
+
 ## Module Structure
 
 ```
-panelini/components/ai/
+panelini/panels/ai/
 ├── __init__.py
-├── frontend.py          # UI layer (Frontend class)
+├── frontend.py          # UI layer (AiChat class)
 ├── backend.py           # Business logic (AiBackend class)
 ├── default_config.yml   # Bundled default provider config
 ├── tools/
@@ -255,9 +281,9 @@ panelini/components/ai/
 
 ## API Reference
 
-### `Frontend`
+### `AiChat`
 
-The UI component. Does **not** create its own Panelini -- it exposes widget lists for integration.
+Standalone AI chat panel. Can be used independently in any Panel app or integrated into Panelini. Exposes widget lists for integration.
 
 ```{list-table}
 :header-rows: 1
@@ -265,8 +291,8 @@ The UI component. Does **not** create its own Panelini -- it exposes widget list
 
 * - Property / Method
   - Description
-* - `Frontend(system_message, welcome_message, config_path)`
-  - Constructor. All parameters are optional.
+* - `AiChat(system_message, welcome_message, config_path, tools)`
+  - Constructor. All parameters are optional. Pass custom ``BaseTool`` instances via ``tools``.
 * - `sidebar_objects`
   - Property returning a list of Panel viewables for the sidebar.
 * - `main_objects`
@@ -355,7 +381,7 @@ Low-level provider-agnostic LLM interface built on LangChain.
 sequenceDiagram
     participant User as User
     participant Chat as ChatInterface
-    participant FE as Frontend
+    participant FE as AiChat
     participant BE as AiBackend
     participant AI as AiInterface
     participant LLM as LLM Provider
