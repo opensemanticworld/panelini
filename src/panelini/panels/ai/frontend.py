@@ -314,7 +314,7 @@ class AiChat:
             preview_card,
             sizing_mode="stretch_both",
             min_height=600,
-            margin=(0, 15, 10, 15),
+            # margin=(0, 15, 10, 15),
         )
 
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]
