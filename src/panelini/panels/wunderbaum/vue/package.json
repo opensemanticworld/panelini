@@ -1,0 +1,17 @@
+{
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "less": "^4.2.1",
+    "postcss-prefixwrap": "^1.51.0",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "bootstrap-icons": "^1.11.0",
+    "wunderbaum": "^0.11.0",
+    "vue": "^3.5.13"
+  },
+  "scripts": {
+    "build": "vite build --config vite.config.js",
+    "watch": "vite build --watch --config vite.config.js"
+  }
+}
