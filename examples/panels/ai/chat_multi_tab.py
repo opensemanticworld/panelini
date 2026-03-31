@@ -41,7 +41,7 @@ digest_ai = AiChat(
 
 # -- Tabbed layout inside Panelini --------------------------------------------
 
-tabs = pn.Tabs(
+main_tabs = pn.Tabs(
     ("Ingest AI", pn.Row(*ingest_ai.main_objects)),
     ("Digest AI", pn.Row(*digest_ai.main_objects)),
 )
@@ -53,13 +53,13 @@ sidebar_tabs = pn.Tabs(
 
 # -- Link Tabs in main and sidebar
 
-tabs.jslink(sidebar_tabs, active="active")
-sidebar_tabs.jslink(tabs, active="active")
+main_tabs.jslink(sidebar_tabs, active="active")
+sidebar_tabs.jslink(main_tabs, active="active")
 
 # -- Create and link Panelini instance
 
 app = Panelini(title="AI Chat Multi Tab", sidebar_enabled=True)
-app.main_set(objects=[tabs])
+app.main_set(objects=[main_tabs])
 app.sidebar_set(objects=[sidebar_tabs])
 
 
