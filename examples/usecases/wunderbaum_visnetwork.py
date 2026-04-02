@@ -106,6 +106,7 @@ def build_tree_source() -> list[dict]:
             "title": props["name"],
             "key": key,
             "expanded": True,
+            "icon": "bi bi-folder",
             # Column values at node level (wunderbaum moves them to node.data)
             "node_id": nid,
             "description": props.get("description", ""),
@@ -211,6 +212,7 @@ def sync_add_node(node_id: str, name: str, desc: str, parent_id: str) -> None:
             "title": name,
             "key": node_id,
             "expanded": True,
+            "icon": "bi bi-folder",
             "node_id": node_id,
             "description": desc,
         },
