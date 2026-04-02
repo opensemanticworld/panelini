@@ -41,21 +41,39 @@ def test_description_column(page: Page, port):
     page.goto(url)
     time.sleep(5)
 
-    # The description column should have input elements
     inputs = page.locator(".wb-col input[type='text']")
     assert inputs.count() > 0, "No input elements in description column"
 
     server.stop()
 
 
-def test_edit_name(page: Page, port):
-    """Edit handler updates data model and graph label.
+def test_card_collapse_expand(page: Page, port):
+    """Tree rows survive Card collapse and re-expand."""
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
 
-    Note: wunderbaum's internal edit state machine cannot be
-    triggered programmatically from Playwright (unlike simple
-    HTML inputs like jsoneditor). The edit works in the browser
-    via clickActive/F2, but here we test the handler directly.
-    """
+    rows_before = page.locator(".wb-row").count()
+    assert rows_before > 1, f"Only {rows_before} rows before collapse"
+
+    # Collapse
+    page.locator("text=Hierarchy").first.click()
+    time.sleep(1)
+
+    # Re-expand
+    page.locator("text=Hierarchy").first.click()
+    time.sleep(2)
+
+    rows_after = page.locator(".wb-row").count()
+    assert rows_after == rows_before, f"Rows after expand: {rows_after}, expected {rows_before}"
+
+    server.stop()
+
+
+def test_edit_name(page: Page, port):
+    """Edit handler updates data model and graph label."""
     url = f"http://localhost:{port}"
     server = pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
@@ -64,10 +82,7 @@ def test_edit_name(page: Page, port):
 
     old_name = NODES["Dog"]["name"]
 
-    # Simulate the edit.apply event as wunderbaum would send it
-    from examples.usecases.wunderbaum_visnetwork import (
-        handle_edit,
-    )
+    from examples.usecases.wunderbaum_visnetwork import handle_edit
 
     handle_edit({
         "key": "Thing/Animal/Dog",
@@ -77,10 +92,8 @@ def test_edit_name(page: Page, port):
     })
     time.sleep(0.5)
 
-    # Data model updated
     assert NODES["Dog"]["name"] == "Puppy"
 
-    # Graph label updated
     dog_node = next((n for n in graph.nodes if n["id"] == "Dog"), None)
     assert dog_node is not None
     assert dog_node.get("label") == "Puppy"
@@ -90,7 +103,7 @@ def test_edit_name(page: Page, port):
 
 
 def test_python_api_add_node(page: Page, port):
-    """Adding a node via context menu updates both tree and graph."""
+    """Adding a node updates both tree and graph."""
     url = f"http://localhost:{port}"
     server = pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
@@ -100,10 +113,7 @@ def test_python_api_add_node(page: Page, port):
     initial_nodes = len(NODES)
     initial_graph_nodes = len(graph.nodes)
 
-    # Use Python API to add a node directly
-    from examples.usecases.wunderbaum_visnetwork import (
-        sync_add_node,
-    )
+    from examples.usecases.wunderbaum_visnetwork import sync_add_node
 
     sync_add_node("TestNode", "Test Node", "A test", "Animal")
     time.sleep(1)
@@ -125,9 +135,7 @@ def test_python_api_delete_node(page: Page, port):
 
     assert "Cat" in NODES
 
-    from examples.usecases.wunderbaum_visnetwork import (
-        sync_remove_node,
-    )
+    from examples.usecases.wunderbaum_visnetwork import sync_remove_node
 
     sync_remove_node("Cat")
     time.sleep(1)

@@ -76,7 +76,9 @@ export default {
 
       const wbOptions = {
         element: container,
-        source: this.source,
+        // Deep-clone: Wunderbaum mutates source objects in-place (removes children),
+        // which would corrupt the AnyWidget model's shared reference.
+        source: JSON.parse(JSON.stringify(this.source)),
         types: this.types || {},
         ...this.options,
 
@@ -130,6 +132,8 @@ export default {
             key: e.node.key,
             flag: e.flag,
           });
+          // Sync expanded/collapsed state back to model so it survives Card re-render
+          setTimeout(() => this.emitSource(), 0);
         },
 
         keydown: (e) => {
@@ -318,10 +322,14 @@ export default {
         let el = container;
         while (el && w === 0) {
           w = el.clientWidth || el.offsetWidth;
-          el = el.parentElement || el.parentNode?.host;  // cross shadow boundary
+          el = el.parentElement || el.parentNode?.host;
         }
         if (w > 0) {
           wbElem.style.width = w + 'px';
+          // Full re-render after visibility change (e.g. Card expand)
+          if (this.tree) {
+            this.tree.update('any');
+          }
         }
       };
 
@@ -333,12 +341,30 @@ export default {
 
       // Keep synced on resize
       this._resizeObserver = new ResizeObserver(applyWidth);
-      // Observe the shadow host (el) since container itself may never resize
       const host = container.getRootNode()?.host;
       if (host) {
         this._resizeObserver.observe(host);
       }
       this._resizeObserver.observe(container);
+
+      // Wunderbaum destroys child nodes when container is hidden (virtual
+      // scrolling). Save source before hide, reload on re-show.
+      let savedSource = null;
+      this._intersectionObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting && this.tree) {
+            // Save before wunderbaum destroys children
+            savedSource = this.getSerializableSource();
+          } else if (entry.isIntersecting && savedSource && this.tree) {
+            // Reload saved source
+            this.tree.clear();
+            this.tree.load(savedSource);
+            savedSource = null;
+            applyWidth();
+          }
+        }
+      });
+      this._intersectionObserver.observe(container);
     },
 
     setupDragDrop() {
@@ -474,7 +500,9 @@ export default {
       if (!this.tree) return [];
 
       const serialize = (node) => {
+        // Flatten node.data to top level (wunderbaum double-nests "data:{}" as node.data.data)
         const obj = {
+          ...(node.data || {}),
           title: node.title,
           key: node.key,
         };
@@ -483,7 +511,6 @@ export default {
         if (node.expanded) obj.expanded = true;
         if (node.selected) obj.selected = true;
         if (node.lazy && (!node.children || node.children.length === 0)) obj.lazy = true;
-        if (node.data && Object.keys(node.data).length > 0) obj.data = { ...node.data };
         if (node.checkbox != null) obj.checkbox = node.checkbox;
         if (node.classes) obj.classes = node.classes;
         if (node.tooltip) obj.tooltip = node.tooltip;
@@ -503,7 +530,7 @@ export default {
     setSource(source) {
       if (this.tree) {
         this.tree.clear();
-        this.tree.load(source);
+        this.tree.load(JSON.parse(JSON.stringify(source)));
       }
     },
 
@@ -806,6 +833,10 @@ export default {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
+    }
+    if (this._intersectionObserver) {
+      this._intersectionObserver.disconnect();
+      this._intersectionObserver = null;
     }
 
     // Clear pending lazy load timers
