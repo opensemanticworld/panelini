@@ -125,6 +125,61 @@ def test_python_api_add_node(page: Page, port):
     server.stop()
 
 
+def test_copy_node(page: Page, port):
+    """Ctrl+DnD copy adds node to data model, tree, and graph."""
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
+
+    initial_nodes = len(NODES)
+    initial_graph_nodes = len(graph.nodes)
+    initial_edges = len(EDGES)
+    rows_before = page.locator(".wb-row").count()
+
+    from examples.usecases.wunderbaum_visnetwork import handle_copy_drop
+
+    # Verify batch_update is used (single _tree_action write)
+    actions_sent = []
+    orig = tree._send_tree_action
+
+    def spy(action, payload):
+        actions_sent.append(action)
+        orig(action, payload)
+
+    tree._send_tree_action = spy
+
+    handle_copy_drop({
+        "copy": True,
+        "copiedNodeId": "Dog",
+        "newParentNodeId": "Vehicle",
+        "targetKey": "Thing/Vehicle",
+        "region": "over",
+    })
+    tree._send_tree_action = orig
+    time.sleep(2)
+
+    # Must use single batch (not separate addNode + expandNode)
+    assert actions_sent == ["batch"], f"Expected single 'batch' action, got {actions_sent}"
+
+    # Data model updated
+    assert len(NODES) == initial_nodes + 1
+    copy_id = next((k for k in NODES if k.startswith("Dog_copy")), None)
+    assert copy_id is not None, "No Dog_copy* in NODES"
+    assert len(EDGES) == initial_edges + 1
+
+    # Graph updated
+    assert len(graph.nodes) == initial_graph_nodes + 1
+    assert any(n["id"] == copy_id for n in graph.nodes)
+
+    # Tree updated (new row visible)
+    rows_after = page.locator(".wb-row").count()
+    assert rows_after == rows_before + 1, f"Tree rows: {rows_after}, expected {rows_before + 1}"
+
+    server.stop()
+
+
 def test_python_api_delete_node(page: Page, port):
     """Deleting a node removes it from tree and graph."""
     url = f"http://localhost:{port}"

@@ -71,6 +71,16 @@ export default {
   methods: {
     initTree() {
       const container = this.$refs.treeContainer;
+
+      // Track Ctrl key globally - e.event.ctrlKey is unreliable in DnD events
+      this._ctrlPressed = false;
+      this._onKeyDown = (ev) => { if (ev.key === 'Control') this._ctrlPressed = true; };
+      this._onKeyUp = (ev) => { if (ev.key === 'Control') this._ctrlPressed = false; };
+      document.addEventListener('keydown', this._onKeyDown, true);
+      document.addEventListener('keyup', this._onKeyUp, true);
+      // Also clear on window blur (user may release Ctrl outside window)
+      this._onBlur = () => { this._ctrlPressed = false; };
+      window.addEventListener('blur', this._onBlur);
       container.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
       container.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
 
@@ -137,9 +147,12 @@ export default {
         },
 
         keydown: (e) => {
+          // Skip modifier-only keys (Ctrl, Shift, Alt, Meta) to avoid spam
+          const k = e.event?.key;
+          if (k === 'Control' || k === 'Shift' || k === 'Alt' || k === 'Meta') return;
           this.sendEvent('keydown', {
             key: e.node?.key,
-            eventKey: e.event?.key,
+            eventKey: k,
           });
         },
 
@@ -240,6 +253,7 @@ export default {
             if (e.event?.dataTransfer) {
               e.event.dataTransfer.setData('text/plain', e.node.key);
               e.event.dataTransfer.setData('application/x-wunderbaum-key', e.node.key);
+              e.event.dataTransfer.effectAllowed = 'copyMove';
             }
             this.sendEvent('dragStart', { key: e.node.key });
             return true;
@@ -247,23 +261,47 @@ export default {
           dragEnter: (e) => {
             return ['before', 'after', 'over'];
           },
+          dragOver: (e) => {
+            // Ctrl changes dropEffect to 'copy' on Windows, which wunderbaum
+            // rejects. Force 'move' so the drop fires; we track Ctrl separately.
+            if (e.event?.dataTransfer) {
+              e.event.dataTransfer.dropEffect = 'move';
+            }
+          },
           drop: (e) => {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
             const region = e.suggestedDropMode;
+            const isCopy = this._ctrlPressed;
 
             if (sourceNode) {
-              sourceNode.moveTo(targetNode, region);
-              // After moveTo, get the ACTUAL parent from the tree
-              const actualParent = sourceNode.parent;
-              this.sendEvent('drop', {
-                sourceKey: sourceNode.key,
-                targetKey: targetNode.key,
-                region: region,
-                movedNodeId: sourceNode.data?.node_id || sourceNode.key,
-                newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
-              });
-              this.emitSource();
+              if (isCopy) {
+                // Ctrl+drop: don't modify tree here - let Python handle the
+                // full copy (model + graph + tree) to keep IDs consistent.
+                // Note: suggestedDropMode is 'appendChild' (not 'over') for child drops
+                const isChild = region === 'over' || region === 'appendChild';
+                const dropParent = isChild ? targetNode : targetNode.parent;
+                this.sendEvent('drop', {
+                  sourceKey: sourceNode.key,
+                  targetKey: targetNode.key,
+                  region: region,
+                  copy: true,
+                  copiedNodeId: sourceNode.data?.node_id || sourceNode.key,
+                  newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
+                });
+              } else {
+                sourceNode.moveTo(targetNode, region);
+                // After moveTo, get the ACTUAL parent from the tree
+                const actualParent = sourceNode.parent;
+                this.sendEvent('drop', {
+                  sourceKey: sourceNode.key,
+                  targetKey: targetNode.key,
+                  region: region,
+                  movedNodeId: sourceNode.data?.node_id || sourceNode.key,
+                  newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
+                });
+                this.emitSource();
+              }
             }
           },
         };
@@ -758,19 +796,9 @@ export default {
     // "Silent" versions that don't emit source (used in batch/step to emit once at the end)
     addNodeFromAction(actionData) {
       if (!this.tree) return;
-      const node = {
-        title: actionData.title,
-        key: actionData.key,
-      };
-      if (actionData.type) node.type = actionData.type;
-      if (actionData.icon) node.icon = actionData.icon;
-      if (actionData.expanded) node.expanded = true;
-      if (actionData.lazy) node.lazy = true;
-      if (actionData.children) node.children = actionData.children;
-      if (actionData.data) node.data = actionData.data;
-      if (actionData.checkbox != null) node.checkbox = actionData.checkbox;
-
-      const parentKey = actionData.parentKey;
+      // Pass all properties (except action/parentKey) to addChildren so
+      // custom fields like node_id, description end up in node.data.
+      const { action, parentKey, ...node } = actionData;
       if (parentKey) {
         const parent = this.findByKey(parentKey);
         if (parent) {
@@ -830,6 +858,11 @@ export default {
   },
 
   beforeUnmount() {
+    if (this._onKeyDown) {
+      document.removeEventListener('keydown', this._onKeyDown, true);
+      document.removeEventListener('keyup', this._onKeyUp, true);
+      window.removeEventListener('blur', this._onBlur);
+    }
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
