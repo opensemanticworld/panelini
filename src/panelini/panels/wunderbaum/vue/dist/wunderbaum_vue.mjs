@@ -8532,7 +8532,7 @@ const nf = (t, e) => {
         },
         drop: (o) => {
           var b, f, a, h;
-          const r = o.sourceNode, s = o.node, l = o.suggestedDropMode, c = this._ctrlPressed;
+          const r = o.sourceNode, s = o.node, l = o.suggestedDropMode, c = this._ctrlPressed || !!window.__wbForceCopy;
           if (r)
             if (c) {
               const g = l === "over" || l === "appendChild" ? s : s.parent;

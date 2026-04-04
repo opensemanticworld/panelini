@@ -272,7 +272,7 @@ export default {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
             const region = e.suggestedDropMode;
-            const isCopy = this._ctrlPressed;
+            const isCopy = this._ctrlPressed || !!window.__wbForceCopy;
 
             if (sourceNode) {
               if (isCopy) {
