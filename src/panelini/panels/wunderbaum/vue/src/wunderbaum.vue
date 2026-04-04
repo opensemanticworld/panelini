@@ -220,6 +220,10 @@ export default {
       // Add columns if provided (treegrid mode)
       if (this.columns && this.columns.length > 0) {
         wbOptions.columns = this.columns;
+        // Enable column resizing by default in treegrid mode
+        if (wbOptions.columnsResizable === undefined) {
+          wbOptions.columnsResizable = true;
+        }
       }
 
       // Merge edit callbacks INTO the edit object (wunderbaum uses edit.apply, not 'edit.apply')
@@ -342,6 +346,38 @@ export default {
           }
           return origStop(apply, options);
         };
+      }
+
+      // Patch: grid extension's DragObserver uses e.target to find the
+      // resizer element, but e.target returns the shadow host for events
+      // crossing the shadow boundary. Wrap handleEvent to use
+      // composedPath()[0] which gives the real target inside shadow DOM.
+      const gridExt = this.tree.extensions?.grid;
+      if (gridExt && gridExt.observer) {
+        const obs = gridExt.observer;
+        const oldHandler = obs._handler;
+        const origHandleEvent = obs.handleEvent.bind(obs);
+        const newHandler = function(e) {
+          if (e.type === 'mousedown' && e.composedPath) {
+            const realTarget = e.composedPath()[0];
+            if (realTarget !== e.target) {
+              const proxy = new Proxy(e, {
+                get(target, prop) {
+                  if (prop === 'target') return realTarget;
+                  const val = target[prop];
+                  return typeof val === 'function' ? val.bind(target) : val;
+                }
+              });
+              return origHandleEvent(proxy);
+            }
+          }
+          return origHandleEvent(e);
+        };
+        obs._handler = newHandler;
+        obs.events.forEach((ev) => {
+          obs.root.removeEventListener(ev, oldHandler);
+          obs.root.addEventListener(ev, newHandler);
+        });
       }
 
       // Expose tree instance on the container for external access (e.g. testing)
