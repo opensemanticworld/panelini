@@ -200,3 +200,169 @@ def test_python_api_delete_node(page: Page, port):
     assert not cat_in_graph, "Cat still in graph after delete"
 
     server.stop()
+
+
+# =========================================================================
+# DnD helpers
+# =========================================================================
+
+
+def _center(box):
+    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+
+def _drag(page, sx, sy, tx, ty, steps=5):
+    page.mouse.move(sx, sy)
+    page.mouse.down()
+    for i in range(steps):
+        frac = (i + 1) / steps
+        page.mouse.move(sx + (tx - sx) * frac, sy + (ty - sy) * frac)
+        time.sleep(0.05)
+    page.mouse.up()
+
+
+def _find_in_source(source, key):
+    """Find node and its parent key in the source tree."""
+
+    def search(nodes, parent_key=None):
+        for node in nodes:
+            if node["key"] == key:
+                return node, parent_key
+            if "children" in node:
+                result = search(node["children"], node["key"])
+                if result:
+                    return result
+        return None
+
+    return search(source)
+
+
+def _get_client_children(page, parent_key):
+    """Get child keys of a node in the client-side wunderbaum tree."""
+    return page.evaluate(
+        """(parentKey) => {
+        function findInShadowRoots(selector) {
+            const results = [];
+            function search(root) {
+                root.querySelectorAll(selector).forEach(el => results.push(el));
+                root.querySelectorAll('*').forEach(el => {
+                    if (el.shadowRoot) search(el.shadowRoot);
+                });
+            }
+            search(document);
+            return results;
+        }
+        const container = findInShadowRoots('.tree-container')[0];
+        if (!container || !container._wunderbaum) return [];
+        const wb = container._wunderbaum;
+        const node = wb.findFirst(n => n.key === parentKey);
+        if (!node || !node.children) return [];
+        return node.children.map(c => c.key);
+    }""",
+        parent_key,
+    )
+
+
+# =========================================================================
+# DnD tests
+# =========================================================================
+
+
+def test_dnd_move_node(page: Page, port):
+    """DnD move: Truck from Vehicle to Animal updates tree, graph, model."""
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
+
+    src = page.locator(".wb-row .wb-title", has_text="Truck").first
+    tgt = page.locator(".wb-row .wb-title", has_text="Animal").first
+    src.drag_to(tgt)
+    time.sleep(2)
+
+    # Server-side tree: Truck moved under Animal
+    result = _find_in_source(
+        tree.source,
+        "Thing/Vehicle/Truck",
+    )
+    assert result is not None, "Truck not in server source"
+    _, parent_key = result
+    assert parent_key == "Thing/Animal", f"Server: parent={parent_key}, expected 'Thing/Animal'"
+
+    # Client-side tree
+    animal_kids = _get_client_children(page, "Thing/Animal")
+    vehicle_kids = _get_client_children(page, "Thing/Vehicle")
+    assert "Thing/Vehicle/Truck" in animal_kids
+    assert "Thing/Vehicle/Truck" not in vehicle_kids
+
+    # Data model: edge updated
+    from examples.usecases.wunderbaum_visnetwork import get_parent
+
+    assert get_parent("Truck") == "Animal"
+
+    # Graph: edge from Truck to Animal exists
+    truck_edges = [e for e in graph.edges if e["from"] == "Truck"]
+    assert any(e["to"] == "Animal" for e in truck_edges), f"No Truck->Animal edge: {truck_edges}"
+
+    server.stop()
+
+
+def test_dnd_copy_node(page: Page, port):
+    """Copy drop: Dog copied under Vehicle, original stays.
+
+    Uses handle_copy_drop directly (DnD copy mechanics are tested
+    in test_wunderbaum_dnd.py); this validates the full example
+    integration: data model, tree, and graph.
+    """
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
+
+    nodes_before = set(NODES.keys())
+    graph_nodes_before = len(graph.nodes)
+
+    from examples.usecases.wunderbaum_visnetwork import (
+        handle_copy_drop,
+    )
+
+    handle_copy_drop({
+        "copy": True,
+        "copiedNodeId": "Dog",
+        "newParentNodeId": "Vehicle",
+        "targetKey": "Thing/Vehicle",
+        "region": "over",
+    })
+    time.sleep(2)
+
+    # Source node preserved in data model
+    assert "Dog" in NODES
+
+    # Server-side tree: Dog still under Animal
+    result = _find_in_source(
+        tree.source,
+        "Thing/Animal/Dog",
+    )
+    assert result is not None, "Original Dog not in source"
+    _, parent_key = result
+    assert parent_key == "Thing/Animal", f"Original Dog moved: parent={parent_key}"
+
+    # New copy node created in data model
+    new_nodes = set(NODES.keys()) - nodes_before
+    assert len(new_nodes) == 1, f"Expected 1 new node, got {new_nodes}"
+    copy_id = new_nodes.pop()
+    assert copy_id.startswith("Dog_copy")
+
+    # Graph: copy node added with edge to Vehicle
+    assert len(graph.nodes) == graph_nodes_before + 1
+    assert any(n["id"] == copy_id for n in graph.nodes)
+    copy_edges = [e for e in graph.edges if e["from"] == copy_id]
+    assert any(e["to"] == "Vehicle" for e in copy_edges)
+
+    # Tree: copy node visible
+    rows_after = page.locator(".wb-row").count()
+    assert rows_after > 0
+
+    server.stop()

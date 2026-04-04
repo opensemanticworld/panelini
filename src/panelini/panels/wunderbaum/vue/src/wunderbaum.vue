@@ -249,6 +249,8 @@ export default {
       if (this.options.dnd) {
         wbOptions.dnd = {
           dragStart: (e) => {
+            // Save original parent - needed to undo auto-move on Ctrl+copy
+            this._dragOrigParent = e.node.parent;
             // Set dataTransfer so external drop targets can read the key
             if (e.event?.dataTransfer) {
               e.event.dataTransfer.setData('text/plain', e.node.key);
@@ -276,9 +278,8 @@ export default {
 
             if (sourceNode) {
               if (isCopy) {
-                // Ctrl+drop: don't modify tree here - let Python handle the
-                // full copy (model + graph + tree) to keep IDs consistent.
-                // Note: suggestedDropMode is 'appendChild' (not 'over') for child drops
+                // Ctrl+drop: let Python handle the full copy to keep IDs consistent.
+                // suggestedDropMode is 'appendChild' (not 'over') for child drops
                 const isChild = region === 'over' || region === 'appendChild';
                 const dropParent = isChild ? targetNode : targetNode.parent;
                 this.sendEvent('drop', {
@@ -289,6 +290,12 @@ export default {
                   copiedNodeId: sourceNode.data?.node_id || sourceNode.key,
                   newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
                 });
+                // Undo wunderbaum's auto-move: source must stay in original place
+                const origParent = this._dragOrigParent;
+                if (origParent && sourceNode.parent !== origParent) {
+                  sourceNode.moveTo(origParent, 'appendChild');
+                }
+                this.emitSource();
               } else {
                 sourceNode.moveTo(targetNode, region);
                 // After moveTo, get the ACTUAL parent from the tree

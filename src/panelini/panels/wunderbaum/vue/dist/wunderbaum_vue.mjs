@@ -988,8 +988,8 @@ function Ts(t, e = !1, n = lt) {
 }
 function Ns(t, e, n = Y) {
   const { immediate: i, deep: o, once: r, scheduler: s, augmentJob: l, call: c } = n, b = (V) => o ? V : /* @__PURE__ */ Ee(V) || o === !1 || o === 0 ? $e(V, 1) : $e(V);
-  let f, a, h, p, g = !1, m = !1;
-  if (/* @__PURE__ */ ae(t) ? (a = () => t.value, g = /* @__PURE__ */ Ee(t)) : /* @__PURE__ */ ft(t) ? (a = () => b(t), g = !0) : j(t) ? (m = !0, g = t.some((V) => /* @__PURE__ */ ft(V) || /* @__PURE__ */ Ee(V)), a = () => t.map((V) => {
+  let f, a, h, p, m = !1, g = !1;
+  if (/* @__PURE__ */ ae(t) ? (a = () => t.value, m = /* @__PURE__ */ Ee(t)) : /* @__PURE__ */ ft(t) ? (a = () => b(t), m = !0) : j(t) ? (g = !0, m = t.some((V) => /* @__PURE__ */ ft(V) || /* @__PURE__ */ Ee(V)), a = () => t.map((V) => {
     if (/* @__PURE__ */ ae(V))
       return V.value;
     if (/* @__PURE__ */ ft(V))
@@ -1025,12 +1025,12 @@ function Ns(t, e, n = Y) {
       V(...K), P();
     };
   }
-  let W = m ? new Array(t.length).fill(en) : en;
+  let W = g ? new Array(t.length).fill(en) : en;
   const F = (V) => {
     if (!(!(f.flags & 1) || !f.dirty && !V))
       if (e) {
         const K = f.run();
-        if (o || g || (m ? K.some((Q, be) => Ue(Q, W[be])) : Ue(K, W))) {
+        if (o || m || (g ? K.some((Q, be) => Ue(Q, W[be])) : Ue(K, W))) {
           h && h();
           const Q = lt;
           lt = f;
@@ -1038,7 +1038,7 @@ function Ns(t, e, n = Y) {
             const be = [
               K,
               // pass undefined as the old value when it's changed for the first time
-              W === en ? void 0 : m && W[0] === en ? [] : W,
+              W === en ? void 0 : g && W[0] === en ? [] : W,
               p
             ];
             W = K, c ? c(e, 3, be) : (
@@ -1285,12 +1285,12 @@ function Go(t, e, n = Y) {
     }
   }
   const f = fe;
-  l.call = (p, g, m) => Ze(p, f, g, m);
+  l.call = (p, m, g) => Ze(p, f, m, g);
   let a = !1;
   r === "post" ? l.scheduler = (p) => {
     de(p, f && f.suspense);
-  } : r !== "sync" && (a = !0, l.scheduler = (p, g) => {
-    g ? p() : gi(p);
+  } : r !== "sync" && (a = !0, l.scheduler = (p, m) => {
+    m ? p() : gi(p);
   }), l.augmentJob = (p) => {
     e && (p.flags |= 4), a && (p.flags |= 2, f && (p.id = f.uid, p.i = f));
   };
@@ -1328,8 +1328,8 @@ const bn = /* @__PURE__ */ new WeakMap();
 function jt(t, e, n, i, o = !1) {
   if (j(t)) {
     t.forEach(
-      (m, S) => jt(
-        m,
+      (g, S) => jt(
+        g,
         e && (j(e) ? e[S] : e),
         n,
         i,
@@ -1342,34 +1342,34 @@ function jt(t, e, n, i, o = !1) {
     i.shapeFlag & 512 && i.type.__asyncResolved && i.component.subTree.component && jt(t, e, n, i.component.subTree);
     return;
   }
-  const r = i.shapeFlag & 4 ? ki(i.component) : i.el, s = o ? null : r, { i: l, r: c } = t, b = e && e.r, f = l.refs === Y ? l.refs = {} : l.refs, a = l.setupState, h = /* @__PURE__ */ L(a), p = a === Y ? go : (m) => Di(f, m) ? !1 : H(h, m), g = (m, S) => !(S && Di(f, S));
+  const r = i.shapeFlag & 4 ? ki(i.component) : i.el, s = o ? null : r, { i: l, r: c } = t, b = e && e.r, f = l.refs === Y ? l.refs = {} : l.refs, a = l.setupState, h = /* @__PURE__ */ L(a), p = a === Y ? go : (g) => Di(f, g) ? !1 : H(h, g), m = (g, S) => !(S && Di(f, S));
   if (b != null && b !== c) {
     if (Fi(e), ee(b))
       f[b] = null, p(b) && (a[b] = null);
     else if (/* @__PURE__ */ ae(b)) {
-      const m = e;
-      g(b, m.k) && (b.value = null), m.k && (f[m.k] = null);
+      const g = e;
+      m(b, g.k) && (b.value = null), g.k && (f[g.k] = null);
     }
   }
   if (D(c))
     Jt(c, l, 12, [s, f]);
   else {
-    const m = ee(c), S = /* @__PURE__ */ ae(c);
-    if (m || S) {
+    const g = ee(c), S = /* @__PURE__ */ ae(c);
+    if (g || S) {
       const P = () => {
         if (t.f) {
-          const W = m ? p(c) ? a[c] : f[c] : g() || !t.k ? c.value : f[t.k];
+          const W = g ? p(c) ? a[c] : f[c] : m() || !t.k ? c.value : f[t.k];
           if (o)
             j(W) && si(W, r);
           else if (j(W))
             W.includes(r) || W.push(r);
-          else if (m)
+          else if (g)
             f[c] = [r], p(c) && (a[c] = f[c]);
           else {
             const F = [r];
-            g(c, t.k) && (c.value = F), t.k && (f[t.k] = F);
+            m(c, t.k) && (c.value = F), t.k && (f[t.k] = F);
           }
-        } else m ? (f[c] = s, p(c) && (a[c] = s)) : S && (g(c, t.k) && (c.value = s), t.k && (f[t.k] = s));
+        } else g ? (f[c] = s, p(c) && (a[c] = s)) : S && (m(c, t.k) && (c.value = s), t.k && (f[t.k] = s));
       };
       if (s) {
         const W = () => {
@@ -1587,8 +1587,8 @@ function el(t) {
     beforeMount: a,
     mounted: h,
     beforeUpdate: p,
-    updated: g,
-    activated: m,
+    updated: m,
+    activated: g,
     deactivated: S,
     beforeDestroy: P,
     beforeUnmount: W,
@@ -1642,7 +1642,7 @@ function el(t) {
   function se(B, X) {
     j(X) ? X.forEach((it) => B(it.bind(n))) : X && B(X.bind(n));
   }
-  if (se(Hs, a), se(Ls, h), se(As, p), se(Us, g), se(Fs, m), se(Zs, S), se(Bs, qe), se(Ys, Q), se(Gs, be), se(Xs, W), se($o, V), se(Js, Re), j(Z))
+  if (se(Hs, a), se(Ls, h), se(As, p), se(Us, m), se(Fs, g), se(Zs, S), se(Bs, qe), se(Ys, Q), se(Gs, be), se(Xs, W), se($o, V), se(Js, Re), j(Z))
     if (Z.length) {
       const B = t.exposed || (t.exposed = {});
       Z.forEach((X) => {
@@ -1937,8 +1937,8 @@ function Ai(t) {
     props: a,
     data: h,
     setupState: p,
-    ctx: g,
-    inheritAttrs: m
+    ctx: m,
+    inheritAttrs: g
   } = t, S = an(t);
   let P, W;
   try {
@@ -1952,7 +1952,7 @@ function Ai(t) {
           a,
           p,
           h,
-          g
+          m
         )
       ), W = l;
     } else {
@@ -1971,7 +1971,7 @@ function Ai(t) {
     Dt.length = 0, qn(V, t, 1), P = Je(tt);
   }
   let F = P;
-  if (W && m !== !1) {
+  if (W && g !== !1) {
     const V = Object.keys(W), { shapeFlag: K } = F;
     V.length && K & 7 && (r && V.some(vn) && (W = bl(
       W,
@@ -2069,11 +2069,11 @@ function pl(t, e, n, i) {
           if (H(r, h))
             p !== r[h] && (r[h] = p, b = !0);
           else {
-            const g = we(h);
-            o[g] = $n(
+            const m = we(h);
+            o[m] = $n(
               c,
               l,
-              g,
+              m,
               p,
               t,
               !1
@@ -2190,25 +2190,25 @@ function fr(t, e, n = !1) {
     for (const f in r) {
       const a = we(f);
       if (Xi(a)) {
-        const h = r[f], p = s[a] = j(h) || D(h) ? { type: h } : re({}, h), g = p.type;
-        let m = !1, S = !0;
-        if (j(g))
-          for (let P = 0; P < g.length; ++P) {
-            const W = g[P], F = D(W) && W.name;
+        const h = r[f], p = s[a] = j(h) || D(h) ? { type: h } : re({}, h), m = p.type;
+        let g = !1, S = !0;
+        if (j(m))
+          for (let P = 0; P < m.length; ++P) {
+            const W = m[P], F = D(W) && W.name;
             if (F === "Boolean") {
-              m = !0;
+              g = !0;
               break;
             } else F === "String" && (S = !1);
           }
         else
-          m = D(g) && g.name === "Boolean";
+          g = D(m) && m.name === "Boolean";
         p[
           0
           /* shouldCast */
-        ] = m, p[
+        ] = g, p[
           1
           /* shouldCastTrue */
-        ] = S, (m || H(p, "default")) && l.push(a);
+        ] = S, (g || H(p, "default")) && l.push(a);
       }
     }
   const b = [s, l];
@@ -2275,8 +2275,8 @@ function wl(t, e) {
     parentNode: a,
     nextSibling: h,
     setScopeId: p = De,
-    insertStaticContent: g
-  } = t, m = (d, u, v, k = null, y = null, x = null, T = void 0, q = null, E = !!u.dynamicChildren) => {
+    insertStaticContent: m
+  } = t, g = (d, u, v, k = null, y = null, x = null, T = void 0, q = null, E = !!u.dynamicChildren) => {
     if (d === u)
       return;
     d && !Vt(d, u) && (k = Qt(d), Te(d, y, x, !0), d = null), u.patchFlag === -2 && (E = !1, u.dynamicChildren = null);
@@ -2357,7 +2357,7 @@ function wl(t, e) {
       k
     ) : u.el = d.el;
   }, W = (d, u, v, k) => {
-    [d.el, d.anchor] = g(
+    [d.el, d.anchor] = m(
       d.children,
       u,
       v,
@@ -2453,7 +2453,7 @@ function wl(t, e) {
   }, qe = (d, u, v, k, y, x, T, q, E = 0) => {
     for (let w = E; w < d.length; w++) {
       const O = d[w] = q ? Ae(d[w]) : Ce(d[w]);
-      m(
+      g(
         null,
         O,
         u,
@@ -2520,7 +2520,7 @@ function wl(t, e) {
           v
         )
       );
-      m(
+      g(
         E,
         w,
         O,
@@ -2662,7 +2662,7 @@ function wl(t, e) {
         let J = N, _;
         st(d, !1), N ? (N.el = U.el, B(d, N, T)) : N = U, z && Mn(z), (_ = N.props && N.props.onVnodeBeforeUpdate) && Ve(_, R, N, U), st(d, !0);
         const ie = Ai(d), Ne = d.subTree;
-        d.subTree = ie, m(
+        d.subTree = ie, g(
           Ne,
           ie,
           // parent may have changed if it's in a teleport
@@ -2686,7 +2686,7 @@ function wl(t, e) {
             d.parent ? d.parent.type : void 0
           );
           const Se = d.subTree = Ai(d);
-          m(
+          g(
             null,
             Se,
             v,
@@ -2772,7 +2772,7 @@ function wl(t, e) {
     let z;
     for (z = 0; z < N; z++) {
       const M = u[z] = E ? Ae(u[z]) : Ce(u[z]);
-      m(
+      g(
         d[z],
         M,
         v,
@@ -2809,7 +2809,7 @@ function wl(t, e) {
     for (; w <= N && w <= z; ) {
       const M = d[w], R = u[w] = E ? Ae(u[w]) : Ce(u[w]);
       if (Vt(M, R))
-        m(
+        g(
           M,
           R,
           v,
@@ -2827,7 +2827,7 @@ function wl(t, e) {
     for (; w <= N && w <= z; ) {
       const M = d[N], R = u[z] = E ? Ae(u[z]) : Ce(u[z]);
       if (Vt(M, R))
-        m(
+        g(
           M,
           R,
           v,
@@ -2846,7 +2846,7 @@ function wl(t, e) {
       if (w <= z) {
         const M = z + 1, R = M < O ? u[M].el : k;
         for (; w <= z; )
-          m(
+          g(
             null,
             u[w] = E ? Ae(u[w]) : Ce(u[w]),
             v,
@@ -2887,7 +2887,7 @@ function wl(t, e) {
               Pe = J;
               break;
             }
-        Pe === void 0 ? Te(pe, y, x, !0) : (Nt[Pe - R] = w + 1, Pe >= Se ? Se = Pe : Ne = !0, m(
+        Pe === void 0 ? Te(pe, y, x, !0) : (Nt[Pe - R] = w + 1, Pe >= Se ? Se = Pe : Ne = !0, g(
           pe,
           u[Pe],
           v,
@@ -2905,7 +2905,7 @@ function wl(t, e) {
           // #13559, #14173 fallback to el placeholder for unresolved async component
           zi.el || pr(zi)
         ) : k;
-        Nt[w] === 0 ? m(
+        Nt[w] === 0 ? g(
           null,
           Pe,
           v,
@@ -3053,7 +3053,7 @@ function wl(t, e) {
   let zn = !1;
   const Vi = (d, u, v) => {
     let k;
-    d == null ? u._vnode && (Te(u._vnode, null, null, !0), k = u._vnode.component) : m(
+    d == null ? u._vnode && (Te(u._vnode, null, null, !0), k = u._vnode.component) : g(
       u._vnode || null,
       d,
       u,
@@ -3063,7 +3063,7 @@ function wl(t, e) {
       v
     ), u._vnode = d, zn || (zn = !0, Ki(k), Uo(), zn = !1);
   }, Tt = {
-    p: m,
+    p: g,
     um: Te,
     m: ot,
     r: Pi,
@@ -3882,11 +3882,11 @@ function Pn(t, e = 0, n = {}) {
   if (typeof t != "function")
     throw new TypeError("Expected a function");
   e = +e || 0, qr(n) && (f = !!n.leading, a = "maxWait" in n, r = a ? Math.max(+n.maxWait || 0, e) : r, h = "trailing" in n ? !!n.trailing : h);
-  function g(Z) {
+  function m(Z) {
     const ne = i, ye = o;
     return i = o = void 0, b = Z, s = t.apply(ye, ne), s;
   }
-  function m(Z, ne) {
+  function g(Z, ne) {
     return p ? (tn.cancelAnimationFrame(l), tn.requestAnimationFrame(Z)) : setTimeout(Z, ne);
   }
   function S(Z) {
@@ -3895,7 +3895,7 @@ function Pn(t, e = 0, n = {}) {
     clearTimeout(Z);
   }
   function P(Z) {
-    return b = Z, l = m(V, e), f ? g(Z) : s;
+    return b = Z, l = g(V, e), f ? m(Z) : s;
   }
   function W(Z) {
     const ne = Z - c, ye = Z - b, nt = e - ne;
@@ -3909,10 +3909,10 @@ function Pn(t, e = 0, n = {}) {
     const Z = Date.now();
     if (F(Z))
       return K(Z);
-    l = m(V, W(Z));
+    l = g(V, W(Z));
   }
   function K(Z) {
-    return l = void 0, h && i ? g(Z) : (i = o = void 0, s);
+    return l = void 0, h && i ? m(Z) : (i = o = void 0, s);
   }
   function Q() {
     l !== void 0 && S(l), b = 0, i = c = o = l = void 0;
@@ -3929,9 +3929,9 @@ function Pn(t, e = 0, n = {}) {
       if (l === void 0)
         return P(c);
       if (a)
-        return l = m(V, e), g(c);
+        return l = g(V, e), m(c);
     }
-    return l === void 0 && (l = m(V, e)), s;
+    return l === void 0 && (l = g(V, e)), s;
   }
   return Re.cancel = Q, Re.flush = be, Re.pending = qe, Re;
 }
@@ -4291,13 +4291,13 @@ function jr(t, e) {
       const a = Date.now();
       try {
         t.apply(this, f);
-      } catch (m) {
-        console.error(m);
+      } catch (g) {
+        console.error(g);
       }
-      const h = Date.now() - a, p = Math.min(Math.max(i, h * n.delayFactor), o), g = Math.max(i, p - h);
+      const h = Date.now() - a, p = Math.min(Math.max(i, h * n.delayFactor), o), m = Math.max(i, p - h);
       l = setTimeout(() => {
         l = null, r = 0, s != null && c.apply(this, s);
-      }, g);
+      }, m);
     }
   };
   return c.cancel = () => {
@@ -4476,42 +4476,42 @@ class Kc extends Et {
         return r.logInfo("Passing an empty string as a filter is handled as clearFilter()."), this.clearFilter(), 0;
       if (c.fuzzy) {
         I(typeof e == "string", "fuzzy filter must be a string");
-        const g = e.split("").map(wt).reduce(function(m, S) {
-          return m + "([^" + S + "]*)" + S;
+        const m = e.split("").map(wt).reduce(function(g, S) {
+          return g + "([^" + S + "]*)" + S;
         }, "");
-        h = new RegExp(g, "i");
+        h = new RegExp(m, "i");
       } else if (e instanceof RegExp)
         h = e, p = e;
       else {
-        const g = wt(e);
-        h = new RegExp(g, "i"), p = new RegExp(g, "gi");
+        const m = wt(e);
+        h = new RegExp(m, "i"), p = new RegExp(m, "gi");
       }
-      r.logDebug(`Filtering nodes by '${h}'`), e = (g) => {
-        if (!g.title)
+      r.logDebug(`Filtering nodes by '${h}'`), e = (m) => {
+        if (!m.title)
           return !1;
-        const m = g.title, S = h.exec(m);
+        const g = m.title, S = h.exec(g);
         if (S && c.highlight) {
           let P;
-          c.fuzzy ? P = Dc(m, S, !0) : P = m.replace(p, function(W) {
+          c.fuzzy ? P = Dc(g, S, !0) : P = g.replace(p, function(W) {
             return Ti + W + Ni;
-          }), g.titleWithHighlight = Yt(P).replace(jc, "<mark>").replace(Wc, "</mark>");
+          }), m.titleWithHighlight = Yt(P).replace(jc, "<mark>").replace(Wc, "</mark>");
         }
         return !!S;
       };
     }
-    return r.filterMode = c.mode, this.lastFilterArgs = arguments, r.element.classList.toggle("wb-ext-filter-hide", !!b), r.element.classList.toggle("wb-ext-filter-dim", !b), r.element.classList.toggle("wb-ext-filter-hide-expanders", !!c.hideExpanders), r.root.subMatchCount = 0, r.visit((g) => {
-      delete g.match, delete g.titleWithHighlight, g.subMatchCount = 0;
-    }), r.setStatus(me.ok), s.autoCollapse = !1, r.visit((g) => {
-      if (a && g.children != null)
+    return r.filterMode = c.mode, this.lastFilterArgs = arguments, r.element.classList.toggle("wb-ext-filter-hide", !!b), r.element.classList.toggle("wb-ext-filter-dim", !b), r.element.classList.toggle("wb-ext-filter-hide-expanders", !!c.hideExpanders), r.root.subMatchCount = 0, r.visit((m) => {
+      delete m.match, delete m.titleWithHighlight, m.subMatchCount = 0;
+    }), r.setStatus(me.ok), s.autoCollapse = !1, r.visit((m) => {
+      if (a && m.children != null)
         return;
-      let m = e(g);
-      if (m === "skip")
-        return g.visit(function(P) {
+      let g = e(m);
+      if (g === "skip")
+        return m.visit(function(P) {
           P.match = !1;
         }, !0), "skip";
       let S = !1;
-      (f || m === "branch") && g.parent.match && (m = !0, S = !0), m && (i++, g.match = !0, g.visitParents((P) => {
-        P !== g && (P.subMatchCount += 1), c.autoExpand && !S && !P.expanded && (P.setExpanded(!0, {
+      (f || g === "branch") && m.parent.match && (g = !0, S = !0), g && (i++, m.match = !0, m.visitParents((P) => {
+        P !== m && (P.subMatchCount += 1), c.autoExpand && !S && !P.expanded && (P.setExpanded(!0, {
           noAnimation: !0,
           noEvents: !0
         }), P._filterAutoExpanded = !0);
@@ -4621,12 +4621,12 @@ class Zc extends Et {
     if (!i.isEnabled() || i._callEvent("keydown", e) === !1 || i._callMethod("edit._preprocessKeyEvent", e) === !1)
       return !1;
     if (!a) {
-      const g = i.getFocusNode() || i.getActiveNode(), m = i.getFirstChild();
-      if (!g && m && f === "ArrowDown") {
-        m.logInfo("Keydown: activate first node."), m.setActive();
+      const m = i.getFocusNode() || i.getActiveNode(), g = i.getFirstChild();
+      if (!m && g && f === "ArrowDown") {
+        g.logInfo("Keydown: activate first node."), g.setActive();
         return;
       }
-      b = g || m, b && (b.setFocus(), a = i.getFocusNode(), a.logInfo("Keydown: force focus on active node."));
+      b = m || g, b && (b.setFocus(), a = i.getFocusNode(), a.logInfo("Keydown: force focus on active node."));
     }
     const p = a.isColspan();
     if (i.isRowNav()) {
@@ -4642,10 +4642,10 @@ class Zc extends Et {
         return;
       }
       if (o.quicksearch && f.length === 1 && /^\w$/.test(f) && !s) {
-        const g = Date.now();
-        g - i.lastQuicksearchTime > Fc && (i.lastQuicksearchTerm = ""), i.lastQuicksearchTime = g, i.lastQuicksearchTerm += f;
-        const m = i.findNextNode(i.lastQuicksearchTerm, i.getActiveNode());
-        m && m.setActive(!0, { event: n }), n.preventDefault();
+        const m = Date.now();
+        m - i.lastQuicksearchTime > Fc && (i.lastQuicksearchTerm = ""), i.lastQuicksearchTime = m, i.lastQuicksearchTerm += f;
+        const g = i.findNextNode(i.lastQuicksearchTerm, i.getActiveNode());
+        g && g.setActive(!0, { event: n }), n.preventDefault();
         return;
       }
       switch (f) {
@@ -4696,7 +4696,7 @@ class Zc extends Et {
           h = !1;
       }
     } else {
-      const g = s ? s.type || s.tagName : "", m = s && g !== "checkbox";
+      const m = s ? s.type || s.tagName : "", g = s && m !== "checkbox";
       if (l) {
         if (f === "Escape") {
           a.logDebug("Reset focused input on Escape"), s.setCustomValidity(""), a._render(), i.setFocus(), i.setColumn(i.activeColIdx);
@@ -4707,7 +4707,7 @@ class Zc extends Et {
           a.logDebug(`Ignored ${f} inside focused input`);
           return;
         }
-      } else if (s && f.length === 1 && m)
+      } else if (s && f.length === 1 && g)
         return s.focus(), s.value = "", a.logDebug(`Focus input: ${f}`), !1;
       switch (f === "Tab" ? (f = "ArrowRight", h = !0) : f === "Shift+Tab" && (f = i.activeColIdx > 0 ? "ArrowLeft" : "", h = !0), f) {
         case "+":
@@ -4719,13 +4719,13 @@ class Zc extends Et {
           a.setExpanded(!1);
           break;
         case " ":
-          i.activeColIdx === 0 && a.getOption("checkbox") ? (a.toggleSelected(), h = !0) : s && g === "checkbox" && (s.click(), h = !0);
+          i.activeColIdx === 0 && a.getOption("checkbox") ? (a.toggleSelected(), h = !0) : s && m === "checkbox" && (s.click(), h = !0);
           break;
         case "F2":
-          s && !l && m && (s.focus(), h = !0);
+          s && !l && g && (s.focus(), h = !0);
           break;
         case "Enter":
-          i.setFocus(), (i.activeColIdx === 0 || p) && a.isExpandable() ? (a.setExpanded(!a.isExpanded()), h = !0) : s && !l && m && (s.focus(), h = !0);
+          i.setFocus(), (i.activeColIdx === 0 || p) && a.isExpandable() ? (a.setExpanded(!a.isExpanded()), h = !0) : s && !l && g && (s.focus(), h = !0);
           break;
         case "Escape":
           i.setFocus(), a.log("keynav: focus tree..."), i.isCellNav() && c !== he.cell && (a.log("keynav: setCellNav(false)"), i.setCellNav(!1), i.setFocus(), h = !0);
@@ -5238,12 +5238,12 @@ function Qc(t) {
     for (const [S, P] of Object.entries(r))
       c[P] = S;
   }
-  const b = s.map((m) => c[m]), f = [], a = {}, h = {}, p = (e = c.key) !== null && e !== void 0 ? e : "key", g = (n = c.children) !== null && n !== void 0 ? n : "children";
-  for (const [m, S] of l.entries()) {
+  const b = s.map((g) => c[g]), f = [], a = {}, h = {}, p = (e = c.key) !== null && e !== void 0 ? e : "key", m = (n = c.children) !== null && n !== void 0 ? n : "children";
+  for (const [g, S] of l.entries()) {
     const [P, W, F = {}] = S;
     S[1] = null, S[2] != null && (S[2] = null), W.forEach((Q, be) => {
       F[b[be]] = Q;
-    }), h[m] = F;
+    }), h[g] = F;
     const V = F[p];
     V != null && (a[V] = F);
     let K = null;
@@ -5254,7 +5254,7 @@ function Qc(t) {
       } else if (K = a[P], K === void 0)
         throw new Error(`unflattenSource: Could not find parent node by key: ${P}`);
     }
-    K ? ((i = K[g]) !== null && i !== void 0 || (K[g] = []), K[g].push(F)) : f.push(F);
+    K ? ((i = K[m]) !== null && i !== void 0 || (K[m] = []), K[m].push(F)) : f.push(F);
   }
   t.children = f;
 }
@@ -5568,21 +5568,21 @@ class We {
       loadLazy: s
     };
     async function f(h, p) {
-      var g;
+      var m;
       if (p === 0)
         return;
-      const m = p == null ? null : p - 1, S = [];
-      return (g = h.children) === null || g === void 0 || g.forEach((P) => {
+      const g = p == null ? null : p - 1, S = [];
+      return (m = h.children) === null || m === void 0 || m.forEach((P) => {
         if (e)
           if (!P.expanded && (P.children || s && P.lazy)) {
             const W = P.setExpanded(!0, b);
             S.push(W), W.then(async () => {
-              await f(P, m);
+              await f(P, g);
             });
           } else
-            S.push(f(P, m));
+            S.push(f(P, g));
         else
-          (!o || l || P.getLevel() > o) && P.setExpanded(!1, b), f(P, m);
+          (!o || l || P.getLevel() > o) && P.setExpanded(!1, b), f(P, g);
       }), new Promise((P) => {
         Promise.all(S).then(() => {
           P(!0);
@@ -6180,20 +6180,20 @@ class We {
     let b, f = this._rowElem, a = null, h = null;
     const p = !f;
     I(p, "Expected unrendered node"), I(!p || e && e.after, "opts.after expected, unless updating"), I(!this.isRootNode(), "Root node not allowed"), f = document.createElement("div"), f.classList.add("wb-row"), f.style.top = this._rowIdx * o + "px", this._rowElem = f, f._wb_node = this;
-    const g = document.createElement("span");
-    g.classList.add("wb-node", "wb-col"), f.appendChild(g);
-    let m = 0;
-    r && (a = document.createElement("i"), a.classList.add("wb-checkbox"), (r === "radio" || this.parent.radiogroup) && a.classList.add("wb-radio"), g.appendChild(a), m += nn);
+    const m = document.createElement("span");
+    m.classList.add("wb-node", "wb-col"), f.appendChild(m);
+    let g = 0;
+    r && (a = document.createElement("i"), a.classList.add("wb-checkbox"), (r === "radio" || this.parent.radiogroup) && a.classList.add("wb-radio"), m.appendChild(a), g += nn);
     for (let V = l - 1; V > 0; V--)
-      b = document.createElement("i"), b.classList.add("wb-indent"), g.appendChild(b), m += nn;
-    (!i.minExpandLevel || l > i.minExpandLevel) && (h = document.createElement("i"), h.classList.add("wb-expander"), g.appendChild(h), m += nn), this._createIcon(n.iconMap, g, null, !h) && (m += nn);
+      b = document.createElement("i"), b.classList.add("wb-indent"), m.appendChild(b), g += nn;
+    (!i.minExpandLevel || l > i.minExpandLevel) && (h = document.createElement("i"), h.classList.add("wb-expander"), m.appendChild(h), g += nn), this._createIcon(n.iconMap, m, null, !h) && (g += nn);
     const P = document.createElement("span");
-    if (P.classList.add("wb-title"), g.appendChild(P), g._ofsTitlePx = m, n.options.dnd.dragStart && (g.draggable = !0), !this.isColspan() && s.length > 1) {
+    if (P.classList.add("wb-title"), m.appendChild(P), m._ofsTitlePx = g, n.options.dnd.dragStart && (m.draggable = !0), !this.isColspan() && s.length > 1) {
       let V = 0;
       for (const K of s) {
         V++;
         let Q;
-        K.id === "*" ? Q = g : (Q = document.createElement("span"), Q.classList.add("wb-col"), f.appendChild(Q)), V === c && Q.classList.add("wb-active"), K.classes && Q.classList.add(...K.classes.split(" ")), Q.style.left = K._ofsPx + "px", Q.style.width = K._widthPx + "px", p && K.html && typeof K.html == "string" && (Q.innerHTML = K.html);
+        K.id === "*" ? Q = m : (Q = document.createElement("span"), Q.classList.add("wb-col"), f.appendChild(Q)), V === c && Q.classList.add("wb-active"), K.classes && Q.classList.add(...K.classes.split(" ")), Q.style.left = K._ofsPx + "px", Q.style.width = K._widthPx + "px", p && K.html && typeof K.html == "string" && (Q.innerHTML = K.html);
       }
     }
     switch (e ? e.after : "last") {
@@ -6265,9 +6265,9 @@ class We {
     if (e.resizeCols !== !1 && !this.isColspan()) {
       const a = s.querySelectorAll("span.wb-col");
       let h = 0, p = 0;
-      for (const g of this.tree.columns) {
-        const m = a[h];
-        m.style.left = `${p}px`, m.style.width = `${g._widthPx}px`, h++, p += g._widthPx;
+      for (const m of this.tree.columns) {
+        const g = a[h];
+        g.style.left = `${p}px`, g.style.width = `${m._widthPx}px`, h++, p += m._widthPx;
       }
     }
   }
@@ -6665,9 +6665,9 @@ class We {
       b = (i = e.order) !== null && i !== void 0 ? i : "asc";
     let a = (o = e.propName) !== null && o !== void 0 ? o : e.colId || "";
     a === "*" && (a = "title"), b == null && (a = l, b = "asc"), this.logDebug(`sortByProperty(), propName=${a}, ${b}`, e), I(a, "No property name specified");
-    const h = (p, g) => {
-      let m, S;
-      return gn.has(a) ? (m = p[a], S = g[a]) : (m = p.data[a], S = g.data[a]), m == null && S == null ? 0 : (m == null ? m = typeof S == "string" ? "" : 0 : typeof m == "boolean" && (m = m ? 1 : 0), S == null ? S = typeof m == "string" ? "" : 0 : typeof S == "boolean" && (S = S ? 1 : 0), r && (typeof m == "string" && (m = m.toLowerCase()), typeof S == "string" && (S = S.toLowerCase())), b === "desc" ? m === S ? 0 : m > S ? -1 : 1 : m === S ? 0 : m > S ? 1 : -1);
+    const h = (p, m) => {
+      let g, S;
+      return gn.has(a) ? (g = p[a], S = m[a]) : (g = p.data[a], S = m.data[a]), g == null && S == null ? 0 : (g == null ? g = typeof S == "string" ? "" : 0 : typeof g == "boolean" && (g = g ? 1 : 0), S == null ? S = typeof g == "string" ? "" : 0 : typeof S == "boolean" && (S = S ? 1 : 0), r && (typeof g == "string" && (g = g.toLowerCase()), typeof S == "string" && (S = S.toLowerCase())), b === "desc" ? g === S ? 0 : g > S ? -1 : 1 : g === S ? 0 : g > S ? 1 : -1);
     };
     return this.sortChildren(h, s);
   }
@@ -7804,9 +7804,9 @@ class $ {
   scrollTo(e) {
     let i, o;
     e instanceof We ? i = e : (o = e, i = o.node), I(i && i._rowIdx != null, `Invalid node: ${i}`);
-    const r = this.options.rowHeightPx, s = this.element, l = this.headerElement.clientHeight, c = s.scrollTop, b = s.clientHeight, f = i._rowIdx * r + l, a = l, h = f - c, p = h + r, g = o == null ? void 0 : o.topNode;
-    let m = null;
-    h >= a ? p <= b || (m = f + r - b + 2) : m = f - a - 2, m != null && (this.log(`scrollTo(${f}): ${c} => ${m}`), s.scrollTop = m, g && this.scrollTo(g));
+    const r = this.options.rowHeightPx, s = this.element, l = this.headerElement.clientHeight, c = s.scrollTop, b = s.clientHeight, f = i._rowIdx * r + l, a = l, h = f - c, p = h + r, m = o == null ? void 0 : o.topNode;
+    let g = null;
+    h >= a ? p <= b || (g = f + r - b + 2) : g = f - a - 2, g != null && (this.log(`scrollTo(${f}): ${c} => ${g}`), s.scrollTop = g, m && this.scrollTo(m));
   }
   /**
    * Make sure that this node is horizontally scrolled into the viewport.
@@ -8002,28 +8002,28 @@ class $ {
     this._columnsById = {};
     for (const p of o) {
       this._columnsById[p.id] = p;
-      const g = p.customWidthPx ? `${p.customWidthPx}px` : p.width;
+      const m = p.customWidthPx ? `${p.customWidthPx}px` : p.width;
       if (p.id === "*" && p !== r)
         throw new Error(`Column id '*' must be defined only once: '${p.title}'.`);
-      if (!g || g === "*")
+      if (!m || m === "*")
         p._weight = 1, l += 1;
-      else if (typeof g == "number")
-        p._weight = g, l += g;
-      else if (typeof g == "string" && g.endsWith("px")) {
+      else if (typeof m == "number")
+        p._weight = m, l += m;
+      else if (typeof m == "string" && m.endsWith("px")) {
         p._weight = 0;
-        const m = parseFloat(g.slice(0, -2));
-        p._widthPx != m && (b = !0, p._widthPx = m), c += m;
+        const g = parseFloat(m.slice(0, -2));
+        p._widthPx != g && (b = !0, p._widthPx = g), c += g;
       } else
-        te(`Invalid column width: ${g} (expected string ending with 'px' or number, e.g. "<num>px" or <int>).`);
+        te(`Invalid column width: ${m} (expected string ending with 'px' or number, e.g. "<num>px" or <int>).`);
     }
     const f = Math.max(0, n - c);
     let a = 0;
     for (const p of o) {
-      let g;
+      let m;
       if (p._weight) {
-        const m = p.minWidth;
-        typeof m == "number" ? g = m : typeof m == "string" && m.endsWith("px") ? g = parseFloat(m.slice(0, -2)) : g = 4;
-        const S = Math.max(g, f * p._weight / l);
+        const g = p.minWidth;
+        typeof g == "number" ? m = g : typeof g == "string" && g.endsWith("px") ? m = parseFloat(g.slice(0, -2)) : m = 4;
+        const S = Math.max(m, f * p._weight / l);
         p._widthPx != S && (b = !0, p._widthPx = S);
       }
       p._ofsPx = a, a += p._widthPx;
@@ -8171,17 +8171,17 @@ class $ {
     let c = Math.max(0, (s + o) / i + r);
     c = Math.ceil(c);
     const b = /* @__PURE__ */ new Set();
-    this.nodeListElement.childNodes.forEach((g) => {
-      const m = g;
-      b.add(m._wb_node);
+    this.nodeListElement.childNodes.forEach((m) => {
+      const g = m;
+      b.add(g._wb_node);
     });
     let f = 0, a = 0, h = !1, p = "first";
-    this.visitRows(function(g) {
-      const m = g._rowElem;
-      g._rowIdx !== f && (g._rowIdx = f, h = !0), f < l || f > c ? m && (p = m) : m && n ? (b.delete(g), m.style.top = f * i + "px", p = m) : (b.delete(g), m && (m.style.top = f * i + "px"), g._render({ top: a, after: p }), p = g._rowElem), f++, a += i;
+    this.visitRows(function(m) {
+      const g = m._rowElem;
+      m._rowIdx !== f && (m._rowIdx = f, h = !0), f < l || f > c ? g && (p = g) : g && n ? (b.delete(m), g.style.top = f * i + "px", p = g) : (b.delete(m), g && (g.style.top = f * i + "px"), m._render({ top: a, after: p }), p = m._rowElem), f++, a += i;
     }), this.treeRowCount = f;
-    for (const g of b)
-      g._callEvent("discard"), g.removeMarkup();
+    for (const m of b)
+      m._callEvent("discard"), m.removeMarkup();
     return this.nodeListElement.style.height = `${a}px`, h;
   }
   /**
@@ -8219,14 +8219,14 @@ class $ {
       for (l = r.children, o = l.indexOf(a) + b, I(o >= 0, `Could not find ${a} in parent's children: ${r}`), i = o; i < l.length; i++) {
         if (a = l[i], a === c)
           return !1;
-        if (!(p && !a.statusNodeType && !a.match && !a.subMatchCount) && (!f && e(a) === !1 || (f = !1, a.children && a.children.length && (h || a.expanded) && (s = a.visit((g) => {
-          if (g === c)
+        if (!(p && !a.statusNodeType && !a.match && !a.subMatchCount) && (!f && e(a) === !1 || (f = !1, a.children && a.children.length && (h || a.expanded) && (s = a.visit((m) => {
+          if (m === c)
             return !1;
-          if (p && !g.match && !g.subMatchCount)
+          if (p && !m.match && !m.subMatchCount)
             return "skip";
-          if (e(g) === !1)
+          if (e(m) === !1)
             return !1;
-          if (!h && g.children && !g.expanded)
+          if (!h && m.children && !m.expanded)
             return "skip";
         }, !1), s === !1))))
           return !1;
@@ -8523,7 +8523,7 @@ const nf = (t, e) => {
       this.options.dnd && (e.dnd = {
         dragStart: (o) => {
           var r;
-          return (r = o.event) != null && r.dataTransfer && (o.event.dataTransfer.setData("text/plain", o.node.key), o.event.dataTransfer.setData("application/x-wunderbaum-key", o.node.key), o.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: o.node.key }), !0;
+          return this._dragOrigParent = o.node.parent, (r = o.event) != null && r.dataTransfer && (o.event.dataTransfer.setData("text/plain", o.node.key), o.event.dataTransfer.setData("application/x-wunderbaum-key", o.node.key), o.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: o.node.key }), !0;
         },
         dragEnter: (o) => ["before", "after", "over"],
         dragOver: (o) => {
@@ -8535,15 +8535,17 @@ const nf = (t, e) => {
           const r = o.sourceNode, s = o.node, l = o.suggestedDropMode, c = this._ctrlPressed || !!window.__wbForceCopy;
           if (r)
             if (c) {
-              const g = l === "over" || l === "appendChild" ? s : s.parent;
+              const m = l === "over" || l === "appendChild" ? s : s.parent;
               this.sendEvent("drop", {
                 sourceKey: r.key,
                 targetKey: s.key,
                 region: l,
                 copy: !0,
                 copiedNodeId: ((b = r.data) == null ? void 0 : b.node_id) || r.key,
-                newParentNodeId: ((f = g == null ? void 0 : g.data) == null ? void 0 : f.node_id) || (g == null ? void 0 : g.key) || null
+                newParentNodeId: ((f = m == null ? void 0 : m.data) == null ? void 0 : f.node_id) || (m == null ? void 0 : m.key) || null
               });
+              const g = this._dragOrigParent;
+              g && r.parent !== g && r.moveTo(g, "appendChild"), this.emitSource();
             } else {
               r.moveTo(s, l);
               const p = r.parent;
