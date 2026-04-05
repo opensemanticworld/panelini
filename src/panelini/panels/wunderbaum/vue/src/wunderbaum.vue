@@ -197,6 +197,28 @@ export default {
               }
             }
           }
+
+          // Auto-generate YAML tooltip from node title + data
+          {
+            const node = e.node;
+            const data = node.data || {};
+            const lines = [`title: ${node.title}`];
+            const nodeId = data.node_id;
+            if (nodeId && nodeId !== node.title) {
+              lines.push(`id: ${nodeId}`);
+            }
+            for (const [k, v] of Object.entries(data)) {
+              if (k === 'node_id' || k.startsWith('_')) continue;
+              if (v !== '' && v !== undefined && v !== null) {
+                lines.push(`${k}: ${v}`);
+              }
+            }
+            const tip = lines.length > 1 ? lines.join('\n') : '';
+            node.tooltip = tip;
+            // Set directly on DOM — wunderbaum only reads node.tooltip on initial create
+            const titleSpan = e.nodeElem?.querySelector('.wb-title');
+            if (titleSpan) titleSpan.title = tip;
+          }
         },
 
 
@@ -206,6 +228,8 @@ export default {
           if (colId) {
             const val = e.util.getValueFromElem(e.inputElem, true);
             e.node.data[colId] = val;
+            // Re-render to update tooltip with new data
+            e.node.update();
             this.sendEvent('change', {
               key: e.node.key,
               colId: colId,
