@@ -25272,7 +25272,12 @@ const JV = (t, e) => {
       this.nodesDataSet = new Ci(this.enrichNodesWithTitles(this.nodes)), this.edgesDataSet = new Ci(this.edges), this._manipulationCallbacks = {
         addNode: (A, i) => {
           A.label = A.label || `Node ${A.id}`, i(A), setTimeout(() => {
-            this.$emit("change:nodes", this.nodesDataSet.get());
+            this.$emit("change:nodes", this.nodesDataSet.get()), this.$emit("network-event", {
+              event_name: "nodeCreated",
+              event_params: {
+                node: A
+              }
+            });
           }, 0);
         },
         addEdge: (A, i) => {
@@ -25281,7 +25286,12 @@ const JV = (t, e) => {
             return;
           }
           i(A), setTimeout(() => {
-            this.$emit("change:edges", this.edgesDataSet.get());
+            this.$emit("change:edges", this.edgesDataSet.get()), this.$emit("network-event", {
+              event_name: "edgeCreated",
+              event_params: {
+                edge: A
+              }
+            });
           }, 0);
         },
         editEdge: (A, i) => {

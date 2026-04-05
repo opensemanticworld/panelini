@@ -92,6 +92,13 @@ export default {
           // Emit updated nodes after the callback completes
           setTimeout(() => {
             this.$emit('change:nodes', this.nodesDataSet.get());
+            // Emit nodeCreated event
+            this.$emit('network-event', {
+              event_name: 'nodeCreated',
+              event_params: {
+                node: nodeData
+              }
+            });
           }, 0);
         },
         addEdge: (edgeData, callback) => {
@@ -105,6 +112,13 @@ export default {
           // Emit updated edges after the callback completes
           setTimeout(() => {
             this.$emit('change:edges', this.edgesDataSet.get());
+            // Emit edgeCreated event
+            this.$emit('network-event', {
+              event_name: 'edgeCreated',
+              event_params: {
+                edge: edgeData
+              }
+            });
           }, 0);
         },
         editEdge: (edgeData, callback) => {
