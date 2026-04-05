@@ -73,3 +73,4 @@ tool.build_panel().servable()
 - Clustering support
 - Event callbacks for all network interactions
 - Node detail visualization with JSON editor
+- ctrl+drag for duplicating nodes

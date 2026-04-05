@@ -17,6 +17,10 @@ class VisNetwork(AnyWidgetComponent):
 
     This component wraps the vis-network JavaScript library to provide
     interactive network/graph visualization within Panel applications.
+
+    Nodes and edges can include a 'callback_name_dict' property to define
+    context menu items shown on right-click. The dict maps action IDs to
+    display labels (e.g., {"edit": "Edit Node", "delete": "Delete"}).
     """
 
     _esm = (bundled_assets_dir / "visnetwork_vue.mjs").read_text(encoding="utf-8")
@@ -50,6 +54,8 @@ class VisNetwork(AnyWidgetComponent):
         options: Optional[dict[str, Any]] = None,
         network_event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         file_drop_callback: Optional[Callable[[dict[str, Any]], None]] = None,
+        context_menu_callback: Optional[Callable[[str, str, str], None]] = None,
+        nodes_duplicated_callback: Optional[Callable[[list[dict[str, Any]]], None]] = None,
         **params: Any,
     ) -> None:
         """Initialize the VisNetwork component.
@@ -60,6 +66,10 @@ class VisNetwork(AnyWidgetComponent):
             options: vis-network options for customizing appearance and behavior.
             network_event_callback: Callback function for network events (click, drag, etc.).
             file_drop_callback: Callback function for file drop events.
+            context_menu_callback: Callback for context menu item selection.
+                Called with (element_type, element_id, action_id) when user clicks a menu item.
+            nodes_duplicated_callback: Callback for when nodes are duplicated via Ctrl+drag.
+                Called with list of duplicated node dicts after dragEnd.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -75,6 +85,8 @@ class VisNetwork(AnyWidgetComponent):
         # Store callbacks
         self._network_event_callback = network_event_callback
         self._file_drop_callback = file_drop_callback
+        self._context_menu_callback = context_menu_callback
+        self._nodes_duplicated_callback = nodes_duplicated_callback
 
         # Watch for event data changes from JavaScript
         self.param.watch(self._on_event_data_change, ["_event_data"])
@@ -99,6 +111,24 @@ class VisNetwork(AnyWidgetComponent):
             event_params: Event parameters containing nodes, edges, positions, etc.
         """
         print(f"Network event: {event_name}")
+
+        # Handle context menu separately
+        if event_name == "contextmenu":
+            if self._context_menu_callback:
+                element_type = event_params.get("element_type")
+                element_id = event_params.get("element_id")
+                action_id = event_params.get("action_id")
+                if element_type and element_id and action_id:
+                    self._context_menu_callback(element_type, element_id, action_id)
+            return
+
+        # Handle nodes duplicated event
+        if event_name == "nodesDuplicated":
+            if self._nodes_duplicated_callback:
+                duplicated_nodes = event_params.get("nodes", [])
+                if duplicated_nodes:
+                    self._nodes_duplicated_callback(duplicated_nodes)
+            return
 
         # Handle file drop separately
         if event_name == "fileDrop":

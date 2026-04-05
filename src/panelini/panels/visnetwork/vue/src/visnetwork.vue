@@ -1,6 +1,18 @@
 <template>
-  <div class="visnetwork-wrapper">
+  <div class="visnetwork-wrapper" @click="hideContextMenu">
     <div ref="networkContainer" class="network-canvas"></div>
+    <div v-if="ctxVisible"
+         ref="ctxMenu"
+         class="vn-context-menu"
+         :style="{ left: ctxX + 'px', top: ctxY + 'px' }"
+         @click.stop>
+      <div v-for="item in ctxMenuItems"
+           :key="item.id"
+           class="vn-context-menu-item"
+           @click.stop="onContextMenuItem(item.id)">
+        {{ item.label }}
+      </div>
+    </div>
   </div>
 </template>
 
@@ -46,7 +58,16 @@ export default {
       nodesDataSet: null,
       edgesDataSet: null,
       _options: {},
-      _manipulationCallbacks: null
+      _manipulationCallbacks: null,
+      // Context menu state
+      ctxVisible: false,
+      ctxX: 0,
+      ctxY: 0,
+      ctxElementType: null,
+      ctxElementId: null,
+      ctxMenuItems: [],
+      // Track duplicated nodes during Ctrl+drag
+      _duplicatedNodeIds: []
     };
   },
 
@@ -214,6 +235,37 @@ export default {
 
       // Context menu (right-click)
       network.on('oncontext', (params) => {
+        params.event.preventDefault();
+
+        let elementType = null;
+        let elementId = null;
+        let callbackNameDict = null;
+
+        // Get the node/edge at the pointer position (not just selected ones)
+        const nodeId = network.getNodeAt(params.pointer.DOM);
+        const edgeId = network.getEdgeAt(params.pointer.DOM);
+
+        // Check if node was right-clicked
+        if (nodeId !== undefined) {
+          elementType = 'node';
+          elementId = nodeId;
+          const node = nodesDataSet.get(elementId);
+          callbackNameDict = node?.callback_name_dict;
+        }
+        // Check if edge was right-clicked
+        else if (edgeId !== undefined) {
+          elementType = 'edge';
+          elementId = edgeId;
+          const edge = this.edgesDataSet.get(elementId);
+          callbackNameDict = edge?.callback_name_dict;
+        }
+
+        // Show menu if callback_name_dict exists and has items
+        if (callbackNameDict && Object.keys(callbackNameDict).length > 0) {
+          this.showContextMenu(params.event, elementType, elementId, callbackNameDict);
+        }
+
+        // Still emit oncontext event for compatibility
         this.sendEvent("oncontext", params);
       });
 
@@ -244,14 +296,43 @@ export default {
       // Drag events
       network.on('dragStart', (params) => {
         if (params.nodes.length > 0) {
-          const node = nodesDataSet.get(params.nodes[0]);
-          if (node) {
-            const position = network.getPosition(params.nodes[0]);
+          const newNodeIds = [];
+
+          params.nodes.forEach((nodeId) => {
+            const node = nodesDataSet.get(nodeId);
+            if (!node) return;
+
+            const position = network.getPosition(nodeId);
             node.x = position.x;
             node.y = position.y;
-            node.fixed = false;
-            nodesDataSet.update(node);
+
+            // Duplicate node if Ctrl key is pressed
+            if (params.event.srcEvent && params.event.srcEvent.ctrlKey) {
+              const newNode = this.duplicateNode(node);
+              newNode.fixed = false;
+              nodesDataSet.update(newNode);
+
+              // Create edge from original to duplicate
+              this.edgesDataSet.update({
+                from: node.id,
+                to: newNode.id
+              });
+
+              newNodeIds.push(newNode.id);
+            } else {
+              node.fixed = false;
+              nodesDataSet.update(node);
+            }
+          });
+
+          // Store duplicated node IDs for dragEnd event
+          this._duplicatedNodeIds = newNodeIds;
+
+          // Select the new duplicated nodes if Ctrl was pressed
+          if (newNodeIds.length > 0) {
+            network.setSelection({ nodes: newNodeIds });
           }
+
           this.sendEvent("dragStart", params);
         }
       });
@@ -274,6 +355,19 @@ export default {
           // Emit updated nodes
           this.$emit('change:nodes', nodesDataSet.get());
           this.sendEvent("dragEnd", params);
+
+          // Emit nodesDuplicated event if nodes were duplicated
+          if (this._duplicatedNodeIds.length > 0) {
+            const duplicatedNodes = this._duplicatedNodeIds.map(id => nodesDataSet.get(id));
+            this.$emit('network-event', {
+              event_name: 'nodesDuplicated',
+              event_params: {
+                nodes: duplicatedNodes
+              }
+            });
+            // Clear the duplicated nodes tracking
+            this._duplicatedNodeIds = [];
+          }
         }
       });
     },
@@ -886,17 +980,146 @@ export default {
 
       // Emit changes
       this.emitNodesAndEdges();
+    },
+
+    // =========================================================================
+    // Context Menu Methods
+    // =========================================================================
+
+    showContextMenu(event, elementType, elementId, callbackNameDict) {
+      // Convert dict to menu items array
+      const menuItems = [];
+      for (const [actionId, label] of Object.entries(callbackNameDict)) {
+        if (typeof label === 'string') {
+          menuItems.push({ id: actionId, label: label });
+        }
+      }
+
+      if (menuItems.length === 0) return;
+
+      // Calculate position relative to wrapper
+      const wrapper = this.$el;
+      const rect = wrapper.getBoundingClientRect();
+
+      this.ctxElementType = elementType;
+      this.ctxElementId = elementId;
+      this.ctxMenuItems = menuItems;
+      this.ctxX = event.clientX - rect.left;
+      this.ctxY = event.clientY - rect.top;
+      this.ctxVisible = true;
+
+      // Adjust position on next tick to prevent overflow
+      this.$nextTick(() => {
+        const menu = this.$refs.ctxMenu;
+        if (menu) {
+          const menuRect = menu.getBoundingClientRect();
+          const wrapperRect = wrapper.getBoundingClientRect();
+
+          // Adjust X if overflowing right edge
+          if (this.ctxX + menuRect.width > wrapperRect.width) {
+            this.ctxX = wrapperRect.width - menuRect.width - 5;
+          }
+          // Adjust Y if overflowing bottom edge
+          if (this.ctxY + menuRect.height > wrapperRect.height) {
+            this.ctxY = wrapperRect.height - menuRect.height - 5;
+          }
+
+          // Ensure minimum padding from edges
+          this.ctxX = Math.max(5, this.ctxX);
+          this.ctxY = Math.max(5, this.ctxY);
+        }
+      });
+    },
+
+    hideContextMenu() {
+      this.ctxVisible = false;
+      this.ctxMenuItems = [];
+      this.ctxElementType = null;
+      this.ctxElementId = null;
+    },
+
+    onContextMenuItem(actionId) {
+      // Capture values before hiding menu
+      const elementType = this.ctxElementType;
+      const elementId = this.ctxElementId;
+
+      // Hide menu
+      this.hideContextMenu();
+
+      // Emit contextmenu event to Python
+      this.$emit('network-event', {
+        event_name: 'contextmenu',
+        event_params: {
+          element_type: elementType,
+          element_id: elementId,
+          action_id: actionId
+        }
+      });
+    },
+
+    // =========================================================================
+    // Node Duplication Helpers
+    // =========================================================================
+
+    generateId() {
+      // Generate a unique ID for duplicated nodes
+      // Check existing nodes to determine ID format
+      const existingIds = this.nodesDataSet.getIds();
+
+      // If all IDs are numbers, find max and increment
+      const allNumeric = existingIds.every(id => typeof id === 'number');
+      if (allNumeric && existingIds.length > 0) {
+        return Math.max(...existingIds) + 1;
+      }
+
+      // Otherwise use string-based UUID
+      return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    },
+
+    duplicateNode(node) {
+      // Create a deep copy of the node with a new ID
+      const newNode = {};
+
+      // Generate new ID
+      newNode.id = this.generateId();
+
+      // Copy all properties except id
+      for (const key in node) {
+        if (key !== 'id' && typeof node[key] !== 'function') {
+          // Deep copy objects to avoid reference issues
+          if (typeof node[key] === 'object' && node[key] !== null) {
+            newNode[key] = JSON.parse(JSON.stringify(node[key]));
+          } else {
+            newNode[key] = node[key];
+          }
+        }
+      }
+
+      return newNode;
     }
   },
 
   mounted() {
     this.initNetwork();
+
+    // Add ESC key listener to close context menu
+    this._keydownHandler = (e) => {
+      if (e.key === 'Escape' && this.ctxVisible) {
+        this.hideContextMenu();
+      }
+    };
+    document.addEventListener('keydown', this._keydownHandler);
   },
 
   beforeUnmount() {
     if (this.network) {
       this.network.destroy();
       this.network = null;
+    }
+
+    // Clean up ESC key listener
+    if (this._keydownHandler) {
+      document.removeEventListener('keydown', this._keydownHandler);
     }
   }
 };
