@@ -28,3 +28,30 @@ div.vis-tooltip {
   padding: 8px 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
+
+// Context menu styling
+.vn-context-menu {
+  position: absolute;
+  z-index: 1000;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  min-width: 160px;
+  font-size: 14px;
+
+  .vn-context-menu-item {
+    padding: 6px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    color: #24292f;
+
+    &:hover {
+      background-color: #0969da;
+      color: #ffffff;
+    }
+  }
+}
