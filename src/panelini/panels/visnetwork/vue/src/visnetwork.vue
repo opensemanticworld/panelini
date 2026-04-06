@@ -169,6 +169,11 @@ export default {
           shape: "dot",
           size: 10,
         },
+        edges: {
+          color: {
+            inherit: 'to'
+          }
+        },
       };
 
       // Merge options (deep-merge interaction to preserve hover/tooltip defaults)
