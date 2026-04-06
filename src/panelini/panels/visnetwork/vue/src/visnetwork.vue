@@ -353,14 +353,15 @@ export default {
 
       network.on('dragEnd', (params) => {
         if (params.nodes.length > 0) {
-          // Update all node positions
+          // Update positions for ALL nodes to capture physics-based movement
           const allNodes = nodesDataSet.get();
           for (const node of allNodes) {
             const pos = network.getPosition(node.id);
             node.x = pos.x;
             node.y = pos.y;
 
-            if (node.id === params.nodes[0]) {
+            // Only fix the nodes that were actually dragged
+            if (params.nodes.includes(node.id)) {
               node.fixed = true;
             }
             nodesDataSet.update(node);

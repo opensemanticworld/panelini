@@ -25408,7 +25408,7 @@ const JV = (t, e) => {
           const A = e.get();
           for (const i of A) {
             const I = t.getPosition(i.id);
-            i.x = I.x, i.y = I.y, i.id === g.nodes[0] && (i.fixed = !0), e.update(i);
+            i.x = I.x, i.y = I.y, g.nodes.includes(i.id) && (i.fixed = !0), e.update(i);
           }
           if (this.$emit("change:nodes", e.get()), this.sendEvent("dragEnd", g), this._duplicatedNodeIds.length > 0) {
             const i = this._duplicatedNodeIds.map((I) => e.get(I));
