@@ -25329,6 +25329,11 @@ const JV = (t, e) => {
         nodes: {
           shape: "dot",
           size: 10
+        },
+        edges: {
+          color: {
+            inherit: "to"
+          }
         }
       };
       this._options = { ...t, ...this.options }, this.options.interaction && (this._options.interaction = { ...t.interaction, ...this.options.interaction });
