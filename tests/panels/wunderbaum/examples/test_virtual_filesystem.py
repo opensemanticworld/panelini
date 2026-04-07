@@ -93,6 +93,128 @@ def test_python_api_delete(page: Page, port):
     server.stop()
 
 
+# =========================================================================
+# DnD helpers (same as test_wunderbaum_dnd.py)
+# =========================================================================
+
+
+def _center(box: dict) -> tuple[float, float]:
+    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+
+def _drag(page: Page, sx, sy, tx, ty, steps=5):
+    page.mouse.move(sx, sy)
+    page.mouse.down()
+    for i in range(steps):
+        frac = (i + 1) / steps
+        page.mouse.move(sx + (tx - sx) * frac, sy + (ty - sy) * frac)
+        time.sleep(0.05)
+    page.mouse.up()
+
+
+def _find_in_source(source, key):
+    """Find node and its parent key in the source tree."""
+
+    def search(nodes, parent_key=None):
+        for node in nodes:
+            if node["key"] == key:
+                return node, parent_key
+            if "children" in node:
+                result = search(node["children"], node["key"])
+                if result:
+                    return result
+        return None
+
+    return search(source)
+
+
+def _get_client_children(page: Page, parent_key: str) -> list[str]:
+    """Get child keys of a node in the client-side wunderbaum tree."""
+    return page.evaluate(
+        """(parentKey) => {
+        function findInShadowRoots(selector) {
+            const results = [];
+            function search(root) {
+                root.querySelectorAll(selector).forEach(el => results.push(el));
+                root.querySelectorAll('*').forEach(el => {
+                    if (el.shadowRoot) search(el.shadowRoot);
+                });
+            }
+            search(document);
+            return results;
+        }
+        const container = findInShadowRoots('.tree-container')[0];
+        if (!container || !container._wunderbaum) return [];
+        const wb = container._wunderbaum;
+        const node = wb.findFirst(n => n.key === parentKey);
+        if (!node || !node.children) return [];
+        return node.children.map(c => c.key);
+    }""",
+        parent_key,
+    )
+
+
+# =========================================================================
+# DnD tests
+# =========================================================================
+
+
+def test_dnd_move_file(page: Page, port):
+    """Drag document.txt from /home/user to /tmp."""
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
+
+    src = page.locator(".wb-row .wb-title", has_text="document.txt").first
+    tgt = page.locator(".wb-row .wb-title", has_text="tmp").first
+    s = src.bounding_box()
+    t = tgt.bounding_box()
+    assert s and t
+
+    _drag(page, *_center(s), *_center(t))
+    time.sleep(2)
+
+    # Server-side: document.txt moved under /tmp
+    result = _find_in_source(tree.source, "/home/user/document.txt")
+    assert result is not None, "document.txt not in server source"
+    _, parent_key = result
+    assert parent_key == "/tmp", f"Server: parent={parent_key}, expected '/tmp'"  # noqa: S108
+
+    # Client-side: /tmp has document.txt, /home/user does not
+    tmp_children = _get_client_children(page, "/tmp")  # noqa: S108
+    user_children = _get_client_children(page, "/home/user")
+    assert "/home/user/document.txt" in tmp_children, f"Client: document.txt not in /tmp: {tmp_children}"
+    assert "/home/user/document.txt" not in user_children
+
+    server.stop()
+
+
+def test_dnd_move_no_duplicate(page: Page, port):
+    """After move, document.txt appears only once."""
+    url = f"http://localhost:{port}"
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(url)
+    time.sleep(5)
+
+    src = page.locator(".wb-row .wb-title", has_text="document.txt").first
+    tgt = page.locator(".wb-row .wb-title", has_text="tmp").first
+    s = src.bounding_box()
+    t = tgt.bounding_box()
+    assert s and t
+
+    _drag(page, *_center(s), *_center(t))
+    time.sleep(2)
+
+    titles = page.locator(".wb-row .wb-title")
+    count = sum(1 for i in range(titles.count()) if "document.txt" in titles.nth(i).text_content())
+    assert count == 1, f"document.txt appears {count} times"
+
+    server.stop()
+
+
 @pytest.mark.xfail(reason="contextmenu event unreliable in shadow DOM via Playwright")
 def test_context_menu_visible(page: Page, port):
     """Right-clicking shows context menu."""

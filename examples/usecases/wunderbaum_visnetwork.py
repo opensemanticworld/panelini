@@ -106,6 +106,7 @@ def build_tree_source() -> list[dict]:
             "title": props["name"],
             "key": key,
             "expanded": True,
+            "icon": "bi bi-folder",
             # Column values at node level (wunderbaum moves them to node.data)
             "node_id": nid,
             "description": props.get("description", ""),
@@ -205,17 +206,21 @@ detail = pn.pane.Markdown("**Click a node** to see details.")
 def sync_add_node(node_id: str, name: str, desc: str, parent_id: str) -> None:
     """Add node to model, tree, and graph."""
     add_model_node(node_id, name, desc, parent_id)
-    tree.add_node(
-        parent_id,
+    # Use batch_update: individual _tree_action writes overwrite each other
+    # inside Panel's document lock (only the last one reaches JS).
+    tree.batch_update([
         {
+            "action": "addNode",
+            "parentKey": parent_id,
             "title": name,
             "key": node_id,
             "expanded": True,
+            "icon": "bi bi-folder",
             "node_id": node_id,
             "description": desc,
         },
-    )
-    tree.expand_node(parent_id, True)
+        {"action": "expandNode", "key": parent_id, "expanded": True},
+    ])
     graph.add_node(vis_node(node_id))
     graph.add_edge(vis_edge({"from": node_id, "to": parent_id}))
 
@@ -278,6 +283,10 @@ def on_tree_event(event_name: str, params: dict) -> None:
 
 
 def handle_drop(params: dict) -> None:
+    if params.get("copy"):
+        handle_copy_drop(params)
+        return
+
     # Use actual parent from JS (set after moveTo in the tree)
     moved_id = params.get("movedNodeId", "")
     new_parent = params.get("newParentNodeId")
@@ -287,6 +296,68 @@ def handle_drop(params: dict) -> None:
 
     old_parent = sync_move_node(moved_id, new_parent)
     detail.object = f"**Moved** `{moved_id}`: `{old_parent}` -> `{new_parent}`"
+
+
+def handle_copy_drop(params: dict) -> None:
+    """Ctrl+drop: copy node (and descendants), positioned like a move."""
+    src_id = params.get("copiedNodeId", "")
+    new_parent = params.get("newParentNodeId")
+    target_key = params.get("targetKey")
+    region = params.get("region", "over")
+    if not src_id or not new_parent or src_id not in NODES:
+        return
+
+    tree_actions: list[dict] = []
+    graph_nodes: list[dict] = []
+    graph_edges: list[dict] = []
+    root_new_id: str | None = None
+
+    def collect_subtree(nid: str, parent_id: str) -> None:
+        nonlocal root_new_id
+        _counter["v"] += 1
+        new_id = f"{nid}_copy{_counter['v']}"
+        if root_new_id is None:
+            root_new_id = new_id
+        children = get_children(nid)
+        props = NODES[nid]
+        desc = props.get("description", "")
+        # Data model
+        add_model_node(new_id, props["name"], desc, parent_id)
+        # Collect tree action
+        tree_actions.append({
+            "action": "addNode",
+            "parentKey": parent_id,
+            "title": props["name"],
+            "key": new_id,
+            "expanded": True,
+            "icon": "bi bi-folder",
+            "node_id": new_id,
+            "description": desc,
+        })
+        # Collect graph updates
+        graph_nodes.append(vis_node(new_id))
+        graph_edges.append(vis_edge({"from": new_id, "to": parent_id}))
+        for child_id in children:
+            collect_subtree(child_id, new_id)
+
+    collect_subtree(src_id, new_parent)
+
+    # For before/after, reposition to match exact move behavior
+    if region in ("before", "after") and root_new_id and target_key:
+        tree_actions.append({
+            "action": "moveNode",
+            "key": root_new_id,
+            "targetKey": target_key,
+            "mode": region,
+        })
+
+    # Single batch write to tree (avoids _tree_action overwrite)
+    tree.batch_update(tree_actions)
+    # Single write to graph params
+    graph.nodes = [*graph.nodes, *graph_nodes]
+    graph.edges = [*graph.edges, *graph_edges]
+
+    detail.object = f"**Copied** `{src_id}` under `{new_parent}`"
 
 
 def handle_context_menu(params: dict) -> None:

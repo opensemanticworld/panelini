@@ -71,12 +71,24 @@ export default {
   methods: {
     initTree() {
       const container = this.$refs.treeContainer;
+
+      // Track Ctrl key globally - e.event.ctrlKey is unreliable in DnD events
+      this._ctrlPressed = false;
+      this._onKeyDown = (ev) => { if (ev.key === 'Control') this._ctrlPressed = true; };
+      this._onKeyUp = (ev) => { if (ev.key === 'Control') this._ctrlPressed = false; };
+      document.addEventListener('keydown', this._onKeyDown, true);
+      document.addEventListener('keyup', this._onKeyUp, true);
+      // Also clear on window blur (user may release Ctrl outside window)
+      this._onBlur = () => { this._ctrlPressed = false; };
+      window.addEventListener('blur', this._onBlur);
       container.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
       container.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
 
       const wbOptions = {
         element: container,
-        source: this.source,
+        // Deep-clone: Wunderbaum mutates source objects in-place (removes children),
+        // which would corrupt the AnyWidget model's shared reference.
+        source: JSON.parse(JSON.stringify(this.source)),
         types: this.types || {},
         ...this.options,
 
@@ -130,12 +142,17 @@ export default {
             key: e.node.key,
             flag: e.flag,
           });
+          // Sync expanded/collapsed state back to model so it survives Card re-render
+          setTimeout(() => this.emitSource(), 0);
         },
 
         keydown: (e) => {
+          // Skip modifier-only keys (Ctrl, Shift, Alt, Meta) to avoid spam
+          const k = e.event?.key;
+          if (k === 'Control' || k === 'Shift' || k === 'Alt' || k === 'Meta') return;
           this.sendEvent('keydown', {
             key: e.node?.key,
-            eventKey: e.event?.key,
+            eventKey: k,
           });
         },
 
@@ -180,6 +197,28 @@ export default {
               }
             }
           }
+
+          // Auto-generate YAML tooltip from node title + data
+          {
+            const node = e.node;
+            const data = node.data || {};
+            const lines = [`title: ${node.title}`];
+            const nodeId = data.node_id;
+            if (nodeId && nodeId !== node.title) {
+              lines.push(`id: ${nodeId}`);
+            }
+            for (const [k, v] of Object.entries(data)) {
+              if (k === 'node_id' || k.startsWith('_')) continue;
+              if (v !== '' && v !== undefined && v !== null) {
+                lines.push(`${k}: ${v}`);
+              }
+            }
+            const tip = lines.length > 1 ? lines.join('\n') : '';
+            node.tooltip = tip;
+            // Set directly on DOM — wunderbaum only reads node.tooltip on initial create
+            const titleSpan = e.nodeElem?.querySelector('.wb-title');
+            if (titleSpan) titleSpan.title = tip;
+          }
         },
 
 
@@ -189,6 +228,8 @@ export default {
           if (colId) {
             const val = e.util.getValueFromElem(e.inputElem, true);
             e.node.data[colId] = val;
+            // Re-render to update tooltip with new data
+            e.node.update();
             this.sendEvent('change', {
               key: e.node.key,
               colId: colId,
@@ -203,6 +244,10 @@ export default {
       // Add columns if provided (treegrid mode)
       if (this.columns && this.columns.length > 0) {
         wbOptions.columns = this.columns;
+        // Enable column resizing by default in treegrid mode
+        if (wbOptions.columnsResizable === undefined) {
+          wbOptions.columnsResizable = true;
+        }
       }
 
       // Merge edit callbacks INTO the edit object (wunderbaum uses edit.apply, not 'edit.apply')
@@ -232,10 +277,13 @@ export default {
       if (this.options.dnd) {
         wbOptions.dnd = {
           dragStart: (e) => {
+            // Save original parent - needed to undo auto-move on Ctrl+copy
+            this._dragOrigParent = e.node.parent;
             // Set dataTransfer so external drop targets can read the key
             if (e.event?.dataTransfer) {
               e.event.dataTransfer.setData('text/plain', e.node.key);
               e.event.dataTransfer.setData('application/x-wunderbaum-key', e.node.key);
+              e.event.dataTransfer.effectAllowed = 'copyMove';
             }
             this.sendEvent('dragStart', { key: e.node.key });
             return true;
@@ -243,23 +291,52 @@ export default {
           dragEnter: (e) => {
             return ['before', 'after', 'over'];
           },
+          dragOver: (e) => {
+            // Ctrl changes dropEffect to 'copy' on Windows, which wunderbaum
+            // rejects. Force 'move' so the drop fires; we track Ctrl separately.
+            if (e.event?.dataTransfer) {
+              e.event.dataTransfer.dropEffect = 'move';
+            }
+          },
           drop: (e) => {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
             const region = e.suggestedDropMode;
+            const isCopy = this._ctrlPressed || !!window.__wbForceCopy;
 
             if (sourceNode) {
-              sourceNode.moveTo(targetNode, region);
-              // After moveTo, get the ACTUAL parent from the tree
-              const actualParent = sourceNode.parent;
-              this.sendEvent('drop', {
-                sourceKey: sourceNode.key,
-                targetKey: targetNode.key,
-                region: region,
-                movedNodeId: sourceNode.data?.node_id || sourceNode.key,
-                newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
-              });
-              this.emitSource();
+              if (isCopy) {
+                // Ctrl+drop: let Python handle the full copy to keep IDs consistent.
+                // suggestedDropMode is 'appendChild' (not 'over') for child drops
+                const isChild = region === 'over' || region === 'appendChild';
+                const dropParent = isChild ? targetNode : targetNode.parent;
+                this.sendEvent('drop', {
+                  sourceKey: sourceNode.key,
+                  targetKey: targetNode.key,
+                  region: region,
+                  copy: true,
+                  copiedNodeId: sourceNode.data?.node_id || sourceNode.key,
+                  newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
+                });
+                // Undo wunderbaum's auto-move: source must stay in original place
+                const origParent = this._dragOrigParent;
+                if (origParent && sourceNode.parent !== origParent) {
+                  sourceNode.moveTo(origParent, 'appendChild');
+                }
+                this.emitSource();
+              } else {
+                sourceNode.moveTo(targetNode, region);
+                // After moveTo, get the ACTUAL parent from the tree
+                const actualParent = sourceNode.parent;
+                this.sendEvent('drop', {
+                  sourceKey: sourceNode.key,
+                  targetKey: targetNode.key,
+                  region: region,
+                  movedNodeId: sourceNode.data?.node_id || sourceNode.key,
+                  newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
+                });
+                this.emitSource();
+              }
             }
           },
         };
@@ -295,6 +372,38 @@ export default {
         };
       }
 
+      // Patch: grid extension's DragObserver uses e.target to find the
+      // resizer element, but e.target returns the shadow host for events
+      // crossing the shadow boundary. Wrap handleEvent to use
+      // composedPath()[0] which gives the real target inside shadow DOM.
+      const gridExt = this.tree.extensions?.grid;
+      if (gridExt && gridExt.observer) {
+        const obs = gridExt.observer;
+        const oldHandler = obs._handler;
+        const origHandleEvent = obs.handleEvent.bind(obs);
+        const newHandler = function(e) {
+          if (e.type === 'mousedown' && e.composedPath) {
+            const realTarget = e.composedPath()[0];
+            if (realTarget !== e.target) {
+              const proxy = new Proxy(e, {
+                get(target, prop) {
+                  if (prop === 'target') return realTarget;
+                  const val = target[prop];
+                  return typeof val === 'function' ? val.bind(target) : val;
+                }
+              });
+              return origHandleEvent(proxy);
+            }
+          }
+          return origHandleEvent(e);
+        };
+        obs._handler = newHandler;
+        obs.events.forEach((ev) => {
+          obs.root.removeEventListener(ev, oldHandler);
+          obs.root.addEventListener(ev, newHandler);
+        });
+      }
+
       // Expose tree instance on the container for external access (e.g. testing)
       container._wunderbaum = this.tree;
 
@@ -318,10 +427,14 @@ export default {
         let el = container;
         while (el && w === 0) {
           w = el.clientWidth || el.offsetWidth;
-          el = el.parentElement || el.parentNode?.host;  // cross shadow boundary
+          el = el.parentElement || el.parentNode?.host;
         }
         if (w > 0) {
           wbElem.style.width = w + 'px';
+          // Full re-render after visibility change (e.g. Card expand)
+          if (this.tree) {
+            this.tree.update('any');
+          }
         }
       };
 
@@ -333,12 +446,30 @@ export default {
 
       // Keep synced on resize
       this._resizeObserver = new ResizeObserver(applyWidth);
-      // Observe the shadow host (el) since container itself may never resize
       const host = container.getRootNode()?.host;
       if (host) {
         this._resizeObserver.observe(host);
       }
       this._resizeObserver.observe(container);
+
+      // Wunderbaum destroys child nodes when container is hidden (virtual
+      // scrolling). Save source before hide, reload on re-show.
+      let savedSource = null;
+      this._intersectionObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting && this.tree) {
+            // Save before wunderbaum destroys children
+            savedSource = this.getSerializableSource();
+          } else if (entry.isIntersecting && savedSource && this.tree) {
+            // Reload saved source
+            this.tree.clear();
+            this.tree.load(savedSource);
+            savedSource = null;
+            applyWidth();
+          }
+        }
+      });
+      this._intersectionObserver.observe(container);
     },
 
     setupDragDrop() {
@@ -474,7 +605,9 @@ export default {
       if (!this.tree) return [];
 
       const serialize = (node) => {
+        // Flatten node.data to top level (wunderbaum double-nests "data:{}" as node.data.data)
         const obj = {
+          ...(node.data || {}),
           title: node.title,
           key: node.key,
         };
@@ -483,7 +616,6 @@ export default {
         if (node.expanded) obj.expanded = true;
         if (node.selected) obj.selected = true;
         if (node.lazy && (!node.children || node.children.length === 0)) obj.lazy = true;
-        if (node.data && Object.keys(node.data).length > 0) obj.data = { ...node.data };
         if (node.checkbox != null) obj.checkbox = node.checkbox;
         if (node.classes) obj.classes = node.classes;
         if (node.tooltip) obj.tooltip = node.tooltip;
@@ -503,7 +635,7 @@ export default {
     setSource(source) {
       if (this.tree) {
         this.tree.clear();
-        this.tree.load(source);
+        this.tree.load(JSON.parse(JSON.stringify(source)));
       }
     },
 
@@ -731,19 +863,9 @@ export default {
     // "Silent" versions that don't emit source (used in batch/step to emit once at the end)
     addNodeFromAction(actionData) {
       if (!this.tree) return;
-      const node = {
-        title: actionData.title,
-        key: actionData.key,
-      };
-      if (actionData.type) node.type = actionData.type;
-      if (actionData.icon) node.icon = actionData.icon;
-      if (actionData.expanded) node.expanded = true;
-      if (actionData.lazy) node.lazy = true;
-      if (actionData.children) node.children = actionData.children;
-      if (actionData.data) node.data = actionData.data;
-      if (actionData.checkbox != null) node.checkbox = actionData.checkbox;
-
-      const parentKey = actionData.parentKey;
+      // Pass all properties (except action/parentKey) to addChildren so
+      // custom fields like node_id, description end up in node.data.
+      const { action, parentKey, ...node } = actionData;
       if (parentKey) {
         const parent = this.findByKey(parentKey);
         if (parent) {
@@ -803,9 +925,18 @@ export default {
   },
 
   beforeUnmount() {
+    if (this._onKeyDown) {
+      document.removeEventListener('keydown', this._onKeyDown, true);
+      document.removeEventListener('keyup', this._onKeyUp, true);
+      window.removeEventListener('blur', this._onBlur);
+    }
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
+    }
+    if (this._intersectionObserver) {
+      this._intersectionObserver.disconnect();
+      this._intersectionObserver = null;
     }
 
     // Clear pending lazy load timers
