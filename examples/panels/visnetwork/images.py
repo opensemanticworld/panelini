@@ -15,19 +15,19 @@ nodes = [
         "id": 5,
         "shape": "image",
         "size": 50,
-        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Festung_Marienberg_-_W%C3%BCrzburg_-_2013.jpg/1024px-Festung_Marienberg_-_W%C3%BCrzburg_-_2013.jpg",
+        "image": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Wuerzburg_Festung_Marienberg.jpg",
     },
     {
         "id": 6,
         "shape": "image",
         "size": 50,
-        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/West_facade_of_the_Wurzburg_Residence_08.jpg/1024px-West_facade_of_the_Wurzburg_Residence_08.jpg",
+        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/South_facade_of_the_Wurzburg_Residence_05.jpg/960px-South_facade_of_the_Wurzburg_Residence_05.jpg",
     },
     {
         "id": 7,
         "shape": "image",
         "size": 50,
-        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Kaeppele_wuerzburg_festungsfoto.jpg/1024px-Kaeppele_wuerzburg_festungsfoto.jpg",
+        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Kaeppele_wuerzburg_festungsfoto.jpg/1280px-Kaeppele_wuerzburg_festungsfoto.jpg",
     },
 ]
 

@@ -77,7 +77,26 @@ class VisNetwork(AnyWidgetComponent):
             edge_created_callback: Callback for when an edge is created via manipulation controls.
                 Called with the newly created edge dict.
             **params: Additional parameters passed to AnyWidgetComponent.
+                Use sizing_mode to control component sizing (default: "stretch_both").
+                Supported modes: "fixed", "stretch_width", "stretch_height", "stretch_both",
+                "scale_width", "scale_height", "scale_both".
+                For fixed dimensions, use height and width parameters (in pixels).
         """
+        # Set default sizing_mode based on width/height parameters
+        if "sizing_mode" not in params:
+            # If both width and height are specified, use fixed sizing
+            if "width" in params and "height" in params:
+                params["sizing_mode"] = "fixed"
+            # If only height is specified, stretch width
+            elif "height" in params and "width" not in params:
+                params["sizing_mode"] = "stretch_width"
+            # If only width is specified, stretch height
+            elif "width" in params and "height" not in params:
+                params["sizing_mode"] = "stretch_height"
+            # If neither is specified, stretch both
+            else:
+                params["sizing_mode"] = "stretch_both"
+
         super().__init__(**params)
 
         # Set initial values

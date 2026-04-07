@@ -74,3 +74,8 @@ tool.build_panel().servable()
 - Event callbacks for all network interactions
 - Node detail visualization with JSON editor
 - ctrl+drag for duplicating nodes
+
+## Feature Wishlist
+- F2 for renaming of nodes/edges
+- delete button for removal of nodes/edges
+- ctrl+c, ctrl+v for selected elements

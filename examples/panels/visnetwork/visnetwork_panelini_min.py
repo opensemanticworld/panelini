@@ -23,15 +23,18 @@ app = Panelini(
     title="Network Graph Demo",
 )
 
+gstack = pn.GridStack(sizing_mode="stretch_both", min_height=600, allow_drag=False)
+
+gstack[:, :] = pn.Card(
+    title="VisNetwork Graph",
+    objects=[visnetwork_panel],
+    max_height=800,
+)
+
+
 # Set the main content with the VisNetwork component
 app.main_set(
-    objects=[
-        pn.Card(
-            title="VisNetwork",
-            objects=[visnetwork_panel],
-            max_height=800,
-        )
-    ]
+    objects=[gstack],
 )
 
 # Servable for debugging using command
@@ -40,4 +43,4 @@ app.servable()
 
 if __name__ == "__main__":
     # Serve app as you would in panel
-    pn.io.server.serve(app, port=5010)
+    pn.io.server.serve(app)

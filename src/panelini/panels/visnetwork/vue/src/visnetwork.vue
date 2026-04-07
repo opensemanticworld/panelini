@@ -39,14 +39,6 @@ export default {
     manipulationState: {
       type: String,
       default: "disableEditMode"
-    },
-    width: {
-      type: [Number, String],
-      default: 800
-    },
-    height: {
-      type: [Number, String],
-      default: 600
     }
   },
 
@@ -67,7 +59,9 @@ export default {
       ctxElementId: null,
       ctxMenuItems: [],
       // Track duplicated nodes during Ctrl+drag
-      _duplicatedNodeIds: []
+      _duplicatedNodeIds: [],
+      // Track original fixed state of source nodes during duplication
+      _originalFixedStates: {}
     };
   },
 
@@ -167,13 +161,47 @@ export default {
         },
         nodes: {
           shape: "dot",
-          size: 10,
+          size: 20,
+          font: {
+            size: 14,
+            strokeWidth: 0,
+            strokeColor: "transparent"
+          },
+          borderWidth: 2,
+          shadow: true
         },
         edges: {
           color: {
             inherit: 'to'
+          },
+          arrows: "to",
+          font: {
+            size: 14,
+            align: "middle",
+            strokeWidth: 3,
+            strokeColor: "#ffffff"
+          },
+          smooth: {
+            type: "continuous"
           }
         },
+        physics: {
+          enabled: true,
+          solver: "forceAtlas2Based",
+          forceAtlas2Based: {
+            gravitationalConstant: -200,
+            centralGravity: 0.005,
+            springLength: 80,
+            springConstant: 0.05,
+            damping: 0.4,
+            avoidOverlap: 1
+          },
+          stabilization: {
+            enabled: true,
+            iterations: 200,
+            updateInterval: 25
+          }
+        }
       };
 
       // Merge options (deep-merge interaction to preserve hover/tooltip defaults)
@@ -182,10 +210,8 @@ export default {
         this._options.interaction = { ...defaultOptions.interaction, ...this.options.interaction };
       }
 
-      // Set container size
+      // Get container reference
       const container = this.$refs.networkContainer;
-      container.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
-      container.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
 
       // Create network
       const data = {
@@ -244,11 +270,23 @@ export default {
         }
 
         if (params.nodes.length > 0) {
-          const node = nodesDataSet.get(params.nodes[0]);
-          if (node) {
-            node.fixed = false;
+          // Update positions for ALL nodes to capture physics-based movement
+          const allNodes = nodesDataSet.get();
+          for (const node of allNodes) {
+            const pos = network.getPosition(node.id);
+            node.x = pos.x;
+            node.y = pos.y;
+
+            // Unfix the double-clicked node
+            if (node.id === params.nodes[0]) {
+              node.fixed = false;
+            }
+
             nodesDataSet.update(node);
           }
+
+          // Emit updated nodes
+          this.$emit('change:nodes', nodesDataSet.get());
         }
       });
 
@@ -316,6 +354,7 @@ export default {
       network.on('dragStart', (params) => {
         if (params.nodes.length > 0) {
           const newNodeIds = [];
+          this._originalFixedStates = {};
 
           params.nodes.forEach((nodeId) => {
             const node = nodesDataSet.get(nodeId);
@@ -327,6 +366,13 @@ export default {
 
             // Duplicate node if Ctrl key is pressed
             if (params.event.srcEvent && params.event.srcEvent.ctrlKey) {
+              // Remember original fixed state
+              this._originalFixedStates[node.id] = node.fixed || false;
+
+              // Fix source node to prevent it from being repelled
+              node.fixed = true;
+              nodesDataSet.update(node);
+
               const newNode = this.duplicateNode(node);
               newNode.fixed = false;
               nodesDataSet.update(newNode);
@@ -365,10 +411,15 @@ export default {
             node.x = pos.x;
             node.y = pos.y;
 
-            // Only fix the nodes that were actually dragged
-            if (params.nodes.includes(node.id)) {
+            // Restore original fixed state for source nodes that were duplicated
+            if (node.id in this._originalFixedStates) {
+              node.fixed = this._originalFixedStates[node.id];
+            }
+            // Fix nodes that were actually dragged (but not source nodes)
+            else if (params.nodes.includes(node.id)) {
               node.fixed = true;
             }
+
             nodesDataSet.update(node);
           }
 
@@ -388,6 +439,9 @@ export default {
             // Clear the duplicated nodes tracking
             this._duplicatedNodeIds = [];
           }
+
+          // Clear the original fixed states tracking
+          this._originalFixedStates = {};
         }
       });
     },
@@ -1129,6 +1183,52 @@ export default {
       }
     };
     document.addEventListener('keydown', this._keydownHandler);
+
+    // Observe container resize events and force canvas resize
+    const container = this.$refs.networkContainer;
+    const wrapper = this.$el;
+
+    if (container && this.network) {
+      this._resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+
+          if (width > 0 && height > 0) {
+            console.log(`Container resized: ${width}x${height}`);
+
+            // Get the actual dimensions from the wrapper or host
+            const host = container.getRootNode()?.host;
+            const actualWidth = host?.offsetWidth || wrapper?.offsetWidth || width;
+            const actualHeight = host?.offsetHeight || wrapper?.offsetHeight || height;
+
+            console.log(`Actual dimensions: ${actualWidth}x${actualHeight}`);
+
+            // Force the canvas to resize
+            if (this.network) {
+              // Update canvas dimensions directly
+              const canvas = container.querySelector('canvas');
+              if (canvas) {
+                canvas.style.width = `${actualWidth}px`;
+                canvas.style.height = `${actualHeight}px`;
+              }
+
+              // Redraw the network
+              this.network.redraw();
+              this.network.fit();
+            }
+          }
+        }
+      });
+
+      // Observe the container, wrapper, and shadow DOM host
+      this._resizeObserver.observe(container);
+      this._resizeObserver.observe(wrapper);
+      const host = container.getRootNode()?.host;
+      if (host) {
+        console.log('Observing host element:', host);
+        this._resizeObserver.observe(host);
+      }
+    }
   },
 
   beforeUnmount() {
@@ -1140,6 +1240,12 @@ export default {
     // Clean up ESC key listener
     if (this._keydownHandler) {
       document.removeEventListener('keydown', this._keydownHandler);
+    }
+
+    // Clean up resize observer
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
     }
   }
 };
