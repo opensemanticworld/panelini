@@ -12,12 +12,45 @@ import panel as pn
 from oold.model import LinkedBaseModel
 from pydantic import ConfigDict, Field, model_validator
 from rdflib import Graph as RDFGraph
+from rdflib.term import Literal as RDFLiteral
 from rdflib.term import URIRef
 
 from panelini.panels.visnetwork import GraphDetailTool, VisNetwork
 
 pn.extension("tabulator")  # For tables
 pn.extension("jsoneditor")  # For viewing/editing node details
+
+# ── Class-graph colour palette (shared with _build_class_graph) ────────────────
+_CLS_NODE_COLOR = "#9B59B6"  # purple  — LinkedBaseModel subclass
+_FIELD_NODE_COLOR = "#BDC3C7"  # silver  — field descriptor
+_ATTR_VAL_NODE_COLOR = "#F39C12"  # orange  — default / description / constraint values
+_ISA_EDGE_COLOR = "#e74c3c"  # red     — IsA / HasRange
+_HAS_TYPE_EDGE_COLOR = "#888888"  # gray    — HasType
+
+_PRIMITIVES_OOLD = (str, int, float, bool, type(None), dict, list, tuple, set)
+_MAX_LABEL = 80
+
+
+def _truncate(s: str) -> str:
+    s = str(s)
+    return s[:_MAX_LABEL] + "..." if len(s) > _MAX_LABEL else s
+
+
+def _ann_label(ann: Any) -> str:
+    """Human-readable label for a type annotation."""
+    if ann is None:
+        return "None"
+    if hasattr(ann, "__name__"):
+        return ann.__name__
+    s = str(ann)
+    for prefix in ("typing.", "builtins."):
+        s = s.replace(prefix, "")
+    return _truncate(s)
+
+
+def _cls_node_id(cls: type) -> str:
+    """Stable visjs node ID for a class, distinct from instance IRIs."""
+    return f"class:{cls.__name__}"
 
 
 def numeric_to_color(value: float, min_val: float, max_val: float, colormap_name: str = "viridis") -> str:
@@ -65,7 +98,7 @@ class Entity(LinkedBaseModel):
                 "ex": "https://example.com/",
                 # literal property
                 "name": "schema:name",
-                "initialized_from": "ex:InitializedFrom",
+                "initialized_from": {"@id": "ex:InitializedFrom", "@type": "@id"},
             },
             "iri": "https://example.com/1976950e-68bd-43a0-af80-c0f9a2293045",  # the IRI of the schema
         }
@@ -98,8 +131,40 @@ class Entity(LinkedBaseModel):
         return self
 
 
-class OOLDGraph(Entity):
+class ExpansionStep(Entity):
+    relations: list[str] = Field(
+        description="List of relation names (e.g. field names or property names) to expand at this step"
+    )
+
+    iter_limit: Optional[int] = Field(
+        None,
+        description="Maximum number of iterations to apply this expansion step. If "
+        "None, apply until no new nodes are found.",
+    )
+
+
+class SingleNodeExpansionPolicy(Entity):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    root_node: Any = Field(
+        description="The root node from which expansion starts. "
+        "Pass an Entity instance to start BFS from that instance, "
+        "or a LinkedBaseModel subclass to start from the class node."
+    )
+    expansion_steps: list[ExpansionStep] = Field(
+        description="List of expansion steps to apply after each other for expanding the graph from the root node"
+    )
+
+
+class MultiExpansionPolicy(Entity):
+    expansion_policies: list[SingleNodeExpansionPolicy] = Field(
+        description="""
+List of policies for how to expand nodes in the graph. Union of nodes expanded by all policies will be shown when a node is expanded. If empty, no additional nodes will be shown on expansion."""
+    )
+
+
+class OOLDGraphConfig(Entity):
     model_config = ConfigDict(
+        arbitrary_types_allowed=True,
         json_schema_extra={
             "@context": [
                 "https://example.com/1976950e-68bd-43a0-af80-c0f9a2293045",  # import the context of the parent class
@@ -113,9 +178,19 @@ class OOLDGraph(Entity):
             ],
             "iri": "OOLDGraph.json",
             "defaultProperties": ["object_list"],
-        }
+        },
     )
-    object_list: list[Entity]
+    entity_list: list[Any]  # may contain Entity instances or bare LinkedBaseModel subclasses
+    entity_types: Optional[dict[str, type]] = None
+    type_colors: Optional[dict[str, str]] = None
+    expansion_policy: Union[SingleNodeExpansionPolicy, MultiExpansionPolicy] = Field(
+        None,
+        description=(
+            "Policy for how to expand nodes in the graph visualization. "
+            "If None, all available information from the entities will be used to build the graph, "
+            "however it is recommended to use a policy to limit the amount of information shown."
+        ),
+    )
 
 
 class EdgeLabelConfig(Enum):
@@ -131,10 +206,7 @@ class EdgeLabelConfig(Enum):
 class OOLDGraphDetailTool(GraphDetailTool):
     def __init__(  # noqa: C901
         self,
-        entity_list: list[Entity],
-        edge_label_config: EdgeLabelConfig = "rdf",
-        entity_types: Optional[dict[str, type]] = None,
-        type_colors: Optional[dict[str, str]] = None,
+        config: OOLDGraphConfig,
         **kwargs,
     ):
         """Initialize the OOLDGraphDetailTool.
@@ -147,8 +219,26 @@ class OOLDGraphDetailTool(GraphDetailTool):
                         If not provided or incomplete, colors are auto-generated for unknown types.
             **kwargs: Additional arguments passed to GraphDetailTool
         """
+        # Extract fields from config
+        entity_list = config.entity_list
+        entity_types = config.entity_types
+        type_colors = config.type_colors
+        self.expansion_policy = config.expansion_policy
+
+        # Split entity_list into instances and bare classes.
+        # Bare LinkedBaseModel subclasses passed in entity_list are promoted to
+        # entity_types so they appear as class nodes in the graph without
+        # causing get_iri() / to_jsonld() calls on a class object.
+        _cls_extras: dict[str, type] = {}
+        _instances: list[Entity] = []
+        for item in entity_list:
+            if isinstance(item, type) and issubclass(item, LinkedBaseModel):
+                _cls_extras[item.__name__] = item
+            else:
+                _instances.append(item)
+
         # a dictionary for fast access by iri
-        self.entity_list = entity_list
+        self.entity_list = _instances
         self.entity_dict = {str(element.get_iri()): element for element in self.entity_list}
 
         # Color scheme for different entity types (optional, generated on the fly if not provided)
@@ -169,25 +259,25 @@ class OOLDGraphDetailTool(GraphDetailTool):
             "#34495E",  # Dark blue-gray
         ]
 
-        # Store available entity types for creating new entities
-        # Default to collecting types from existing entities if not provided
+        # Store available entity types for creating new entities.
+        # Classes extracted from entity_list are merged in; explicit entity_types win on conflict.
         if entity_types is None:
             self.entity_types = {}
-            for entity in entity_list:
+            for entity in self.entity_list:
                 entity_type = type(entity)
                 type_name = entity_type.__name__
                 if type_name not in self.entity_types:
                     self.entity_types[type_name] = entity_type
         else:
             self.entity_types = entity_types
+        # Merge bare classes from entity_list (don't overwrite explicit entity_types entries)
+        for name, cls in _cls_extras.items():
+            self.entity_types.setdefault(name, cls)
 
         # Undo/Redo stacks for tracking history
         self.undo_stack = []
         self.redo_stack = []
         self.max_history = 50  # Maximum number of undo states to keep
-
-        # Save initial state
-        self._save_state()
 
         self.rdf_graph = RDFGraph()
 
@@ -195,13 +285,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
             print(f"Parsing entity {element} with IRI {element.get_iri()} into RDF graph")
             self.rdf_graph.parse(data=element.to_jsonld(), format="json-ld")  ## appends elements
 
-        ### transform python-classes/instances to visjs nodes/edges
-        ## iterate over all triples
-        ## for each triple:
-        ## * create an edge with the predicate as label and the subject and object as source and target
-        ## * create nodes for the subject and object if they don't exist yet, with the label as the name of the entity (e.g. name property) or the IRI if no name is available
-        ## ids shall be iris
+        # Compute which node IDs are visible (None = show all).
+        # Must be called after RDF graph is built so policy BFS can query it.
+        self._visible_node_ids: Optional[set[str]] = self._compute_initial_visible_node_ids()
 
+        # Save initial state (after _visible_node_ids is set)
+        self._save_state()
+
+        ### transform python-classes/instances to visjs nodes/edges
         self.visjs_nodes = []
         self.visjs_edges = []
 
@@ -256,20 +347,22 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         ## build graph from nodes and their relations:
 
-        for id_str, _element in self.entity_dict.items():
-            # create node
+        for id_str in self.entity_dict:
             add_node_by_id(id_str)
 
         ## add all edges between the nodes based on the relations in the OO-LD objects
         available_ids = {node["id"] for node in self.visjs_nodes}
-        for s, p, o in self.rdf_graph:
-            if str(s) in available_ids:
-                self.visjs_edges.append({
-                    "from": str(s),
-                    "to": str(o),
-                    "label": str(p.split("/")[-1].split("#")[-1]),
-                    "arrows": "to",
-                })
+        self._build_rdf_edges(available_ids)
+
+        # Add class hierarchy (IsA / definesProperty / HasType) on top of instance graph
+        self._build_class_graph()
+
+        # Store the complete (fully-expanded) graph for expand-menu computation
+        self._full_visjs_nodes: list[dict] = [dict(n) for n in self.visjs_nodes]
+        self._full_visjs_edges: list[dict] = [dict(e) for e in self.visjs_edges]
+
+        # Apply visibility filter (no-op when _visible_node_ids is None)
+        self._apply_visibility_filter_inplace()
 
         super().__init__(nodes=self.visjs_nodes, edges=self.visjs_edges)
         self.oold_detail_col = pn.Column()
@@ -304,13 +397,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.edit_row.append(self.undo_button)
         self.edit_row.append(self.redo_button)
 
-        # Recreate VisNetwork with duplication and edge creation callbacks
+        # Recreate VisNetwork with duplication, edge creation, and context-menu callbacks
         self.visnetwork_panel = VisNetwork(
             nodes=self.nodes,
             edges=self.edges,
             network_event_callback=self.network_event_callback,
-            nodes_duplicated_callback=self.on_nodes_duplicated,  # Add duplication support
-            edge_created_callback=self.on_edge_created,  # Add edge creation support
+            nodes_duplicated_callback=self.on_nodes_duplicated,
+            node_created_callback=self._on_node_created,
+            edge_created_callback=self.on_edge_created,
+            context_menu_callback=self._on_context_menu_item,
         )
 
         # Update the graph column to use the new visnetwork_panel
@@ -367,17 +462,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
     def _save_state(self) -> None:
         """Save current state to undo stack.
 
-        Creates a deep copy of entity_list for state preservation.
+        Creates a deep copy of entity_list and a copy of _visible_node_ids.
         Clears redo stack when new state is saved.
         """
         try:
-            # Create deep copies of all entities
-            state_snapshot = []
-            for entity in self.entity_list:
-                # Use model_copy with deep=True to ensure complete independence
-                entity_copy = entity.model_copy(deep=True)
-                state_snapshot.append(entity_copy)
-
+            state_snapshot = {
+                "entities": [e.model_copy(deep=True) for e in self.entity_list],
+                "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
+            }
             self.undo_stack.append(state_snapshot)
 
             # Limit history size
@@ -394,26 +486,29 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             traceback.print_exc()
 
-    def _restore_state(self, state_snapshot: list[LinkedBaseModel]) -> None:
-        """Restore entity_list from a state snapshot.
+    def _current_state_snapshot(self) -> dict:
+        """Return a snapshot dict of the current state (for undo/redo stacks)."""
+        return {
+            "entities": [e.model_copy(deep=True) for e in self.entity_list],
+            "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
+        }
 
-        Args:
-            state_snapshot: list of entity copies to restore
+    def _restore_state(self, state: dict | list) -> None:
+        """Restore entity_list (and optionally _visible_node_ids) from a snapshot.
+
+        Accepts both the new dict format and the legacy list format for robustness.
         """
         try:
-            # Deep copy the snapshot to avoid reference issues
-            restored_entities = []
-            for entity in state_snapshot:
-                entity_copy = entity.model_copy(deep=True)
-                restored_entities.append(entity_copy)
+            if isinstance(state, dict):
+                entities = state["entities"]
+                self._visible_node_ids = state.get("visible_node_ids", None)
+            else:
+                # Legacy format: plain list
+                entities = state
+                # Keep _visible_node_ids as-is
 
-            # Replace entity_list
-            self.entity_list = restored_entities
-
-            # Rebuild entity_dict
-            self.entity_dict = {str(entity.get_iri()): entity for entity in self.entity_list}
-
-            # Rebuild visualization
+            self.entity_list = [e.model_copy(deep=True) for e in entities]
+            self.entity_dict = {str(e.get_iri()): e for e in self.entity_list}
             self._rebuild_visualization()
 
             print(f"State restored. Entity count: {len(self.entity_list)}")
@@ -427,26 +522,31 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Rebuild entire visualization from entity_list.
 
         Recreates nodes, RDF graph, and edges from scratch.
+        Builds the full graph first, then applies the visibility filter.
         """
-        # Clear existing visualization
+        # Build ALL entity nodes (no visibility filter yet)
         self.visjs_nodes = []
         self.visjs_edges = []
 
-        # Rebuild nodes
         for entity in self.entity_list:
             iri = str(entity.get_iri())
             label = entity.name if hasattr(entity, "name") else iri
             entity_type_name = type(entity).__name__
-
-            self.visjs_nodes.append({
+            node = {
                 "id": iri,
                 "label": label,
                 "shape": "ellipse",
                 "entity_type": entity_type_name,
                 "color": self._get_color_for_type(entity_type_name),
-            })
+            }
+            self.visjs_nodes.append(node)
 
-        # Rebuild RDF graph and edges
+        # Temporarily seed _full_visjs_nodes with entity nodes so that
+        # _rebuild_visjs_edges() (which uses _full_visjs_nodes) can build
+        # the class hierarchy correctly.
+        self._full_visjs_nodes = [dict(n) for n in self.visjs_nodes]
+
+        # Rebuild RDF graph and all edges (includes class hierarchy + full-graph storage)
         self._rebuild_rdf_graph()
         self._rebuild_visjs_edges()
 
@@ -454,7 +554,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if hasattr(self, "property_mappings") and any(self.property_mappings.values()):
             self._apply_all_mappings()
 
-        # Update visnetwork - create new list references to trigger Panel update
+        # Update visnetwork
         self.visnetwork_panel.nodes = list(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
 
@@ -465,19 +565,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return
 
         try:
-            # Save current state to redo stack before undoing
-            current_state = []
-            for entity in self.entity_list:
-                current_state.append(entity.model_copy(deep=True))
-            self.redo_stack.append(current_state)
-
-            # Remove current state from undo stack
+            self.redo_stack.append(self._current_state_snapshot())
             self.undo_stack.pop()
-
-            # Restore previous state
-            previous_state = self.undo_stack[-1]
-            self._restore_state(previous_state)
-
+            self._restore_state(self.undo_stack[-1])
             print(f"Undo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}")
         except Exception as e:
             print(f"Error during undo: {e}")
@@ -492,18 +582,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return
 
         try:
-            # Get state from redo stack
-            next_state = self.redo_stack.pop()
-
-            # Save current state to undo stack
-            current_state = []
-            for entity in self.entity_list:
-                current_state.append(entity.model_copy(deep=True))
-            self.undo_stack.append(current_state)
-
-            # Restore next state
-            self._restore_state(next_state)
-
+            self.undo_stack.append(self._current_state_snapshot())
+            self._restore_state(self.redo_stack.pop())
             print(f"Redo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}")
         except Exception as e:
             print(f"Error during redo: {e}")
@@ -904,6 +984,325 @@ class OOLDGraphDetailTool(GraphDetailTool):
         set_all_df = pd.DataFrame([set_all_row])
         self.oold_set_all_tabulator.value = set_all_df
 
+    # ===== Expansion policy =====
+
+    def _compute_initial_visible_node_ids(self) -> Optional[set[str]]:
+        """Return the initial set of visible node IDs based on expansion_policy.
+
+        Returns None when no policy is set (means: show all nodes).
+        Returns a set[str] of entity IRIs when a policy restricts the initial view.
+        Class/field/type nodes are NOT included — they start hidden when a policy is set
+        and can be revealed via right-click expansion.
+        """
+        if self.expansion_policy is None:
+            return None
+        if isinstance(self.expansion_policy, MultiExpansionPolicy):
+            ids: set[str] = set()
+            for p in self.expansion_policy.expansion_policies:
+                ids |= self._apply_single_policy(p)
+            return ids
+        return self._apply_single_policy(self.expansion_policy)
+
+    def _apply_single_policy(self, policy: "SingleNodeExpansionPolicy") -> set[str]:
+        """BFS expansion from a root entity along the configured relation steps."""
+        root = policy.root_node
+        if not isinstance(root, LinkedBaseModel):
+            return set()
+        root_iri = str(root.get_iri())
+        if root_iri not in self.entity_dict:
+            return set()
+
+        visible: set[str] = {root_iri}
+        frontier: set[str] = {root_iri}
+
+        for step in policy.expansion_steps:
+            new_frontier: set[str] = set()
+            current = frontier
+            iterations = 0
+            while current:
+                if step.iter_limit is not None and iterations >= step.iter_limit:
+                    break
+                found: set[str] = set()
+                for iri in current:
+                    found |= self._get_neighbors_via_relations(iri, step.relations)
+                new_nodes = found - visible
+                visible |= new_nodes
+                new_frontier = new_nodes
+                current = new_frontier
+                iterations += 1
+            frontier = new_frontier
+
+        return visible
+
+    def _get_neighbors_via_relations(self, iri: str, relations: list[str]) -> set[str]:
+        """Return IRIs of entities reachable from iri via any of the given relation labels."""
+        result: set[str] = set()
+        for s, p, o in self.rdf_graph:
+            if str(s) == iri:
+                label = str(p).split("/")[-1].split("#")[-1]
+                if label in relations and str(o) in self.entity_dict:
+                    result.add(str(o))
+        return result
+
+    # ===== RDF → visjs edge building =====
+
+    def _literal_node_id(self, entity_iri: str, pred_label: str, subject_str: str) -> str:
+        """Return a stable, path-scoped ID for a literal node: <entity_iri>#<field_name>."""
+        entity = self.entity_dict.get(subject_str)
+        if entity is not None:
+            field_name = self._field_name_for_predicate(entity, pred_label)
+            if field_name:
+                return f"{entity_iri}#{field_name}"
+        return f"{entity_iri}#literal_{pred_label}"
+
+    def _build_rdf_edges(self, source_ids: set[str]) -> None:
+        """Append RDF-derived edges (and literal nodes) to self.visjs_nodes / self.visjs_edges.
+
+        For each triple (s, p, o) where s is in source_ids:
+        - Literal o: create an orange literal node (ID = <entity_iri>#<field_name>) + add edge.
+        - URIRef o in source_ids: add edge between known entities.
+        - External URI: skip (rdf:type IRIs, context IRIs, etc. would clutter the graph).
+        """
+        existing_node_ids = {n["id"] for n in self.visjs_nodes}
+        for s, p, o in self.rdf_graph:
+            if str(s) not in source_ids:
+                continue
+            pred_label = str(p).split("/")[-1].split("#")[-1]
+            if isinstance(o, RDFLiteral):
+                lit_id = self._literal_node_id(str(s), pred_label, str(s))
+                if lit_id not in existing_node_ids:
+                    self.visjs_nodes.append({
+                        "id": lit_id,
+                        "label": _truncate(str(o)),
+                        "color": _ATTR_VAL_NODE_COLOR,
+                        "shape": "ellipse",
+                        "node_kind": "literal",
+                    })
+                    existing_node_ids.add(lit_id)
+                self.visjs_edges.append({
+                    "from": str(s),
+                    "to": lit_id,
+                    "label": pred_label,
+                    "arrows": "to",
+                })
+            elif str(o) in source_ids:
+                self.visjs_edges.append({
+                    "from": str(s),
+                    "to": str(o),
+                    "label": pred_label,
+                    "arrows": "to",
+                })
+            # else: external URI reference — skip
+
+    # ===== Expansion context-menu helpers =====
+
+    def _get_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
+        """Return {edge_label: [target_node_id, ...]} for outgoing edges from node_id to hidden nodes."""
+        if self._visible_node_ids is None:
+            return {}
+        full_node_ids = {n["id"] for n in self._full_visjs_nodes}
+        result: dict[str, list[str]] = {}
+        for edge in self._full_visjs_edges:
+            if edge.get("from") == node_id:
+                target = str(edge.get("to", ""))
+                if target and target not in self._visible_node_ids and target in full_node_ids:
+                    result.setdefault(edge.get("label", ""), []).append(target)
+        return result
+
+    def _get_inverse_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
+        """Return {edge_label: [source_node_id, ...]} for incoming edges into node_id from hidden nodes."""
+        if self._visible_node_ids is None:
+            return {}
+        full_node_ids = {n["id"] for n in self._full_visjs_nodes}
+        result: dict[str, list[str]] = {}
+        for edge in self._full_visjs_edges:
+            if edge.get("to") == node_id:
+                source = str(edge.get("from", ""))
+                if source and source not in self._visible_node_ids and source in full_node_ids:
+                    result.setdefault(edge.get("label", ""), []).append(source)
+        return result
+
+    def _expand_dict_for_node(self, node_id: str) -> dict[str, str]:
+        """Return callback_name_dict with outgoing (Expand: X) and incoming (Expand: -X) options."""
+        outgoing = self._get_expand_options_for_node(node_id)
+        incoming = self._get_inverse_expand_options_for_node(node_id)
+        if not outgoing and not incoming:
+            return {}
+        d: dict[str, str] = {"expand_all": "Expand: All"}
+        for label in outgoing:
+            d[f"expand_{label}"] = f"Expand: {label}"
+        for label in incoming:
+            d[f"expand_inv_{label}"] = f"Expand: -{label}"
+        return d
+
+    def _apply_visibility_filter_inplace(self) -> None:
+        """Filter _full_visjs_nodes/_full_visjs_edges into visjs_nodes/visjs_edges.
+
+        When _visible_node_ids is None, all nodes are shown (no filtering).
+        Populates callback_name_dict on visible nodes that have hidden outgoing edges.
+        """
+        if self._visible_node_ids is None:
+            self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes]
+            self.visjs_edges = [dict(e) for e in self._full_visjs_edges]
+            for node in self.visjs_nodes:
+                if node.get("node_kind") == "literal":
+                    node["callback_name_dict"] = {"edit_value": "Edit Value"}
+                else:
+                    node.pop("callback_name_dict", None)
+            return
+
+        self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes if n["id"] in self._visible_node_ids]
+        visible_ids = {n["id"] for n in self.visjs_nodes}
+        self.visjs_edges = [
+            dict(e) for e in self._full_visjs_edges if e.get("from") in visible_ids and e.get("to") in visible_ids
+        ]
+        for node in self.visjs_nodes:
+            if node.get("node_kind") == "literal":
+                node["callback_name_dict"] = {"edit_value": "Edit Value"}
+            else:
+                cb = self._expand_dict_for_node(node["id"])
+                if cb:
+                    node["callback_name_dict"] = cb
+                else:
+                    node.pop("callback_name_dict", None)
+
+    def _on_context_menu_item(self, element_type: str, element_id: Any, action_id: str) -> None:
+        """Handle a right-click context-menu selection on a node."""
+        node_id = str(element_id)
+
+        if action_id == "edit_value":
+            self._show_literal_edit_form(node_id)
+            return
+
+        if self._visible_node_ids is None:
+            return  # already showing everything
+
+        outgoing = self._get_expand_options_for_node(node_id)
+        incoming = self._get_inverse_expand_options_for_node(node_id)
+        if not outgoing and not incoming:
+            return
+
+        added: set[str] = set()
+        if action_id == "expand_all":
+            for targets in outgoing.values():
+                added.update(targets)
+            for sources in incoming.values():
+                added.update(sources)
+        elif action_id.startswith("expand_inv_"):
+            label = action_id[len("expand_inv_") :]
+            added.update(incoming.get(label, []))
+        elif action_id.startswith("expand_"):
+            label = action_id[len("expand_") :]
+            added.update(outgoing.get(label, []))
+
+        if not added:
+            return
+
+        # Save state for undo before mutating
+        self._save_state()
+
+        self._visible_node_ids.update(added)
+        self._apply_visibility_filter_inplace()
+
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    # ===== Literal value editing =====
+
+    def _field_name_for_predicate(self, entity: LinkedBaseModel, pred_label: str) -> Optional[str]:  # noqa: C901
+        """Map an RDF predicate label back to the Python field name on an entity.
+
+        Checks direct name match first, then scans the JSON-LD @context chain
+        across the entity's MRO.
+        """
+        if pred_label in entity.model_fields:
+            return pred_label
+        for cls in type(entity).__mro__:
+            mc = getattr(cls, "model_config", None)
+            if mc is None:
+                continue
+            extra = mc.get("json_schema_extra", None) if hasattr(mc, "get") else None
+            if not isinstance(extra, dict):
+                continue
+            context = extra.get("@context", None)
+            if context is None:
+                continue
+            contexts: list = [context] if isinstance(context, dict) else (context if isinstance(context, list) else [])
+            for ctx_item in contexts:
+                if not isinstance(ctx_item, dict):
+                    continue
+                for field_name, mapping in ctx_item.items():
+                    if field_name not in entity.model_fields:
+                        continue
+                    mapped_id = mapping.get("@id", "") if isinstance(mapping, dict) else str(mapping)
+                    # Extract local part from full IRI or prefixed name (e.g. "ex:HasAge" → "HasAge")
+                    local = mapped_id.split("/")[-1].split("#")[-1].split(":")[-1]
+                    if local == pred_label:
+                        return field_name
+        return None
+
+    def _show_literal_edit_form(self, lit_id: str) -> None:
+        """Show an inline edit form in the OO-LD Details tab for a literal node."""
+        # Collect all (entity, field_name) pairs that point to this literal
+        refs: list[tuple[LinkedBaseModel, str]] = []
+        for edge in self._full_visjs_edges:
+            if edge.get("to") != lit_id:
+                continue
+            entity = self.entity_dict.get(edge.get("from", ""))
+            if entity is None:
+                continue
+            field_name = self._field_name_for_predicate(entity, edge.get("label", ""))
+            if field_name is not None:
+                refs.append((entity, field_name))
+
+        if not refs:
+            return
+
+        self._lit_edit_lit_id = lit_id
+        self._lit_edit_refs = refs
+
+        # Get current value from the first referenced entity field
+        first_entity, first_field = refs[0]
+        lit_value = str(getattr(first_entity, first_field, ""))
+
+        self.oold_detail_col.clear()
+        if len(refs) == 1:
+            entity, field_name = refs[0]
+            self.oold_detail_col.append(pn.pane.Markdown(f"### Edit **{entity.name}**.{field_name}"))
+        else:
+            names = ", ".join(f"{e.name}.{f}" for e, f in refs)
+            self.oold_detail_col.append(pn.pane.Markdown(f"### Edit literal value\n\nAffects: {names}"))
+
+        self._lit_edit_input = pn.widgets.TextInput(value=lit_value, name="New value", width=300)
+        apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
+        apply_btn.on_click(self._on_literal_edit_apply)
+        cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+        cancel_btn.on_click(lambda _: self.oold_detail_col.clear())
+
+        self.oold_detail_col.append(self._lit_edit_input)
+        self.oold_detail_col.append(pn.Row(apply_btn, cancel_btn))
+        self.detail_tabs.active = 2  # OO-LD Details tab
+
+    def _on_literal_edit_apply(self, event: Any) -> None:
+        """Apply the edited literal value to all referenced entity fields."""
+        if not hasattr(self, "_lit_edit_refs") or not hasattr(self, "_lit_edit_input"):
+            return
+
+        new_value_str = self._lit_edit_input.value
+
+        self._save_state()
+
+        for entity, field_name in self._lit_edit_refs:
+            try:
+                new_val = self._deserialize_property_value(entity, field_name, new_value_str)
+                setattr(entity, field_name, new_val)
+            except Exception as e:
+                print(f"Error updating {entity.name}.{field_name}: {e}")
+
+        # Literal node IDs are entity-scoped (<iri>#<field>), so the ID is stable across value changes.
+        self._full_sync_after_edit()
+        self.oold_detail_col.clear()
+
     # ===== Synchronization =====
 
     def _rebuild_rdf_graph(self) -> None:
@@ -913,21 +1312,195 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.rdf_graph.parse(data=entity.to_jsonld(), format="json-ld")
 
     def _rebuild_visjs_edges(self) -> None:
-        """Rebuild visjs edges from RDF graph.
+        """Rebuild all edges (RDF + class hierarchy). Updates _full_visjs_* and applies filter.
 
-        Preserves nodes, rebuilds edges based on current entity relationships.
+        Uses _full_visjs_nodes as the working node set so that _build_class_graph()
+        sees the complete node inventory (entity + class nodes).
+        After building, stores the result in _full_visjs_edges/_full_visjs_nodes,
+        then applies the visibility filter to produce visjs_nodes/visjs_edges.
         """
+        # Work on the full node set so _build_class_graph() idempotency checks are correct.
+        # Drop stale literal nodes — they are rebuilt fresh from the current RDF.
+        self.visjs_nodes = [n for n in self._full_visjs_nodes if n.get("node_kind") != "literal"]
         self.visjs_edges = []
-        available_ids = {node["id"] for node in self.visjs_nodes}
 
-        for s, p, o in self.rdf_graph:
-            if str(s) in available_ids:
-                self.visjs_edges.append({
-                    "from": str(s),
-                    "to": str(o),
-                    "label": str(p.split("/")[-1].split("#")[-1]),
-                    "arrows": "to",
+        all_entity_ids = set(self.entity_dict.keys())
+        self._build_rdf_edges(all_entity_ids)
+
+        # Add class hierarchy (IsA / definesProperty / HasType)
+        self._build_class_graph()
+
+        # Persist full graph (class nodes may have been added by _build_class_graph)
+        self._full_visjs_nodes = [dict(n) for n in self.visjs_nodes]
+        self._full_visjs_edges = [dict(e) for e in self.visjs_edges]
+
+        # Apply visibility filter
+        self._apply_visibility_filter_inplace()
+
+    def _build_class_graph(self) -> None:  # noqa: C901
+        """Add class-hierarchy nodes and edges for all types in entity_types.
+
+        Uses Python introspection because oold-python does not emit
+        rdfs:subClassOf or rdf:Property triples.
+
+        Always emits all nodes/edges — no visibility filtering.
+        Safe to call multiple times — every node/edge is only added if absent.
+        """
+        if not self.entity_types:
+            return
+
+        # Helper set for fast duplicate detection
+        existing_node_ids = {n["id"] for n in self.visjs_nodes}
+
+        def _ensure_node(cls: type, color: str = _CLS_NODE_COLOR) -> str:
+            nid = _cls_node_id(cls)
+            if nid not in existing_node_ids:
+                self.visjs_nodes.append({
+                    "id": nid,
+                    "label": cls.__name__,
+                    "color": color,
+                    "shape": "ellipse",
+                    "node_kind": "class",
                 })
+                existing_node_ids.add(nid)
+            return nid
+
+        existing_edges: set[tuple] = {(e.get("from"), e.get("to"), e.get("label")) for e in self.visjs_edges}
+
+        def _add_edge(from_id: str, to_id: str, label: str, **kwargs: Any) -> None:
+            key = (from_id, to_id, label)
+            if key not in existing_edges:
+                self.visjs_edges.append({"from": from_id, "to": to_id, "label": label, "arrows": "to", **kwargs})
+                existing_edges.add(key)
+
+        def _unwrap_annotation(ann: Any) -> Any:
+            """Unwrap Optional[X] -> X and list[X] -> X (one level each)."""
+            origin = getattr(ann, "__origin__", None)
+            if origin is Union and hasattr(ann, "__args__"):
+                inner = [a for a in ann.__args__ if a is not type(None)]
+                if len(inner) == 1:
+                    ann = inner[0]
+            origin = getattr(ann, "__origin__", None)
+            if origin is list and getattr(ann, "__args__", None):
+                ann = ann.__args__[0]
+            return ann
+
+        for cls in self.entity_types.values():
+            cls_nid = _ensure_node(cls)
+
+            # ── IsA edges via __bases__ ──────────────────────────────────
+            for base in cls.__bases__:
+                if base is object:
+                    continue
+                try:
+                    if not issubclass(base, LinkedBaseModel):
+                        continue
+                except TypeError:
+                    continue
+                base_nid = _ensure_node(base)
+                _add_edge(cls_nid, base_nid, "IsA", color=_ISA_EDGE_COLOR)
+
+            # ── definesProperty edges (own fields only) ──────────────────
+            own_fields = set(getattr(cls, "__annotations__", {}).keys())
+            for field_name, field_info in cls.model_fields.items():
+                if field_name not in own_fields:
+                    continue
+                field_nid = f"{cls_nid}#field_{field_name}"
+                if field_nid not in existing_node_ids:
+                    self.visjs_nodes.append({
+                        "id": field_nid,
+                        "label": field_name,
+                        "color": _FIELD_NODE_COLOR,
+                        "shape": "ellipse",
+                        "node_kind": "field",
+                    })
+                    existing_node_ids.add(field_nid)
+                _add_edge(cls_nid, field_nid, "definesProperty")
+
+                # HasRange — all annotations, primitives get a per-field orange node
+                ann = _unwrap_annotation(field_info.annotation)
+                if ann is not None:
+                    is_linked = False
+                    if isinstance(ann, type):
+                        try:  # noqa: SIM105
+                            is_linked = issubclass(ann, LinkedBaseModel)
+                        except TypeError:
+                            pass
+                    if is_linked:
+                        ann_nid = _ensure_node(ann)
+                    else:
+                        ann_nid = f"{field_nid}#type"
+                        if ann_nid not in existing_node_ids:
+                            self.visjs_nodes.append({
+                                "id": ann_nid,
+                                "label": _ann_label(ann),
+                                "color": _ATTR_VAL_NODE_COLOR,
+                                "shape": "ellipse",
+                                "node_kind": "type",
+                            })
+                            existing_node_ids.add(ann_nid)
+                    _add_edge(field_nid, ann_nid, "HasRange", color=_ISA_EDGE_COLOR)
+
+                # default value node
+                if not field_info.is_required():
+                    default_nid = f"{field_nid}#default"
+                    if default_nid not in existing_node_ids:
+                        try:
+                            default_label = json.dumps(field_info.default)
+                        except Exception:
+                            default_label = str(field_info.default)
+                        self.visjs_nodes.append({
+                            "id": default_nid,
+                            "label": _truncate(default_label),
+                            "color": _ATTR_VAL_NODE_COLOR,
+                            "shape": "ellipse",
+                            "node_kind": "default",
+                        })
+                        existing_node_ids.add(default_nid)
+                    _add_edge(field_nid, default_nid, "default")
+
+                # description node
+                if field_info.description:
+                    desc_nid = f"{field_nid}#description"
+                    if desc_nid not in existing_node_ids:
+                        self.visjs_nodes.append({
+                            "id": desc_nid,
+                            "label": _truncate(field_info.description),
+                            "color": _ATTR_VAL_NODE_COLOR,
+                            "shape": "ellipse",
+                            "node_kind": "description",
+                        })
+                        existing_node_ids.add(desc_nid)
+                    _add_edge(field_nid, desc_nid, "description")
+
+                # constraint nodes (ge, gt, le, lt, min_length, max_length, multiple_of)
+                for meta in getattr(field_info, "metadata", []):
+                    for attr in ("ge", "gt", "le", "lt", "multiple_of", "min_length", "max_length"):
+                        val = getattr(meta, attr, None)
+                        if val is not None:
+                            constraint_nid = f"{field_nid}#constraint_{attr}"
+                            if constraint_nid not in existing_node_ids:
+                                self.visjs_nodes.append({
+                                    "id": constraint_nid,
+                                    "label": str(val),
+                                    "color": _ATTR_VAL_NODE_COLOR,
+                                    "shape": "ellipse",
+                                    "node_kind": "constraint",
+                                })
+                                existing_node_ids.add(constraint_nid)
+                            _add_edge(field_nid, constraint_nid, attr)
+
+        # ── HasType edges from all instances to their class ───────────
+        all_node_ids = {n["id"] for n in self.visjs_nodes}
+        for entity in self.entity_list:
+            cls_name = type(entity).__name__
+            if cls_name not in self.entity_types:
+                continue
+            cls_nid = _cls_node_id(self.entity_types[cls_name])
+            instance_iri = str(entity.get_iri())
+            if instance_iri not in all_node_ids or cls_nid not in all_node_ids:
+                continue
+            _add_edge(instance_iri, cls_nid, "HasType", color=_HAS_TYPE_EDGE_COLOR)
 
     def _sync_entity_to_visjs(self, entity: LinkedBaseModel) -> None:
         """Sync a single entity's data to its corresponding visjs node.
@@ -951,11 +1524,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     node["color"] = self._get_color_for_type(entity_type_name)
                 break
 
-    def _full_sync_after_edit(self) -> None:
+    def _full_sync_after_edit(self, replace_nodes: bool = False) -> None:
         """Perform full sync of all data structures after entity edit.
 
         Ensures consistency between LinkedBaseModel instances, RDF graph,
         and visualization (nodes and edges).
+
+        Args:
+            replace_nodes: When True, replace the entire node list (removes stale nodes
+                such as old literal nodes). When False, use update_nodes to preserve
+                positions for entity edits where no nodes are added/removed.
         """
         # Rebuild RDF graph
         self._rebuild_rdf_graph()
@@ -972,8 +1550,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
             print("Reapplying active visualization mappings after edit...")
             self._apply_all_mappings()
 
-        # Update visnetwork - use update_nodes for proper reactivity
-        self.visnetwork_panel.update_nodes(self.visjs_nodes)
+        # Update visnetwork — replace_nodes removes stale nodes; update_nodes preserves positions
+        if replace_nodes:
+            self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        else:
+            self.visnetwork_panel.update_nodes(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
 
         # Refresh tables if displayed
@@ -1107,122 +1688,91 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             traceback.print_exc()
 
+    def _on_node_created(self, node_data: dict[str, Any]) -> None:
+        """Pin a freshly placed node and store its position for later entity creation.
+
+        Called after the user clicks in the canvas during addNodeMode.
+        The node already exists in vis-network's DataSet at this point, so
+        update_nodes() with fixed=True takes immediate effect.
+        """
+        node_id = node_data.get("id")
+        x = node_data.get("x")
+        y = node_data.get("y")
+        if node_id is None:
+            return
+        # Pin the temp node so it doesn't drift while the user fills the form
+        self.visnetwork_panel.update_nodes([{"id": node_id, "x": x, "y": y, "fixed": True}])
+        # Store position so on_new_entity_save can place the entity node here
+        if not hasattr(self, "_pending_node_positions"):
+            self._pending_node_positions: dict[Any, dict] = {}
+        self._pending_node_positions[node_id] = {"x": x, "y": y}
+
     def on_nodes_duplicated(self, duplicated_nodes: list[dict[str, Any]]) -> None:
         """Callback when nodes are duplicated via Ctrl+drag.
 
-        Creates new OO-LD entities for each duplicated node.
-
-        Args:
-            duplicated_nodes: list of duplicated node dicts from JavaScript
+        Creates a deep copy of each entity with a new UUID and "<name> (copy)" label.
+        The JS side passes the *duplicated* node dict (temp ID), not the original IRI,
+        so we look up the source entity by label + type.
         """
         try:
-            print(f"Nodes duplicated: {len(duplicated_nodes)} nodes")
+            self._save_state()  # save BEFORE mutations so undo restores the pre-copy state
 
             for dup_node in duplicated_nodes:
-                print(f"  Duplicated node: id={dup_node.get('id')}, label={dup_node.get('label')}")
-
-                # Get entity type from node metadata
-                entity_type_name = dup_node.get("entity_type", "Entity")
-
+                entity_type_name = dup_node.get("entity_type", "")
                 if entity_type_name not in self.entity_types:
-                    print(f"Warning: Unknown entity type '{entity_type_name}', skipping")
                     continue
 
                 entity_type = self.entity_types[entity_type_name]
-
-                # Generate unique name for the new entity
                 base_name = dup_node.get("label", "Copy")
                 unique_name = self._generate_unique_name(base_name)
 
-                # Find the direct parent entity to copy properties from
-                # This should be the entity represented by the node being duplicated
-                parent_entity = None
-                dup_node_id = dup_node.get("id")
+                # dup_node.id is a JS-generated temp ID, not an IRI — find source by name
+                parent_entity: Optional[LinkedBaseModel] = None
+                for entity in self.entity_list:
+                    if (
+                        type(entity).__name__ == entity_type_name
+                        and hasattr(entity, "name")
+                        and entity.name == base_name
+                    ):
+                        parent_entity = entity
+                        break
 
-                # First try to find by ID (this is the IRI of the node being duplicated)
-                if dup_node_id and dup_node_id in self.entity_dict:
-                    parent_entity = self.entity_dict[dup_node_id]
-                    print(f"  Found parent entity by ID: {parent_entity.name}")
-                else:
-                    # Fall back to finding by exact name match
-                    for entity in self.entity_list:
-                        if (
-                            type(entity).__name__ == entity_type_name
-                            and hasattr(entity, "name")
-                            and entity.name == base_name
-                        ):
-                            parent_entity = entity
-                            print(f"  Found parent entity by name: {parent_entity.name}")
-                            break
-
-                # Create new entity
                 if parent_entity is not None:
-                    # Get parent IRI for initialized_from tracking (tracks direct parent, not ancestor)
-                    parent_iri = str(parent_entity.get_iri())
-
-                    # Generate new UUID for the duplicated entity
                     new_uuid = str(uuid.uuid4())
-
-                    # Use JSON roundtrip for reliable deep copying
-                    # This ensures the parent entity is never modified
-                    entity_json = parent_entity.model_dump_json(exclude={"id", "__iris__"})
-                    entity_data = json.loads(entity_json)
-
-                    # Update with new values for the copy
+                    entity_data = json.loads(parent_entity.model_dump_json(exclude={"id", "__iris__"}))
                     entity_data["uuid"] = new_uuid
                     entity_data["name"] = unique_name
-                    entity_data["initialized_from"] = parent_iri  # Points to direct parent
-                    # Clear id so it gets regenerated from the new uuid
                     entity_data["id"] = ""
-
-                    # Create new entity
+                    entity_data["initialized_from"] = str(parent_entity.get_iri())
                     new_entity = entity_type(**entity_data)
-                    print(f"  ✓ Copied entity from {parent_entity.name} to {unique_name}")
-                    print(f"    uuid: {new_uuid}")
-                    print(f"    initialized_from: {parent_iri}")
-
-                    # Verify parent wasn't modified
-                    if hasattr(parent_entity, "initialized_from") and parent_entity.initialized_from == parent_iri:
-                        print("  ⚠ WARNING: Parent entity may have been modified!")
                 else:
-                    # Create minimal entity with just the name and uuid
-                    new_uuid = str(uuid.uuid4())
-                    new_entity = entity_type(uuid=new_uuid, name=unique_name)
-                    print("  Created minimal entity (no original found)")
-                    print(f"    uuid: {new_uuid}")
+                    new_entity = entity_type(uuid=str(uuid.uuid4()), name=unique_name)
 
-                # Get the new entity's IRI
                 new_iri = str(new_entity.get_iri())
-
-                # Add to entity structures
                 self.entity_list.append(new_entity)
                 self.entity_dict[new_iri] = new_entity
 
-                # Create and add new visjs node
                 new_visjs_node = {
                     "id": new_iri,
                     "label": unique_name,
                     "shape": "ellipse",
                     "entity_type": entity_type_name,
                     "color": self._get_color_for_type(entity_type_name),
-                    # Preserve position from duplicated node
                     "x": dup_node.get("x"),
                     "y": dup_node.get("y"),
                     "fixed": dup_node.get("fixed", True),
                 }
+                # Must add to _full_visjs_nodes: _rebuild_visjs_edges starts from that list.
                 self.visjs_nodes.append(new_visjs_node)
+                self._full_visjs_nodes.append(dict(new_visjs_node))
 
-                print(f"  Created new {entity_type_name}: {unique_name} -> {new_iri}")
+                # Keep new node visible when expansion mode is active
+                if self._visible_node_ids is not None:
+                    self._visible_node_ids.add(new_iri)
 
-            # Save state after duplication
-            self._save_state()
-
-            # Invalidate property cache since entities changed
             self._available_properties = None
-
-            # Full sync to update RDF graph, edges, and visualization
-            self._full_sync_after_edit()
-            print(f"Duplication complete. Total nodes: {len(self.visjs_nodes)}")
+            # replace_nodes=True removes the phantom temp node the JS side injected
+            self._full_sync_after_edit(replace_nodes=True)
 
         except Exception as e:
             print(f"Error duplicating nodes: {e}")
@@ -2113,11 +2663,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if hasattr(entity, "name"):
                 existing_names.add(entity.name)
 
-        # Try base_name_copy, base_name_copy_2, etc.
-        candidate = f"{base_name}_copy"
+        # Try "base_name (copy)", "base_name (copy 2)", etc.
+        candidate = f"{base_name} (copy)"
         counter = 2
         while candidate in existing_names:
-            candidate = f"{base_name}_copy_{counter}"
+            candidate = f"{base_name} (copy {counter})"
             counter += 1
 
         return candidate
@@ -2229,7 +2779,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 schema=entity_type.export_schema(),
                 width=700,
                 height=500,
-                mode="code",  # Use code mode for better typing experience
+                mode="tree",
             )
 
             # Save button
@@ -2280,19 +2830,26 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.entity_list.append(new_entity)
             self.entity_dict[entity_iri] = new_entity
 
-            # Create visjs node for the new entity
+            # Create visjs node for the new entity, preserving the cursor position if available
             node_label = entity_data.get("name", entity_iri)
             entity_type_name = entity_type.__name__
+            pending_pos = {}
+            if hasattr(self, "_pending_node_positions") and hasattr(self, "_new_entity_node_id"):
+                pending_pos = self._pending_node_positions.pop(self._new_entity_node_id, {})
             new_visjs_node = {
                 "id": entity_iri,
                 "label": node_label,
                 "shape": "ellipse",
                 "entity_type": entity_type_name,  # metadata for duplication
                 "color": self._get_color_for_type(entity_type_name),
+                **({k: v for k, v in pending_pos.items() if v is not None}),
+                **({"fixed": True} if pending_pos else {}),
             }
             self.visjs_nodes.append(new_visjs_node)
+            self._full_visjs_nodes.append(dict(new_visjs_node))
 
-            print(f"Created new entity with IRI: {entity_iri}")
+            if self._visible_node_ids is not None:
+                self._visible_node_ids.add(entity_iri)
 
             # Save state after entity creation
             self._save_state()
@@ -2301,7 +2858,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._available_properties = None
 
             # Full sync to update RDF graph and edges
-            self._full_sync_after_edit()
+            self._full_sync_after_edit(replace_nodes=True)
 
             # Clear the creation UI and show success message
             self.oold_detail_col.clear()
