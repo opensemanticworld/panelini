@@ -54,3 +54,16 @@ import xml.etree.ElementTree as ET  # noqa: E402
 def validate_drawio_xml(xml: str) -> None:
     """Raise ``xml.etree.ElementTree.ParseError`` if ``xml`` is not parseable."""
     ET.fromstring(xml)  # noqa: S314
+
+
+import urllib.parse  # noqa: E402
+
+
+def make_viewer_html(xml: str) -> str:
+    """Return an iframe HTML snippet rendering ``xml`` via the drawio web viewer.
+
+    The XML is URL-encoded into the URL fragment (``#R<encoded>``).
+    """
+    encoded = urllib.parse.quote(xml, safe="")
+    src = f"https://viewer.diagrams.net/?lightbox=1&highlight=0000ff&edit=_blank#R{encoded}"
+    return f'<iframe src="{src}" width="100%" height="100%" frameborder="0"></iframe>'

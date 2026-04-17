@@ -56,3 +56,20 @@ def test_validate_drawio_xml_raises_on_malformed():
     malformed = (FIXTURES / "malformed.drawio").read_text()
     with pytest.raises(ET.ParseError):
         validate_drawio_xml(malformed)
+
+
+from examples.panels.ai.drawai_beautify import make_viewer_html  # noqa: E402
+
+
+def test_make_viewer_html_returns_iframe_with_encoded_xml():
+    html = make_viewer_html("<mxfile/>")
+    assert "<iframe" in html
+    assert "viewer.diagrams.net" in html
+    # URL-encoded "<mxfile/>"
+    assert "%3Cmxfile%2F%3E" in html
+
+
+def test_make_viewer_html_empty_xml_returns_empty_iframe_src():
+    html = make_viewer_html("")
+    assert "<iframe" in html
+    assert "#R" in html  # fragment present but empty
