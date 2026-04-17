@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from PIL import Image
+from PIL import Image, PngImagePlugin
 
 
 def extract_xml_from_drawio_png(data: bytes) -> str:
@@ -33,3 +33,16 @@ def extract_xml_from_drawio_png(data: bytes) -> str:
             msg = "No 'mxfile' tEXt chunk found — not a drawio PNG."
             raise ValueError(msg) from None
         return text["mxfile"]
+
+
+def embed_xml_into_drawio_png(original: bytes, new_xml: str) -> bytes:
+    """Return a new PNG identical to ``original`` except the ``mxfile``
+    tEXt chunk is replaced with ``new_xml``.
+    """
+    with Image.open(BytesIO(original)) as img:
+        img.load()
+        meta = PngImagePlugin.PngInfo()
+        meta.add_text("mxfile", new_xml)
+        out = BytesIO()
+        img.save(out, "PNG", pnginfo=meta)
+        return out.getvalue()
