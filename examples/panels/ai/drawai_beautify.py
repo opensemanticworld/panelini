@@ -46,3 +46,11 @@ def embed_xml_into_drawio_png(original: bytes, new_xml: str) -> bytes:
         out = BytesIO()
         img.save(out, "PNG", pnginfo=meta)
         return out.getvalue()
+
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+
+def validate_drawio_xml(xml: str) -> None:
+    """Raise ``xml.etree.ElementTree.ParseError`` if ``xml`` is not parseable."""
+    ET.fromstring(xml)  # noqa: S314

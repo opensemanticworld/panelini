@@ -41,3 +41,18 @@ def test_embed_produces_valid_png():
     original = (FIXTURES / "diagram.drawio.png").read_bytes()
     out_bytes = embed_xml_into_drawio_png(original, "<mxfile/>")
     assert out_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+from examples.panels.ai.drawai_beautify import validate_drawio_xml  # noqa: E402
+
+
+def test_validate_drawio_xml_passes_valid():
+    validate_drawio_xml("<mxfile><diagram/></mxfile>")  # no exception
+
+
+def test_validate_drawio_xml_raises_on_malformed():
+    malformed = (FIXTURES / "malformed.drawio").read_text()
+    with pytest.raises(ET.ParseError):
+        validate_drawio_xml(malformed)
