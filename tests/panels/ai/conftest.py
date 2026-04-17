@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import panel as pn
 import pytest
 
 # Skip the entire directory when langchain is not installed
@@ -91,3 +92,21 @@ def mock_ai_interface(sample_provider: ProviderConfig) -> Any:
     iface.get_response = AsyncMock(return_value="mock response")
     iface.get_response_with_tools = AsyncMock(return_value={"text": "mock tool response", "tool_calls": []})
     return iface
+
+
+PORT = [6100]  # offset from jsoneditor (6000) to avoid port conflicts
+
+
+@pytest.fixture
+def port():
+    PORT[0] += 1
+    return PORT[0]
+
+
+@pytest.fixture(autouse=True)
+def server_cleanup():
+    """Clean up Panel server state after each test."""
+    try:
+        yield
+    finally:
+        pn.state.reset()

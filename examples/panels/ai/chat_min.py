@@ -17,4 +17,5 @@ load_dotenv()  # load .env if present
 
 app = Panelini(title="Panelini AI Chat", use_ai=True)
 
-serve(app.servable(), title="Panelini AI Chat", port=5006)
+if __name__ == "__main__":
+    serve(app.servable(), title="Panelini AI Chat", port=5006)

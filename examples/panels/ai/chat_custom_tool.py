@@ -8,7 +8,7 @@ Prerequisites
 1. ``pip install panelini[ai]``
 2. Set the required environment variables for your chosen provider
    (see ``src/panelini/panels/ai/default_config.yml``).
-3. Run this script: ``python examples/panels/ai/ai_chat_custom_tool.py``
+3. Run this script: ``python examples/panels/ai/chat_custom_tool.py``
 """
 
 from typing import Literal
@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from panelini import Panelini
 from panelini.panels.ai import AiChat
 
 load_dotenv()  # load .env if present
@@ -135,6 +136,9 @@ chat = AiChat(
     tools=[local_storage_tool],
 )
 
-app = pn.Row(*chat.main_objects)
+app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
+app.main_set(objects=[pn.Row(*chat.main_objects)])
+app.sidebar_set(objects=chat.sidebar_objects)
 
-pn.serve(app, title="AI Chat with Custom Tool", port=5007)
+if __name__ == "__main__":
+    pn.serve(app.servable(), title="AI Chat with Custom Tool", port=5007)

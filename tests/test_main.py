@@ -90,6 +90,21 @@ def test_panelini_classvar_content_background_image():
     assert instance_str.content_background_image == content_background_image_str
 
 
+def test_panelini_classvar_background_images_none():
+    """Test that setting background images to None skips base64 CSS injection."""
+    css_before = len(config.raw_css)
+    instance = Panelini(
+        header_background_image=None,
+        content_background_image=None,
+    )
+    assert instance.header_background_image is None
+    assert instance.content_background_image is None
+    # No base64 background-image CSS rules should have been added
+    new_css = config.raw_css[css_before:]
+    for rule in new_css:
+        assert "background-image: url(data:image/" not in rule
+
+
 def test_panelini_classvar_static_dir():
     """Test the assets as static directory."""
     instance = Panelini(static_dir="/assets")

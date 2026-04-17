@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -15,6 +16,13 @@ from panelini.panels.ai.tools.basic_tools import (
 pytestmark = pytest.mark.ai
 
 
+def _run_async(coro_func, *args, **kwargs):
+    """Run an async function in a fresh thread to avoid event-loop conflicts
+    with Playwright (which leaves a running loop in the main thread)."""
+    with ThreadPoolExecutor(1) as pool:
+        return pool.submit(lambda: asyncio.run(coro_func(*args, **kwargs))).result()
+
+
 class TestGetCurrentTimeTool:
     def test_returns_formatted_time(self) -> None:
         result = get_current_time_tool._run()
@@ -25,7 +33,7 @@ class TestGetCurrentTimeTool:
         assert "Current time (US/Eastern):" in result
 
     def test_async_run(self) -> None:
-        result = asyncio.run(get_current_time_tool._arun())
+        result = _run_async(get_current_time_tool._arun)
         assert "Current time" in result
 
 
@@ -39,7 +47,7 @@ class TestUpdatePreviewTool:
         assert result.startswith("PREVIEW_UPDATE::Preview::")
 
     def test_async_run(self) -> None:
-        result = asyncio.run(update_preview_tool._arun(content="md", title="T"))
+        result = _run_async(update_preview_tool._arun, content="md", title="T")
         assert result == "PREVIEW_UPDATE::T::md"
 
 

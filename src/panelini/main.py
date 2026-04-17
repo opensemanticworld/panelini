@@ -83,13 +83,15 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     header_background_image = param.ClassSelector(
         class_=(str, Path),
         default=_HEADER_BACKGROUND_IMAGE,
-        doc="Background image for the header section.",
+        allow_None=True,
+        doc="Background image for the header section. Set to None to disable.",
     )
 
     content_background_image = param.ClassSelector(
         class_=(str, Path),
         default=_CONTENT_BACKGROUND_IMAGE,
-        doc="Background image for the content section.",
+        allow_None=True,
+        doc="Background image for the content section. Set to None to disable.",
     )
 
     static_dir = param.ClassSelector(
@@ -313,12 +315,14 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         panel.config.raw_css.append(_MAIN_CSS.read_text())
 
         # Set navbar background image
-        header_img_base64 = image_to_base64(str(self.header_background_image))
-        panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
+        if self.header_background_image is not None:
+            header_img_base64 = image_to_base64(str(self.header_background_image))
+            panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
 
         # Set content background image
-        content_img_base64 = image_to_base64(str(self.content_background_image))
-        panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
+        if self.content_background_image is not None:
+            content_img_base64 = image_to_base64(str(self.content_background_image))
+            panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
 
     def _sidebar_config_set(self) -> None:
         """Set the configuration for the sidebars."""
