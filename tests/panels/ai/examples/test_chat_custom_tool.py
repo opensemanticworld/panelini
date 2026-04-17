@@ -1,70 +1,22 @@
 """Playwright UI tests for examples/panels/ai/chat_custom_tool.py."""
 
+import importlib
 import time
-from typing import Literal
 
 import panel as pn
 import pytest
-from langchain_core.tools import BaseTool
 from playwright.sync_api import Page
-from pydantic import BaseModel, Field
-
-from panelini import Panelini
-from panelini.panels.ai import AiChat
 
 _PORT = 6320
 
 
-# ── Reproduce the custom tool from the example ──────────────────
-
-
-class LocalStorageInput(BaseModel):
-    """Input schema for the LocalStorage tool."""
-
-    action: Literal["get", "set", "update", "delete", "list"] = Field(
-        description="The operation to perform: get, set, update, delete, or list."
-    )
-    key: str | None = Field(default=None, description="The key to operate on.")
-    value: str | None = Field(default=None, description="The value to store.")
-
-
-class LocalStorageTool(BaseTool):
-    """In-memory key-value store exposed as a LangChain tool."""
-
-    name: str = "local_storage"
-    description: str = "A simple key-value store."
-    args_schema: type[BaseModel] = LocalStorageInput
-    storage: dict[str, str] = Field(default_factory=dict)
-
-    def _run(self, action: str, key: str | None = None, value: str | None = None) -> str:
-        return f"{action}: {key}={value}"
-
-    async def _arun(self, action: str, key: str | None = None, value: str | None = None) -> str:
-        return self._run(action=action, key=key, value=value)
-
-
-# ── Fixtures ─────────────────────────────────────────────────────
-
-
 @pytest.fixture(scope="module")
 def panel_server(mock_langchain):
-    """Serve the real custom-tool AiChat app with mocked LangChain."""
+    """Serve the real custom-tool example module with mocked LangChain."""
     p1, p2 = mock_langchain
     with p1, p2:
-        chat = AiChat(
-            system_message="You are a helpful assistant with access to a local storage tool.",
-            tools=[LocalStorageTool()],
-        )
-        app = Panelini(
-            title="AI Chat with Custom Tool",
-            sidebar_enabled=True,
-            header_background_image=None,
-            content_background_image=None,
-        )
-        app.main_set(objects=[pn.Row(*chat.main_objects)])
-        app.sidebar_set(objects=chat.sidebar_objects)
-
-        server = pn.serve(app.servable(), port=_PORT, threaded=True, show=False)
+        module = importlib.reload(importlib.import_module("examples.panels.ai.chat_custom_tool"))
+        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT
         server.stop()
@@ -81,9 +33,6 @@ def ready_page(browser, panel_server):
     yield page
     page.goto("about:blank")
     context.close()
-
-
-# ── Tests ────────────────────────────────────────────────────────
 
 
 def test_custom_tool_renders(ready_page: Page):

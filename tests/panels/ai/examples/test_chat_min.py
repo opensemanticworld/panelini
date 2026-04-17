@@ -1,28 +1,22 @@
 """Playwright UI tests for examples/panels/ai/chat_min.py."""
 
+import importlib
 import time
 
 import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from panelini import Panelini
-
 _PORT = 6310
 
 
 @pytest.fixture(scope="module")
 def panel_server(mock_langchain):
-    """Serve a real Panelini(use_ai=True) app with mocked LangChain."""
+    """Serve the real example module with mocked LangChain."""
     p1, p2 = mock_langchain
     with p1, p2:
-        app = Panelini(
-            title="Panelini AI Chat",
-            use_ai=True,
-            header_background_image=None,
-            content_background_image=None,
-        )
-        server = pn.serve(app.servable(), port=_PORT, threaded=True, show=False)
+        module = importlib.reload(importlib.import_module("examples.panels.ai.chat_min"))
+        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT
         server.stop()
