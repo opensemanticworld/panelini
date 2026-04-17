@@ -13,6 +13,7 @@
 :titlesonly:
 :maxdepth: 3
 
+panelini.panels.ai
 panelini.panels.jsoneditor
 panelini.panels.visnetwork
 ```

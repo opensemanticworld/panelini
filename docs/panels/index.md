@@ -1,6 +1,35 @@
 # Panels
 
-Panels are **independent, standalone components** that can be used in any Panel application -- with or without the Panelini framework. They are designed for maximum reusability.
+Panels are **independent, standalone components** that can be used in any Panel application — with or without the Panelini framework. They're designed for maximum reusability.
+
+::::{grid} 1 1 2 2
+:gutter: 3
+
+:::{grid-item-card} JsonEditor
+:link: jsoneditor
+:link-type: doc
+JSON-Schema driven form editor. Dynamic schemas, theming, bi-directional value sync.
+:::
+
+:::{grid-item-card} VisNetwork
+:link: visnetwork
+:link-type: doc
+Interactive physics-simulated graph with edit modes, drag-drop files, and event callbacks.
+:::
+
+:::{grid-item-card} GraphDetailTool
+:link: graph_detail_tool
+:link-type: doc
+High-level workspace that composes VisNetwork + JsonEditor with a detail pane.
+:::
+
+:::{grid-item-card} AiChat
+:link: ai
+:link-type: doc
+LangChain-powered chat panel with multi-provider support, tools, and live preview.
+:::
+
+::::
 
 ```{mermaid}
 graph LR

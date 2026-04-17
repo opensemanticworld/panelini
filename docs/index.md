@@ -1,123 +1,149 @@
-# 📊 panelini 🐍
+---
+hide-toc: true
+---
 
-[![opensemanticworld.github.io/panelini/](https://img.shields.io/badge/panelini-docs-blue
-)](https://opensemanticworld.github.io/panelini/)
-[![PyPI Version](https://img.shields.io/pypi/v/panelini)](https://pypi.org/project/panelini/)
+# panelini
+
+[![PyPI](https://img.shields.io/pypi/v/panelini)](https://pypi.org/project/panelini/)
 [![Release](https://img.shields.io/github/v/release/opensemanticworld/panelini)](https://github.com/opensemanticworld/panelini/releases)
-[![Build status](https://img.shields.io/github/actions/workflow/status/opensemanticworld/panelini/main.yml?branch=main)](https://github.com/opensemanticworld/panelini/actions/workflows/main.yml?query=branch%3Amain)
+[![Build](https://img.shields.io/github/actions/workflow/status/opensemanticworld/panelini/main.yml?branch=main)](https://github.com/opensemanticworld/panelini/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/opensemanticworld/panelini/branch/main/graph/badge.svg)](https://codecov.io/gh/opensemanticworld/panelini)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)](https://img.shields.io/github/commit-activity/m/opensemanticworld/panelini)
-[![License](https://img.shields.io/github/license/opensemanticworld/panelini)](https://github.com/opensemanticworld/panelini/blob/fa449c31d48088bbdbf14072746bb68360131ddb/LICENSE)
+[![License](https://img.shields.io/github/license/opensemanticworld/panelini)](https://github.com/opensemanticworld/panelini/blob/main/LICENSE)
 
-[![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/ceb5e9ca820f6706653255bdf9ab8db6ed6c5e83/img/panelinibanner.png)](https://github.com/opensemanticworld/panelini)
-
-``panelini`` is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, this package offers an easy-to-use solution that enhances productivity and aesthetics.
-
-[![Panelini Banner](https://raw.githubusercontent.com/opensemanticworld/panelini/7e8e0748df02ad05cfe1b22617a7ee00e813f6ae/img/panelini-min.svg)](https://github.com/opensemanticworld/panelini)
-
-## 📦 Table of Contents
-
-- [📄 Features](#-features)
-- [🚀 Install](#-install)
-- [💥 Usage](#-usage)
-- [🛞 Commands](#-commands)
-- [🦥 Authors](#-authors)
-- [📜 Content Attribution](#-content-attribution)
-
-## 📄 Features
-
-- **Easy Setup:** Quickly get started with minimal configuration.
-- **Beautiful Layouts:** Pre-designed, aesthetically pleasing layouts that can be customized to fit your needs.
-- **Dynamic Content:** Efficiently manage and display dynamic content using robust Python Panel components.
-- **Extensible:** Easily extend and integrate with other Python libraries and tools.
-- **Published on PyPI:** Install effortlessly using pip.
-
-## 🚀 Install
-
-Recommended
-
-```bash
-uv add panelini
+```{image} https://raw.githubusercontent.com/opensemanticworld/panelini/ceb5e9ca820f6706653255bdf9ab8db6ed6c5e83/img/panelinibanner.png
+:alt: Panelini Banner
+:align: center
+:class: only-light
 ```
 
-or use pip
+**A beautiful, batteries-included dashboard framework for [HoloViz Panel](https://panel.holoviz.org/).**
+
+panelini gives you a responsive, production-ready layout — header, sidebars, main area, footer — plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
+
+---
+
+## Why panelini?
+
+::::{grid} 1 1 3 3
+:gutter: 3
+
+:::{grid-item-card} Beautiful out of the box
+:columns: 12 12 4 4
+Responsive layout, sensible defaults, warm colour palette. No CSS wrestling before your first demo.
+:::
+
+:::{grid-item-card} Panel-native
+:columns: 12 12 4 4
+Every region accepts any `panel` object. Bring your own widgets, plots, and reactive state — panelini just composes the shell.
+:::
+
+:::{grid-item-card} Reusable panels
+:columns: 12 12 4 4
+Standalone `JsonEditor`, `VisNetwork`, `GraphDetailTool`, and `AiChat` components — usable with or without panelini.
+:::
+
+::::
+
+---
+
+## Install
 
 ```bash
+uv add panelini            # recommended
+# or
 pip install panelini
 ```
 
-## 💥 Usage
+With the AI chat extras:
 
-A minimal example to run ``Panelini`` can be found in the `examples/panelini_min.py` file.
-Below is a simple code snippet to get you started:
+```bash
+uv add "panelini[ai]"
+```
+
+## Hello, panelini
 
 ```python
 import panel as pn
 from panelini import Panelini
 
-# Create an instance of Panelini
-app = Panelini(
-    title="📊 Welcome to Panelini! 🖥️",
-    # main = main_objects # init objects here
-)
-# Or set objects outside
-app.main_set(
-    # Use panel components to build your layout
-    objects=[
-        pn.Card(
-            title="Set complete main objects",
-            objects=["Some content goes here"],
-            width=300,
-            max_height=200,
-        )
-    ]
-)
-# Servable for debugging using command
-# panel serve <panelini_min.py --dev
+app = Panelini(title="👋 Hello panelini")
+app.main_set(objects=[pn.pane.Markdown("## Your first dashboard")])
 app.servable()
-
-if __name__ == "__main__":
-    # Serve app as you would in panel
-    pn.io.server.serve(app, port=2233)
 ```
 
-> See [examples directory](https://github.com/opensemanticworld/panelini/tree/main/examples) for more usage scenarios.
-
-## 🛞 Commands
-
-Panel command to serve with static content
+Run it:
 
 ```bash
-panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src/panelini/assets" --ico-path src/panelini/assets/favicon.ico
+panel serve app.py --dev
 ```
 
-> When using `panel serve`, make sure to specify the correct paths for your static assets and favicon.
+That's it — you now have a branded, responsive dashboard at `http://localhost:5006`.
 
-## 🦥 Authors
+---
+
+## Where to next?
+
+::::{grid} 1 1 2 2
+:gutter: 3
+
+:::{grid-item-card} 🚀 Getting started
+:link: getting_started/index
+:link-type: doc
+Install, build your first app, learn the layout regions.
+:::
+
+:::{grid-item-card} 🧪 Examples
+:link: examples/index
+:link-type: doc
+Walkthroughs of every example in `examples/panels/` — AI chat, JSON editor, network graphs.
+:::
+
+:::{grid-item-card} 🧭 Architecture
+:link: architecture
+:link-type: doc
+How the layout, panels, and components fit together. Data-flow diagrams.
+:::
+
+:::{grid-item-card} 📚 API reference
+:link: modules
+:link-type: doc
+Handwritten overview plus the full auto-generated API.
+:::
+
+::::
+
+---
+
+## Authors
 
 - [Andreas Räder](https://github.com/raederan)
 - [Linus Schenk](https://github.com/cptnsloww)
 - [Matthias A. Popp](https://github.com/MatPoppFHG)
 - [Simon Stier](https://github.com/simontaurus)
 
-## 📜 Content Attribution
-
-The authors initially generated the logo and banner for this repository using DALL-E 3 and later modified it to better align with the project's vision.
+The logo and banner were generated with DALL·E 3 and refined by hand.
 
 ```{toctree}
 :maxdepth: 2
 :caption: Getting Started
 :hidden:
 
-self
+getting_started/index
+getting_started/installation
+getting_started/quickstart
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Architecture
+:caption: Examples
 :hidden:
 
-architecture
+examples/index
+examples/ai_chat_min
+examples/ai_chat_custom_tool
+examples/ai_chat_multi_tab
+examples/jsoneditor
+examples/visnetwork
 ```
 
 ```{toctree}
@@ -130,9 +156,10 @@ panels/index
 
 ```{toctree}
 :maxdepth: 2
-:caption: Components
+:caption: Design
 :hidden:
 
+architecture
 components/index
 ```
 
