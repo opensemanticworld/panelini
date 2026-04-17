@@ -12,6 +12,7 @@ import panel as pn
 from oold.model import LinkedBaseModel
 from pydantic import ConfigDict, Field, model_validator
 from rdflib import Graph as RDFGraph
+from rdflib.namespace import RDF
 from rdflib.term import Literal as RDFLiteral
 from rdflib.term import URIRef
 
@@ -49,7 +50,15 @@ def _ann_label(ann: Any) -> str:
 
 
 def _cls_node_id(cls: type) -> str:
-    """Stable visjs node ID for a class, distinct from instance IRIs."""
+    """Stable visjs node ID for a class: IRI from model_config if declared, else 'class:<Name>'."""
+    try:
+        extra = cls.model_config.get("json_schema_extra", {})  # type: ignore[attr-defined]
+        if isinstance(extra, dict):
+            iri = extra.get("iri")
+            if iri:
+                return str(iri)
+    except AttributeError:
+        pass
     return f"class:{cls.__name__}"
 
 
@@ -285,13 +294,6 @@ class OOLDGraphDetailTool(GraphDetailTool):
             print(f"Parsing entity {element} with IRI {element.get_iri()} into RDF graph")
             self.rdf_graph.parse(data=element.to_jsonld(), format="json-ld")  ## appends elements
 
-        # Compute which node IDs are visible (None = show all).
-        # Must be called after RDF graph is built so policy BFS can query it.
-        self._visible_node_ids: Optional[set[str]] = self._compute_initial_visible_node_ids()
-
-        # Save initial state (after _visible_node_ids is set)
-        self._save_state()
-
         ### transform python-classes/instances to visjs nodes/edges
         self.visjs_nodes = []
         self.visjs_edges = []
@@ -360,6 +362,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Store the complete (fully-expanded) graph for expand-menu computation
         self._full_visjs_nodes: list[dict] = [dict(n) for n in self.visjs_nodes]
         self._full_visjs_edges: list[dict] = [dict(e) for e in self.visjs_edges]
+
+        # Compute visibility after _full_visjs_edges is built so policy BFS can
+        # traverse any edge label (IsA, HasType, knows, …) generically.
+        self._visible_node_ids: Optional[set[str]] = self._compute_initial_visible_node_ids()
+
+        # Save initial state (after _visible_node_ids is set)
+        self._save_state()
 
         # Apply visibility filter (no-op when _visible_node_ids is None)
         self._apply_visibility_filter_inplace()
@@ -990,9 +999,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Return the initial set of visible node IDs based on expansion_policy.
 
         Returns None when no policy is set (means: show all nodes).
-        Returns a set[str] of entity IRIs when a policy restricts the initial view.
-        Class/field/type nodes are NOT included — they start hidden when a policy is set
-        and can be revealed via right-click expansion.
+        Returns a set[str] of node IDs when a policy restricts the initial view.
+        May include class node IDs (e.g. 'class:Entity') when the policy BFS visits them.
         """
         if self.expansion_policy is None:
             return None
@@ -1004,16 +1012,21 @@ class OOLDGraphDetailTool(GraphDetailTool):
         return self._apply_single_policy(self.expansion_policy)
 
     def _apply_single_policy(self, policy: "SingleNodeExpansionPolicy") -> set[str]:
-        """BFS expansion from a root entity along the configured relation steps."""
+        """BFS expansion from a root node along the configured relation steps."""
         root = policy.root_node
-        if not isinstance(root, LinkedBaseModel):
-            return set()
-        root_iri = str(root.get_iri())
-        if root_iri not in self.entity_dict:
+        if isinstance(root, LinkedBaseModel):
+            root_id = str(root.get_iri())
+        elif isinstance(root, type):
+            root_id = _cls_node_id(root)
+        else:
             return set()
 
-        visible: set[str] = {root_iri}
-        frontier: set[str] = {root_iri}
+        full_node_ids = {n["id"] for n in self._full_visjs_nodes}
+        if root_id not in full_node_ids:
+            return set()
+
+        visible: set[str] = {root_id}
+        frontier: set[str] = {root_id}
 
         for step in policy.expansion_steps:
             new_frontier: set[str] = set()
@@ -1023,8 +1036,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if step.iter_limit is not None and iterations >= step.iter_limit:
                     break
                 found: set[str] = set()
-                for iri in current:
-                    found |= self._get_neighbors_via_relations(iri, step.relations)
+                for nid in current:
+                    found |= self._get_neighbors_via_relations(nid, step.relations)
                 new_nodes = found - visible
                 visible |= new_nodes
                 new_frontier = new_nodes
@@ -1034,14 +1047,29 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         return visible
 
-    def _get_neighbors_via_relations(self, iri: str, relations: list[str]) -> set[str]:
-        """Return IRIs of entities reachable from iri via any of the given relation labels."""
+    def _get_neighbors_via_relations(self, node_id: str, relations: list[str]) -> set[str]:
+        """Return IDs of nodes reachable from node_id via any of the given relations.
+
+        Relations prefixed with '-' are traversed in reverse (incoming edges).
+        Works on _full_visjs_edges so it covers instance-level AND class-hierarchy edges
+        without any label-specific special-casing.
+        """
         result: set[str] = set()
-        for s, p, o in self.rdf_graph:
-            if str(s) == iri:
-                label = str(p).split("/")[-1].split("#")[-1]
-                if label in relations and str(o) in self.entity_dict:
-                    result.add(str(o))
+        full_node_ids = {n["id"] for n in self._full_visjs_nodes}
+        for relation in relations:
+            inverse = relation.startswith("-")
+            label = relation[1:] if inverse else relation
+            for edge in self._full_visjs_edges:
+                if edge.get("label") != label:
+                    continue
+                if not inverse and edge.get("from") == node_id:
+                    target = str(edge.get("to", ""))
+                    if target in full_node_ids:
+                        result.add(target)
+                elif inverse and edge.get("to") == node_id:
+                    source = str(edge.get("from", ""))
+                    if source in full_node_ids:
+                        result.add(source)
         return result
 
     # ===== RDF → visjs edge building =====
@@ -1059,13 +1087,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Append RDF-derived edges (and literal nodes) to self.visjs_nodes / self.visjs_edges.
 
         For each triple (s, p, o) where s is in source_ids:
+        - rdf:type triples: skip (handled by _build_class_graph as HasType edges).
         - Literal o: create an orange literal node (ID = <entity_iri>#<field_name>) + add edge.
-        - URIRef o in source_ids: add edge between known entities.
-        - External URI: skip (rdf:type IRIs, context IRIs, etc. would clutter the graph).
+        - URIRef o in source_ids or matching a known class node ID: add edge.
+        - Other external URI: skip (would clutter the graph).
         """
         existing_node_ids = {n["id"] for n in self.visjs_nodes}
+        class_node_ids: set[str] = {_cls_node_id(cls) for cls in (self.entity_types or {}).values()}
         for s, p, o in self.rdf_graph:
             if str(s) not in source_ids:
+                continue
+            if p == RDF.type:
                 continue
             pred_label = str(p).split("/")[-1].split("#")[-1]
             if isinstance(o, RDFLiteral):
@@ -1085,7 +1117,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     "label": pred_label,
                     "arrows": "to",
                 })
-            elif str(o) in source_ids:
+            elif str(o) in source_ids or str(o) in class_node_ids:
                 self.visjs_edges.append({
                     "from": str(s),
                     "to": str(o),

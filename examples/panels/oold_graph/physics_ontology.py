@@ -19,9 +19,9 @@ Instances
 ---------
 unit_circle    - Circle with r=0.3
 unit_rect      - Rectangle 1x1
-disk           - PhysicalObject wrapping a Circle shape
+a_circle           - PhysicalObject wrapping a Circle shape
 block          - PhysicalObject wrapping a Rectangle shape
-disk_inertia   - MomentOfInertia for the disk
+disk_inertia   - MomentOfInertia for the a_circle
 block_pat      - ParallelAxisTheorem for the block
 """
 
@@ -30,7 +30,13 @@ import uuid
 import panel as pn
 from pydantic import ConfigDict, Field
 
-from panelini.panels.oold_graph_tool.oold_graph_tool import Entity, OOLDGraphConfig, OOLDGraphDetailTool
+from panelini.panels.oold_graph_tool.oold_graph_tool import (
+    Entity,
+    ExpansionStep,
+    OOLDGraphConfig,
+    OOLDGraphDetailTool,
+    SingleNodeExpansionPolicy,
+)
 
 pn.extension("tabulator")
 pn.extension("jsoneditor")
@@ -128,16 +134,16 @@ class MomentOfInertia(Entity):
                 "https://example.com/1976950e-68bd-43a0-af80-c0f9a2293045",
                 {
                     "formula": {"@id": "ex:hasFormula"},
-                    "object_name": {"@id": "ex:refersToObject"},
+                    "geometry": {"@id": "ex:refersToGeometry", "@type": "@id"},
                 },
             ],
             "iri": "https://example.com/moment_of_inertia",
-            "defaultProperties": ["type", "name", "formula", "object_name"],
+            "defaultProperties": ["type", "name", "formula", "geometry"],
         }
     )
     type: str = "https://example.com/moment_of_inertia"
     formula: str = Field(default="", description="Mathematical formula, e.g. I = m*r^2/2")
-    object_name: str = Field(default="", description="Name of the physical object")
+    geometry: str = Field(default="", description="Name of the physical object")
 
 
 class ParallelAxisTheorem(Entity):
@@ -148,12 +154,12 @@ class ParallelAxisTheorem(Entity):
             "@context": [
                 "https://example.com/1976950e-68bd-43a0-af80-c0f9a2293045",
                 {
-                    "object_name": {"@id": "ex:refersToObject"},
+                    "geometry": {"@id": "ex:refersToObject"},
                     "distance": {"@id": "ex:hasDistance"},
                 },
             ],
             "iri": "https://example.com/parallel_axis_theorem",
-            "defaultProperties": ["type", "name", "object_name", "distance"],
+            "defaultProperties": ["type", "name", "geometry", "distance"],
         }
     )
     type: str = "https://example.com/parallel_axis_theorem"
@@ -166,7 +172,7 @@ class ParallelAxisTheorem(Entity):
 unit_circle = Circle(uuid=str(uuid.uuid4()), name="Unit Circle", radius=1.0)
 unit_rect = Rectangle(uuid=str(uuid.uuid4()), name="Unit Rectangle", width=1.0, height=1.0)
 
-disk = Circle(uuid=str(uuid.uuid4()), name="Disk (r=0.3)", radius=0.3)
+a_circle = Circle(uuid=str(uuid.uuid4()), name="Disk (r=0.3)", radius=0.3)
 block = Rectangle(uuid=str(uuid.uuid4()), name="Block (0.4x0.2)", width=0.4, height=0.2)
 
 disk_obj = PhysicalObject(uuid=str(uuid.uuid4()), name="Disk", mass=2.5)
@@ -176,8 +182,9 @@ disk_inertia = MomentOfInertia(
     uuid=str(uuid.uuid4()),
     name="Disk Inertia",
     formula="I = m*r^2 / 2",
-    object_name="Disk",
+    geometry=Circle.model_config["json_schema_extra"]["iri"],
 )
+
 block_pat = ParallelAxisTheorem(
     uuid=str(uuid.uuid4()),
     name="Block PAT",
@@ -190,7 +197,7 @@ block_pat = ParallelAxisTheorem(
 entity_list = [
     unit_circle,
     unit_rect,
-    disk,
+    a_circle,
     block,
     disk_obj,
     block_obj,
@@ -213,6 +220,14 @@ config = OOLDGraphConfig(
     name="Physics Ontology",
     entity_list=entity_list,
     entity_types=entity_types,
+    expansion_policy=SingleNodeExpansionPolicy(
+        uuid=str(uuid.uuid4()),
+        name="Alice policy",
+        root_node=Entity,
+        expansion_steps=[
+            ExpansionStep(uuid=str(uuid.uuid4()), name="step1", relations=["-HasType", "-IsA"], iter_limit=10)
+        ],
+    ),
 )
 graph_detail_panel = OOLDGraphDetailTool(config=config)
 

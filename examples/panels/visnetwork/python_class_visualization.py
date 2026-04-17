@@ -372,7 +372,7 @@ if __name__ == "__main__":
         ParallelAxisTheorem,
         ("circle", Circle()),
         ("rectangle", Rectangle()),
-        ("disk", disk),
+        ("a_circle", disk),
         ("block", block),
     ]
 
