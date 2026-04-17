@@ -35,3 +35,48 @@ def mock_langchain():
 def server_cleanup():
     """Override parent fixture — don't reset Panel state mid-run."""
     yield
+
+
+@pytest.fixture(scope="module")
+def mock_anthropic_sdk():
+    """Patch the Anthropic SDK + the config lookup used by drawai_beautify.
+
+    Returns a tuple of (config_patch, anthropic_patch, canned_xml). The UI test
+    applies both patches under ``with`` before reloading the example module.
+
+    The config patch supplies an ``anthropic`` provider (the drawai example
+    looks it up by key in its ``_anthropic_credentials_from_config`` helper).
+    This is separate from ``mock_langchain``'s patch, which targets the
+    backend's ``load_config`` reference with a generic "test" provider.
+    """
+    from unittest.mock import AsyncMock
+
+    canned_xml = "<mxfile><diagram id='beautified'/></mxfile>"
+
+    block = MagicMock()
+    block.text = canned_xml
+    response = MagicMock()
+    response.content = [block]
+
+    anthropic_client = MagicMock()
+    anthropic_client.messages = MagicMock()
+    anthropic_client.messages.create = AsyncMock(return_value=response)
+
+    fake_provider = ProviderConfig(
+        key="anthropic",
+        display_name="Anthropic",
+        client_type="anthropic",
+        env_vars={"api_key": "fake-key", "endpoint": "https://localhost"},
+        models=(ModelConfig(name="Claude Opus 4.7", value="anthropic/claude-opus-4-7"),),
+    )
+    fake_config = AppConfig(providers={"anthropic": fake_provider})
+
+    config_patch = patch(
+        "examples.panels.ai.drawai_beautify.load_config",
+        return_value=fake_config,
+    )
+    anthropic_patch = patch(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        return_value=anthropic_client,
+    )
+    return config_patch, anthropic_patch, canned_xml
