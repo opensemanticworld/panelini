@@ -136,3 +136,100 @@ async def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
     assert "Beautified" in result
     assert state.beautified_xml == canned
     mock_client.messages.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_no_file_loaded(monkeypatch):
+    state = DrawAiState()  # current_xml is ""
+    # anthropic client should never be called
+    mock_client = _make_mock_anthropic_client("<mxfile/>")
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        lambda **kwargs: mock_client,
+    )
+
+    tool = BeautifyDrawioTool(state=state, api_key="test-key")
+    result = await tool._arun(intent="whatever")
+
+    assert "No file loaded" in result
+    assert state.beautified_xml == ""
+    mock_client.messages.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_invalid_xml_response(monkeypatch):
+    state = DrawAiState(current_xml="<mxfile/>")
+    mock_client = _make_mock_anthropic_client("not valid xml at all")
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        lambda **kwargs: mock_client,
+    )
+
+    tool = BeautifyDrawioTool(state=state, api_key="test-key")
+    result = await tool._arun(intent="fix it")
+
+    assert "did not parse as XML" in result
+    assert state.beautified_xml == ""  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_anthropic_error(monkeypatch):
+    state = DrawAiState(current_xml="<mxfile/>")
+
+    failing_client = MagicMock()
+    failing_client.messages = MagicMock()
+    failing_client.messages.create = AsyncMock(side_effect=RuntimeError("rate limit exceeded"))
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        lambda **kwargs: failing_client,
+    )
+
+    tool = BeautifyDrawioTool(state=state, api_key="test-key")
+    result = await tool._arun(intent="fix it")
+
+    assert "Anthropic API error" in result
+    assert "rate limit exceeded" in result
+    assert state.beautified_xml == ""
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_strips_code_fences(monkeypatch):
+    state = DrawAiState(current_xml="<mxfile/>")
+    canned = "```xml\n<mxfile><diagram id='x'/></mxfile>\n```"
+    mock_client = _make_mock_anthropic_client(canned)
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        lambda **kwargs: mock_client,
+    )
+
+    tool = BeautifyDrawioTool(state=state, api_key="test-key")
+    await tool._arun(intent="whatever")
+
+    assert state.beautified_xml == "<mxfile><diagram id='x'/></mxfile>"
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_passes_credentials(monkeypatch):
+    """Tool forwards api_key and base_url from config into AsyncAnthropic."""
+    state = DrawAiState(current_xml="<mxfile/>")
+    mock_client = _make_mock_anthropic_client("<mxfile><diagram id='x'/></mxfile>")
+
+    captured_kwargs: dict = {}
+
+    def _capture(**kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_client
+
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        _capture,
+    )
+
+    tool = BeautifyDrawioTool(
+        state=state,
+        api_key="my-key",
+        base_url="https://proxy.example.com",
+    )
+    await tool._arun(intent="whatever")
+
+    assert captured_kwargs == {"api_key": "my-key", "base_url": "https://proxy.example.com"}
