@@ -73,6 +73,7 @@ dev = [
     "sphinx-design>=0.6.0",
     "sphinxcontrib-mermaid>=1.0.0",
     "pytest-playwright>=0.7.2",
+    "pytest-asyncio>=0.23",
 ]
 
 [build-system]

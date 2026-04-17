@@ -99,3 +99,40 @@ def test_drawai_state_format_selector_rejects_invalid():
     state = DrawAiState()
     with pytest.raises(ValueError):
         state.current_format = "bmp"
+
+
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+
+from examples.panels.ai.drawai_beautify import BeautifyDrawioTool  # noqa: E402
+
+
+def _make_mock_anthropic_client(text: str) -> MagicMock:
+    """Build a mock ``anthropic.AsyncAnthropic`` instance whose
+    ``messages.create`` returns one text block with the given content.
+    """
+    block = MagicMock()
+    block.text = text
+    response = MagicMock()
+    response.content = [block]
+    client = MagicMock()
+    client.messages = MagicMock()
+    client.messages.create = AsyncMock(return_value=response)
+    return client
+
+
+@pytest.mark.asyncio
+async def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
+    state = DrawAiState(current_xml="<mxfile><diagram/></mxfile>")
+    canned = "<mxfile><diagram id='new'/></mxfile>"
+    mock_client = _make_mock_anthropic_client(canned)
+    monkeypatch.setattr(
+        "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
+        lambda **kwargs: mock_client,
+    )
+
+    tool = BeautifyDrawioTool(state=state, api_key="test-key", base_url="https://localhost")
+    result = await tool._arun(intent="tighter spacing")
+
+    assert "Beautified" in result
+    assert state.beautified_xml == canned
+    mock_client.messages.create.assert_awaited_once()
