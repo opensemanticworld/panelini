@@ -73,3 +73,29 @@ def test_make_viewer_html_empty_xml_returns_empty_iframe_src():
     html = make_viewer_html("")
     assert "<iframe" in html
     assert "#R" in html  # fragment present but empty
+
+
+from examples.panels.ai.drawai_beautify import DrawAiState  # noqa: E402
+
+
+def test_drawai_state_defaults():
+    state = DrawAiState()
+    assert state.current_bytes == b""
+    assert state.current_xml == ""
+    assert state.current_format is None
+    assert state.current_filename == ""
+    assert state.beautified_xml == ""
+
+
+def test_drawai_state_beautified_xml_triggers_watcher():
+    state = DrawAiState()
+    seen = []
+    state.param.watch(lambda e: seen.append(e.new), "beautified_xml")
+    state.beautified_xml = "<mxfile/>"
+    assert seen == ["<mxfile/>"]
+
+
+def test_drawai_state_format_selector_rejects_invalid():
+    state = DrawAiState()
+    with pytest.raises(ValueError):
+        state.current_format = "bmp"

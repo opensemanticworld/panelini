@@ -67,3 +67,18 @@ def make_viewer_html(xml: str) -> str:
     encoded = urllib.parse.quote(xml, safe="")
     src = f"https://viewer.diagrams.net/?lightbox=1&highlight=0000ff&edit=_blank#R{encoded}"
     return f'<iframe src="{src}" width="100%" height="100%" frameborder="0"></iframe>'
+
+
+import param  # noqa: E402
+
+
+class DrawAiState(param.Parameterized):
+    """Reactive state shared by the upload handler, the beautify tool,
+    and the compare-column widgets.
+    """
+
+    current_bytes = param.Bytes(default=b"")
+    current_xml = param.String(default="")
+    current_format = param.Selector(objects=["png", "drawio", None], default=None)
+    current_filename = param.String(default="")
+    beautified_xml = param.String(default="")
