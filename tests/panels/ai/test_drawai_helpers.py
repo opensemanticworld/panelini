@@ -27,7 +27,58 @@ def test_extract_xml_from_plain_png_raises():
         extract_xml_from_drawio_png(data)
 
 
-from examples.panels.ai.drawai_beautify import embed_xml_into_drawio_png  # noqa: E402
+def test_extract_xml_from_urlencoded_chunk_returns_decoded_xml():
+    """drawio's other export mode writes the mxfile chunk URL-encoded
+    (starts with ``%3C``). The extractor must detect and decode it."""
+    data = (FIXTURES / "diagram_urlencoded.drawio.png").read_bytes()
+    xml = extract_xml_from_drawio_png(data)
+    assert xml.lstrip().startswith("<mxfile")
+    assert "%3C" not in xml
+    assert "Hello" in xml
+
+
+from examples.panels.ai.drawai_beautify import (  # noqa: E402
+    embed_xml_into_drawio_png,
+    rewrap_drawio_xml,
+    unwrap_drawio_xml,
+)
+
+
+def _make_compressed_mxfile(model_xml: str) -> str:
+    """Build a drawio `<mxfile>` whose `<diagram>` carries `model_xml`
+    encoded the same way drawio itself writes (base64 + raw deflate +
+    URL-encoded). Uses the example's own helpers via a round-trip."""
+    # Wrap minimal XML, then rewrap to compress the inner model.
+    skeleton = '<mxfile host="test"><diagram id="d" name="n"><placeholder/></diagram></mxfile>'
+    return rewrap_drawio_xml(model_xml, skeleton)
+
+
+def test_unwrap_passes_through_plain_mxgraphmodel():
+    plain = "<mxGraphModel><root/></mxGraphModel>"
+    editable, wrapper = unwrap_drawio_xml(plain)
+    assert editable == plain
+    assert wrapper is None
+
+
+def test_unwrap_passes_through_uncompressed_mxfile():
+    uncompressed = '<mxfile><diagram id="d" name="n"><mxGraphModel><root/></mxGraphModel></diagram></mxfile>'
+    editable, wrapper = unwrap_drawio_xml(uncompressed)
+    assert editable == uncompressed
+    assert wrapper is None
+
+
+def test_unwrap_and_rewrap_compressed_roundtrip():
+    model_xml = "<mxGraphModel><root><mxCell id='2' value='Hello'/></root></mxGraphModel>"
+    wrapped = _make_compressed_mxfile(model_xml)
+
+    editable, wrapper = unwrap_drawio_xml(wrapped)
+    assert editable == model_xml  # LLM sees the plain mxGraphModel
+    assert wrapper == wrapped
+
+    beautified = "<mxGraphModel><root><mxCell id='2' value='World'/></root></mxGraphModel>"
+    rewrapped = rewrap_drawio_xml(beautified, wrapper)
+    editable2, _ = unwrap_drawio_xml(rewrapped)
+    assert editable2 == beautified  # beautified content survives the roundtrip
 
 
 def test_embed_then_extract_roundtrip():
@@ -73,6 +124,15 @@ def test_make_viewer_html_empty_xml_returns_empty_iframe_src():
     html = make_viewer_html("")
     assert "<iframe" in html
     assert "#R" in html  # fragment present but empty
+
+
+def test_make_viewer_html_wraps_bare_mxgraphmodel_in_mxfile():
+    """Drawio viewer needs an ``<mxfile>`` root; wrap bare ``<mxGraphModel>``
+    so it renders instead of showing 'error loading file'."""
+    html = make_viewer_html("<mxGraphModel><root/></mxGraphModel>")
+    # URL-encoded "<mxfile>" wrapping should appear in the iframe src
+    assert "%3Cmxfile%3E" in html
+    assert "%3Cmxfile%3E%3Cdiagram" in html
 
 
 from examples.panels.ai.drawai_beautify import DrawAiState  # noqa: E402

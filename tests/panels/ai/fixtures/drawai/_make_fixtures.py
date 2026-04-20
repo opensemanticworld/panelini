@@ -3,13 +3,15 @@
 Run from anywhere:
     python tests/panels/ai/fixtures/drawai/_make_fixtures.py
 
-Generates four files alongside this script:
-    diagram.drawio.png  - valid drawio PNG (uncompressed XML in mxfile tEXt)
-    diagram.drawio      - plain XML matching the PNG's embedded XML
-    corrupt.drawio.png  - plain PNG, no mxfile chunk (upload-error fixture)
-    malformed.drawio    - invalid XML (parse-error fixture)
+Generates five files alongside this script:
+    diagram.drawio.png          - valid drawio PNG (raw XML in mxfile tEXt)
+    diagram_urlencoded.drawio.png - valid drawio PNG (URL-encoded XML in mxfile tEXt)
+    diagram.drawio              - plain XML matching the PNG's embedded XML
+    corrupt.drawio.png          - plain PNG, no mxfile chunk (upload-error fixture)
+    malformed.drawio            - invalid XML (parse-error fixture)
 """
 
+import urllib.parse
 from pathlib import Path
 
 from PIL import Image, PngImagePlugin
@@ -49,6 +51,8 @@ def make_plain_png(out_path: Path, size: tuple[int, int] = (200, 100)) -> None:
 
 def main() -> None:
     make_drawio_png(DIAGRAM_XML, HERE / "diagram.drawio.png")
+    # Covers drawio's other export mode where the mxfile chunk is percent-encoded.
+    make_drawio_png(urllib.parse.quote(DIAGRAM_XML), HERE / "diagram_urlencoded.drawio.png")
     (HERE / "diagram.drawio").write_text(DIAGRAM_XML, encoding="utf-8")
     make_plain_png(HERE / "corrupt.drawio.png")
     (HERE / "malformed.drawio").write_text("<not>valid</xml>", encoding="utf-8")

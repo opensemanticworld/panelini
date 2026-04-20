@@ -15,6 +15,10 @@ Run:
 
 from __future__ import annotations
 
+import base64
+import urllib.parse
+import xml.etree.ElementTree as ET
+import zlib
 from io import BytesIO
 
 from PIL import Image, PngImagePlugin
@@ -22,6 +26,10 @@ from PIL import Image, PngImagePlugin
 
 def extract_xml_from_drawio_png(data: bytes) -> str:
     """Return the XML stored in a drawio PNG's ``mxfile`` tEXt chunk.
+
+    drawio writes the chunk in one of two forms depending on the export
+    options used: raw XML (starts with ``<mxfile``) or URL-encoded XML
+    (starts with ``%3C``). Both are returned as raw XML here.
 
     Raises:
         ValueError: if the PNG has no ``mxfile`` chunk.
@@ -32,7 +40,10 @@ def extract_xml_from_drawio_png(data: bytes) -> str:
         if "mxfile" not in text:
             msg = "No 'mxfile' tEXt chunk found — not a drawio PNG."
             raise ValueError(msg) from None
-        return text["mxfile"]
+        raw = text["mxfile"]
+        if not raw.lstrip().startswith("<"):
+            raw = urllib.parse.unquote(raw)
+        return raw
 
 
 def embed_xml_into_drawio_png(original: bytes, new_xml: str) -> bytes:
@@ -48,22 +59,84 @@ def embed_xml_into_drawio_png(original: bytes, new_xml: str) -> bytes:
         return out.getvalue()
 
 
-import xml.etree.ElementTree as ET  # noqa: E402
-
-
 def validate_drawio_xml(xml: str) -> None:
     """Raise ``xml.etree.ElementTree.ParseError`` if ``xml`` is not parseable."""
     ET.fromstring(xml)  # noqa: S314
 
 
-import urllib.parse  # noqa: E402
+def _decompress_drawio_inner(diagram_text: str) -> str:
+    """Reverse drawio's <diagram> payload encoding: base64 → raw deflate → URL-decode."""
+    raw = base64.b64decode(diagram_text)
+    inflated = zlib.decompress(raw, -15).decode("utf-8")
+    return urllib.parse.unquote(inflated)
+
+
+def _compress_drawio_inner(model_xml: str) -> str:
+    """Forward drawio's <diagram> payload encoding: URL-encode → raw deflate → base64."""
+    url_encoded = urllib.parse.quote(model_xml, safe="").encode("ascii")
+    compressor = zlib.compressobj(level=9, wbits=-15)
+    compressed = compressor.compress(url_encoded) + compressor.flush()
+    return base64.b64encode(compressed).decode("ascii")
+
+
+def unwrap_drawio_xml(xml: str) -> tuple[str, str | None]:
+    """Return (editable_xml, wrapper_template).
+
+    drawio exports come in three flavors:
+      1. ``<mxGraphModel>…</mxGraphModel>`` — already editable, returned as-is
+         with ``wrapper_template=None``.
+      2. ``<mxfile>…<diagram>…<mxGraphModel>…</mxGraphModel>…</diagram></mxfile>``
+         (uncompressed) — returned as-is with ``wrapper_template=None``; the
+         whole outer XML is already editable by the LLM.
+      3. ``<mxfile>…<diagram>BASE64_DEFLATED_URLENCODED</diagram></mxfile>``
+         (compressed) — returns the decompressed ``<mxGraphModel>`` plus the
+         original outer XML so ``rewrap_drawio_xml`` can re-compress and
+         substitute after beautification.
+    """
+    if not xml.lstrip().startswith("<mxfile"):
+        return xml, None
+    try:
+        root = ET.fromstring(xml)  # noqa: S314
+    except ET.ParseError:
+        return xml, None
+    diagram = root.find("diagram")
+    if diagram is None or not diagram.text:
+        return xml, None
+    inner = diagram.text.strip()
+    if inner.startswith("<"):
+        return xml, None
+    try:
+        editable = _decompress_drawio_inner(inner)
+    except (ValueError, zlib.error, UnicodeDecodeError):
+        return xml, None
+    return editable, xml
+
+
+def rewrap_drawio_xml(editable: str, wrapper: str) -> str:
+    """Compress ``editable`` and substitute into ``wrapper``'s <diagram> element."""
+    compressed = _compress_drawio_inner(editable)
+    root = ET.fromstring(wrapper)  # noqa: S314
+    diagram = root.find("diagram")
+    if diagram is None:
+        msg = "wrapper has no <diagram> element"
+        raise ValueError(msg)
+    diagram.text = compressed
+    return ET.tostring(root, encoding="unicode")
 
 
 def make_viewer_html(xml: str) -> str:
     """Return an iframe HTML snippet rendering ``xml`` via the drawio web viewer.
 
     The XML is URL-encoded into the URL fragment (``#R<encoded>``).
+
+    The drawio viewer expects an ``<mxfile>`` root (the "drawio file" format)
+    and shows "error loading file" for a bare ``<mxGraphModel>``. Wrap bare
+    models in a minimal ``<mxfile>`` shell so both the editable form (what
+    the LLM returns) and the saved file form render consistently.
     """
+    stripped = xml.lstrip()
+    if stripped.startswith("<mxGraphModel"):
+        xml = f'<mxfile><diagram id="d" name="Page-1">{xml}</diagram></mxfile>'
     encoded = urllib.parse.quote(xml, safe="")
     src = f"https://viewer.diagrams.net/?lightbox=1&highlight=0000ff&edit=_blank#R{encoded}"
     return f'<iframe src="{src}" width="100%" height="100%" frameborder="0"></iframe>'
@@ -78,10 +151,11 @@ class DrawAiState(param.Parameterized):
     """
 
     current_bytes = param.Bytes(default=b"")
-    current_xml = param.String(default="")
+    current_xml = param.String(default="")  # editable (decompressed if input was compressed)
+    current_outer_wrapper = param.String(default="")  # original <mxfile>…</mxfile> when input was compressed
     current_format = param.Selector(objects=["png", "drawio", None], default=None)
     current_filename = param.String(default="")
-    beautified_xml = param.String(default="")
+    beautified_xml = param.String(default="")  # editable beautified XML (matches current_xml shape)
 
 
 from typing import ClassVar  # noqa: E402
@@ -104,8 +178,15 @@ class BeautifyDrawioInput(BaseModel):
 
 
 _BEAUTIFY_SYSTEM_PROMPT = (
-    "You beautify drawio XML. Output valid drawio XML only, no prose, "
-    "no code fences. Preserve node IDs where possible so diffs stay meaningful."
+    "You beautify drawio diagrams. The user will send a complete "
+    "<mxGraphModel> (or <mxfile>) XML document. You MUST return the "
+    "ENTIRE modified XML document, preserving every <mxCell> — both "
+    "vertex cells and edge cells — with their original ids, parents, "
+    "sources, targets, and values intact. "
+    "Only change visual attributes: geometry (x/y/width/height), style "
+    "strings, and whitespace. Do NOT add cells, do NOT remove cells, do "
+    "NOT rename ids, do NOT summarize, do NOT truncate. "
+    "Output raw XML only — no prose, no explanations, no markdown code fences."
 )
 
 
@@ -163,7 +244,10 @@ class BeautifyDrawioTool(BaseTool):
             client = anthropic.AsyncAnthropic(**client_kwargs)
             resp = await client.messages.create(
                 model=self.model_name,
-                max_tokens=8192,
+                # 16k headroom: typical editable mxGraphModel is 5-15k chars;
+                # lower caps were truncating mid-diagram and the model was
+                # dropping cells from its output to stay under the budget.
+                max_tokens=16384,
                 system=[
                     {
                         "type": "text",
@@ -198,10 +282,10 @@ class BeautifyDrawioTool(BaseTool):
             return f"Returned content did not parse as XML. Parse error: {e}. Please try again."
 
         self.state.beautified_xml = new_xml
-        return "Beautified — see the bottom pane. Click Download to save."
+        orig_len = len(self.state.current_xml)
+        new_len = len(new_xml)
+        return f"Beautified ({new_len} chars, was {orig_len}). See the bottom pane. Click Download to save."
 
-
-import base64  # noqa: E402
 
 import panel as pn  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
@@ -251,6 +335,10 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     chat = AiChat(system_message=_SYSTEM_MESSAGE, tools=[tool])
     # Pre-enable the beautify tool (AiChat defaults only enable get_current_time)
     chat.tool_checkboxes[tool.name]["checkbox"].value = True
+    # Drop the 330px floor so the chat can shrink to share the row with the
+    # compare column on narrower viewports (otherwise the compare column
+    # overflows to the right and needs horizontal scroll to reach).
+    chat.chat_interface.min_width = 0
 
     # ── Compare column ────────────────────────────────────────────────
     file_input = pn.widgets.FileInput(
@@ -277,13 +365,40 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         min_height=240,
         styles={"border": "1px solid #ccc"},
     )
-    download_button = pn.widgets.Button(
-        name="Download beautified",
+
+    def _build_download_bytes() -> BytesIO:
+        """Build the beautified file bytes at click time (always fresh state).
+
+        Always outputs a ``.drawio`` (plain XML) file — even when the input
+        was a ``.drawio.png``.  This avoids confusion between the original
+        PNG pixels (unchanged) and the beautified XML.  If the input was
+        compressed, we re-wrap so drawio's own compressed format is preserved;
+        otherwise the editable ``<mxGraphModel>`` is emitted directly.
+        """
+        if not state.beautified_xml:
+            return BytesIO(b"")
+        if state.current_outer_wrapper:
+            xml_out = rewrap_drawio_xml(state.beautified_xml, state.current_outer_wrapper)
+        else:
+            xml_out = state.beautified_xml
+        return BytesIO(xml_out.encode("utf-8"))
+
+    def _download_filename() -> str:
+        stem = state.current_filename
+        for suffix in (".drawio.png", ".drawio"):
+            if stem.endswith(suffix):
+                stem = stem[: -len(suffix)]
+                break
+        return f"{stem}_beautified.drawio"
+
+    download_widget = pn.widgets.FileDownload(
+        callback=_build_download_bytes,
+        filename=_download_filename(),
         button_type="primary",
+        label="Download beautified",
         disabled=True,
         sizing_mode="stretch_width",
     )
-    download_link = pn.pane.HTML("", sizing_mode="stretch_width")
 
     # ── Reactivity ────────────────────────────────────────────────────
 
@@ -301,11 +416,11 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     def _refresh_bottom_pane(*_: object) -> None:
         if state.beautified_xml:
             bottom_pane.object = make_viewer_html(state.beautified_xml)
-            download_button.disabled = False
+            download_widget.filename = _download_filename()
+            download_widget.disabled = False
         else:
             bottom_pane.object = "<em style='color:#999'>No beautified result yet.</em>"
-            download_button.disabled = True
-            download_link.object = ""
+            download_widget.disabled = True
 
     state.param.watch(_refresh_top_pane, ["current_bytes", "current_xml", "current_format"])
     state.param.watch(_refresh_bottom_pane, "beautified_xml")
@@ -322,16 +437,19 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
             return
         try:
             if filename.endswith(".drawio.png"):
-                xml = extract_xml_from_drawio_png(data)
+                raw_xml = extract_xml_from_drawio_png(data)
                 fmt = "png"
             elif filename.endswith(".drawio"):
-                xml = data.decode("utf-8")
+                raw_xml = data.decode("utf-8")
                 fmt = "drawio"
             else:
                 alert_pane.object = "Unsupported extension. Use .drawio or .drawio.png."
                 alert_pane.visible = True
                 return
-            validate_drawio_xml(xml)
+            validate_drawio_xml(raw_xml)
+            # If the <diagram> payload is compressed base64, unwrap so the LLM
+            # sees the actual <mxGraphModel> instead of opaque gibberish.
+            editable_xml, wrapper = unwrap_drawio_xml(raw_xml)
         except Exception as e:
             alert_pane.object = f"Could not read file: {e}"
             alert_pane.visible = True
@@ -340,7 +458,8 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         alert_pane.visible = False
         state.param.update(
             current_bytes=data,
-            current_xml=xml,
+            current_xml=editable_xml,
+            current_outer_wrapper=wrapper or "",
             current_format=fmt,
             current_filename=filename,
             beautified_xml="",
@@ -348,33 +467,16 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     file_input.param.watch(_on_upload, "value")
 
-    # ── Download handler ──────────────────────────────────────────────
-
-    def _on_download(event: object) -> None:
-        _ = event
-        if not state.beautified_xml:
-            return
-        stem = state.current_filename
-        for suffix in (".drawio.png", ".drawio"):
-            if stem.endswith(suffix):
-                stem = stem[: -len(suffix)]
-                break
-
-        if state.current_format == "png":
-            out_bytes = embed_xml_into_drawio_png(state.current_bytes, state.beautified_xml)
-            out_name = f"{stem}_beautified.drawio.png"
-            mime = "image/png"
-        else:
-            out_bytes = state.beautified_xml.encode("utf-8")
-            out_name = f"{stem}_beautified.drawio"
-            mime = "application/xml"
-
-        b64 = base64.b64encode(out_bytes).decode()
-        download_link.object = (
-            f'<a href="data:{mime};base64,{b64}" download="{out_name}">Click to download {out_name}</a>'
-        )
-
-    download_button.on_click(_on_download)
+    # `flex: 1 1 0` + `min-width: 0` is the standard flexbox trick that lets
+    # each column share the row 50/50 and collapse below its content's natural
+    # width, so the two halves always fit inside the viewport (no horizontal
+    # scroll). `overflow: hidden` on the cards catches anything inside that
+    # would otherwise punch through.
+    _HALF_COLUMN_STYLES = {
+        "flex": "1 1 0",
+        "min-width": "0",
+        "overflow": "hidden",
+    }
 
     compare_column = pn.Column(
         file_input,
@@ -383,10 +485,10 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         top_pane,
         pn.pane.Markdown("**Beautified**", margin=(5, 5, 0, 5)),
         bottom_pane,
-        download_button,
-        download_link,
+        download_widget,
         sizing_mode="stretch_both",
         min_height=600,
+        styles=_HALF_COLUMN_STYLES,
     )
 
     chat_card = pn.Card(
@@ -395,10 +497,16 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         objects=[chat.chat_interface],
         sizing_mode="stretch_both",
         min_height=600,
-        styles={"padding": "15px", "margin-right": "10px"},
+        styles={**_HALF_COLUMN_STYLES, "padding": "15px", "margin-right": "10px"},
     )
 
-    main_layout = pn.Row(chat_card, compare_column, sizing_mode="stretch_both", min_height=600)
+    main_layout = pn.Row(
+        chat_card,
+        compare_column,
+        sizing_mode="stretch_both",
+        min_height=600,
+        styles={"display": "flex", "width": "100%", "max-width": "100%", "flex-wrap": "nowrap"},
+    )
 
     app = Panelini(title="Panelini DrawAI", sidebar_enabled=True)
     app.main_set(objects=[main_layout])

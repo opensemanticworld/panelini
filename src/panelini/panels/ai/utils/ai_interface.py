@@ -22,6 +22,16 @@ from .config import ModelConfig, ProviderConfig, parse_model_value
 
 _ClientFactory = Callable[[ProviderConfig, str, float, int], BaseChatModel]
 
+# Models that reject the ``temperature`` parameter. Claude Opus 4.7 samples
+# adaptively and returns 400 "temperature is deprecated for this model" if
+# temperature is sent. Extend this set as Anthropic expands the list.
+_TEMPERATURE_FREE_MODELS = frozenset({"claude-opus-4-7"})
+
+
+def _model_supports_temperature(model_name: str) -> bool:
+    """Return False for models that reject the ``temperature`` parameter."""
+    return model_name not in _TEMPERATURE_FREE_MODELS
+
 
 def _create_anthropic_client(
     provider: ProviderConfig,
@@ -33,13 +43,16 @@ def _create_anthropic_client(
     api_key = provider.env_vars.get("api_key", "")
     endpoint = provider.env_vars.get("endpoint", "")
 
-    return ChatAnthropic(  # type: ignore[call-arg]
-        model_name=model_name,
-        temperature=temperature,
-        max_tokens_to_sample=max_tokens,
-        anthropic_api_key=api_key,
-        base_url=endpoint,
-    )
+    kwargs: dict[str, object] = {
+        "model_name": model_name,
+        "max_tokens_to_sample": max_tokens,
+        "anthropic_api_key": api_key,
+        "base_url": endpoint,
+    }
+    if _model_supports_temperature(model_name):
+        kwargs["temperature"] = temperature
+
+    return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
 
 
 def _create_azure_openai_client(
