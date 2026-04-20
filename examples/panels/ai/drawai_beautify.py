@@ -366,39 +366,13 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         styles={"border": "1px solid #ccc"},
     )
 
-    def _build_download_bytes() -> BytesIO:
-        """Build the beautified file bytes at click time (always fresh state).
-
-        Always outputs a ``.drawio`` (plain XML) file — even when the input
-        was a ``.drawio.png``.  This avoids confusion between the original
-        PNG pixels (unchanged) and the beautified XML.  If the input was
-        compressed, we re-wrap so drawio's own compressed format is preserved;
-        otherwise the editable ``<mxGraphModel>`` is emitted directly.
-        """
-        if not state.beautified_xml:
-            return BytesIO(b"")
-        if state.current_outer_wrapper:
-            xml_out = rewrap_drawio_xml(state.beautified_xml, state.current_outer_wrapper)
-        else:
-            xml_out = state.beautified_xml
-        return BytesIO(xml_out.encode("utf-8"))
-
-    def _download_filename() -> str:
-        stem = state.current_filename
-        for suffix in (".drawio.png", ".drawio"):
-            if stem.endswith(suffix):
-                stem = stem[: -len(suffix)]
-                break
-        return f"{stem}_beautified.drawio"
-
-    download_widget = pn.widgets.FileDownload(
-        callback=_build_download_bytes,
-        filename=_download_filename(),
+    download_button = pn.widgets.Button(
+        name="Download beautified",
         button_type="primary",
-        label="Download beautified",
         disabled=True,
         sizing_mode="stretch_width",
     )
+    download_link = pn.pane.HTML("", sizing_mode="stretch_width")
 
     # ── Reactivity ────────────────────────────────────────────────────
 
@@ -416,11 +390,11 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     def _refresh_bottom_pane(*_: object) -> None:
         if state.beautified_xml:
             bottom_pane.object = make_viewer_html(state.beautified_xml)
-            download_widget.filename = _download_filename()
-            download_widget.disabled = False
+            download_button.disabled = False
         else:
             bottom_pane.object = "<em style='color:#999'>No beautified result yet.</em>"
-            download_widget.disabled = True
+            download_button.disabled = True
+            download_link.object = ""
 
     state.param.watch(_refresh_top_pane, ["current_bytes", "current_xml", "current_format"])
     state.param.watch(_refresh_bottom_pane, "beautified_xml")
@@ -467,6 +441,32 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     file_input.param.watch(_on_upload, "value")
 
+    # ── Download handler ──────────────────────────────────────────────
+
+    def _on_download(event: object) -> None:
+        _ = event
+        if not state.beautified_xml:
+            return
+        stem = state.current_filename
+        for suffix in (".drawio.png", ".drawio"):
+            if stem.endswith(suffix):
+                stem = stem[: -len(suffix)]
+                break
+
+        if state.current_outer_wrapper:
+            xml_out = rewrap_drawio_xml(state.beautified_xml, state.current_outer_wrapper)
+        else:
+            xml_out = state.beautified_xml
+
+        out_bytes = xml_out.encode("utf-8")
+        out_name = f"{stem}_beautified.drawio"
+        b64 = base64.b64encode(out_bytes).decode()
+        download_link.object = (
+            f'<a href="data:application/xml;base64,{b64}" download="{out_name}">Click to download {out_name}</a>'
+        )
+
+    download_button.on_click(_on_download)
+
     # `flex: 1 1 0` + `min-width: 0` is the standard flexbox trick that lets
     # each column share the row 50/50 and collapse below its content's natural
     # width, so the two halves always fit inside the viewport (no horizontal
@@ -485,7 +485,8 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         top_pane,
         pn.pane.Markdown("**Beautified**", margin=(5, 5, 0, 5)),
         bottom_pane,
-        download_widget,
+        download_button,
+        download_link,
         sizing_mode="stretch_both",
         min_height=600,
         styles=_HALF_COLUMN_STYLES,
