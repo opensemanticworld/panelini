@@ -153,7 +153,7 @@ alice = Person(
     hobbies=[HobbyEnum.SPORTS, HobbyEnum.MUSIC],
     profession=ProfessionEnum.ENGINEER,
     age=41,
-    body_weight=68.5,
+    # body_weight=68.5,
 )
 bob = Person(
     uuid=str(uuid.uuid4()),
@@ -161,7 +161,7 @@ bob = Person(
     hobbies=[HobbyEnum.ART],
     profession=ProfessionEnum.ARTIST,
     knows=[alice],
-    age=35,
+    # age=35,
     body_weight=82.3,
 )
 charlie = Person(
@@ -171,7 +171,7 @@ charlie = Person(
     profession=ProfessionEnum.TEACHER,
     knows=[alice, bob],
     age=28,
-    body_weight=75.0,
+    #  body_weight=75.0,
 )
 david = Person(
     uuid=str(uuid.uuid4()),

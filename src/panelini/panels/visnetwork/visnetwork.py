@@ -345,6 +345,17 @@ class VisNetwork(AnyWidgetComponent):
         node_ids = {n.get("id"): n for n in nodes}
         self.nodes = [{**n, **node_ids[n.get("id")]} if n.get("id") in node_ids else n for n in self.nodes]
 
+    def remove_nodes(self, node_ids: list[Any]) -> None:
+        """Remove nodes by ID from the graph.
+
+        Args:
+            node_ids: List of node IDs to remove.
+        """
+        id_set = set(node_ids)
+        for node_id in node_ids:
+            self._send_graph_action("removeNode", {"id": node_id})
+        self.nodes = [n for n in self.nodes if n.get("id") not in id_set]
+
     def update_node_state(self, node_ids: list[Any], state: str) -> None:
         """Update the state of multiple nodes (changes border color).
 

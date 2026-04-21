@@ -30,6 +30,7 @@ _HAS_TYPE_EDGE_COLOR = "#888888"  # gray    — HasType
 
 _PRIMITIVES_OOLD = (str, int, float, bool, type(None), dict, list, tuple, set)
 _MAX_LABEL = 80
+_SKIP_FIELDS = {"type", "uuid", "id", "initialized_from"}  # fields excluded from "Create:" menu
 
 
 def _truncate(s: str) -> str:
@@ -366,6 +367,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Compute visibility after _full_visjs_edges is built so policy BFS can
         # traverse any edge label (IsA, HasType, knows, …) generically.
         self._visible_node_ids: Optional[set[str]] = self._compute_initial_visible_node_ids()
+        # None = show all edges between visible nodes; set = only edges in this set
+        self._visible_edge_keys: Optional[set[tuple]] = None
 
         # Save initial state (after _visible_node_ids is set)
         self._save_state()
@@ -478,6 +481,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
             state_snapshot = {
                 "entities": [e.model_copy(deep=True) for e in self.entity_list],
                 "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
+                "visible_edge_keys": (set(self._visible_edge_keys) if self._visible_edge_keys is not None else None),
             }
             self.undo_stack.append(state_snapshot)
 
@@ -500,6 +504,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         return {
             "entities": [e.model_copy(deep=True) for e in self.entity_list],
             "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
+            "visible_edge_keys": (set(self._visible_edge_keys) if self._visible_edge_keys is not None else None),
         }
 
     def _restore_state(self, state: dict | list) -> None:
@@ -511,10 +516,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if isinstance(state, dict):
                 entities = state["entities"]
                 self._visible_node_ids = state.get("visible_node_ids", None)
+                raw_ek = state.get("visible_edge_keys", None)
+                self._visible_edge_keys = set(raw_ek) if raw_ek is not None else None
             else:
                 # Legacy format: plain list
                 entities = state
                 # Keep _visible_node_ids as-is
+                self._visible_edge_keys = None
 
             self.entity_list = [e.model_copy(deep=True) for e in entities]
             self.entity_dict = {str(e.get_iri()): e for e in self.entity_list}
@@ -610,15 +618,21 @@ class OOLDGraphDetailTool(GraphDetailTool):
             pn.pane.Markdown(f"### Node ID: {node_id} of type {type(self.entity_dict.get(node_id)).__name__}")
         )
 
-        current_entity = self.entity_dict.get(node_id, None)
+        # For literal nodes, show the parent entity's editor instead
+        resolved_id = node_id
+        parsed = self._parent_of_literal(node_id)
+        if parsed is not None:
+            resolved_id = parsed[0]
+
+        current_entity = self.entity_dict.get(resolved_id, None)
         if current_entity is not None:
             # Display the current entity's properties in a JSON editor for easy editing
             self.current_node_oold_editor = pn.widgets.JSONEditor(
                 schema=type(current_entity).export_schema(), value=current_entity.model_dump(), mode="tree"
             )
 
-            # Store current node ID for the callback
-            self._current_single_node_id = node_id
+            # Store resolved (parent) node ID so Apply Changes targets the entity, not the literal
+            self._current_single_node_id = resolved_id
 
             # Add "Apply Changes" button
             self.single_node_apply_button = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
@@ -1128,6 +1142,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Expansion context-menu helpers =====
 
+    def _snapshot_visible_edge_keys(self) -> set[tuple]:
+        """Return (from, to, label) keys for all edges currently between visible nodes."""
+        ids = {n["id"] for n in self._full_visjs_nodes} if self._visible_node_ids is None else self._visible_node_ids
+        return {
+            (e.get("from", ""), e.get("to", ""), e.get("label", ""))
+            for e in self._full_visjs_edges
+            if e.get("from") in ids and e.get("to") in ids
+        }
+
     def _get_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
         """Return {edge_label: [target_node_id, ...]} for outgoing edges from node_id to hidden nodes."""
         if self._visible_node_ids is None:
@@ -1154,17 +1177,97 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     result.setdefault(edge.get("label", ""), []).append(source)
         return result
 
+    def _is_iri_field(self, entity: LinkedBaseModel, field_name: str) -> bool:
+        """Return True if field_name is declared as @type:@id (URI reference) in the JSON-LD context."""
+        for cls in type(entity).__mro__:
+            extra = getattr(cls, "model_config", {}).get("json_schema_extra", {})
+            if not isinstance(extra, dict):
+                continue
+            ctx = extra.get("@context", {})
+            contexts = ctx if isinstance(ctx, list) else [ctx]
+            for c in contexts:
+                if isinstance(c, dict) and field_name in c:
+                    entry = c[field_name]
+                    if isinstance(entry, dict) and entry.get("@type") == "@id":
+                        return True
+        return False
+
+    def _get_creatable_fields(self, entity_id: str) -> list[str]:
+        """Return field names that are None/empty and not internal, for the 'Create:' menu."""
+        entity = self.entity_dict.get(entity_id)
+        if entity is None:
+            return []
+        # model_dump() returns raw IRI strings for reference fields without triggering the resolver,
+        # unlike getattr() which triggers OO-LD's resolver and __dict__ which misses __iris__ storage.
+        try:
+            dumped = entity.model_dump()
+        except Exception:
+            return []
+        result = []
+        for field_name in entity.model_fields:
+            if field_name in _SKIP_FIELDS:
+                continue
+            val = dumped.get(field_name)
+            if val is None or val == "" or isinstance(val, list):
+                result.append(field_name)
+        return result
+
+    def _get_class_for_node_id(self, node_id: str) -> type | None:
+        """Return the entity type whose class node IRI matches node_id, or None."""
+        for cls in (self.entity_types or {}).values():
+            if _cls_node_id(cls) == node_id:
+                return cls
+        return None
+
+    def _get_expandable_subobject_fields(self, entity_id: str) -> list[str]:
+        """Return list-field names that have ≥1 sub-object element not yet fully visible."""
+        entity = self.entity_dict.get(entity_id)
+        if entity is None:
+            return []
+        result = []
+        for field_name in entity.model_fields:
+            if field_name in _SKIP_FIELDS:
+                continue
+            if self._field_inner_model_type(entity, field_name) is None:
+                continue
+            val = getattr(entity, field_name, None)
+            if not isinstance(val, list) or not val:
+                continue
+            # Show if any element is unregistered or hidden
+            for sub_obj in val:
+                if not hasattr(sub_obj, "get_iri"):
+                    continue
+                sub_iri = str(sub_obj.get_iri())
+                if sub_iri not in self.entity_dict or (
+                    self._visible_node_ids is not None and sub_iri not in self._visible_node_ids
+                ):
+                    result.append(field_name)
+                    break
+        return result
+
     def _expand_dict_for_node(self, node_id: str) -> dict[str, str]:
-        """Return callback_name_dict with outgoing (Expand: X) and incoming (Expand: -X) options."""
+        """Return callback_name_dict with Expand:/Create: options for an entity node."""
         outgoing = self._get_expand_options_for_node(node_id)
         incoming = self._get_inverse_expand_options_for_node(node_id)
-        if not outgoing and not incoming:
+        creatable = self._get_creatable_fields(node_id)
+        expandable_subobjs = self._get_expandable_subobject_fields(node_id)
+        is_class_node = self._get_class_for_node_id(node_id) is not None
+        if not outgoing and not incoming and not creatable and not expandable_subobjs and not is_class_node:
             return {}
-        d: dict[str, str] = {"expand_all": "Expand: All"}
+        d: dict[str, str] = {}
+        if outgoing or incoming:
+            d["expand_all"] = "Expand: All"
         for label in outgoing:
             d[f"expand_{label}"] = f"Expand: {label}"
         for label in incoming:
             d[f"expand_inv_{label}"] = f"Expand: -{label}"
+        for field_name in expandable_subobjs:
+            d[f"expand_subobj_{field_name}"] = f"Expand: {field_name}"
+        for field_name in creatable:
+            d[f"create_{field_name}"] = f"Create: {field_name}"
+        if is_class_node:
+            cls = self._get_class_for_node_id(node_id)
+            d["create_instance"] = f"Create a: {cls.__name__}"
         return d
 
     def _apply_visibility_filter_inplace(self) -> None:
@@ -1175,30 +1278,32 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         if self._visible_node_ids is None:
             self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes]
-            self.visjs_edges = [dict(e) for e in self._full_visjs_edges]
-            for node in self.visjs_nodes:
-                if node.get("node_kind") == "literal":
-                    node["callback_name_dict"] = {"edit_value": "Edit Value"}
-                else:
-                    node.pop("callback_name_dict", None)
-            return
+            candidate_edges = self._full_visjs_edges
+        else:
+            self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes if n["id"] in self._visible_node_ids]
+            visible_ids = {n["id"] for n in self.visjs_nodes}
+            candidate_edges = [
+                e for e in self._full_visjs_edges if e.get("from") in visible_ids and e.get("to") in visible_ids
+            ]
+        if self._visible_edge_keys is None:
+            self.visjs_edges = [dict(e) for e in candidate_edges]
+        else:
+            self.visjs_edges = [
+                dict(e)
+                for e in candidate_edges
+                if (e.get("from", ""), e.get("to", ""), e.get("label", "")) in self._visible_edge_keys
+            ]
 
-        self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes if n["id"] in self._visible_node_ids]
-        visible_ids = {n["id"] for n in self.visjs_nodes}
-        self.visjs_edges = [
-            dict(e) for e in self._full_visjs_edges if e.get("from") in visible_ids and e.get("to") in visible_ids
-        ]
         for node in self.visjs_nodes:
             if node.get("node_kind") == "literal":
-                node["callback_name_dict"] = {"edit_value": "Edit Value"}
+                node["callback_name_dict"] = {"edit_value": "Edit Value", "hide": "Hide", "delete": "Delete"}
             else:
                 cb = self._expand_dict_for_node(node["id"])
-                if cb:
-                    node["callback_name_dict"] = cb
-                else:
-                    node.pop("callback_name_dict", None)
+                cb["hide"] = "Hide"
+                cb["delete"] = "Delete"
+                node["callback_name_dict"] = cb
 
-    def _on_context_menu_item(self, element_type: str, element_id: Any, action_id: str) -> None:
+    def _on_context_menu_item(self, element_type: str, element_id: Any, action_id: str) -> None:  # noqa: C901
         """Handle a right-click context-menu selection on a node."""
         node_id = str(element_id)
 
@@ -1206,8 +1311,33 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._show_literal_edit_form(node_id)
             return
 
+        if action_id == "hide":
+            self._hide_node(node_id)
+            return
+
+        if action_id == "delete":
+            self._initiate_delete(node_id)
+            return
+
+        if action_id == "create_instance":
+            cls = self._get_class_for_node_id(node_id)
+            if cls is not None:
+                self._new_entity_node_id = None
+                self._show_create_entity_editor(cls)
+            return
+
+        if action_id.startswith("expand_subobj_"):
+            field_name = action_id[len("expand_subobj_") :]
+            self._expand_subobject_list(node_id, field_name)
+            return
+
+        if action_id.startswith("create_"):
+            field_name = action_id[len("create_") :]
+            self._show_property_create_form(node_id, field_name)
+            return
+
         if self._visible_node_ids is None:
-            return  # already showing everything
+            return  # expand actions only apply in expansion mode
 
         outgoing = self._get_expand_options_for_node(node_id)
         incoming = self._get_inverse_expand_options_for_node(node_id)
@@ -1215,17 +1345,20 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return
 
         added: set[str] = set()
+        expand_label: str | None = None
+        is_inverse: bool = False
         if action_id == "expand_all":
             for targets in outgoing.values():
                 added.update(targets)
             for sources in incoming.values():
                 added.update(sources)
         elif action_id.startswith("expand_inv_"):
-            label = action_id[len("expand_inv_") :]
-            added.update(incoming.get(label, []))
+            expand_label = action_id[len("expand_inv_") :]
+            is_inverse = True
+            added.update(incoming.get(expand_label, []))
         elif action_id.startswith("expand_"):
-            label = action_id[len("expand_") :]
-            added.update(outgoing.get(label, []))
+            expand_label = action_id[len("expand_") :]
+            added.update(outgoing.get(expand_label, []))
 
         if not added:
             return
@@ -1233,11 +1366,273 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Save state for undo before mutating
         self._save_state()
 
+        # Transition _visible_edge_keys: for specific-label expand, only show the
+        # edges through which nodes were expanded (suppress all others on new nodes).
+        # For expand_all, keep _visible_edge_keys as-is (None = show all; set = add all).
+        if expand_label is not None:
+            if self._visible_edge_keys is None:
+                # First specific expand: snapshot all currently visible edges
+                self._visible_edge_keys = self._snapshot_visible_edge_keys()
+            # Add only the edges matching the expand_label to/from the new nodes
+            for e in self._full_visjs_edges:
+                frm, to, lbl = e.get("from", ""), e.get("to", ""), e.get("label", "")
+                if lbl != expand_label:
+                    continue
+                if (is_inverse and frm in added) or (not is_inverse and to in added):
+                    self._visible_edge_keys.add((frm, to, lbl))
+        else:
+            # expand_all: if already tracking edges, add all edges among all visible nodes
+            if self._visible_edge_keys is not None:
+                new_visible = self._visible_node_ids | added
+                for e in self._full_visjs_edges:
+                    if e.get("from") in new_visible and e.get("to") in new_visible:
+                        self._visible_edge_keys.add((e.get("from", ""), e.get("to", ""), e.get("label", "")))
+
         self._visible_node_ids.update(added)
         self._apply_visibility_filter_inplace()
 
         self.visnetwork_panel.nodes = list(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    # ===== Sub-object list expansion =====
+
+    def _expand_subobject_list(self, entity_id: str, field_name: str) -> None:
+        """Register and reveal all sub-objects in a list field that are not yet visible."""
+        entity = self.entity_dict.get(entity_id)
+        if entity is None:
+            return
+        val = getattr(entity, field_name, None)
+        if not isinstance(val, list) or not val:
+            return
+        inner_type = self._field_inner_model_type(entity, field_name)
+        if inner_type is None:
+            return
+
+        self._save_state()
+        # Before mutating, snapshot current edges if this is the first tracked expand
+        if self._visible_edge_keys is None:
+            self._visible_edge_keys = self._snapshot_visible_edge_keys()
+
+        changed = False
+        for sub_obj in val:
+            if not hasattr(sub_obj, "get_iri"):
+                continue
+            sub_iri = str(sub_obj.get_iri())
+            if sub_iri not in self.entity_dict:
+                # Sub-object was embedded but never registered — register it now
+                self.entity_list.append(sub_obj)
+                self.entity_dict[sub_iri] = sub_obj
+                sub_type_name = inner_type.__name__
+                new_node = {
+                    "id": sub_iri,
+                    "label": getattr(sub_obj, "name", sub_iri),
+                    "shape": "ellipse",
+                    "entity_type": sub_type_name,
+                    "color": self._get_color_for_type(sub_type_name),
+                }
+                self._full_visjs_nodes.append(dict(new_node))
+                changed = True
+            if self._visible_node_ids is not None and sub_iri not in self._visible_node_ids:
+                self._visible_node_ids.add(sub_iri)
+                changed = True
+
+        if changed:
+            self._full_sync_after_edit(replace_nodes=True)
+
+    # ===== Hide / Delete =====
+
+    def _hide_node(self, node_id: str) -> None:
+        """Remove a node (and its orphaned literal children) from the visible graph."""
+        self._save_state()
+        if self._visible_node_ids is None:
+            self._visible_node_ids = {n["id"] for n in self._full_visjs_nodes}
+        # Also hide literal nodes attached to this node
+        literal_children = {
+            e["to"]
+            for e in self._full_visjs_edges
+            if e.get("from") == node_id
+            and any(n["id"] == e["to"] and n.get("node_kind") == "literal" for n in self._full_visjs_nodes)
+        }
+        self._visible_node_ids.discard(node_id)
+        self._visible_node_ids -= literal_children
+        self._apply_visibility_filter_inplace()
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    def _find_iri_references_to(self, target_iri: str) -> list[tuple[Any, str]]:
+        """Return (entity, field_name) pairs whose IRI-reference field points to target_iri."""
+        results = []
+        for entity in self.entity_list:
+            try:
+                dumped = entity.model_dump()
+            except Exception:  # noqa: S112
+                continue
+            for field_name in entity.model_fields:
+                if field_name in _SKIP_FIELDS:
+                    continue
+                if not self._is_iri_field(entity, field_name):
+                    continue
+                val = dumped.get(field_name)
+                if val == target_iri or (isinstance(val, list) and target_iri in val):
+                    results.append((entity, field_name))
+        return results
+
+    def _parent_of_literal(self, node_id: str) -> tuple[str, str] | None:
+        """Return (entity_iri, field_name) for a literal node ID, or None if not parseable."""
+        if "#" not in node_id:
+            return None
+        entity_iri, rest = node_id.rsplit("#", 1)
+        field_name = rest[len("literal_") :] if rest.startswith("literal_") else rest
+        if entity_iri in self.entity_dict and field_name in self.entity_dict[entity_iri].model_fields:
+            return entity_iri, field_name
+        return None
+
+    def _retype_to_parent_class(self, cls: type) -> str | None:
+        """Return the IRI of the nearest ancestor of cls that is still in entity_types."""
+        cls_values = set(self.entity_types.values())
+        for ancestor in cls.__mro__[1:]:
+            if ancestor in cls_values and ancestor is not cls:
+                return _cls_node_id(ancestor)
+        return None
+
+    def _initiate_delete(self, node_id: str) -> None:
+        """Dispatch to the correct delete handler based on node kind."""
+        node = next((n for n in self._full_visjs_nodes if n["id"] == node_id), None)
+        if node is None:
+            return
+        kind = node.get("node_kind")
+        if kind == "literal":
+            self._delete_literal_node(node_id)
+        elif node_id in self.entity_dict:
+            self._delete_entity_node(node_id)
+        elif self._get_class_for_node_id(node_id) is not None:
+            self._delete_class_node(node_id)
+
+    def _delete_literal_node(self, node_id: str) -> None:
+        """Delete a literal node by setting its parent field to None."""
+        parsed = self._parent_of_literal(node_id)
+        if parsed is None:
+            return
+        entity_iri, field_name = parsed
+        entity = self.entity_dict[entity_iri]
+        self._save_state()
+        setattr(entity, field_name, None)
+        self._full_sync_after_edit()
+        # Refresh the JSON editor if it is currently showing this entity
+        if hasattr(self, "current_node_oold_editor") and getattr(self, "_current_single_node_id", None) == entity_iri:
+            self.current_node_oold_editor.value = entity.model_dump()
+
+    def _delete_entity_node(self, node_id: str) -> None:
+        """Delete an entity, with confirmation if other entities reference it."""
+        refs = self._find_iri_references_to(node_id)
+        if refs:
+            self._show_delete_confirmation(
+                node_id=node_id,
+                retype_pairs=[],
+                clear_pairs=[(e, f) for e, f in refs],
+                on_confirm=lambda: self._execute_entity_delete(node_id),
+            )
+        else:
+            self._save_state()
+            self._execute_entity_delete(node_id)
+
+    def _execute_entity_delete(self, node_id: str) -> None:
+        """Remove entity from all data structures and rebuild."""
+        entity = self.entity_dict.pop(node_id, None)
+        if entity is not None and entity in self.entity_list:
+            self.entity_list.remove(entity)
+        self._full_visjs_nodes = [n for n in self._full_visjs_nodes if n["id"] != node_id]
+        if self._visible_node_ids is not None:
+            self._visible_node_ids.discard(node_id)
+        self._rebuild_visjs_edges()
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+        self.oold_detail_col.clear()
+
+    def _delete_class_node(self, node_id: str) -> None:
+        """Delete a class from entity_types, retying HasType instances and checking IRI refs."""
+        cls = self._get_class_for_node_id(node_id)
+        if cls is None:
+            return
+        parent_iri = self._retype_to_parent_class(cls)
+        # Entities whose 'type' field == this class IRI → retype to parent
+        retype_pairs: list[tuple[Any, str, str]] = []  # (entity, field_name, new_iri)
+        for entity in self.entity_list:
+            try:
+                dumped = entity.model_dump()
+            except Exception:  # noqa: S112
+                continue
+            if dumped.get("type") == node_id and parent_iri is not None:
+                retype_pairs.append((entity, "type", parent_iri))
+        # IRI-reference fields (non-type) pointing to this class
+        iri_refs = [(e, f) for e, f in self._find_iri_references_to(node_id)]
+        self._show_delete_confirmation(
+            node_id=node_id,
+            retype_pairs=retype_pairs,
+            clear_pairs=iri_refs,
+            on_confirm=lambda: self._execute_class_delete(node_id, cls, retype_pairs, iri_refs),
+        )
+
+    def _execute_class_delete(
+        self,
+        node_id: str,
+        cls: type,
+        retype_pairs: list,
+        clear_pairs: list,
+    ) -> None:
+        """Apply retype + clear, remove class from entity_types, rebuild."""
+        self._save_state()
+        for entity, field_name, new_iri in retype_pairs:
+            setattr(entity, field_name, new_iri)
+        for entity, field_name in clear_pairs:
+            setattr(entity, field_name, None)
+        # Remove from entity_types
+        self.entity_types = {k: v for k, v in (self.entity_types or {}).items() if v is not cls}
+        self._full_visjs_nodes = [n for n in self._full_visjs_nodes if n["id"] != node_id]
+        if self._visible_node_ids is not None:
+            self._visible_node_ids.discard(node_id)
+        self._rebuild_visjs_edges()
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+        self.oold_detail_col.clear()
+
+    def _show_delete_confirmation(
+        self,
+        node_id: str,
+        retype_pairs: list,
+        clear_pairs: list,
+        on_confirm: Any,
+    ) -> None:
+        """Show a confirmation panel listing what will change on delete."""
+        node = next((n for n in self._full_visjs_nodes if n["id"] == node_id), None)
+        label = node.get("label", node_id) if node else node_id
+
+        lines = [f"### Delete **{label}**\n"]
+        if retype_pairs:
+            lines.append("**The following will be retyped to the next higher class:**")
+            for entity, _field, new_iri in retype_pairs:
+                lines.append(f"- {entity.name} → `{new_iri}`")
+            lines.append("")
+        if clear_pairs:
+            lines.append("**The following references will be cleared:**")
+            for entity, field_name in clear_pairs:
+                lines.append(f"- {entity.name}.{field_name}")
+            lines.append("")
+
+        self.oold_detail_col.clear()
+        self.oold_detail_col.append(pn.pane.Markdown("\n".join(lines)))
+
+        confirm_btn = pn.widgets.Button(name="Confirm Delete", button_type="danger", width=150)
+        cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+
+        def _on_confirm(_event: Any) -> None:
+            on_confirm()
+
+        confirm_btn.on_click(_on_confirm)
+        cancel_btn.on_click(lambda _: self.oold_detail_col.clear())
+
+        self.oold_detail_col.append(pn.Row(confirm_btn, cancel_btn))
+        self.detail_tabs.active = 2
 
     # ===== Literal value editing =====
 
@@ -1333,6 +1728,160 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Literal node IDs are entity-scoped (<iri>#<field>), so the ID is stable across value changes.
         self._full_sync_after_edit()
+        self.oold_detail_col.clear()
+
+    def _field_inner_model_type(self, entity: LinkedBaseModel, field_name: str) -> type | None:
+        """Return the model class if field_name expects a sub-object (or list of sub-objects), else None."""
+        field = entity.model_fields.get(field_name)
+        if field is None:
+            return None
+        annotation = field.annotation
+        origin = getattr(annotation, "__origin__", None)
+        args = getattr(annotation, "__args__", ())
+        # Unwrap Optional/Union
+        if origin is Union:
+            annotation = next((a for a in args if a is not type(None)), annotation)
+            origin = getattr(annotation, "__origin__", None)
+            args = getattr(annotation, "__args__", ())
+        # Unwrap list
+        if origin is list and args:
+            annotation = args[0]
+        if isinstance(annotation, type) and hasattr(annotation, "model_fields"):
+            return annotation
+        return None
+
+    def _show_property_create_form(self, entity_id: str, field_name: str) -> None:
+        """Show an inline create form for a field that currently has no value.
+
+        Shows a JSON editor for sub-object fields, TextInput for literals/IRI refs.
+        """
+        entity = self.entity_dict.get(entity_id)
+        if entity is None:
+            return
+        self._create_entity_id = entity_id
+        self._create_field_name = field_name
+        self.oold_detail_col.clear()
+        self.oold_detail_col.append(pn.pane.Markdown(f"### Create **{entity.name}**.{field_name}"))
+
+        inner_type = self._field_inner_model_type(entity, field_name)
+        self._create_is_subobject = inner_type is not None
+
+        apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
+        apply_btn.on_click(self._on_property_create_apply)
+        cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+        cancel_btn.on_click(lambda _: self.oold_detail_col.clear())
+
+        if self._create_is_subobject:
+            self._create_inner_type = inner_type
+            default_values: dict[str, Any] = {}
+            if "uuid" in inner_type.model_fields:
+                default_values["uuid"] = str(uuid.uuid4())
+            if "name" in inner_type.model_fields:
+                default_values["name"] = f"New{inner_type.__name__}"
+            schema = inner_type.export_schema() if hasattr(inner_type, "export_schema") else None
+            self._create_input = pn.widgets.JSONEditor(
+                value=default_values,
+                schema=schema,
+                width=700,
+                height=400,
+                mode="tree",
+            )
+        else:
+            self._create_input = pn.widgets.TextInput(value="", name="Value", width=300)
+
+        self.oold_detail_col.append(self._create_input)
+        self.oold_detail_col.append(pn.Row(apply_btn, cancel_btn))
+        self.detail_tabs.active = 2
+
+    def _on_property_create_apply(self, event: Any) -> None:  # noqa: C901
+        """Apply a newly created field value; routes to sub-object, IRI edge, or typed literal."""
+        entity = self.entity_dict.get(getattr(self, "_create_entity_id", None))
+        field_name = getattr(self, "_create_field_name", None)
+        if entity is None or field_name is None:
+            return
+
+        self._save_state()
+
+        if getattr(self, "_create_is_subobject", False):
+            data = self._create_input.value
+            if not data:
+                return
+            inner_type = self._create_inner_type
+            try:
+                sub_obj = inner_type(**data)
+            except Exception as exc:
+                print(f"Error creating sub-object {inner_type.__name__}: {exc}")
+                return
+            # Append to list field or set scalar field
+            field = entity.model_fields[field_name]
+            annotation = field.annotation
+            origin = getattr(annotation, "__origin__", None)
+            args = getattr(annotation, "__args__", ())
+            if origin is Union:
+                inner = [a for a in args if a is not type(None)]
+                annotation = inner[0] if inner else annotation
+                origin = getattr(annotation, "__origin__", None)
+            if origin is list:
+                current = list(getattr(entity, field_name) or [])
+                setattr(entity, field_name, [*current, sub_obj])
+            else:
+                setattr(entity, field_name, sub_obj)
+
+            # Register sub-object as a top-level entity so the graph shows it as a node
+            sub_iri = str(sub_obj.get_iri())
+            self.entity_list.append(sub_obj)
+            self.entity_dict[sub_iri] = sub_obj
+            sub_type_name = inner_type.__name__
+            new_node = {
+                "id": sub_iri,
+                "label": data.get("name", sub_iri),
+                "shape": "ellipse",
+                "entity_type": sub_type_name,
+                "color": self._get_color_for_type(sub_type_name),
+            }
+            self._full_visjs_nodes.append(dict(new_node))
+            if self._visible_node_ids is not None:
+                self._visible_node_ids.add(sub_iri)
+
+            self._full_sync_after_edit(replace_nodes=True)
+            self.oold_detail_col.clear()
+            return
+
+        raw = self._create_input.value.strip()
+        if not raw:
+            return
+
+        is_iri = self._is_iri_field(entity, field_name)
+        known_ids = set(self.entity_dict.keys()) | {_cls_node_id(c) for c in (self.entity_types or {}).values()}
+
+        if is_iri and raw in known_ids:
+            # URI-reference field pointing to a known node — store the IRI
+            field = entity.model_fields[field_name]
+            annotation = field.annotation
+            origin = getattr(annotation, "__origin__", None)
+            args = getattr(annotation, "__args__", ())
+            if origin is Union:
+                inner = [a for a in args if a is not type(None)]
+                annotation = inner[0] if inner else annotation
+                origin = getattr(annotation, "__origin__", None)
+            setattr(entity, field_name, [raw] if origin is list else raw)
+            new_node_id = raw  # the target entity/class node
+        else:
+            try:
+                new_val = self._deserialize_property_value(entity, field_name, raw)
+                setattr(entity, field_name, new_val)
+            except Exception as exc:
+                print(f"Error creating {entity.name}.{field_name}: {exc}")
+                return
+            # Literal node ID is stable: <entity_iri>#<field_name>
+            new_node_id = f"{entity.get_iri()!s}#{field_name}"
+
+        # Reveal the new node before syncing so the visibility filter includes it
+        if self._visible_node_ids is not None:
+            self._visible_node_ids.add(new_node_id)
+
+        # replace_nodes=True so vis-network's DataSet gets the new node added, not just updated
+        self._full_sync_after_edit(replace_nodes=True)
         self.oold_detail_col.clear()
 
     # ===== Synchronization =====
@@ -1567,11 +2116,25 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 such as old literal nodes). When False, use update_nodes to preserve
                 positions for entity edits where no nodes are added/removed.
         """
+        # Snapshot edge keys before rebuild so we can detect genuinely new edges
+        old_edge_keys: Optional[set[tuple]] = None
+        if self._visible_edge_keys is not None:
+            old_edge_keys = {(e.get("from", ""), e.get("to", ""), e.get("label", "")) for e in self._full_visjs_edges}
+
         # Rebuild RDF graph
         self._rebuild_rdf_graph()
 
         # Rebuild edges
         self._rebuild_visjs_edges()
+
+        # Auto-reveal edges that are new since the snapshot and have both endpoints visible
+        if old_edge_keys is not None:
+            visible = self._visible_node_ids or {n["id"] for n in self._full_visjs_nodes}
+            for e in self._full_visjs_edges:
+                key = (e.get("from", ""), e.get("to", ""), e.get("label", ""))
+                if key not in old_edge_keys and e.get("from") in visible and e.get("to") in visible:
+                    self._visible_edge_keys.add(key)  # type: ignore[union-attr]
+            self._apply_visibility_filter_inplace()
 
         # Sync node labels
         for entity in self.entity_list:
@@ -1582,7 +2145,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
             print("Reapplying active visualization mappings after edit...")
             self._apply_all_mappings()
 
-        # Update visnetwork — replace_nodes removes stale nodes; update_nodes preserves positions
+        # Remove any literal nodes that no longer exist after the rebuild
+        current_node_ids = {n["id"] for n in self.visjs_nodes}
+        stale_literal_ids = [
+            n["id"]
+            for n in self.visnetwork_panel.nodes
+            if n.get("node_kind") == "literal" and n["id"] not in current_node_ids
+        ]
+        if stale_literal_ids:
+            self.visnetwork_panel.remove_nodes(stale_literal_ids)
+
+        # Update visnetwork — replace_nodes removes stale non-literal nodes; update_nodes preserves positions
         if replace_nodes:
             self.visnetwork_panel.nodes = list(self.visjs_nodes)
         else:
@@ -1595,7 +2168,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Event Handlers =====
 
-    def on_single_node_apply_changes(self, event: Any) -> None:
+    def on_single_node_apply_changes(self, event: Any) -> None:  # noqa: C901
         """Callback when 'Apply Changes' button is clicked for single node editing.
 
         Reads the current value from the JSON editor and applies changes.
@@ -1621,24 +2194,43 @@ class OOLDGraphDetailTool(GraphDetailTool):
             # Save state before making changes
             self._save_state()
 
+            _internal = {"id", "__iris__"} | _SKIP_FIELDS
+
             # Update each property from the edited JSON
             for prop_name, prop_value in new_value_dict.items():
-                # Skip internal fields
-                if prop_name in ["id", "__iris__"]:
+                if prop_name in _internal:
                     continue
-
-                # Check if property exists in model
                 if prop_name in entity.model_fields:
                     try:
-                        # Deserialize the value to the correct type
                         deserialized = self._deserialize_property_value(entity, prop_name, prop_value)
                         setattr(entity, prop_name, deserialized)
                         print(f"  Updated property '{prop_name}' to: {deserialized}")
                     except Exception as e:
                         print(f"  Warning: Could not update property '{prop_name}': {e}")
 
-            # Full sync to update all data structures
-            self._full_sync_after_edit()
+            # Clear fields that were removed from the editor (deleted by user)
+
+            for prop_name, field_info in entity.model_fields.items():
+                if prop_name in _internal or prop_name in new_value_dict:
+                    continue
+                # Mandatory field (no default, not Optional) — cannot delete it
+                if field_info.is_required():
+                    continue
+                try:
+                    annotation = field_info.annotation
+                    origin = getattr(annotation, "__origin__", None)
+                    args = getattr(annotation, "__args__", ())
+                    accepts_none = annotation is type(None) or (origin is Union and type(None) in args)
+                    if not accepts_none:
+                        continue  # cannot delete a non-nullable field — leave it unchanged
+                    setattr(entity, prop_name, None)
+                    print(f"  Cleared deleted property '{prop_name}'")
+                except Exception as e:
+                    print(f"  Warning: Could not clear property '{prop_name}': {e}")
+
+            # replace_nodes=True ensures the vis-network DataSet is fully refreshed,
+            # including callback_name_dict on all nodes (new literal nodes, updated expand options).
+            self._full_sync_after_edit(replace_nodes=True)
             print("Changes applied successfully")
 
         except Exception as e:
@@ -1739,6 +2331,56 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._pending_node_positions: dict[Any, dict] = {}
         self._pending_node_positions[node_id] = {"x": x, "y": y}
 
+    def _reassign_and_register_subobjects(self, entity: LinkedBaseModel) -> None:
+        """Recursively give each sub-object field a new UUID and register it as a standalone entity.
+
+        Called after deep-copying a parent entity so that embedded sub-objects don't share
+        IRIs with the originals.
+        """
+        for field_name in entity.model_fields:
+            if field_name in _SKIP_FIELDS:
+                continue
+            inner_type = self._field_inner_model_type(entity, field_name)
+            if inner_type is None:
+                continue
+            val = getattr(entity, field_name, None)
+            if not val:
+                continue
+            is_list = isinstance(val, list)
+            items = val if is_list else [val]
+            new_items = []
+            for sub_obj in items:
+                if not hasattr(sub_obj, "model_fields"):
+                    new_items.append(sub_obj)
+                    continue
+                try:
+                    sub_data = json.loads(sub_obj.model_dump_json(exclude={"id", "__iris__"}))
+                    sub_data["uuid"] = str(uuid.uuid4())
+                    sub_data["id"] = ""
+                    new_sub = inner_type(**sub_data)
+                except Exception:
+                    new_items.append(sub_obj)
+                    continue
+                # Recurse for nested sub-objects
+                self._reassign_and_register_subobjects(new_sub)
+                # Register as a standalone entity so the graph shows it
+                sub_iri = str(new_sub.get_iri())
+                self.entity_list.append(new_sub)
+                self.entity_dict[sub_iri] = new_sub
+                sub_type_name = inner_type.__name__
+                new_node = {
+                    "id": sub_iri,
+                    "label": getattr(new_sub, "name", sub_iri),
+                    "shape": "ellipse",
+                    "entity_type": sub_type_name,
+                    "color": self._get_color_for_type(sub_type_name),
+                }
+                self._full_visjs_nodes.append(dict(new_node))
+                if self._visible_node_ids is not None:
+                    self._visible_node_ids.add(sub_iri)
+                new_items.append(new_sub)
+            setattr(entity, field_name, new_items if is_list else (new_items[0] if new_items else None))
+
     def on_nodes_duplicated(self, duplicated_nodes: list[dict[str, Any]]) -> None:
         """Callback when nodes are duplicated via Ctrl+drag.
 
@@ -1777,6 +2419,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     entity_data["id"] = ""
                     entity_data["initialized_from"] = str(parent_entity.get_iri())
                     new_entity = entity_type(**entity_data)
+                    # Deep-copy sub-objects: give each a new UUID and register as standalone entity
+                    self._reassign_and_register_subobjects(new_entity)
                 else:
                     new_entity = entity_type(uuid=str(uuid.uuid4()), name=unique_name)
 
@@ -1855,7 +2499,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             traceback.print_exc()
 
-    def _get_object_properties(self, entity: LinkedBaseModel) -> list[dict[str, Any]]:  # noqa: C901
+    def _get_object_properties(self, entity: LinkedBaseModel) -> list[dict[str, Any]]:
         """Get all properties that can hold object references (IRIs).
 
         Args:
@@ -1901,21 +2545,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 prop_type = annotation.__name__
 
             # Also check the JSON-LD context for @type: @id
-            try:
-                context_entry = entity.model_config.get("json_schema_extra", {}).get("@context", {})
-                if isinstance(context_entry, list):
-                    for ctx in context_entry:
-                        if isinstance(ctx, dict) and prop_name in ctx:
-                            prop_def = ctx[prop_name]
-                            if isinstance(prop_def, dict) and prop_def.get("@type") == "@id":
-                                is_object_property = True
-                                break
-                elif isinstance(context_entry, dict) and prop_name in context_entry:
-                    prop_def = context_entry[prop_name]
-                    if isinstance(prop_def, dict) and prop_def.get("@type") == "@id":
-                        is_object_property = True
-            except Exception:  # noqa: S110
-                pass
+            if self._is_iri_field(entity, prop_name):
+                is_object_property = True
 
             if is_object_property:
                 object_props.append({
@@ -2774,61 +3405,43 @@ class OOLDGraphDetailTool(GraphDetailTool):
             # Revert to current state
             self._refresh_oold_tabulators()
 
+    def _show_create_entity_editor(self, entity_type: type) -> None:
+        """Show the JSON editor UI for creating a new entity of entity_type."""
+        entity_type_name = entity_type.__name__
+        self.oold_detail_col.clear()
+        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New {entity_type_name}"))
+
+        default_values: dict[str, Any] = {}
+        if "uuid" in entity_type.model_fields:
+            default_values["uuid"] = str(uuid.uuid4())
+        if "name" in entity_type.model_fields:
+            default_values["name"] = f"New{entity_type_name}"
+
+        self.new_entity_editor = pn.widgets.JSONEditor(
+            value=default_values,
+            schema=entity_type.export_schema(),
+            width=700,
+            height=500,
+            mode="tree",
+        )
+        self.new_entity_save_button = pn.widgets.Button(name="Save Entity", button_type="primary", width=150)
+        self.new_entity_save_button.on_click(self.on_new_entity_save)
+        self.new_entity_cancel_button = pn.widgets.Button(name="Cancel", button_type="default", width=150)
+        self.new_entity_cancel_button.on_click(self.on_new_entity_cancel)
+        self._new_entity_type = entity_type
+
+        self.oold_detail_col.append(self.new_entity_editor)
+        self.oold_detail_col.append(pn.Row(self.new_entity_save_button, self.new_entity_cancel_button))
+        self.detail_tabs.active = 2
+
     def on_create_entity_click(self, event: Any) -> None:
-        """Callback when the 'Create Entity' button is clicked.
-
-        Shows a JSON editor for creating a new entity of the selected type.
-
-        Args:
-            event: Button click event
-        """
+        """Callback when the 'Create Entity' button is clicked."""
         try:
             if not hasattr(self, "new_entity_type_select") or not hasattr(self, "_new_entity_node_id"):
                 return
-
-            # Get selected entity type
             entity_type_name = self.new_entity_type_select.value
             entity_type = self.entity_types[entity_type_name]
-
-            # Clear the column and show editor
-            self.oold_detail_col.clear()
-            self.oold_detail_col.append(pn.pane.Markdown(f"### Create New {entity_type_name}"))
-
-            # Create a default instance with minimal required fields
-            default_values = {}
-
-            # Add uuid field (required for Entity)
-            if "uuid" in entity_type.model_fields:
-                default_values["uuid"] = str(uuid.uuid4())
-
-            # Check if 'name' field exists and add a default
-            if "name" in entity_type.model_fields:
-                default_values["name"] = f"New{entity_type_name}"
-
-            # Create JSON editor with schema
-            self.new_entity_editor = pn.widgets.JSONEditor(
-                value=default_values,
-                schema=entity_type.export_schema(),
-                width=700,
-                height=500,
-                mode="tree",
-            )
-
-            # Save button
-            self.new_entity_save_button = pn.widgets.Button(name="Save Entity", button_type="primary", width=150)
-            self.new_entity_save_button.on_click(self.on_new_entity_save)
-
-            # Cancel button
-            self.new_entity_cancel_button = pn.widgets.Button(name="Cancel", button_type="default", width=150)
-            self.new_entity_cancel_button.on_click(self.on_new_entity_cancel)
-
-            # Store entity type for save handler
-            self._new_entity_type = entity_type
-
-            # Add UI elements
-            self.oold_detail_col.append(self.new_entity_editor)
-            self.oold_detail_col.append(pn.Row(self.new_entity_save_button, self.new_entity_cancel_button))
-
+            self._show_create_entity_editor(entity_type)
         except Exception as e:
             print(f"Error creating entity editor: {e}")
             import traceback
