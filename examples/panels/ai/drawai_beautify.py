@@ -373,10 +373,38 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         sizing_mode="stretch_width",
     )
     download_link = pn.pane.HTML("", sizing_mode="stretch_width")
+    use_as_input_button = pn.widgets.Button(
+        name="Use as new input",
+        button_type="success",
+        disabled=True,
+        sizing_mode="stretch_width",
+    )
+    clear_input_button = pn.widgets.Button(
+        name="Clear input",
+        button_type="warning",
+        disabled=True,
+        sizing_mode="stretch_width",
+    )
+    clear_beautified_button = pn.widgets.Button(
+        name="Clear beautified",
+        button_type="warning",
+        disabled=True,
+        sizing_mode="stretch_width",
+    )
+    clear_both_button = pn.widgets.Button(
+        name="Clear both",
+        button_type="danger",
+        disabled=True,
+        sizing_mode="stretch_width",
+    )
 
     # ── Reactivity ────────────────────────────────────────────────────
 
     def _refresh_top_pane(*_: object) -> None:
+        has_input = bool(
+            (state.current_format == "png" and state.current_bytes)
+            or (state.current_format == "drawio" and state.current_xml)
+        )
         if state.current_format == "png" and state.current_bytes:
             b64 = base64.b64encode(state.current_bytes).decode()
             top_pane.object = (
@@ -386,15 +414,23 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
             top_pane.object = make_viewer_html(state.current_xml)
         else:
             top_pane.object = "<em style='color:#999'>No file loaded.</em>"
+        clear_input_button.disabled = not has_input
+        clear_both_button.disabled = not (has_input or state.beautified_xml)
 
     def _refresh_bottom_pane(*_: object) -> None:
-        if state.beautified_xml:
+        has_beautified = bool(state.beautified_xml)
+        has_input = bool(state.current_xml)
+        if has_beautified:
             bottom_pane.object = make_viewer_html(state.beautified_xml)
             download_button.disabled = False
+            use_as_input_button.disabled = False
         else:
             bottom_pane.object = "<em style='color:#999'>No beautified result yet.</em>"
             download_button.disabled = True
+            use_as_input_button.disabled = True
             download_link.object = ""
+        clear_beautified_button.disabled = not has_beautified
+        clear_both_button.disabled = not (has_input or has_beautified)
 
     state.param.watch(_refresh_top_pane, ["current_bytes", "current_xml", "current_format"])
     state.param.watch(_refresh_bottom_pane, "beautified_xml")
@@ -467,6 +503,51 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     download_button.on_click(_on_download)
 
+    # ── Use-as-input handler ──────────────────────────────────────────
+
+    def _on_use_as_input(event: object) -> None:
+        _ = event
+        if not state.beautified_xml:
+            return
+        new_wrapper = ""
+        if state.current_outer_wrapper:
+            new_wrapper = rewrap_drawio_xml(state.beautified_xml, state.current_outer_wrapper)
+        state.param.update(
+            current_bytes=b"",
+            current_xml=state.beautified_xml,
+            current_outer_wrapper=new_wrapper,
+            current_format="drawio",
+            beautified_xml="",
+        )
+
+    use_as_input_button.on_click(_on_use_as_input)
+
+    # ── Clear handlers ────────────────────────────────────────────────
+
+    _EMPTY_STATE = {
+        "current_bytes": b"",
+        "current_xml": "",
+        "current_outer_wrapper": "",
+        "current_format": None,
+        "current_filename": "",
+    }
+
+    def _on_clear_input(event: object) -> None:
+        _ = event
+        state.param.update(**_EMPTY_STATE, beautified_xml=state.beautified_xml)
+
+    def _on_clear_beautified(event: object) -> None:
+        _ = event
+        state.beautified_xml = ""
+
+    def _on_clear_both(event: object) -> None:
+        _ = event
+        state.param.update(**_EMPTY_STATE, beautified_xml="")
+
+    clear_input_button.on_click(_on_clear_input)
+    clear_beautified_button.on_click(_on_clear_beautified)
+    clear_both_button.on_click(_on_clear_both)
+
     # `flex: 1 1 0` + `min-width: 0` is the standard flexbox trick that lets
     # each column share the row 50/50 and collapse below its content's natural
     # width, so the two halves always fit inside the viewport (no horizontal
@@ -485,8 +566,9 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         top_pane,
         pn.pane.Markdown("**Beautified**", margin=(5, 5, 0, 5)),
         bottom_pane,
-        download_button,
+        pn.Row(download_button, use_as_input_button, sizing_mode="stretch_width"),
         download_link,
+        pn.Row(clear_input_button, clear_beautified_button, clear_both_button, sizing_mode="stretch_width"),
         sizing_mode="stretch_both",
         min_height=600,
         styles=_HALF_COLUMN_STYLES,
