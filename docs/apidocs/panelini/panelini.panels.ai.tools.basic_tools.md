@@ -55,12 +55,18 @@
 
 ### API
 
-`````{py:class} GetCurrentTimeInput
+`````{py:class} GetCurrentTimeInput(/, **data: typing.Any)
 :canonical: panelini.panels.ai.tools.basic_tools.GetCurrentTimeInput
 
 Bases: {py:obj}`pydantic.BaseModel`
 
 ```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.GetCurrentTimeInput
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.GetCurrentTimeInput.__init__
 ```
 
 ````{py:attribute} timezone
@@ -76,12 +82,18 @@ Bases: {py:obj}`pydantic.BaseModel`
 
 `````
 
-`````{py:class} GetCurrentTimeTool
+`````{py:class} GetCurrentTimeTool(**kwargs: typing.Any)
 :canonical: panelini.panels.ai.tools.basic_tools.GetCurrentTimeTool
 
 Bases: {py:obj}`langchain_core.tools.BaseTool`
 
 ```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.GetCurrentTimeTool
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.GetCurrentTimeTool.__init__
 ```
 
 ````{py:attribute} name
@@ -119,12 +131,18 @@ Bases: {py:obj}`langchain_core.tools.BaseTool`
 
 `````
 
-`````{py:class} UpdatePreviewInput
+`````{py:class} UpdatePreviewInput(/, **data: typing.Any)
 :canonical: panelini.panels.ai.tools.basic_tools.UpdatePreviewInput
 
 Bases: {py:obj}`pydantic.BaseModel`
 
 ```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.UpdatePreviewInput
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.UpdatePreviewInput.__init__
 ```
 
 ````{py:attribute} content
@@ -151,12 +169,18 @@ Bases: {py:obj}`pydantic.BaseModel`
 
 `````
 
-`````{py:class} UpdatePreviewTool
+`````{py:class} UpdatePreviewTool(**kwargs: typing.Any)
 :canonical: panelini.panels.ai.tools.basic_tools.UpdatePreviewTool
 
 Bases: {py:obj}`langchain_core.tools.BaseTool`
 
 ```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.UpdatePreviewTool
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} panelini.panels.ai.tools.basic_tools.UpdatePreviewTool.__init__
 ```
 
 ````{py:attribute} name

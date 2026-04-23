@@ -13,7 +13,7 @@
 - Let a user **upload** a drawio file (`.drawio` or `.drawio.png`), chat an "intent" for beautification, and get a **visual before/after comparison** in the browser.
 - **Non-destructive**: the original file is never modified. Output is a **download** (browser Downloads folder), never a server-side write.
 - Use **Claude Opus 4.7** (`claude-opus-4-7`) for the beautification itself, called directly through the official `anthropic` SDK with **prompt caching** on the system prompt and the XML input.
-- The layout is reusable — the ASCII diagram in this doc should lift cleanly into [docs/panels/](../../panels/) when the example graduates to a panel module.
+- The layout is reusable — the ASCII diagram in this doc should lift cleanly into [docs/panels/](../../panels/index.md) when the example graduates to a panel module.
 
 ## Non-goals (v1)
 
@@ -289,7 +289,7 @@ The `local/fig*.drawio.png` files remain dev-only demo material; the test suite 
 - `validate_drawio_xml` — one pass, one fail.
 - `extract_xml_from_drawio_png(corrupt.drawio.png)` → raises; assert error type.
 
-**UI tests** — [tests/panels/ai/test_drawai_ui.py](../../../tests/panels/ai/test_drawai_ui.py), marked `ui` + `ai`, following the Playwright pattern from commit `a391172`:
+**UI tests** — [tests/panels/ai/examples/test_drawai_ui.py](../../../tests/panels/ai/examples/test_drawai_ui.py), marked `ui` + `ai`, following the Playwright pattern from commit `a391172`:
 
 - Add a `_mock_anthropic_sdk` fixture that stubs `anthropic.AsyncAnthropic.messages.create` to return a canned "beautified" XML. Reuse the existing `_mock_langchain` fixture for the chat model. Both live in [tests/conftest.py](../../../tests/conftest.py).
 - Upload `diagram.drawio.png` via the `FileInput` → assert top pane renders (image or iframe, by locator).
@@ -328,4 +328,4 @@ No changes to `src/panelini/panels/ai/`.
 - Side-by-side XML diff view as an optional third pane.
 - Re-rasterization via a drawio CLI so downloaded PNGs have matching pixels.
 - `postMessage`-based viewer integration to remove the URL-length limit on very large diagrams.
-- Sphinx docs page reusing the layout diagram above, under [docs/panels/](../../panels/).
+- Sphinx docs page reusing the layout diagram above, under [docs/panels/](../../panels/index.md).

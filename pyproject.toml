@@ -164,6 +164,6 @@ source = ["src"]
 exclude = ["src/panelini/components/migration"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles", "langchain", "langchain-community", "python-dotenv"]
+DEP002 = ["watchfiles", "langchain", "langchain-community", "python-dotenv", "anthropic", "pillow"]
 DEP003 = ["langchain-core", "langchain_core", "pydantic"]
 DEP004 = ["langchain", "langchain-anthropic", "langchain-community", "langchain-openai", "python-dotenv", "pyyaml"]

@@ -161,9 +161,22 @@ def test_drawai_state_format_selector_rejects_invalid():
         state.current_format = "bmp"
 
 
+import asyncio  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 from unittest.mock import AsyncMock, MagicMock  # noqa: E402
 
 from examples.panels.ai.drawai_beautify import BeautifyDrawioTool  # noqa: E402
+
+
+def _run_async(coro_func, *args, **kwargs):
+    """Run an async coroutine in a fresh thread.
+
+    Playwright leaves a running event loop in the main thread, which prevents
+    asyncio.Runner.run() from starting. Running async tool tests in a worker
+    thread gives them a clean event loop.
+    """
+    with ThreadPoolExecutor(1) as pool:
+        return pool.submit(lambda: asyncio.run(coro_func(*args, **kwargs))).result()
 
 
 def _make_mock_anthropic_client(text: str) -> MagicMock:
@@ -180,8 +193,7 @@ def _make_mock_anthropic_client(text: str) -> MagicMock:
     return client
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
+def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
     state = DrawAiState(current_xml="<mxfile><diagram/></mxfile>")
     canned = "<mxfile><diagram id='new'/></mxfile>"
     mock_client = _make_mock_anthropic_client(canned)
@@ -191,17 +203,15 @@ async def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
     )
 
     tool = BeautifyDrawioTool(state=state, api_key="test-key", base_url="https://localhost")
-    result = await tool._arun(intent="tighter spacing")
+    result = _run_async(tool._arun, intent="tighter spacing")
 
     assert "Beautified" in result
     assert state.beautified_xml == canned
     mock_client.messages.create.assert_awaited_once()
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_no_file_loaded(monkeypatch):
+def test_beautify_drawio_tool_no_file_loaded(monkeypatch):
     state = DrawAiState()  # current_xml is ""
-    # anthropic client should never be called
     mock_client = _make_mock_anthropic_client("<mxfile/>")
     monkeypatch.setattr(
         "examples.panels.ai.drawai_beautify.anthropic.AsyncAnthropic",
@@ -209,15 +219,14 @@ async def test_beautify_drawio_tool_no_file_loaded(monkeypatch):
     )
 
     tool = BeautifyDrawioTool(state=state, api_key="test-key")
-    result = await tool._arun(intent="whatever")
+    result = _run_async(tool._arun, intent="whatever")
 
     assert "No file loaded" in result
     assert state.beautified_xml == ""
     mock_client.messages.create.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_invalid_xml_response(monkeypatch):
+def test_beautify_drawio_tool_invalid_xml_response(monkeypatch):
     state = DrawAiState(current_xml="<mxfile/>")
     mock_client = _make_mock_anthropic_client("not valid xml at all")
     monkeypatch.setattr(
@@ -226,14 +235,13 @@ async def test_beautify_drawio_tool_invalid_xml_response(monkeypatch):
     )
 
     tool = BeautifyDrawioTool(state=state, api_key="test-key")
-    result = await tool._arun(intent="fix it")
+    result = _run_async(tool._arun, intent="fix it")
 
     assert "did not parse as XML" in result
     assert state.beautified_xml == ""  # unchanged
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_anthropic_error(monkeypatch):
+def test_beautify_drawio_tool_anthropic_error(monkeypatch):
     state = DrawAiState(current_xml="<mxfile/>")
 
     failing_client = MagicMock()
@@ -245,15 +253,14 @@ async def test_beautify_drawio_tool_anthropic_error(monkeypatch):
     )
 
     tool = BeautifyDrawioTool(state=state, api_key="test-key")
-    result = await tool._arun(intent="fix it")
+    result = _run_async(tool._arun, intent="fix it")
 
     assert "Anthropic API error" in result
     assert "rate limit exceeded" in result
     assert state.beautified_xml == ""
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_strips_code_fences(monkeypatch):
+def test_beautify_drawio_tool_strips_code_fences(monkeypatch):
     state = DrawAiState(current_xml="<mxfile/>")
     canned = "```xml\n<mxfile><diagram id='x'/></mxfile>\n```"
     mock_client = _make_mock_anthropic_client(canned)
@@ -263,13 +270,12 @@ async def test_beautify_drawio_tool_strips_code_fences(monkeypatch):
     )
 
     tool = BeautifyDrawioTool(state=state, api_key="test-key")
-    await tool._arun(intent="whatever")
+    _run_async(tool._arun, intent="whatever")
 
     assert state.beautified_xml == "<mxfile><diagram id='x'/></mxfile>"
 
 
-@pytest.mark.asyncio
-async def test_beautify_drawio_tool_passes_credentials(monkeypatch):
+def test_beautify_drawio_tool_passes_credentials(monkeypatch):
     """Tool forwards api_key and base_url from config into AsyncAnthropic."""
     state = DrawAiState(current_xml="<mxfile/>")
     mock_client = _make_mock_anthropic_client("<mxfile><diagram id='x'/></mxfile>")
@@ -290,6 +296,6 @@ async def test_beautify_drawio_tool_passes_credentials(monkeypatch):
         api_key="my-key",
         base_url="https://proxy.example.com",
     )
-    await tool._arun(intent="whatever")
+    _run_async(tool._arun, intent="whatever")
 
     assert captured_kwargs == {"api_key": "my-key", "base_url": "https://proxy.example.com"}
