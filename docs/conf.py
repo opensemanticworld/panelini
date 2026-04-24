@@ -15,6 +15,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
+    "sphinx_design",
     "autodoc2",
     "sphinxcontrib.mermaid",
 ]
@@ -25,8 +26,14 @@ myst_enable_extensions = [
     "deflist",
     "fieldlist",
     "tasklist",
+    "attrs_inline",
+    "attrs_block",
+    "linkify",
+    "smartquotes",
+    "substitution",
 ]
 myst_heading_anchors = 3
+myst_linkify_fuzzy_links = False
 
 # Napoleon configuration (Google-style docstrings)
 napoleon_google_docstring = True

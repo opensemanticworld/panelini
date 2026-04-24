@@ -2,9 +2,18 @@
 
 Auto-marks tests whose module imports from the ``playwright`` package with
 the ``ui`` marker so they are excluded from the default ``make test`` run.
+
+Also disables Panelini background images session-wide to skip the ~530 KB
+base64 CSS injection that otherwise fires at every ``Panelini(...)`` call.
+Unit tests in ``test_main.py`` pass explicit values and are unaffected.
 """
 
 import pytest
+
+from panelini import Panelini
+
+Panelini.param.header_background_image.default = None
+Panelini.param.content_background_image.default = None
 
 
 def pytest_collection_modifyitems(items):
