@@ -3,6 +3,83 @@
 - `chat_min.py` — minimal AI chat inside Panelini.
 - `chat_custom_tool.py` — AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` — multiple AI chats in separate tabs, with config switching.
+- `plot_by_code.py` — AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).
+
+## Plot by Code — sandboxed matplotlib
+
+`plot_by_code.py` renders matplotlib figures inside a Docker sandbox via
+`llm-sandbox`. An `AiChat` is wired to five plot tools (`plot_by_code`,
+`run_code`, `load_data_from_csv`, `attach_current_plot_to_osw_page`,
+`document_current_evaluation`) and, when the OSW env vars are set, eight
+additional OSW connector tools.
+
+### Prerequisites
+
+- Docker daemon running (`docker ps` must succeed) — `plot_by_code` /
+  `run_code` spin up `python:3.12-slim` sandbox containers.
+- An Anthropic or Azure OpenAI API key (see env vars below).
+- `uv` installed (<https://docs.astral.sh/uv/>).
+
+### Install with uv
+
+From a checkout of this repo:
+
+```bash
+# Core: chat + sandboxed plotting (no OSW)
+uv sync --extra ai --extra ai-llm-sandbox
+
+# With the OSW connector (adds the eight OSW tools)
+uv sync --extra ai --extra ai-llm-sandbox --extra ai-osw
+```
+
+Into another uv-managed project (as a dependency):
+
+```bash
+uv add 'panelini[ai,ai-llm-sandbox]'
+# or, with OSW
+uv add 'panelini[ai,ai-llm-sandbox,ai-osw]'
+```
+
+### Configure
+
+Create a `.env` file next to the script (loaded via `python-dotenv`) or
+export the variables in your shell.
+
+LLM (one of):
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+# — or —
+export AZURE_OPENAI_API_KEY=...
+export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
+export AZURE_OPENAI_API_VERSION=2024-06-01
+```
+
+OSW (optional — all six required together to enable OSW tools):
+
+```bash
+export OSW_DOMAIN=wiki.example.org
+export OSW_USER=alice
+export OSW_PASSWORD=hunter2
+export BLAZEGRAPH_ENDPOINT=https://wiki.example.org/blazegraph/sparql
+export BLAZEGRAPH_USER=alice
+export BLAZEGRAPH_PASSWORD=hunter2
+```
+
+Credentials stay in memory — no `accounts.pwd.yaml` is written, and the
+`input()` / `getpass` prompt that `osw.express` normally shows on a fresh
+machine is bypassed. Missing any of the three auth vars when an OSW tool
+is invoked produces a `RuntimeError` listing the missing names.
+
+### Run
+
+```bash
+uv run python examples/panels/ai/plot_by_code.py
+```
+
+Open the URL it prints (default `http://localhost:5008`) and prompt the
+chat, e.g. *"plot y = sin(x) for x in 0..2π and save to /sandbox/output.png"*.
+The figure appears in the right pane.
 
 ## DrawAI — AI-assisted drawio beautifier
 

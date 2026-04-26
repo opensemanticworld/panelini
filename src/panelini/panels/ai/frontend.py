@@ -52,10 +52,10 @@ class AiChat:
             config_path=config_path,
         )
 
-        # Initialize with get_current_time tool enabled by default
+        # Initialize with get_current_time + any user-supplied tools enabled by default
         from .tools.basic_tools import get_current_time_tool
 
-        self.backend.update_tools([get_current_time_tool])
+        self.backend.update_tools([get_current_time_tool, *(tools or [])])
 
         # Initialize preview content with proper overflow handling (starts empty)
         self.preview_content = pn.pane.Markdown(
@@ -106,12 +106,13 @@ class AiChat:
         self.tool_checkbox_group = pn.Column(sizing_mode="stretch_width")
 
         all_tools = list(AVAILABLE_TOOLS)
+        user_tool_names = {t.name for t in tools} if tools else set()
         if tools:
             all_tools.extend(tools)
 
         for tool in all_tools:
-            # Enable "get_current_time" tool by default
-            default_enabled = tool.name == "get_current_time"
+            # Enable "get_current_time" + any user-supplied tools by default
+            default_enabled = tool.name == "get_current_time" or tool.name in user_tool_names
             checkbox = pn.widgets.Checkbox(
                 name=tool.name.replace("_", " ").title(),
                 value=default_enabled,
