@@ -222,8 +222,8 @@ class UploadOslFileTool(BaseTool):
             import uuid as uuid_mod
             from pathlib import Path
 
-            from osw.controller.file.wiki import WikiFileController  # type: ignore[import-untyped]
-            from osw.core import model  # type: ignore[import-untyped]
+            from osw.controller.file.wiki import WikiFileController
+            from osw.core import model
 
             path = Path(file_path)
             if not path.exists():
@@ -452,7 +452,7 @@ class FetchSchemaTool(BaseTool):
 
     def _run(self, schema_titles: list[str]) -> str:
         try:
-            from osw.core import OSW  # type: ignore[import-untyped]
+            from osw.core import OSW
 
             osw_obj = _get_osw(self.connection)
             osw_obj.fetch_schema(
