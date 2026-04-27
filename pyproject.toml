@@ -55,11 +55,31 @@ ai-osw = [
     "pandas>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
+mcp-server = [
+    "mcp>=1.0",
+    "starlette>=0.27",
+    "uvicorn>=0.24",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.27",
+    "osw[wikitext]>=1.0",
+    "SPARQLWrapper>=2.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+mcp-client = [
+    "mcp>=1.0",
+    "langchain-mcp-adapters>=0.0.1",
+    "langchain>=0.3.27",
+    "python-dotenv>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://opensemanticworld.github.io/panelini/"
 Repository = "https://github.com/opensemanticworld/panelini"
 Documentation = "https://opensemanticworld.github.io/panelini/"
+
+[project.scripts]
+panelini-osw-mcp-server = "panelini.mcp.server.osw.server:main"
 
 [dependency-groups]
 plotting = [
@@ -85,6 +105,7 @@ dev = [
     "pytest-playwright>=0.7.2",
     "pytest-asyncio>=0.23",
     "osw>=1.0.1",
+    "anyio>=3.0",
 ]
 
 [build-system]
