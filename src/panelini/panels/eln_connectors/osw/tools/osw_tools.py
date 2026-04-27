@@ -222,8 +222,8 @@ class UploadOslFileTool(BaseTool):
             import uuid as uuid_mod
             from pathlib import Path
 
-            from osw.controller.file.wiki import WikiFileController
-            from osw.core import model
+            from osw.controller.file.wiki import WikiFileController  # type: ignore[import-untyped]
+            from osw.core import model  # type: ignore[import-untyped]
 
             path = Path(file_path)
             if not path.exists():
