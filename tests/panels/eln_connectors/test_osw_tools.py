@@ -67,6 +67,10 @@ class TestUploadOslFileTool:
         assert result.startswith("File:OSW")
         assert result.endswith(".csv")
         fake_wf.put.assert_called_once()
+        call_args = fake_wf.put.call_args
+        bytesio_arg = call_args[0][0]
+        assert bytesio_arg.name.startswith("OSW")
+        assert bytesio_arg.name.endswith(".csv")
 
     def test_upload_uses_explicit_osw_id(self, tmp_path: Path) -> None:
         from panelini.panels.eln_connectors.osw.tools.osw_tools import UploadOslFileTool
@@ -89,6 +93,10 @@ class TestUploadOslFileTool:
 
         assert "29b9f7873b6f4752beafc4cc57b65db2" in result.replace("-", "")
         fake_wf.put.assert_called_once()
+        call_args = fake_wf.put.call_args
+        bytesio_arg = call_args[0][0]
+        assert bytesio_arg.name.startswith("OSW")
+        assert "29b9f7873b6f4752beafc4cc57b65db2" in bytesio_arg.name.replace("-", "")
 
     def test_file_not_found_returns_error(self) -> None:
         from panelini.panels.eln_connectors.osw.tools.osw_tools import UploadOslFileTool
@@ -121,6 +129,26 @@ class TestUploadOslFileTool:
 
         assert "could not upload file" in result
         assert "wiki connection lost" in result
+
+    def test_custom_label_passed_to_wiki_file(self, tmp_path: Path) -> None:
+        from panelini.panels.eln_connectors.osw.tools.osw_tools import UploadOslFileTool
+
+        csv = tmp_path / "data.csv"
+        csv.write_text("x\n")
+
+        fake_osw = MagicMock()
+        fake_wf = MagicMock()
+        fake_wf_cls = MagicMock(return_value=fake_wf)
+        fake_model = MagicMock()
+
+        with (
+            patch(f"{OSW_TOOLS_MODULE}._get_osw", return_value=fake_osw),
+            patch("osw.controller.file.wiki.WikiFileController", fake_wf_cls),
+            patch("osw.core.model", fake_model),
+        ):
+            UploadOslFileTool()._run(file_path=str(csv), label="My custom label")
+
+        fake_model.Label.assert_called_once_with(text="My custom label")
 
 
 class TestMakeOswToolsIncludesUpload:

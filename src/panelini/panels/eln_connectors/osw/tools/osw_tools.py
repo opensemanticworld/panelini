@@ -235,7 +235,7 @@ class UploadOslFileTool(BaseTool):
             else:
                 new_uuid = uuid_mod.uuid4()
 
-            suffix = path.suffix or ""
+            suffix = path.suffix
             title = "OSW" + str(new_uuid).replace("-", "") + suffix
             file_label = label or path.name
 
