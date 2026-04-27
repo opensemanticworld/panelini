@@ -201,6 +201,59 @@ class DownloadOslFileTool(BaseTool):
             return f"could not download file, exception {e}"
 
 
+class UploadOslFileTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
+    name: str = "upload_osl_file"
+    description: str = (
+        "Upload a local file to an OSW instance as a WikiFile and return its OSW File ID. "
+        "Use this after download_osl_file to copy a file from one OSW instance to another."
+    )
+    args_schema: type[BaseModel] = UploadOslFileInput
+    connection: OswConnection | None = None
+
+    def _run(
+        self,
+        file_path: str,
+        osw_id: str | None = None,
+        label: str | None = None,
+    ) -> str:
+        try:
+            import io
+            import uuid as uuid_mod
+            from pathlib import Path
+
+            from osw.controller.file.wiki import WikiFileController  # type: ignore[import-untyped]
+            from osw.core import model  # type: ignore[import-untyped]
+
+            path = Path(file_path)
+            if not path.exists():
+                return f"error: file not found at {file_path}"
+
+            if osw_id is not None:
+                bare = osw_id.split(":")[-1].split(".")[0]
+                new_uuid = uuid_mod.UUID(bare.replace("OSW", ""))
+            else:
+                new_uuid = uuid_mod.uuid4()
+
+            suffix = path.suffix or ""
+            title = "OSW" + str(new_uuid).replace("-", "") + suffix
+            file_label = label or path.name
+
+            osw_obj = _get_osw(self.connection)
+            wf = WikiFileController(
+                uuid=str(new_uuid),
+                osw=osw_obj,
+                title=title,
+                label=[model.Label(text=file_label)],
+            )
+            bytesio = io.BytesIO(path.read_bytes())
+            bytesio.name = title
+            wf.put(bytesio, overwrite=True)
+            return f"File:OSW{str(new_uuid).replace('-', '')}{suffix}"
+        except Exception as e:
+            return f"could not upload file, exception {e}"
+
+
 class GetFileHeaderTool(BaseTool):
     name: str = "get_file_header"
     description: str = "Read the first N lines of a local text file and return them as one string."
@@ -463,6 +516,7 @@ def make_osw_tools(connection: OswConnection | None = None) -> list[BaseTool]:
     return [
         GetPageHtmlTool(connection=connection),
         DownloadOslFileTool(connection=connection),
+        UploadOslFileTool(connection=connection),
         GetFileHeaderTool(),
         SparqlSearchTool(connection=connection),
         FindOutEverythingAboutTool(connection=connection),
