@@ -1693,16 +1693,16 @@ wheels = [
 
 [[package]]
 name = "langchain-mcp-adapters"
-version = "0.2.0"
+version = "0.1.14"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "mcp" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7a/ad/4c73093ac8848bd188d6d2bdf4817eee54ef103082b857b144877e729ed5/langchain_mcp_adapters-0.2.0.tar.gz", hash = "sha256:9a878f7e2fe2c3a8a33e3eda41a7d46e899470f5f5e6a5c9f8a79e409c487236", size = 36435, upload-time = "2025-12-09T12:57:55.828Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8a/36/0179462acf344ad18cf6d7190b7a6797e015386a3b4518fcd960bb831c61/langchain_mcp_adapters-0.1.14.tar.gz", hash = "sha256:36f8131d0b3b5ca28df03440be4dc2a3636e2f73e3e4a0a266d606ffaa12adda", size = 31119, upload-time = "2025-11-24T15:00:54.591Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/65/b5d2cec4b91541c2503148e0e4cd45b54cd45dcd3560502e9a57eec40d71/langchain_mcp_adapters-0.2.0-py3-none-any.whl", hash = "sha256:88768f31acfaa857b9e6fd50e50fcd5aea8bd85f75eaa17451b346d46feb7ce9", size = 22711, upload-time = "2025-12-09T12:57:55.005Z" },
+    { url = "https://files.pythonhosted.org/packages/17/e0/eee23ea4d651d2b2dd5b1a5e1b7f66ee212940a595917a280663d5f745b9/langchain_mcp_adapters-0.1.14-py3-none-any.whl", hash = "sha256:b900d37d1a82261e408e663b7176a1a74cf0072e17ae9e4241c068093912394a", size = 21133, upload-time = "2025-11-24T15:00:53.569Z" },
 ]
 
 [[package]]
@@ -2938,7 +2938,7 @@ requires-dist = [
     { name = "langchain-anthropic", marker = "extra == 'ai'", specifier = ">=0.3.0" },
     { name = "langchain-community", marker = "extra == 'ai'", specifier = ">=0.3.27" },
     { name = "langchain-community", marker = "extra == 'mcp-server'", specifier = ">=0.3.27" },
-    { name = "langchain-mcp-adapters", marker = "extra == 'mcp-client'", specifier = ">=0.0.1" },
+    { name = "langchain-mcp-adapters", marker = "extra == 'mcp-client'", specifier = ">=0.0.1,<0.2.0" },
     { name = "langchain-openai", marker = "extra == 'ai'", specifier = ">=0.3.32" },
     { name = "llm-sandbox", extras = ["docker"], marker = "extra == 'ai-llm-sandbox'", specifier = ">=0.2" },
     { name = "mcp", marker = "extra == 'mcp-client'", specifier = ">=1.0" },
