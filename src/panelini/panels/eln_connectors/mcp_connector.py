@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Callable
+from typing import Any, Callable
 
 import panel as pn
 from langchain.tools import BaseTool
@@ -93,7 +93,7 @@ class McpElnConnector:
         if self._on_tools_changed:
             self._on_tools_changed(tools)
 
-    def _on_mode_change(self, event) -> None:
+    def _on_mode_change(self, event: Any) -> None:
         if event.old == "direct":
             # Suppress child callback so disconnect() doesn't double-fire on_tools_changed
             self._osw_connector.on_tools_changed = None
@@ -135,7 +135,7 @@ class McpElnConnector:
             url = f"{url}/sse"
         return url
 
-    def _on_mcp_connect(self, event) -> None:
+    def _on_mcp_connect(self, event: Any) -> None:
         self._status_pane.object = "⏳ Connecting..."
         self._connect_btn.visible = False
         self._cancel_btn.visible = True
@@ -162,7 +162,7 @@ class McpElnConnector:
         self._connect_thread = threading.Thread(target=_do_connect, daemon=True)
         self._connect_thread.start()
 
-    def _on_cancel_connect(self, event) -> None:
+    def _on_cancel_connect(self, event: Any) -> None:
         self._connect_cancelled = True
         self._cancel_btn.visible = False
         self._connect_btn.visible = True
@@ -177,13 +177,13 @@ class McpElnConnector:
         self._disconnect_btn.visible = False
         self._status_pane.object = "⚫ Disconnected"
 
-    def _on_mcp_disconnect(self, event) -> None:
+    def _on_mcp_disconnect(self, event: Any) -> None:
         self._do_mcp_disconnect()
         self._tools = []
         if self._on_tools_changed:
             self._on_tools_changed([])
 
-    def _on_tool_selection_changed(self, event) -> None:
+    def _on_tool_selection_changed(self, event: Any) -> None:
         selected = set(event.new)
         self._tools = [t for t in self._all_mcp_tools if t.name in selected]
         if self._on_tools_changed:

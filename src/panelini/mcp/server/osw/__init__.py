@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 
-def __getattr__(name: str):
+
+def __getattr__(name: str) -> Any:
     if name == "OswMcpServer":
         from panelini.mcp.server.osw.server import OswMcpServer
 

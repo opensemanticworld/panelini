@@ -30,7 +30,9 @@ class OswMcpServer:
                 name=t.name,
                 description=t.description or "",
                 inputSchema=(
-                    t.args_schema.model_json_schema() if t.args_schema else {"type": "object", "properties": {}}
+                    t.args_schema.model_json_schema()
+                    if t.args_schema and isinstance(t.args_schema, type)
+                    else {"type": "object", "properties": {}}
                 ),
             )
             for t in self._tools
@@ -82,15 +84,15 @@ def _build_connection(args: argparse.Namespace) -> OswConnection:
     domain = args.domain or os.environ.get("OSW_DOMAIN")
     user = args.user or os.environ.get("OSW_USER")
     password = args.password or os.environ.get("OSW_PASSWORD")
-    if not all([domain, user, password]):
+    if not (domain and user and password):
         raise SystemExit(  # noqa: TRY003
             "OSW domain, user, and password must be set via "
             "--domain/--user/--password or OSW_DOMAIN/OSW_USER/OSW_PASSWORD."
         )
     return OswConnection(
-        domain=domain,
-        username=user,
-        password=password,
+        domain=str(domain),
+        username=str(user),
+        password=str(password),
         blazegraph_endpoint=args.blazegraph_endpoint or os.environ.get("BLAZEGRAPH_ENDPOINT"),
         blazegraph_user=args.blazegraph_user or os.environ.get("BLAZEGRAPH_USER"),
         blazegraph_password=args.blazegraph_password or os.environ.get("BLAZEGRAPH_PASSWORD"),
