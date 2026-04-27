@@ -95,6 +95,22 @@ class DownloadOslFileInput(BaseModel):
     )
 
 
+class UploadOslFileInput(BaseModel):
+    file_path: str = Field(..., description="Local path to the file to upload to OSW.")
+    osw_id: str | None = Field(
+        default=None,
+        description=(
+            "Optional target OSW File ID to overwrite. Can start with 'File:' or 'OSW', "
+            "e.g. 'File:OSW29b9f7873b6f4752beafc4cc57b65db2.csv'. "
+            "If omitted, a new UUID is generated."
+        ),
+    )
+    label: str | None = Field(
+        default=None,
+        description="Human-readable label for the uploaded file. Defaults to the filename.",
+    )
+
+
 class GetFileHeaderInput(BaseModel):
     file_path: str = Field(..., description="The path to the file to get the header from.")
     n_lines: int = Field(default=10, description="The number of lines to read from the file.")
