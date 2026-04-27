@@ -20,13 +20,14 @@ class McpElnConnector:
     def __init__(
         self,
         on_tools_changed: Callable[[list[BaseTool]], None] | None = None,
+        initial_mode: str = "direct",
     ) -> None:
         self._on_tools_changed = on_tools_changed
         self._tools: list[BaseTool] = []
         self._all_mcp_tools: list[BaseTool] = []
 
         self._eln_type_select = pn.widgets.Select(name="ELN Type", options=["osw"], value="osw", width=200)
-        self._mode_select = pn.widgets.RadioButtonGroup(name="Mode", options=["direct", "mcp"], value="direct")
+        self._mode_select = pn.widgets.RadioButtonGroup(name="Mode", options=["direct", "mcp"], value=initial_mode)
         self._osw_connector = OswConnector(on_tools_changed=self._on_child_tools_changed)
 
         self._server_url_input = pn.widgets.TextInput(
