@@ -12,7 +12,7 @@ Or via panel serve:
 
     panel serve examples/panels/eln_connectors/mcp_connector_min.py --port 5009
 
-Enter the server endpoint (default: http://localhost:8765/sse) and click Connect.
+Enter the server base URL (e.g. http://localhost:8765) and click Connect.
 """
 
 import panel as pn

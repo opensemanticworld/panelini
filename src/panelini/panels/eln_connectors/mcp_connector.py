@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Callable
 
 import panel as pn
@@ -7,6 +8,19 @@ from langchain.tools import BaseTool
 
 from panelini.mcp.client.osw.client import McpConnectionError, OswMcpClient
 from panelini.panels.eln_connectors.osw.connector import OswConnector
+
+MCP_SYSTEM_MESSAGE = (
+    "You are a helpful assistant with access to OSW (OpenSemanticWorld) ELN tools.\n\n"
+    "## MANDATORY RULES — never break these:\n"
+    "1. ALWAYS call the relevant tool immediately when the user asks about any entity, "
+    "category, property, page, or concept — do NOT answer from your own knowledge.\n"
+    "2. NEVER ask the user for an OSW ID. Use search or taxonomy tools to discover IDs.\n"
+    "3. NEVER claim 'technical difficulties', 'internal errors', or that tools are "
+    "unavailable — just call them.\n"
+    "4. NEVER describe what a tool call would look like — execute it.\n"
+    "5. If a tool returns an error, report the exact error to the user and try an "
+    "alternative approach.\n"
+)
 
 
 class McpElnConnector:
@@ -21,25 +35,41 @@ class McpElnConnector:
         self,
         on_tools_changed: Callable[[list[BaseTool]], None] | None = None,
         initial_mode: str = "direct",
+        server_url: str = "",
     ) -> None:
         self._on_tools_changed = on_tools_changed
         self._tools: list[BaseTool] = []
         self._all_mcp_tools: list[BaseTool] = []
+        self._connect_cancelled = False
+        self._connect_thread: threading.Thread | None = None
 
-        self._eln_type_select = pn.widgets.Select(name="ELN Type", options=["osw"], value="osw", width=200)
-        self._mode_select = pn.widgets.RadioButtonGroup(name="Mode", options=["direct", "mcp"], value=initial_mode)
+        self._eln_type_select = pn.widgets.Select(
+            name="ELN Type", options=["osw"], value="osw", sizing_mode="stretch_width"
+        )
+        self._mode_select = pn.widgets.RadioButtonGroup(
+            name="Mode", options=["direct", "mcp"], value=initial_mode, sizing_mode="stretch_width"
+        )
         self._osw_connector = OswConnector(on_tools_changed=self._on_child_tools_changed)
 
         self._server_url_input = pn.widgets.TextInput(
-            name="Server URL", placeholder="http://localhost:8765/sse", width=300
+            name="Server URL",
+            placeholder="http://localhost:8765",
+            value=server_url,
+            sizing_mode="stretch_width",
         )
-        self._connect_btn = pn.widgets.Button(name="Connect", button_type="primary")
-        self._disconnect_btn = pn.widgets.Button(name="Disconnect", button_type="danger", visible=False)
+        self._connect_btn = pn.widgets.Button(name="Connect", button_type="primary", sizing_mode="stretch_width")
+        self._cancel_btn = pn.widgets.Button(
+            name="Cancel", button_type="warning", visible=False, sizing_mode="stretch_width"
+        )
+        self._disconnect_btn = pn.widgets.Button(
+            name="Disconnect", button_type="danger", visible=False, sizing_mode="stretch_width"
+        )
         self._status_pane = pn.pane.HTML("⚫ Disconnected")
         self._tool_checkbox = pn.widgets.CheckBoxGroup(name="Tools", options=[], value=[])
 
         self._mode_select.param.watch(self._on_mode_change, "value")
         self._connect_btn.on_click(self._on_mcp_connect)
+        self._cancel_btn.on_click(self._on_cancel_connect)
         self._disconnect_btn.on_click(self._on_mcp_disconnect)
         self._tool_checkbox.param.watch(self._on_tool_selection_changed, "value")
 
@@ -88,30 +118,62 @@ class McpElnConnector:
                 self._eln_type_select,
                 self._mode_select,
                 self._server_url_input,
-                pn.Row(self._connect_btn, self._disconnect_btn),
+                pn.Row(
+                    self._connect_btn,
+                    self._cancel_btn,
+                    self._disconnect_btn,
+                    sizing_mode="stretch_width",
+                ),
                 self._status_pane,
                 self._tool_checkbox,
             ]
 
+    @staticmethod
+    def _normalise_server_url(url: str) -> str:
+        url = url.rstrip("/")
+        if not url.endswith("/sse"):
+            url = f"{url}/sse"
+        return url
+
     def _on_mcp_connect(self, event) -> None:
         self._status_pane.object = "⏳ Connecting..."
-        try:
-            client = OswMcpClient(server_url=self._server_url_input.value)
-            tools = client.get_tools_sync()
-            self._all_mcp_tools = tools
-            self._tool_checkbox.options = [t.name for t in tools]
-            self._tool_checkbox.value = [t.name for t in tools]
-            self._connect_btn.visible = False
-            self._disconnect_btn.visible = True
-            self._status_pane.object = "🟢 Connected"
-        except McpConnectionError as e:
-            self._status_pane.object = f"🔴 {e}"
+        self._connect_btn.visible = False
+        self._cancel_btn.visible = True
+        self._connect_cancelled = False
+
+        def _do_connect() -> None:
+            try:
+                client = OswMcpClient(server_url=self._normalise_server_url(self._server_url_input.value))
+                tools = client.get_tools_sync()
+                if self._connect_cancelled:
+                    return
+                self._all_mcp_tools = tools
+                self._tool_checkbox.options = [t.name for t in tools]
+                self._tool_checkbox.value = [t.name for t in tools]
+                self._cancel_btn.visible = False
+                self._disconnect_btn.visible = True
+                self._status_pane.object = "🟢 Connected"
+            except McpConnectionError as e:
+                if not self._connect_cancelled:
+                    self._cancel_btn.visible = False
+                    self._connect_btn.visible = True
+                    self._status_pane.object = f"🔴 {e}"
+
+        self._connect_thread = threading.Thread(target=_do_connect, daemon=True)
+        self._connect_thread.start()
+
+    def _on_cancel_connect(self, event) -> None:
+        self._connect_cancelled = True
+        self._cancel_btn.visible = False
+        self._connect_btn.visible = True
+        self._status_pane.object = "⚫ Disconnected"
 
     def _do_mcp_disconnect(self) -> None:
         self._all_mcp_tools = []
         self._tool_checkbox.options = []
         self._tool_checkbox.value = []
         self._connect_btn.visible = True
+        self._cancel_btn.visible = False
         self._disconnect_btn.visible = False
         self._status_pane.object = "⚫ Disconnected"
 

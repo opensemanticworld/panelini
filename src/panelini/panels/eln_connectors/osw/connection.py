@@ -9,7 +9,7 @@ connection instance owns its credentials, enabling multi-instance setups.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from osw.auth import CredentialManager  # type: ignore[import-untyped]
@@ -58,26 +58,29 @@ class OswConnection:
     blazegraph_endpoint: str | None = None
     blazegraph_user: str | None = None
     blazegraph_password: str | None = None
+    _osw_cache: Any = field(default=None, init=False, repr=False, compare=False)
 
     def has_sparql(self) -> bool:
         """True iff all three Blazegraph fields are set."""
         return all([self.blazegraph_endpoint, self.blazegraph_user, self.blazegraph_password])
 
     def build_osw_express(self) -> Any:
-        """Construct an ``OswExpress`` client from this connection's credentials.
+        """Return a cached ``OswExpress`` for this connection.
 
-        Returns a ready-to-use ``OswExpress`` that will not prompt for input
-        and will not write a credentials file.
+        The first call connects to the wiki (slow). Subsequent calls return the
+        cached instance so tool calls do not reconnect on every invocation.
         """
-        mgr = EnvCredentialManager()
-        mgr.add_credential(
-            CredentialManager.UserPwdCredential(
-                iri=self.domain,
-                username=self.username,
-                password=self.password,
+        if self._osw_cache is None:
+            mgr = EnvCredentialManager()
+            mgr.add_credential(
+                CredentialManager.UserPwdCredential(
+                    iri=self.domain,
+                    username=self.username,
+                    password=self.password,
+                )
             )
-        )
-        return OswExpress(domain=self.domain, cred_mngr=mgr)
+            self._osw_cache = OswExpress(domain=self.domain, cred_mngr=mgr)
+        return self._osw_cache
 
     @classmethod
     def from_env(cls) -> OswConnection | None:

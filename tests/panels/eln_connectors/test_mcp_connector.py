@@ -67,6 +67,7 @@ def test_mcp_connect_populates_tools_and_fires_callback():
     with patch("panelini.panels.eln_connectors.mcp_connector.OswMcpClient") as MockClient:
         MockClient.return_value.get_tools_sync.return_value = [mock_tool]
         connector._on_mcp_connect(None)
+        connector._connect_thread.join(timeout=5)
 
     assert mock_tool in connector.tools
     assert any(mock_tool in tools_list for tools_list in received)
@@ -82,6 +83,7 @@ def test_mcp_connect_sets_error_status_on_failure():
     with patch("panelini.panels.eln_connectors.mcp_connector.OswMcpClient") as MockClient:
         MockClient.return_value.get_tools_sync.side_effect = McpConnectionError("refused")
         connector._on_mcp_connect(None)
+        connector._connect_thread.join(timeout=5)
 
     assert "🔴" in connector._status_pane.object
 
@@ -116,3 +118,43 @@ def test_tool_selection_filters_active_tools():
 
     connector._tool_checkbox.value = ["tool_a"]
     assert connector.tools == [mock_tool_a]
+
+
+def test_cancel_connect_resets_ui():
+    import time
+
+    connector = _make_connector()
+    connector._mode_select.value = "mcp"
+    connector._server_url_input.value = "http://localhost:8765/sse"
+
+    barrier = {"ready": False}
+
+    with patch("panelini.panels.eln_connectors.mcp_connector.OswMcpClient") as MockClient:
+
+        def _slow_get_tools():
+            barrier["ready"] = True
+            time.sleep(2)
+            return []
+
+        MockClient.return_value.get_tools_sync.side_effect = _slow_get_tools
+        connector._on_mcp_connect(None)
+        # wait until thread has started and is inside get_tools_sync
+        for _ in range(50):
+            if barrier["ready"]:
+                break
+            time.sleep(0.05)
+        connector._on_cancel_connect(None)
+        connector._connect_thread.join(timeout=5)
+
+    assert connector._connect_btn.visible is True
+    assert connector._cancel_btn.visible is False
+    assert "⚫" in connector._status_pane.object
+
+
+def test_normalise_server_url_appends_sse():
+    from panelini.panels.eln_connectors.mcp_connector import McpElnConnector
+
+    assert McpElnConnector._normalise_server_url("http://localhost:8765") == "http://localhost:8765/sse"
+    assert McpElnConnector._normalise_server_url("http://localhost:8765/") == "http://localhost:8765/sse"
+    assert McpElnConnector._normalise_server_url("http://localhost:8765/sse") == "http://localhost:8765/sse"
+    assert McpElnConnector._normalise_server_url("http://localhost:8765/sse/") == "http://localhost:8765/sse"

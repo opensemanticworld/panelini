@@ -545,7 +545,7 @@ class AiChat:
         """
         _ = (user, instance)
 
-        use_tools = len(self._get_selected_tools()) > 0
+        use_tools = bool(self.backend.current_tools)
 
         if not use_tools and self.backend.ai_interface:
             full = ""

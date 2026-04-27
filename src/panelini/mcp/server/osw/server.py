@@ -10,7 +10,8 @@ from mcp.server.sse import SseServerTransport
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.routing import Route
+from starlette.responses import Response
+from starlette.routing import Mount, Route
 
 from panelini.panels.eln_connectors.osw.connection import OswConnection
 from panelini.panels.eln_connectors.osw.tools.osw_tools import make_osw_tools
@@ -57,21 +58,19 @@ class OswMcpServer:
         sse = SseServerTransport("/messages/")
         mcp_server = self._server
 
-        async def handle_sse(request: Request) -> None:
+        async def handle_sse(request: Request) -> Response:
             async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
                 await mcp_server.run(
                     streams[0],
                     streams[1],
                     mcp_server.create_initialization_options(),
                 )
-
-        async def handle_messages(request: Request) -> None:
-            await sse.handle_post_message(request.scope, request.receive, request._send)
+            return Response()
 
         return Starlette(
             routes=[
                 Route("/sse", endpoint=handle_sse),
-                Route("/messages/", endpoint=handle_messages),
+                Mount("/messages/", app=sse.handle_post_message),
             ]
         )
 
