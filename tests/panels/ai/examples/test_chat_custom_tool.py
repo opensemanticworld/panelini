@@ -51,11 +51,16 @@ def test_local_storage_tool_toggle(ready_page: Page):
     """Clicking the Local Storage checkbox in the sidebar sends a system message."""
     page = ready_page
 
+    # Expand the collapsed "Basic Tools" card before interacting
+    page.locator("button.card-header", has_text="Basic Tools").click()
+
     # Click the actual <input> inside the Bokeh Checkbox shadow DOM.
     # get_by_text("Local Storage") finds the .bk-label sibling, not the input.
+    # local_storage starts enabled by default (custom tools are pre-checked),
+    # so clicking it unchecks it, leaving only get_current_time = 1 tool.
     page.locator(".bk-Checkbox", has_text="Local Storage").locator("input[type=checkbox]").click()
 
     # System message confirming the tool update should appear in the chat
     page.locator("text=Tools updated").first.wait_for(timeout=5000)
     assert page.locator("text=Tools updated").first.is_visible()
-    assert page.locator("text=2 tool(s) now available").first.is_visible()
+    assert page.locator("text=1 tool(s) now available").first.is_visible()

@@ -123,6 +123,8 @@ class AiChat:
             self.tool_checkboxes[tool.name] = {"checkbox": checkbox, "tool": tool}
             self.tool_checkbox_group.append(checkbox)
 
+        self._external_tools: dict[str, list] = {}
+
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
@@ -248,7 +250,7 @@ class AiChat:
                     pn.Card(
                         title="Basic Tools",
                         collapsible=True,
-                        collapsed=False,
+                        collapsed=True,
                         objects=[
                             pn.Column(
                                 pn.pane.Markdown("**Enable tools for the assistant:**", margin=(0, 0, 10, 0)),
@@ -263,7 +265,7 @@ class AiChat:
                     pn.Card(
                         title="Chat Management",
                         collapsible=True,
-                        collapsed=False,
+                        collapsed=True,
                         objects=[
                             pn.Column(
                                 pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
@@ -339,6 +341,25 @@ class AiChat:
         """Main area content (chat + preview two-column layout)."""
         return list(self._main_objects)
 
+    # ── External tool registration ─────────────────────────────────────
+
+    def register_external_tools(self, group: str, tools: list) -> None:
+        """Register or update a named group of external tools.
+
+        External tools are managed by their owning panel (e.g. ``OswConnector``)
+        and are **not** shown in the "Basic Tools" checkbox card. They are merged
+        into the backend tool list alongside the checked basic tools.
+
+        Args:
+            group: A short identifier for the tool group (e.g. ``"osw"``).
+            tools: The tools to register. Pass ``[]`` to remove the group.
+        """
+        if tools:
+            self._external_tools[group] = list(tools)
+        else:
+            self._external_tools.pop(group, None)
+        self._sync_backend_tools()
+
     # ── Private helpers ──────────────────────────────────────────────────
 
     def _update_preview_content(self, title: str, content: str) -> None:
@@ -404,9 +425,14 @@ class AiChat:
     def _on_tool_change(self, event: Any) -> None:
         """Handle tool selection changes."""
         _ = event
+        self._sync_backend_tools()
 
-        tool_count = self.backend.update_tools(self._get_selected_tools())
-
+    def _sync_backend_tools(self) -> None:
+        """Merge basic (checkbox) tools with external tools and update the backend."""
+        all_tools = self._get_selected_tools()
+        for group_tools in self._external_tools.values():
+            all_tools.extend(group_tools)
+        tool_count = self.backend.update_tools(all_tools)
         self.chat_interface.send(
             f"Tools updated. {tool_count} tool(s) now available. Conversation history preserved.",
             user="⚙️ System",

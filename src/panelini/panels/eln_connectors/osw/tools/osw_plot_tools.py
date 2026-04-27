@@ -1,9 +1,12 @@
-"""Backward-compatibility shim — canonical code moved to
-``panelini.panels.eln_connectors.osw.tools.osw_plot_tools``.
+"""OSW-bound BaseTool subclasses that upload a PlotPanel's current plot.
 
-This module keeps its original implementation so that existing tests
-which patch at this module path continue to work. New code should import
-from the new location.
+These "bridge tools" span two domains: they need an
+:class:`~..connection.OswConnection` for the OSW instance and a
+``PlotPanel`` reference for the current plot state. Both are injected at
+construction time.
+
+This module imports from the ``osw`` package at top level, so it is only
+importable when ``osw`` is installed (via ``panelini[ai-osw]``).
 """
 
 from __future__ import annotations
@@ -16,15 +19,12 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, ConfigDict, Field
 
-from panelini.panels.eln_connectors.osw.utils.osw_env import build_osw_express
+from ..connection import OswConnection
+from ..utils.osw_env import build_osw_express
 
-from ..panel import PlotPanel
-
-# ``osw`` ships no ``py.typed`` marker upstream, so mypy cannot resolve its
-# types. We opt in to ``Any`` explicitly at the boundary here, keeping the
-# trade-off visible in-source rather than hiding it in a global mypy override.
-# Runtime imports happen normally; only the type checker sees ``Any``.
 if TYPE_CHECKING:
+    from panelini.panels.ai.plot.panel import PlotPanel
+
     WikiFileController: Any = Any
     OSW: Any = Any
     model: Any = Any
@@ -61,7 +61,6 @@ class DocumentEvaluationInput(BaseModel):
 
 
 def _load_plot_bytes(panel: PlotPanel) -> io.BytesIO:
-    """Read the current plot's PNG bytes from ``panel.output_file_path``."""
     path = panel.output_file_path
     if path is None or not path.exists():
         raise ValueError("No image available to attach — run plot_by_code first.")  # noqa: TRY003
@@ -69,17 +68,18 @@ def _load_plot_bytes(panel: PlotPanel) -> io.BytesIO:
 
 
 def _build_wiki_file(osw_obj: Any, plot_uuid: uuid.UUID) -> Any:
-    """Factory for a WikiFileController labeled with the current time.
-
-    ``osw_obj`` is an ``OswExpress`` and the return is a ``WikiFileController``;
-    annotated as ``Any`` because ``osw`` doesn't ship types upstream.
-    """
     return WikiFileController(
         uuid=str(plot_uuid),
         osw=osw_obj,
         title="OSW" + str(plot_uuid).replace("-", "") + ".png",
         label=[model.Label(text=f"Plot from Chatbot {datetime.now().strftime('%Y-%m-%d_%H-%M')}")],
     )
+
+
+def _get_osw(connection: OswConnection | None) -> Any:
+    if connection is not None:
+        return connection.build_osw_express()
+    return build_osw_express()
 
 
 class AttachPlotToOswTool(BaseTool):
@@ -90,11 +90,12 @@ class AttachPlotToOswTool(BaseTool):
         "given OSW page. Requires OSW_DOMAIN env var and the 'osw' package."
     )
     args_schema: type[BaseModel] = AttachPlotInput
-    panel: PlotPanel
+    panel: Any  # PlotPanel — Any to avoid import at class-body time
+    connection: OswConnection | None = None
 
     def _run(self, osw_id: str, format: str = "png") -> str:  # noqa: A002
         try:
-            osw_obj = build_osw_express()
+            osw_obj = _get_osw(self.connection)
             entity = osw_obj.load_entity(osw_id)
             if entity is None:
                 return f"error loading entity with title: {osw_id} — was it formatted correctly?"
@@ -124,11 +125,12 @@ class DocumentEvaluationTool(BaseTool):
         "uploading the plot as a linked file. Requires OSW_DOMAIN env var and the 'osw' package."
     )
     args_schema: type[BaseModel] = DocumentEvaluationInput
-    panel: PlotPanel
+    panel: Any  # PlotPanel
+    connection: OswConnection | None = None
 
     def _run(self, uuid: str | None = None, output_osw_id: str | None = None) -> str:
         try:
-            osw_obj = build_osw_express()
+            osw_obj = _get_osw(self.connection)
             bytesio = _load_plot_bytes(self.panel)
             plot_uuid = __import__("uuid").uuid4()
             wf = _build_wiki_file(osw_obj, plot_uuid)
@@ -156,3 +158,14 @@ class DocumentEvaluationTool(BaseTool):
 
     async def _arun(self, uuid: str | None = None, output_osw_id: str | None = None) -> str:
         return self._run(uuid=uuid, output_osw_id=output_osw_id)
+
+
+def make_osw_plot_tools(
+    connection: OswConnection,
+    panel: Any,
+) -> list[BaseTool]:
+    """Return OSW plot bridge tools bound to a connection and PlotPanel."""
+    return [
+        AttachPlotToOswTool(panel=panel, connection=connection),
+        DocumentEvaluationTool(panel=panel, connection=connection),
+    ]

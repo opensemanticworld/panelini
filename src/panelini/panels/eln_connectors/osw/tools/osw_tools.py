@@ -1,24 +1,25 @@
-"""Backward-compatibility shim — canonical code moved to
-``panelini.panels.eln_connectors.osw.tools.osw_tools``.
+"""OSW ``BaseTool`` subclasses and ``make_osw_tools()`` factory.
 
-This module keeps its original implementation so that existing tests
-which patch ``build_osw_express`` and ``SPARQLWrapper`` at this module
-path continue to work. New code should import from the new location.
+Each tool accepts an optional :class:`~..connection.OswConnection`. When
+provided, the tool uses that connection's credentials; when ``None``, it
+falls back to env-var-based ``build_osw_express()`` for backward compat.
 """
 
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 from urllib.request import urlopen
 from uuid import UUID
 
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-from SPARQLWrapper import JSON, SPARQLWrapper
+from pydantic import BaseModel, ConfigDict, Field
 
-from panelini.panels.eln_connectors.osw.utils.osw_env import build_osw_express, osw_env_present
+from ..connection import OswConnection
+from ..utils.osw_env import build_osw_express
+from ..utils.sparql import run_sparql, sparql_prefixes
+
+_CONN_MODEL_CONFIG = ConfigDict(arbitrary_types_allowed=True)
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -28,7 +29,6 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 
 
 def _replace_special_characters(s: str, replacer: str = " ") -> str:
-    """Replace every non-alphanumeric char with ``replacer`` and drop umlauts."""
     for char in s:
         if char.isalnum():
             continue
@@ -37,12 +37,10 @@ def _replace_special_characters(s: str, replacer: str = " ") -> str:
 
 
 def _check_for_uuid(input_str: str) -> bool:
-    """True iff ``input_str`` is a canonical UUID string."""
     return _UUID_RE.match(input_str) is not None
 
 
 def _try_cast_str_to_uuid(input_str: str) -> str | None:
-    """Return a UUID string from either a UUID or an OSW id; ``None`` otherwise."""
     if _check_for_uuid(input_str):
         return input_str
     if "osw" in input_str.lower():
@@ -51,33 +49,25 @@ def _try_cast_str_to_uuid(input_str: str) -> str | None:
     return None
 
 
-def _sparql_prefixes(domain: str) -> str:
-    """Return common PREFIX declarations for the Blazegraph endpoint."""
-    return (
-        "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n"
-        "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n"
-        f"PREFIX osl: <https://{domain}/id/>\n"
-        f"PREFIX Property: <https://{domain}/id/Property-3A>\n"
-        f"PREFIX File: <https://{domain}/id/File-3A>\n"
-        f"PREFIX Category: <https://{domain}/id/Category-3A>\n"
-        f"PREFIX Item: <https://{domain}/id/Item-3A>\n"
-    )
-
-
-def _run_sparql(query: str) -> Any:
-    """Execute ``query`` against ``BLAZEGRAPH_ENDPOINT`` with basic auth."""
-    sparql = SPARQLWrapper(os.environ["BLAZEGRAPH_ENDPOINT"])
-    sparql.setHTTPAuth("BASIC")
-    sparql.setCredentials(os.environ["BLAZEGRAPH_USER"], os.environ["BLAZEGRAPH_PASSWORD"])
-    sparql.setQuery(query)
-    sparql.setReturnFormat(JSON)
-    return sparql.query().convert()
-
-
 def _osw_id_to_uuid(osw_id: str) -> str:
-    """Extract the UUID portion of an OSW id like 'File:OSW<hex>.csv'."""
     bare = osw_id.split(":")[-1].split(".")[0]
     return str(UUID(bare.replace("OSW", "")))
+
+
+def _get_osw(connection: OswConnection | None) -> Any:
+    """Resolve an OswExpress client from a connection or env vars."""
+    if connection is not None:
+        return connection.build_osw_express()
+    return build_osw_express()
+
+
+def _get_domain(connection: OswConnection | None) -> str:
+    """Resolve domain from a connection or env var."""
+    if connection is not None:
+        return connection.domain
+    import os
+
+    return os.environ["OSW_DOMAIN"]
 
 
 # ---------------------------------------------------------------------------
@@ -140,32 +130,46 @@ class GetInstancesInput(BaseModel):
     max_number: int = Field(default=10, description="The maximum number of instances to be fetched.")
 
 
+class FetchSchemaInput(BaseModel):
+    schema_titles: list[str] = Field(
+        ...,
+        description=(
+            "List of category page titles whose schemas should be fetched and registered locally. "
+            "Example: ['Category:OSW136953ec4cbf49ef80e2343c0e1981c0']"
+        ),
+    )
+
+
 class GetWebsiteHtmlInput(BaseModel):
     url: str = Field(..., description="The url of the website to get the html from.")
 
 
 # ---------------------------------------------------------------------------
-# Tools (stubs — _run bodies implemented in step 9 via TDD)
+# Tools
 # ---------------------------------------------------------------------------
 
 
 class GetPageHtmlTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "get_page_html"
     description: str = "Get the HTML content of a wiki page (main slot) from an OSW instance."
     args_schema: type[BaseModel] = GetPageHtmlInput
+    connection: OswConnection | None = None
 
     def _run(self, fullpagetitle: str) -> Any:
         try:
-            osw_obj = build_osw_express()
+            osw_obj = _get_osw(self.connection)
             return osw_obj.site._site.raw_api(action="parse", page=fullpagetitle, format="json")
         except Exception as e:
             return f"error fetching page html: {e}"
 
 
 class DownloadOslFileTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "download_osl_file"
     description: str = "Download a file from an OSW instance to a local path and return that path."
     args_schema: type[BaseModel] = DownloadOslFileInput
+    connection: OswConnection | None = None
 
     def _run(self, osw_id: str) -> str:
         try:
@@ -174,7 +178,7 @@ class DownloadOslFileTool(BaseTool):
                     osw_id = "File:" + osw_id
                 else:
                     raise ValueError("OSW id must start with 'File:' or 'OSW'")  # noqa: TRY003, TRY301
-            osw_obj = build_osw_express()
+            osw_obj = _get_osw(self.connection)
             local_file = osw_obj.download_file(f"https://{osw_obj.domain}/wiki/{osw_id}", overwrite=True)
             return str(local_file.path)
         except Exception as e:
@@ -196,14 +200,20 @@ class GetFileHeaderTool(BaseTool):
 
 
 class SparqlSearchTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "sparql_search"
-    description: str = "Search for a string in the OSW via SPARQL (label match on normalized labels)."
+    description: str = (
+        "Search the OSW knowledge base by keyword. Returns matching OSW elements with their "
+        "IDs and labels. Use this FIRST when the user asks about a topic, entity, or concept — "
+        "then pass the returned OSW ID to find_out_everything_about for full details."
+    )
     args_schema: type[BaseModel] = SparqlSearchInput
+    connection: OswConnection | None = None
 
     def _run(self, search_string: str) -> Any:
         try:
-            domain = os.environ["OSW_DOMAIN"]
-            prefixes = _sparql_prefixes(domain)
+            domain = _get_domain(self.connection)
+            prefixes = sparql_prefixes(domain)
             uuid_hit = _try_cast_str_to_uuid(search_string)
             if uuid_hit is not None:
                 query = (
@@ -233,20 +243,30 @@ class SparqlSearchTool(BaseTool):
                     + "  ?node Property:HasOswId ?osw_id\n"
                     + "}"
                 )
-            return _run_sparql(query)
+            if self.connection is not None:
+                return run_sparql(self.connection, query)
+
+            return _run_sparql_from_env(query)
         except Exception as e:
             return f"error running sparql search: {e}"
 
 
 class FindOutEverythingAboutTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "find_out_everything_about"
-    description: str = "Get all SPARQL triples (star shape) for an OSW element — all its properties and relations."
+    description: str = (
+        "Query the OSW knowledge base for all properties and relations of an OSW element "
+        "(SPARQL star shape). Requires an OSW ID — use sparql_search first if you only "
+        "have a keyword. This is a DATABASE LOOKUP, not code execution."
+    )
     args_schema: type[BaseModel] = FindOutEverythingAboutInput
+    connection: OswConnection | None = None
 
     def _run(self, osw_id: str, depth: int = 1) -> Any:
         try:
             my_uuid = _osw_id_to_uuid(osw_id)
-            prefixes = _sparql_prefixes(os.environ["OSW_DOMAIN"])
+            domain = _get_domain(self.connection)
+            prefixes = sparql_prefixes(domain)
             query = (
                 prefixes
                 + "SELECT DISTINCT ?s ?p ?o ?s_label ?p_label ?o_label\n"
@@ -270,20 +290,25 @@ class FindOutEverythingAboutTool(BaseTool):
                 + '" . }\n'
                 + "}"
             )
-            return _run_sparql(query)
+            if self.connection is not None:
+                return run_sparql(self.connection, query)
+            return _run_sparql_from_env(query)
         except Exception as e:
             return f"error finding out about {osw_id}: {e}"
 
 
 class GetTopicTaxonomyTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "get_topic_taxonomy"
     description: str = "Get parent and child classes of a given OSW class via SubClassOf traversal."
     args_schema: type[BaseModel] = GetTopicTaxonomyInput
+    connection: OswConnection | None = None
 
     def _run(self, osw_id: str, parent_depth: int = 10, child_depth: int = 1) -> Any:
         try:
             my_uuid = _osw_id_to_uuid(osw_id)
-            prefixes = _sparql_prefixes(os.environ["OSW_DOMAIN"])
+            domain = _get_domain(self.connection)
+            prefixes = sparql_prefixes(domain)
             query = (
                 prefixes
                 + "SELECT DISTINCT ?s_label ?p ?p_label ?o ?o_label ?s_id ?o_id\n"
@@ -301,20 +326,25 @@ class GetTopicTaxonomyTool(BaseTool):
                 + "    ?o Property:HasName ?o_label . ?o Property:HasOswId ?o_id . }\n"
                 + "}"
             )
-            return _run_sparql(query)
+            if self.connection is not None:
+                return run_sparql(self.connection, query)
+            return _run_sparql_from_env(query)
         except Exception as e:
             return f"error getting taxonomy for {osw_id}: {e}"
 
 
 class GetInstancesTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
     name: str = "get_instances"
     description: str = "Get all instances (examples) of a given OSW class."
     args_schema: type[BaseModel] = GetInstancesInput
+    connection: OswConnection | None = None
 
     def _run(self, osw_id: str, max_number: int = 10) -> Any:
         try:
             my_uuid = _osw_id_to_uuid(osw_id)
-            prefixes = _sparql_prefixes(os.environ["OSW_DOMAIN"])
+            domain = _get_domain(self.connection)
+            prefixes = sparql_prefixes(domain)
             query = (
                 prefixes
                 + "SELECT DISTINCT ?s_label ?p ?p_label ?o ?o_label ?s_id ?o_id\n"
@@ -332,9 +362,39 @@ class GetInstancesTool(BaseTool):
                 + "    ?o Property:HasName ?o_label . ?o Property:HasOswId ?o_id . }\n"
                 + "}"
             )
-            return _run_sparql(query)
+            if self.connection is not None:
+                return run_sparql(self.connection, query)
+            return _run_sparql_from_env(query)
         except Exception:
             return "no instances found. The name of the class might not be available — try sparql_search first."
+
+
+class FetchSchemaTool(BaseTool):
+    model_config = _CONN_MODEL_CONFIG
+    name: str = "fetch_osw_schema"
+    description: str = (
+        "Fetch and register OSW category schemas locally so that the corresponding "
+        "Python model classes become available in osw.model.entity. Call this when a "
+        "tool fails with 'module osw.model.entity has no attribute <ClassName>' — pass "
+        "the Category page title(s) to load the missing schema."
+    )
+    args_schema: type[BaseModel] = FetchSchemaInput
+    connection: OswConnection | None = None
+
+    def _run(self, schema_titles: list[str]) -> str:
+        try:
+            from osw.core import OSW  # type: ignore[import-untyped]
+
+            osw_obj = _get_osw(self.connection)
+            osw_obj.fetch_schema(
+                OSW.FetchSchemaParam(
+                    schema_title=schema_titles,
+                    mode="replace",
+                )
+            )
+            return f"Successfully fetched and registered schemas: {', '.join(schema_titles)}"
+        except Exception as e:
+            return f"error fetching schemas: {e}"
 
 
 class GetWebsiteHtmlTool(BaseTool):
@@ -352,25 +412,46 @@ class GetWebsiteHtmlTool(BaseTool):
 
 
 # ---------------------------------------------------------------------------
+# Legacy env-var SPARQL fallback
+# ---------------------------------------------------------------------------
+
+
+def _run_sparql_from_env(query: str) -> Any:
+    """Execute a SPARQL query using env-var credentials (legacy path)."""
+    import os
+
+    from SPARQLWrapper import JSON, SPARQLWrapper
+
+    sparql = SPARQLWrapper(os.environ["BLAZEGRAPH_ENDPOINT"])
+    sparql.setHTTPAuth("BASIC")
+    sparql.setCredentials(os.environ["BLAZEGRAPH_USER"], os.environ["BLAZEGRAPH_PASSWORD"])
+    sparql.setQuery(query)
+    sparql.setReturnFormat(JSON)
+    return sparql.query().convert()
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
 
-def make_osw_tools() -> list[BaseTool]:
-    """Return all OSW tools when the required env vars are set, ``[]`` otherwise.
+def make_osw_tools(connection: OswConnection | None = None) -> list[BaseTool]:
+    """Return all OSW tools bound to *connection*.
 
-    Required env: ``OSW_DOMAIN``, ``BLAZEGRAPH_ENDPOINT``, ``BLAZEGRAPH_USER``,
-    ``BLAZEGRAPH_PASSWORD``.
+    When *connection* is ``None`` and env vars are present, tools fall back
+    to env-var-based credential resolution. Returns ``[]`` when neither a
+    connection nor the required env vars are available.
     """
-    if not osw_env_present():
+    if connection is None and not OswConnection.all_env_present():
         return []
     return [
-        GetPageHtmlTool(),
-        DownloadOslFileTool(),
+        GetPageHtmlTool(connection=connection),
+        DownloadOslFileTool(connection=connection),
         GetFileHeaderTool(),
-        SparqlSearchTool(),
-        FindOutEverythingAboutTool(),
-        GetTopicTaxonomyTool(),
-        GetInstancesTool(),
+        SparqlSearchTool(connection=connection),
+        FindOutEverythingAboutTool(connection=connection),
+        GetTopicTaxonomyTool(connection=connection),
+        GetInstancesTool(connection=connection),
+        FetchSchemaTool(connection=connection),
         GetWebsiteHtmlTool(),
     ]

@@ -45,13 +45,13 @@ def _env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestPickDefaultPlotModel:
-    def test_returns_sonnet_4_6_when_present(self) -> None:
-        sonnet = ModelConfig(name=_DEFAULT_PLOT_MODEL_NAME, value="anthropic/claude-sonnet-4-5")
+    def test_returns_default_model_when_present(self) -> None:
+        haiku = ModelConfig(name=_DEFAULT_PLOT_MODEL_NAME, value="anthropic/claude-haiku-4-5")
         opus = ModelConfig(name="Claude Opus 4.7", value="anthropic/claude-opus-4-7")
-        provider = _provider((opus, sonnet))
-        assert pick_default_plot_model(provider) == sonnet
+        provider = _provider((opus, haiku))
+        assert pick_default_plot_model(provider) == haiku
 
-    def test_falls_back_to_first_model_when_sonnet_4_6_missing(self) -> None:
+    def test_falls_back_to_first_model_when_default_missing(self) -> None:
         opus = ModelConfig(name="Claude Opus 4.7", value="anthropic/claude-opus-4-7")
         haiku = ModelConfig(name="Claude Haiku 4.5", value="anthropic/claude-haiku-4-5")
         provider = _provider((opus, haiku))

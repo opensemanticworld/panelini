@@ -1,9 +1,8 @@
 """Panel-bound BaseTool subclasses that drive a ``PlotPanel``.
 
-The three tools here delegate directly to panel methods (no OSW coupling).
-``make_plot_tools`` additionally tries to import the OSW-bound tools from
-``osw_plot_tools``; if the ``osw`` package is not installed, those tools are
-silently omitted from the returned list.
+The three tools here delegate directly to panel methods. OSW-bound tools
+have moved to ``panelini.panels.eln_connectors.osw.tools`` and are no
+longer bundled by ``make_plot_tools``.
 """
 
 from __future__ import annotations
@@ -152,18 +151,12 @@ class LoadCsvTool(BaseTool):
 def make_plot_tools(panel: PlotPanel) -> list[BaseTool]:
     """Return panel-bound tools, ready to be passed to ``AiChat(tools=...)``.
 
-    Always includes the three delegation tools (``plot_by_code``, ``run_code``,
-    ``load_data_from_csv``). If the ``osw`` package is installed, also appends
-    ``attach_current_plot_to_osw_page`` and ``document_current_evaluation``.
+    Returns the three delegation tools (``plot_by_code``, ``run_code``,
+    ``load_data_from_csv``). OSW-bound tools are now provided separately
+    by ``panelini.panels.eln_connectors.osw``.
     """
-    tools: list[BaseTool] = [
+    return [
         PlotByCodeTool(panel=panel),
         RunCodeTool(panel=panel),
         LoadCsvTool(panel=panel),
     ]
-    try:
-        from .osw_plot_tools import AttachPlotToOswTool, DocumentEvaluationTool
-    except ImportError:
-        return tools
-    tools.extend([AttachPlotToOswTool(panel=panel), DocumentEvaluationTool(panel=panel)])
-    return tools

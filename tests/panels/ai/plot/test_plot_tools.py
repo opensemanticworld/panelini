@@ -103,11 +103,11 @@ class TestLoadCsvTool:
 
 
 class TestMakePlotTools:
-    """With ``osw`` installed in the dev env, the factory returns all five tools."""
+    """After OSW decoupling, the factory returns only the three pure-plot tools."""
 
-    def test_returns_five_tools_when_osw_available(self, mock_panel: MagicMock) -> None:
+    def test_returns_three_tools(self, mock_panel: MagicMock) -> None:
         tools = make_plot_tools(mock_panel)
-        assert len(tools) == 5
+        assert len(tools) == 3
 
     def test_contains_all_expected_names(self, mock_panel: MagicMock) -> None:
         names = {t.name for t in make_plot_tools(mock_panel)}
@@ -115,27 +115,9 @@ class TestMakePlotTools:
             "plot_by_code",
             "run_code",
             "load_data_from_csv",
-            "attach_current_plot_to_osw_page",
-            "document_current_evaluation",
         }
 
     def test_all_tools_bound_to_same_panel(self, mock_panel: MagicMock) -> None:
         tools = make_plot_tools(mock_panel)
         for t in tools:
             assert t.panel is mock_panel
-
-    def test_returns_three_tools_when_osw_missing(self, mock_panel: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Simulate missing osw package by making the submodule import raise ImportError."""
-        import builtins
-
-        real_import = builtins.__import__
-
-        def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name.endswith("osw_plot_tools") or name == "osw_plot_tools":
-                raise ImportError
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
-        tools = make_plot_tools(mock_panel)
-        assert len(tools) == 3
-        assert {t.name for t in tools} == {"plot_by_code", "run_code", "load_data_from_csv"}

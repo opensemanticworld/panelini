@@ -142,7 +142,7 @@ def make_viewer_html(xml: str) -> str:
     return f'<iframe src="{src}" width="100%" height="100%" frameborder="0"></iframe>'
 
 
-import param  # noqa: E402
+import param
 
 
 class DrawAiState(param.Parameterized):
@@ -158,11 +158,11 @@ class DrawAiState(param.Parameterized):
     beautified_xml = param.String(default="")  # editable beautified XML (matches current_xml shape)
 
 
-from typing import ClassVar  # noqa: E402
+from typing import ClassVar
 
-import anthropic  # noqa: E402
-from langchain_core.tools import BaseTool  # noqa: E402
-from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
+import anthropic
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BeautifyDrawioInput(BaseModel):
@@ -287,12 +287,12 @@ class BeautifyDrawioTool(BaseTool):
         return f"Beautified ({new_len} chars, was {orig_len}). See the bottom pane. Click Download to save."
 
 
-import panel as pn  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
+import panel as pn
+from dotenv import load_dotenv
 
-from panelini import Panelini  # noqa: E402
-from panelini.panels.ai import AiChat  # noqa: E402
-from panelini.panels.ai.utils.config import load_config  # noqa: E402
+from panelini import Panelini
+from panelini.panels.ai import AiChat
+from panelini.panels.ai.utils.config import load_config
 
 _SYSTEM_MESSAGE = (
     "You help the user beautify drawio diagrams. "

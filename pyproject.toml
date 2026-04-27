@@ -50,7 +50,7 @@ ai-llm-sandbox = [
     "pillow>=10.0",
 ]
 ai-osw = [
-    "osw>=1.0",
+    "osw[wikitext]>=1.0",
     "SPARQLWrapper>=2.0",
     "pandas>=2.0.0",
     "python-dotenv>=1.0.0",
@@ -111,6 +111,10 @@ markers = [
     "ui: UI tests requiring Playwright (browser)",
     "ai: AI tests requiring langchain and related packages",
 ]
+filterwarnings = [
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore::pydantic.json_schema.PydanticJsonSchemaWarning",
+]
 
 [tool.ruff]
 target-version = "py39"
@@ -160,6 +164,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+"examples/*" = ["E402"]
 
 [tool.ruff.format]
 preview = true

@@ -9,6 +9,15 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from .utils.ai_interface import AiInterface, create_interface
 from .utils.config import ModelConfig, ProviderConfig, load_config
 
+_DEFAULT_CHAT_MODEL_NAME = "Claude Sonnet 4.6"
+
+
+def _pick_default_model(provider: ProviderConfig) -> ModelConfig:
+    for m in provider.models:
+        if m.name == _DEFAULT_CHAT_MODEL_NAME:
+            return m
+    return provider.models[0]
+
 
 class AiBackend:
     """Backend for AI interface management and message processing.
@@ -42,7 +51,7 @@ class AiBackend:
 
         # Current configuration
         self.current_provider = self._config.default_provider
-        self.current_model: ModelConfig = self.current_provider.models[0]
+        self.current_model: ModelConfig = _pick_default_model(self.current_provider)
         self.current_temperature = 0.7
         self.current_tools: list[Any] = []
 
@@ -115,8 +124,7 @@ class AiBackend:
         """
         self.current_provider = provider
 
-        # Update model to first available for new provider
-        self.current_model = provider.models[0]
+        self.current_model = _pick_default_model(provider)
 
         # Recreate interface (clear history when changing providers)
         self._create_ai_interface(preserve_history=False)
@@ -242,7 +250,7 @@ class AiBackend:
         if not self.ai_interface:
             return "Error: AI interface not initialized"
 
-        max_iterations = 10  # Prevent infinite loops
+        max_iterations = 25  # Prevent infinite loops
         iteration = 0
 
         while iteration < max_iterations:
@@ -298,35 +306,40 @@ class AiBackend:
                     tool = current_tool
                     break
 
-            if tool:
-                try:
-                    # Execute the tool
-                    result = await tool._arun(**tool_args)
-                    result_str = str(result)
-
-                    # Check if this is a preview update
-                    if result_str.startswith("PREVIEW_UPDATE::"):
-                        parts = result_str.split("::", 2)
-                        if len(parts) == 3:
-                            _, preview_title, preview_content = parts
-                            # Store preview update for frontend
-                            self.preview_updates.append({"title": preview_title, "content": preview_content})
-                            # Return success message to AI
-                            result_str = f"Successfully updated preview window with title '{preview_title}'"
-
-                    tool_results.append(
-                        ToolMessage(
-                            content=result_str,
-                            tool_call_id=tool_id,
-                        )
+            if not tool:
+                tool_results.append(
+                    ToolMessage(
+                        content=f"Error: tool '{tool_name}' not found. Available tools: "
+                        + ", ".join(t.name for t in self.current_tools),
+                        tool_call_id=tool_id,
                     )
-                except Exception as e:
-                    tool_results.append(
-                        ToolMessage(
-                            content=f"Error executing tool: {e!s}",
-                            tool_call_id=tool_id,
-                        )
+                )
+                continue
+
+            try:
+                result = await tool._arun(**tool_args)
+                result_str = str(result)
+
+                if result_str.startswith("PREVIEW_UPDATE::"):
+                    parts = result_str.split("::", 2)
+                    if len(parts) == 3:
+                        _, preview_title, preview_content = parts
+                        self.preview_updates.append({"title": preview_title, "content": preview_content})
+                        result_str = f"Successfully updated preview window with title '{preview_title}'"
+
+                tool_results.append(
+                    ToolMessage(
+                        content=result_str,
+                        tool_call_id=tool_id,
                     )
+                )
+            except Exception as e:
+                tool_results.append(
+                    ToolMessage(
+                        content=f"Error executing tool: {e!s}",
+                        tool_call_id=tool_id,
+                    )
+                )
 
         return tool_results
 

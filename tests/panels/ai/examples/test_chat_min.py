@@ -60,6 +60,9 @@ def test_chat_min_clear_chat(ready_page: Page):
     # Welcome message should be visible before clearing
     assert page.locator("text=Hello! 👋").first.is_visible()
 
+    # Expand the collapsed "Chat Management" card before interacting
+    page.locator("button.card-header", has_text="Chat Management").click()
+
     # Click clear chat button
     page.locator("button:has-text('Clear Chat')").click()
 

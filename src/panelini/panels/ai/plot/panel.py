@@ -29,6 +29,24 @@ _EMPTY_PLOT_HTML = (
 DEFAULT_LIBRARIES: list[str] = ["numpy", "pandas", "matplotlib", "scipy"]
 DEFAULT_IMAGE: str = "python:3.12-slim"
 
+# import-name → pip-package-name for cases where they differ
+_PIP_NAME_MAP: dict[str, str] = {
+    "micpy": "micress-micpy",
+    "PIL": "pillow",
+    "cv2": "opencv-python",
+    "sklearn": "scikit-learn",
+    "skimage": "scikit-image",
+    "yaml": "pyyaml",
+    "bs4": "beautifulsoup4",
+    "attr": "attrs",
+    "dateutil": "python-dateutil",
+}
+
+
+def _resolve_pip_names(libraries: list[str]) -> list[str]:
+    """Replace Python import names with the correct pip package names."""
+    return [_PIP_NAME_MAP.get(lib, lib) for lib in libraries]
+
 
 class PlotPanel:
     """Sandbox-backed plotting panel driven by an AI chat agent."""
@@ -38,10 +56,12 @@ class PlotPanel:
         data_path: Path | str | None = None,
         download_dir: Path | str | None = None,
         docker_image: str = DEFAULT_IMAGE,
+        verbose: bool = False,
     ) -> None:
         self.data_path: Path = Path(data_path) if data_path is not None else Path.cwd() / "data"
         self.download_dir: Path = Path(download_dir) if download_dir is not None else self.data_path / "downloads"
         self.docker_image: str = docker_image
+        self.verbose: bool = verbose
 
         self.df: pd.DataFrame | None = None  # type: ignore[no-any-unimported]
         self.current_python_code: str | None = None
@@ -88,10 +108,12 @@ class PlotPanel:
 
         Returns a success or error message suitable for a tool response.
         """
-        libs = list(libraries) if libraries is not None else list(DEFAULT_LIBRARIES)
+        libs = _resolve_pip_names(list(libraries) if libraries is not None else list(DEFAULT_LIBRARIES))
         return_str: str | None = None
         result: str
-        with SandboxSession(lang="python", image=self.docker_image, keep_template=True) as session:
+        with SandboxSession(
+            lang="python", image=self.docker_image, keep_template=True, verbose=self.verbose
+        ) as session:
             try:
                 filenames: list[str] = []
                 if file_paths:
@@ -136,8 +158,8 @@ class PlotPanel:
         libraries: list[str] | None = None,
     ) -> str:
         """Run ``code`` in a sandbox and return whatever it prints to stdout."""
-        libs = list(libraries) if libraries is not None else list(DEFAULT_LIBRARIES)
-        with SandboxSession(lang=lang, image=self.docker_image, keep_template=True) as session:
+        libs = _resolve_pip_names(list(libraries) if libraries is not None else list(DEFAULT_LIBRARIES))
+        with SandboxSession(lang=lang, image=self.docker_image, keep_template=True, verbose=self.verbose) as session:
             try:
                 if file_paths:
                     copy_files_to_sandbox(

@@ -1,4 +1,4 @@
-"""Tests for panelini.panels.ai.plot.utils.osw_env."""
+"""Tests for panelini.panels.eln_connectors.osw.utils.osw_env."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from panelini.panels.ai.plot.utils.osw_env import (
+from panelini.panels.eln_connectors.osw.utils.osw_env import (
     OSW_AUTH_ENV_VARS,
     OSW_ENV_VARS,
     EnvCredentialManager,
@@ -128,7 +128,7 @@ class TestBuildOswExpress:
         monkeypatch.setenv("OSW_USER", "alice")
         monkeypatch.setenv("OSW_PASSWORD", "hunter2")
 
-        with patch("panelini.panels.ai.plot.utils.osw_env.OswExpress") as mock_osw_cls:
+        with patch("panelini.panels.eln_connectors.osw.connection.OswExpress") as mock_osw_cls:
             mock_osw_cls.return_value = MagicMock()
             build_osw_express()
 
@@ -145,7 +145,7 @@ class TestBuildOswExpress:
         monkeypatch.setenv("OSW_USER", "alice")
         monkeypatch.setenv("OSW_PASSWORD", "hunter2")
 
-        with patch("panelini.panels.ai.plot.utils.osw_env.OswExpress") as mock_osw_cls:
+        with patch("panelini.panels.eln_connectors.osw.connection.OswExpress") as mock_osw_cls:
             mock_osw_cls.return_value = MagicMock()
             build_osw_express(domain="explicit.example")
 

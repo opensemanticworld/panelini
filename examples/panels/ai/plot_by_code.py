@@ -1,13 +1,12 @@
 """Example: AI chat that plots matplotlib figures in a sandboxed Docker container.
 
-The chat agent is wired to a ``PlotPanel`` (on the right of the chat) via five
-``BaseTool`` wrappers: ``plot_by_code``, ``run_code``, ``load_data_from_csv``,
-``attach_current_plot_to_osw_page``, and ``document_current_evaluation``. When
-the required OSW environment variables are set, an additional eight
-OSW-connector tools (``get_page_html``, ``download_osl_file``, ``sparql_search``,
-``find_out_everything_about``, ``get_topic_taxonomy``, ``get_instances``,
-``get_file_header``, ``get_website_html``) are registered; otherwise they are
-silently omitted and the example still runs with the three core plotting tools.
+The chat agent is wired to a ``PlotPanel`` (on the right of the chat) via three
+``BaseTool`` wrappers: ``plot_by_code``, ``run_code``, ``load_data_from_csv``.
+
+An ``OswConnector`` panel in the sidebar lets the user connect to one or more
+OpenSemanticWorld instances. On connect, eight OSW-connector tools and two
+OSW-plot bridge tools are dynamically registered in the chat; on disconnect
+they are removed.
 
 Environment variables
 ---------------------
@@ -16,19 +15,13 @@ LLM — one of the following provider set-ups (see ``src/panelini/panels/ai/defa
   OR
     AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION
 
-OSW (optional, enables 8 extra tools + OSW upload of the current plot):
+OSW (optional, pre-fills the connector UI fields):
     OSW_DOMAIN
     OSW_USER
     OSW_PASSWORD
     BLAZEGRAPH_ENDPOINT
     BLAZEGRAPH_USER
     BLAZEGRAPH_PASSWORD
-
-The three OSW auth variables (``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD``)
-are *required together* when any OSW tool is invoked. Credentials stay in
-memory — no ``accounts.pwd.yaml`` is written, and the ``input()`` / ``getpass``
-prompt that ``osw.express`` normally shows on a fresh machine is bypassed.
-Missing any of the three produces a ``RuntimeError`` with the missing names.
 
 Panelini (optional):
     PANELINI_AI_CONFIG_PATH  # override the default AI config file
@@ -43,31 +36,12 @@ With uv (from a checkout of this repo):
     # Run the example:
     uv run python examples/panels/ai/plot_by_code.py
 
-With uv (as a dependency in another project):
-    uv add 'panelini[ai,ai-llm-sandbox]'
-    # or, with OSW connector:
-    uv add 'panelini[ai,ai-llm-sandbox,ai-osw]'
-
-With pip:
-    pip install 'panelini[ai,ai-llm-sandbox]'
-    # or, with OSW connector:
-    pip install 'panelini[ai,ai-llm-sandbox,ai-osw]'
-
 Runtime requirements
 --------------------
 * Docker daemon running (``plot_by_code`` / ``run_code`` spin up
   ``python:3.12-slim`` sandbox containers).
 * A ``.env`` file next to this script (or exported env vars) with the LLM
   credentials; ``python-dotenv`` is loaded below.
-
-OSW connector behaviour
------------------------
-The OSW tools are registered only when *all six* OSW env vars are set
-(three auth vars + three Blazegraph vars). Otherwise they are silently
-omitted from the tool list, and the example runs with ``plot_by_code``,
-``run_code``, and ``load_data_from_csv`` only — plus the two OSW-bound
-plot tools, which themselves degrade gracefully (returning an error
-string instead of raising) when ``osw`` is unavailable at runtime.
 
 Right sidebar — plot model override
 -----------------------------------
@@ -89,9 +63,10 @@ from panelini.panels.ai import AiChat
 from panelini.panels.ai.plot import (
     PlotPanel,
     build_plot_context_sidebar,
-    make_osw_tools,
     make_plot_tools,
 )
+from panelini.panels.eln_connectors.osw import OswConnector
+from panelini.panels.eln_connectors.osw.tools.osw_plot_tools import make_osw_plot_tools
 
 load_dotenv()
 
@@ -123,9 +98,22 @@ SYSTEM_MESSAGE = (
 
 
 plot_panel = PlotPanel()
-tools = [*make_plot_tools(plot_panel), *make_osw_tools()]
+tools = make_plot_tools(plot_panel)
 
 chat = AiChat(system_message=SYSTEM_MESSAGE, tools=tools)
+
+osw_connector = OswConnector()
+
+
+def _on_osw_tools_changed(osw_tools: list) -> None:
+    """Callback: register/deregister OSW tools in the chat when connection changes."""
+    bridge_tools = (
+        make_osw_plot_tools(connection=osw_connector.connection, panel=plot_panel) if osw_connector.connected else []
+    )
+    chat.register_external_tools("osw", osw_tools + bridge_tools)
+
+
+osw_connector.on_tools_changed = _on_osw_tools_changed
 
 app = Panelini(
     title="AI + Plot by Code",
@@ -133,7 +121,7 @@ app = Panelini(
     sidebar_right_enabled=True,
     sidebar_right_visible=True,
 )
-app.sidebar_set(objects=chat.sidebar_objects)
+app.sidebar_set(objects=[*chat.sidebar_objects, *osw_connector.sidebar_objects])
 app.sidebar_right_set(objects=build_plot_context_sidebar(plot_panel))
 
 chat_card = pn.Card(

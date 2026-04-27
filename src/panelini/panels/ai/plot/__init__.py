@@ -12,13 +12,11 @@ Install optional dependencies::
 
 from .model_selector import build_plot_context_sidebar, regenerate_plot
 from .panel import PlotPanel
-from .tools.osw_tools import make_osw_tools
 from .tools.plot_tools import make_plot_tools
 
 __all__ = [
     "PlotPanel",
     "build_plot_context_sidebar",
-    "make_osw_tools",
     "make_plot_tools",
     "regenerate_plot",
 ]
