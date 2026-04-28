@@ -341,10 +341,39 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     chat.chat_interface.min_width = 0
 
     # ── Compare column ────────────────────────────────────────────────
-    file_input = pn.widgets.FileInput(
-        accept=".drawio,.drawio.png",
-        sizing_mode="stretch_width",
+    file_input = pn.widgets.FileDropper(
+        multiple=False,
+        sizing_mode="stretch_both",
+        min_height=200,
         margin=(5, 5, 5, 5),
+        stylesheets=[
+            """
+            .filepond--root {
+                height: 100%;
+                min-height: 200px;
+            }
+            .filepond--drop-label {
+                height: 100%;
+            }
+            .filepond--panel-root {
+                background: linear-gradient(135deg, #f0f4ff 0%, #f8f0ff 100%);
+                border: 2px dashed #7c9cff;
+                border-radius: 10px;
+                transition: background 0.2s, border-color 0.2s;
+            }
+            .filepond--root[data-hopper-state="drag-over"] .filepond--panel-root {
+                background: linear-gradient(135deg, #dce6ff 0%, #ecdeff 100%);
+                border-color: #4466ee;
+                border-style: solid;
+            }
+            .filepond--drop-label label {
+                font-size: 1rem;
+                font-weight: 600;
+                color: #4455aa;
+                cursor: pointer;
+            }
+            """
+        ],
     )
     alert_pane = pn.pane.Alert(
         "",
@@ -441,16 +470,18 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     def _on_upload(event: object) -> None:
         _ = event
-        filename = file_input.filename or ""
-        data = file_input.value
-        if not data:
+        print(f"[drawai] _on_upload called, value keys: {list(file_input.value)}", flush=True)
+        if not file_input.value:
             return
+        filename = next(iter(file_input.value))
+        data = file_input.value[filename]
+        print(f"[drawai] filename={filename!r} data type={type(data).__name__} len={len(data)}", flush=True)
         try:
             if filename.endswith(".drawio.png"):
                 raw_xml = extract_xml_from_drawio_png(data)
                 fmt = "png"
             elif filename.endswith(".drawio"):
-                raw_xml = data.decode("utf-8")
+                raw_xml = data if isinstance(data, str) else data.decode("utf-8")
                 fmt = "drawio"
             else:
                 alert_pane.object = "Unsupported extension. Use .drawio or .drawio.png."
@@ -467,7 +498,7 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
         alert_pane.visible = False
         state.param.update(
-            current_bytes=data,
+            current_bytes=data.encode("utf-8") if isinstance(data, str) else data,
             current_xml=editable_xml,
             current_outer_wrapper=wrapper or "",
             current_format=fmt,
