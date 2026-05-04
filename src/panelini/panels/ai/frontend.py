@@ -425,8 +425,15 @@ class AiChat:
         self.backend.update_temperature(event.new)
 
     def _on_tool_change(self, event: Any) -> None:
-        """Handle tool selection changes."""
+        """Handle tool selection changes.
+
+        Suppressed when _suppress_tool_notifications is True
+        (for bulk updates from external tool trees).
+        """
         _ = event
+
+        if getattr(self, "_suppress_tool_notifications", False):
+            return
 
         tool_count = self.backend.update_tools(self._get_selected_tools())
 
@@ -435,6 +442,28 @@ class AiChat:
             user="⚙️ System",
             respond=False,
         )
+
+    def batch_update_tools(self, tool_names_checked: set[str]) -> int:
+        """Update tool checkboxes in bulk without chat spam.
+
+        Sets checkbox values, updates backend once, sends a
+        single notification. Returns the number of enabled tools.
+
+        Args:
+            tool_names_checked: Set of tool names to enable.
+                All others are disabled.
+        """
+        self._suppress_tool_notifications = True
+        try:
+            for name, info in self.tool_checkboxes.items():
+                info["checkbox"].value = name in tool_names_checked
+        finally:
+            self._suppress_tool_notifications = False
+
+        tool_count = self.backend.update_tools(
+            self._get_selected_tools(),
+        )
+        return tool_count
 
     def _on_clear_chat(self, event: Any) -> None:
         """Handle clear chat & history button click."""
