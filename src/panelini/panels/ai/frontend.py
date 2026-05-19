@@ -35,6 +35,8 @@ class AiChat:
         welcome_message: str | None = None,
         config_path: Path | None = None,
         tools: list | None = None,
+        show_tools: bool = True,
+        show_preview: bool = True,
     ) -> None:
         """Initialize the AI chat frontend.
 
@@ -45,7 +47,14 @@ class AiChat:
             config_path: Optional path to a custom config.yml file.
             tools: Optional list of custom ``BaseTool`` instances to make
                 available alongside the built-in tools.
+            show_tools: When *False*, the "Basic Tools" sidebar card is
+                hidden and tool toggles are not rendered.
+            show_preview: When *False*, the preview split-pane is omitted
+                and the chat fills the full main area.
         """
+        self._show_tools = show_tools
+        self._show_preview = show_preview
+
         # Initialize backend
         self.backend = AiBackend(
             system_message=system_message,
@@ -209,78 +218,84 @@ class AiChat:
         """)
 
         # Build the sidebar and main objects
+        _general_setup_items: list[pn.viewable.Viewable] = [
+            pn.Card(
+                title="Provider Settings",
+                collapsible=True,
+                collapsed=False,
+                objects=[
+                    pn.Column(
+                        self.provider_selector,
+                    )
+                ],
+                styles={
+                    "margin-top": "10px",
+                    "margin-bottom": "12px",
+                    "padding": "12px",
+                },
+            ),
+            pn.Card(
+                title="Model Settings",
+                collapsible=True,
+                collapsed=False,
+                objects=[
+                    pn.Column(
+                        self.model_selector,
+                        self.temperature_slider,
+                    )
+                ],
+                styles={
+                    "margin-bottom": "12px",
+                    "padding": "12px",
+                },
+            ),
+        ]
+        if show_tools:
+            _general_setup_items.append(
+                pn.Card(
+                    title="Basic Tools",
+                    collapsible=True,
+                    collapsed=False,
+                    objects=[
+                        pn.Column(
+                            pn.pane.Markdown("**Enable tools for the assistant:**", margin=(0, 0, 10, 0)),
+                            self.tool_checkbox_group,
+                        )
+                    ],
+                    styles={
+                        "margin-bottom": "12px",
+                        "padding": "12px",
+                    },
+                )
+            )
+        _general_setup_items.append(
+            pn.Card(
+                title="Chat Management",
+                collapsible=True,
+                collapsed=False,
+                objects=[
+                    pn.Column(
+                        pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
+                        self.clear_chat_button,
+                        pn.pane.Markdown("**Export/Import:**", margin=(10, 0, 5, 0)),
+                        self.download_chat_button,
+                        pn.pane.Markdown("**Restore from JSON:**", margin=(10, 0, 5, 0)),
+                        self.upload_chat_input,
+                        self.uploaded_filename_display,
+                    )
+                ],
+                styles={
+                    "margin-bottom": "10px",
+                    "padding": "12px",
+                },
+            )
+        )
         self._sidebar_objects = [
             pn.Card(
                 title="General Setup",
                 collapsible=True,
                 collapsed=False,
-                objects=[
-                    pn.Card(
-                        title="Provider Settings",
-                        collapsible=True,
-                        collapsed=False,
-                        objects=[
-                            pn.Column(
-                                self.provider_selector,
-                            )
-                        ],
-                        styles={
-                            "margin-top": "10px",
-                            "margin-bottom": "12px",
-                            "padding": "12px",
-                        },
-                    ),
-                    pn.Card(
-                        title="Model Settings",
-                        collapsible=True,
-                        collapsed=False,
-                        objects=[
-                            pn.Column(
-                                self.model_selector,
-                                self.temperature_slider,
-                            )
-                        ],
-                        styles={
-                            "margin-bottom": "12px",
-                            "padding": "12px",
-                        },
-                    ),
-                    pn.Card(
-                        title="Basic Tools",
-                        collapsible=True,
-                        collapsed=False,
-                        objects=[
-                            pn.Column(
-                                pn.pane.Markdown("**Enable tools for the assistant:**", margin=(0, 0, 10, 0)),
-                                self.tool_checkbox_group,
-                            )
-                        ],
-                        styles={
-                            "margin-bottom": "12px",
-                            "padding": "12px",
-                        },
-                    ),
-                    pn.Card(
-                        title="Chat Management",
-                        collapsible=True,
-                        collapsed=False,
-                        objects=[
-                            pn.Column(
-                                pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
-                                self.clear_chat_button,
-                                pn.pane.Markdown("**Export/Import:**", margin=(10, 0, 5, 0)),
-                                self.download_chat_button,
-                                pn.pane.Markdown("**Restore from JSON:**", margin=(10, 0, 5, 0)),
-                                self.upload_chat_input,
-                                self.uploaded_filename_display,
-                            )
-                        ],
-                        styles={
-                            "margin-bottom": "10px",
-                            "padding": "12px",
-                        },
-                    ),
-                ],
+                objects=_general_setup_items,
                 styles={"padding": "8px"},
             ),
         ]
@@ -309,14 +324,20 @@ class AiChat:
             },
         )
 
-        # Two-column layout
-        main_layout = pn.Row(
-            chat_card,
-            preview_card,
-            sizing_mode="stretch_both",
-            min_height=600,
-            # margin=(0, 15, 10, 15),
-        )
+        # Two-column layout (or single-column when preview is disabled)
+        if show_preview:
+            main_layout = pn.Row(
+                chat_card,
+                preview_card,
+                sizing_mode="stretch_both",
+                min_height=600,
+            )
+        else:
+            main_layout = pn.Row(
+                chat_card,
+                sizing_mode="stretch_both",
+                min_height=600,
+            )
 
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]
 
@@ -348,6 +369,8 @@ class AiChat:
             title: Title for the preview
             content: Markdown content to display
         """
+        if not self._show_preview:
+            return
         # Check if content already starts with a heading to avoid duplicates
         if content.strip().startswith("#"):
             self.preview_content.object = content

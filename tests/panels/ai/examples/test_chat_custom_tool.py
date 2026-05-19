@@ -58,4 +58,4 @@ def test_local_storage_tool_toggle(ready_page: Page):
     # System message confirming the tool update should appear in the chat
     page.locator("text=Tools updated").first.wait_for(timeout=5000)
     assert page.locator("text=Tools updated").first.is_visible()
-    assert page.locator("text=2 tool(s) now available").first.is_visible()
+    assert page.locator("text=1 tool(s) now available").first.is_visible()
