@@ -8,6 +8,7 @@ Internal planning documents — design specs and implementation plans.
 :hidden:
 
 plans/2026-04-17-drawai-beautify-example
+plans/2026-04-24-ai-plot-by-code-example
 ```
 
 ```{toctree}
@@ -16,4 +17,5 @@ plans/2026-04-17-drawai-beautify-example
 :hidden:
 
 specs/2026-04-17-drawai-beautify-example-design
+specs/2026-04-24-ai-plot-by-code-example-design
 ```

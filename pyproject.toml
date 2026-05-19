@@ -45,6 +45,16 @@ ai-drawio = [
     "anthropic>=0.39",
     "pillow>=10.0",
 ]
+ai-llm-sandbox = [
+    "llm-sandbox[docker]>=0.2",
+    "pillow>=10.0",
+]
+ai-osw = [
+    "osw>=1.0",
+    "SPARQLWrapper>=2.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://opensemanticworld.github.io/panelini/"
@@ -74,6 +84,7 @@ dev = [
     "sphinxcontrib-mermaid>=1.0.0",
     "pytest-playwright>=0.7.2",
     "pytest-asyncio>=0.23",
+    "osw>=1.0.1",
 ]
 
 [build-system]
@@ -166,4 +177,4 @@ exclude = ["src/panelini/components/migration"]
 [tool.deptry.per_rule_ignores]
 DEP002 = ["watchfiles", "langchain", "langchain-community", "python-dotenv", "anthropic", "pillow"]
 DEP003 = ["langchain-core", "langchain_core", "pydantic"]
-DEP004 = ["langchain", "langchain-anthropic", "langchain-community", "langchain-openai", "python-dotenv", "pyyaml"]
+DEP004 = ["langchain", "langchain-anthropic", "langchain-community", "langchain-openai", "llm-sandbox", "python-dotenv", "pyyaml"]
