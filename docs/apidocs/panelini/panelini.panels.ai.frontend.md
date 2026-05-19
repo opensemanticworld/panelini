@@ -23,7 +23,7 @@
 
 ### API
 
-`````{py:class} AiChat(system_message: str = 'You are a helpful assistant.', welcome_message: str | None = None, config_path: pathlib.Path | None = None, tools: list | None = None)
+`````{py:class} AiChat(system_message: str = 'You are a helpful assistant.', welcome_message: str | None = None, config_path: pathlib.Path | None = None, tools: list | None = None, show_tools: bool = True, show_preview: bool = True)
 :canonical: panelini.panels.ai.frontend.AiChat
 
 ```{autodoc2-docstring} panelini.panels.ai.frontend.AiChat

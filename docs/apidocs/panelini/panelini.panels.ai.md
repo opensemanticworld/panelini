@@ -13,6 +13,7 @@
 :titlesonly:
 :maxdepth: 3
 
+panelini.panels.ai.plot
 panelini.panels.ai.tools
 panelini.panels.ai.utils
 ```
