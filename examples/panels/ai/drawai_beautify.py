@@ -190,9 +190,6 @@ _BEAUTIFY_SYSTEM_PROMPT = (
 )
 
 
-_BLANK_DIAGRAM = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
-
-
 def _strip_fences(text: str) -> str:
     """Remove ```...``` code fences if the model wrapped its output anyway."""
     stripped = text.strip()
@@ -333,7 +330,6 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     api_key, base_url = _anthropic_credentials_from_config()
 
     state = DrawAiState()
-    state.param.update(current_xml=_BLANK_DIAGRAM, current_format="drawio")
     tool = BeautifyDrawioTool(state=state, api_key=api_key, base_url=base_url)
 
     chat = AiChat(system_message=_SYSTEM_MESSAGE, tools=[tool])
@@ -559,18 +555,17 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     # ── Clear handlers ────────────────────────────────────────────────
 
-    def _reset_to_blank() -> None:
-        state.param.update(
-            current_bytes=b"",
-            current_xml=_BLANK_DIAGRAM,
-            current_outer_wrapper="",
-            current_format="drawio",
-            current_filename="",
-        )
+    _EMPTY_STATE = {
+        "current_bytes": b"",
+        "current_xml": "",
+        "current_outer_wrapper": "",
+        "current_format": None,
+        "current_filename": "",
+    }
 
     def _on_clear_input(event: object) -> None:
         _ = event
-        _reset_to_blank()
+        state.param.update(**_EMPTY_STATE, beautified_xml=state.beautified_xml)
 
     def _on_clear_beautified(event: object) -> None:
         _ = event
@@ -578,8 +573,7 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
 
     def _on_clear_both(event: object) -> None:
         _ = event
-        _reset_to_blank()
-        state.beautified_xml = ""
+        state.param.update(**_EMPTY_STATE, beautified_xml="")
 
     clear_input_button.on_click(_on_clear_input)
     clear_beautified_button.on_click(_on_clear_beautified)
@@ -597,6 +591,8 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     }
 
     compare_column = pn.Column(
+        file_input,
+        alert_pane,
         pn.pane.Markdown("**Original**", margin=(5, 5, 0, 5)),
         top_pane,
         pn.pane.Markdown("**Beautified**", margin=(5, 5, 0, 5)),
@@ -626,10 +622,9 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         styles={"display": "flex", "width": "100%", "max-width": "100%", "flex-wrap": "nowrap"},
     )
 
-    app = Panelini(title="Panelini DrawAI", sidebar_enabled=True, sidebar_right_enabled=True)
+    app = Panelini(title="Panelini DrawAI", sidebar_enabled=True)
     app.main_set(objects=[main_layout])
     app.sidebar_set(objects=chat.sidebar_objects)
-    app.sidebar_right_set(objects=[file_input, alert_pane])
     return app
 
 
