@@ -16,4 +16,5 @@
 panelini.panels.ai
 panelini.panels.jsoneditor
 panelini.panels.visnetwork
+panelini.panels.wunderbaum
 ```
