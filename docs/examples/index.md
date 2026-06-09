@@ -31,6 +31,12 @@ Host two independent chats in synced tabs with `jslink`.
 Render a JSON-Schema driven form inside a Panelini card.
 :::
 
+:::{grid-item-card} Pydantic-backed JSON editor
+:link: jsoneditor_pydantic
+:link-type: doc
+Drive a JSON editor from a Pydantic model — schema and initial value derived automatically.
+:::
+
 :::{grid-item-card} VisNetwork graph
 :link: visnetwork
 :link-type: doc

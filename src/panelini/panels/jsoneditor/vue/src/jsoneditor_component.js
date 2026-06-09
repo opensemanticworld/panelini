@@ -20,6 +20,10 @@ export function render({ model, el }) {
       "properties": {"test": {"type": "string"}}},
     //   startval: this.data
   }
+  const initialValue = model.get("value");
+  if (initialValue !== null && initialValue !== undefined && options.startval === undefined) {
+    options = { ...options, startval: initialValue };
+  }
   const app = createApp(JsonEditorComponent, {
     options: options,
     onChange: (value) => {

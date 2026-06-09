@@ -143,6 +143,7 @@ examples/ai_chat_min
 examples/ai_chat_custom_tool
 examples/ai_chat_multi_tab
 examples/jsoneditor
+examples/jsoneditor_pydantic
 examples/visnetwork
 ```
 
