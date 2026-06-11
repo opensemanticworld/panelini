@@ -2,7 +2,9 @@
 name = "panelini"
 version = "0.9.1"
 description = "Panelini is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, panelini offers an easy-to-use solution that enhances productivity and aesthetics."
-authors = [{ name = "Andreas Räder", email = "andreas.raeder@isc.fraunhofer.de" }]
+authors = [
+    { name = "Andreas Räder", email = "andreas.raeder@isc.fraunhofer.de" },
+]
 readme = "README.md"
 keywords = ['python']
 requires-python = ">=3.10,<4.0"
@@ -16,23 +18,11 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
-    "panel>=1.7.1",
-    "param>=2.2.1",
-    "watchfiles>=1.1.0",
-]
+dependencies = ["panel>=1.7.1", "param>=2.2.1", "watchfiles>=1.1.0"]
 
 [project.optional-dependencies]
-plotting = [
-    "numpy>=1.24.0",
-    "pandas>=2.0.0",
-    "plotly>=5.0.0",
-]
-standard = [
-    "numpy>=1.24.0",
-    "pandas>=2.0.0",
-    "plotly>=5.0.0",
-]
+plotting = ["numpy>=1.24.0", "pandas>=2.0.0", "plotly>=5.0.0"]
+standard = ["numpy>=1.24.0", "pandas>=2.0.0", "plotly>=5.0.0"]
 ai = [
     "langchain>=0.3.27",
     "langchain-anthropic>=0.3.0",
@@ -41,14 +31,8 @@ ai = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
 ]
-ai-drawio = [
-    "anthropic>=0.39",
-    "pillow>=10.0",
-]
-ai-llm-sandbox = [
-    "llm-sandbox[docker]>=0.2",
-    "pillow>=10.0",
-]
+ai-drawio = ["anthropic>=0.39", "pillow>=10.0"]
+ai-llm-sandbox = ["llm-sandbox[docker]>=0.2", "pillow>=10.0"]
 ai-osw = [
     "osw>=1.0",
     "SPARQLWrapper>=2.0",
@@ -62,10 +46,7 @@ Repository = "https://github.com/opensemanticworld/panelini"
 Documentation = "https://opensemanticworld.github.io/panelini/"
 
 [dependency-groups]
-plotting = [
-    "pandas>=2.0.0",
-    "plotly>=5.0.0",
-]
+plotting = ["pandas>=2.0.0", "plotly>=5.0.0"]
 dev = [
     { include-group = "plotting" },
     "pytest>=7.2.0",
@@ -86,6 +67,7 @@ dev = [
     "pytest-asyncio>=0.23",
     "osw>=1.0.1",
 ]
+pydantic-workflow = ["pydantic-panel"]
 
 [build-system]
 requires = ["hatchling"]
@@ -139,7 +121,8 @@ select = [
     # mccabe
     "C90",
     # pycodestyle
-    "E", "W",
+    "E",
+    "W",
     # pyflakes
     "F",
     # pygrep-hooks
@@ -175,6 +158,24 @@ source = ["src"]
 exclude = ["src/panelini/components/migration"]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles", "langchain", "langchain-community", "python-dotenv", "anthropic", "pillow"]
+DEP002 = [
+    "watchfiles",
+    "langchain",
+    "langchain-community",
+    "python-dotenv",
+    "anthropic",
+    "pillow",
+]
 DEP003 = ["langchain-core", "langchain_core", "pydantic"]
-DEP004 = ["langchain", "langchain-anthropic", "langchain-community", "langchain-openai", "llm-sandbox", "python-dotenv", "pyyaml"]
+DEP004 = [
+    "langchain",
+    "langchain-anthropic",
+    "langchain-community",
+    "langchain-openai",
+    "llm-sandbox",
+    "python-dotenv",
+    "pyyaml",
+]
+
+[tool.uv.sources]
+pydantic-panel = { git = "https://github.com/MatPoppFHG/pydantic-panel.git" }
