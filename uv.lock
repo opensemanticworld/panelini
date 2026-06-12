@@ -2766,7 +2766,7 @@ plotting = [
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "plotly", specifier = ">=5.0.0" },
 ]
-pydantic-workflow = [{ name = "pydantic-panel", git = "https://github.com/MatPoppFHG/pydantic-panel.git" }]
+pydantic-workflow = [{ name = "pydantic-panel", git = "https://github.com/opensemanticworld/osw-pydantic-panel.git" }]
 
 [[package]]
 name = "param"
@@ -3242,7 +3242,7 @@ wheels = [
 [[package]]
 name = "pydantic-panel"
 version = "0.2.2"
-source = { git = "https://github.com/MatPoppFHG/pydantic-panel.git#32c4ba67a44fba24126070d672d09c913a02f9bd" }
+source = { git = "https://github.com/opensemanticworld/osw-pydantic-panel.git#32c4ba67a44fba24126070d672d09c913a02f9bd" }
 dependencies = [
     { name = "panel" },
     { name = "plum" },

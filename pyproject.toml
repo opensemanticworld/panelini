@@ -178,4 +178,4 @@ DEP004 = [
 ]
 
 [tool.uv.sources]
-pydantic-panel = { git = "https://github.com/MatPoppFHG/pydantic-panel.git" }
+pydantic-panel = { git = "https://github.com/opensemanticworld/osw-pydantic-panel.git" }
