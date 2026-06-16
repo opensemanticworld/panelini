@@ -1,0 +1,425 @@
+"""Generate the docs Pyodide portfolio: thumbnails, cards page, and Pyodide apps.
+
+What it does:
+- Discovers the example panels (excludes ``plot_by_code`` and, for now, the ``ai``
+  category — see the browser-native AI panel step).
+- Emits a placeholder thumbnail per panel and writes ``docs/portfolio/index.md`` as a
+  ``sphinx_design`` card grid grouped by category.
+- With ``--convert``, builds a standalone **Pyodide app** per panel via ``panel
+  convert`` (each app inlines the example source, so it is fully self-contained), and
+  links each card to its app.
+
+Building & testing locally:
+
+    # 1. Build the Pyodide apps (slow; ~10 MB each, gitignored build artifacts)
+    make portfolio                # == python docs/gen_portfolio.py --convert
+
+    # 2. Serve the docs and open in a browser to test the live apps
+    make docs                     # sphinx-autobuild on http://localhost:8000
+
+    # Then open the "Portfolio" page and click a card — the example runs in your
+    # browser via Pyodide (first load downloads packages, so give it a few seconds).
+
+    # Strict build (matches CI; no apps required, links just won't appear):
+    make docs-test
+
+The plain page + thumbnails are regenerated automatically on every Sphinx build (via
+a ``config-inited`` hook in conf.py), so ``docs/portfolio/index.md`` and
+``docs/_static/portfolio/`` are build artifacts and gitignored.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import subprocess
+import tempfile
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+_DOCS = Path(__file__).resolve().parent
+_REPO = _DOCS.parent
+_PANELS_DIR = _REPO / "examples" / "panels"
+_THUMB_DIR = _DOCS / "_static" / "portfolio" / "thumbs"
+# Converted Pyodide apps + the local panelini wheel live under _static so Sphinx
+# copies them verbatim.
+_APPS_DIR = _DOCS / "_static" / "portfolio" / "apps"
+_WHEELS_DIR = _DOCS / "_static" / "portfolio" / "wheels"
+_PAGE = _DOCS / "portfolio" / "index.md"
+
+# Extra packages installed in the browser (via micropip) that some examples need
+# beyond panel/param (which the base environment provides). panelini itself is
+# installed from the locally-built wheel inside the wrapper.
+_REQUIREMENTS = ["numpy", "pydantic"]
+
+# Self-contained wrapper: inline the example source, run it with serve/servable
+# intercepted to capture the intended renderable, then servable that. Executing into
+# the module globals keeps ``__name__ == "__main__"`` and correct class ``__module__``
+# so pydantic/LangChain forward references resolve.
+_WRAPPER_TEMPLATE = """\
+# AUTO-GENERATED for the Pyodide portfolio — do not edit.
+# panelini is installed by the converter's env bootstrap (a relative-URL wheel whose
+# unused ``watchfiles`` dependency was stripped so micropip can resolve it).
+import base64
+import panel as pn
+from panelini import Panelini
+
+pn.extension("tabulator", "jsoneditor", "plotly")
+
+__pf_orig = {{
+    "pn_serve": pn.serve,
+    "io_serve": pn.io.server.serve,
+    "viewable": pn.viewable.Viewable.servable,
+    "panelini": Panelini.servable,
+}}
+__pf_captured = []
+
+
+class __PfStop(Exception):
+    pass
+
+
+def __pf_rec_self(self, *a, **k):
+    __pf_captured.append(self)
+    raise __PfStop
+
+
+def __pf_rec_serve(panels, *a, **k):
+    __pf_captured.append(panels)
+    raise __PfStop
+
+
+Panelini.servable = __pf_rec_self
+pn.viewable.Viewable.servable = __pf_rec_self
+pn.serve = __pf_rec_serve
+pn.io.server.serve = __pf_rec_serve
+
+__pf_src = base64.b64decode("{b64}").decode("utf-8")
+try:
+    exec(compile(__pf_src, "{name}", "exec"), globals())
+except __PfStop:
+    pass
+except Exception:
+    import traceback
+    traceback.print_exc()
+
+Panelini.servable = __pf_orig["panelini"]
+pn.viewable.Viewable.servable = __pf_orig["viewable"]
+pn.serve = __pf_orig["pn_serve"]
+pn.io.server.serve = __pf_orig["io_serve"]
+
+
+def __pf_flat(items):
+    out = []
+    for it in items:
+        if isinstance(it, dict):
+            out.extend(it.values())
+        elif isinstance(it, (list, tuple)):
+            out.extend(it)
+        else:
+            out.append(it)
+    return out
+
+
+__pf_view = None
+for __pf_it in __pf_flat(__pf_captured):
+    if isinstance(__pf_it, Panelini):
+        __pf_view = __pf_it
+        break
+if __pf_view is None:
+    for __pf_it in __pf_flat(__pf_captured):
+        if isinstance(__pf_it, (pn.viewable.Viewable, pn.viewable.Viewer)):
+            __pf_view = __pf_it
+            break
+if __pf_view is None:
+    __pf_app = globals().get("app")
+    if isinstance(__pf_app, (Panelini, pn.viewable.Viewable, pn.viewable.Viewer)):
+        __pf_view = __pf_app
+
+if isinstance(__pf_view, Panelini):
+    __pf_orig["panelini"](__pf_view)
+elif __pf_view is not None:
+    __pf_orig["viewable"](__pf_view)
+else:
+    pn.pane.Markdown("# Could not render this example").servable()
+"""
+
+# Panels excluded from the Pyodide portfolio (server/sandbox-backed, can't run in WASM).
+_EXCLUDE_STEMS = {"plot_by_code"}
+# Categories handled in a later step (the browser-native AI panel replaces this stack).
+_EXCLUDE_CATEGORIES = {"ai"}
+
+# Per-category accent colour (background gradient base) + short human label.
+_CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
+    "ai": ((124, 58, 237), "AI"),
+    "jsoneditor": ((13, 148, 136), "JSON Editor"),
+    "visnetwork": ((37, 99, 235), "VisNetwork"),
+    "wunderbaum": ((217, 119, 6), "Wunderbaum"),
+}
+
+_THUMB_SIZE = (480, 270)  # 16:9 preview
+
+
+def discover() -> dict[str, list[Path]]:
+    """Discover example panels grouped by category, applying exclusions."""
+    grouped: dict[str, list[Path]] = {}
+    for path in sorted(_PANELS_DIR.glob("**/*.py")):
+        if path.name == "__init__.py" or path.name.startswith("_"):
+            continue
+        if path.stem in _EXCLUDE_STEMS:
+            continue
+        category = path.relative_to(_PANELS_DIR).parts[0]
+        if category in _EXCLUDE_CATEGORIES:
+            continue
+        grouped.setdefault(category, []).append(path)
+    return grouped
+
+
+def _title(stem: str) -> str:
+    """Human-friendly title from a file stem (``visnetwork_panel_min`` -> ...)."""
+    return stem.replace("_", " ").strip().title()
+
+
+def _font(size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.load_default(size=size)
+
+
+def _make_thumbnail(path: Path, category: str) -> Path:
+    """Render a meaningful placeholder thumbnail PNG for one panel."""
+    color, label = _CATEGORY_META.get(category, ((71, 85, 105), category.title()))
+    w, h = _THUMB_SIZE
+    img = Image.new("RGB", (w, h), color)
+    draw = ImageDraw.Draw(img)
+
+    # Subtle darker band at the bottom + lighter top via a simple vertical gradient.
+    top = tuple(min(255, c + 38) for c in color)
+    for y in range(h):
+        t = y / h
+        row = tuple(int(top[i] * (1 - t) + color[i] * t) for i in range(3))
+        draw.line([(0, y), (w, y)], fill=row)
+
+    # Category chip (top-left).
+    chip_font = _font(22)
+    draw.text((24, 22), label.upper(), font=chip_font, fill=(255, 255, 255))
+
+    # Panel title (wrapped, centred-ish, lower area).
+    title = _title(path.stem)
+    title_font = _font(34)
+    words, lines, line = title.split(), [], ""
+    for wd in words:
+        trial = f"{line} {wd}".strip()
+        if draw.textlength(trial, font=title_font) <= w - 48:
+            line = trial
+        else:
+            lines.append(line)
+            line = wd
+    if line:
+        lines.append(line)
+    y = h - 28 - len(lines) * 40
+    for ln in lines:
+        draw.text((24, y), ln, font=title_font, fill=(255, 255, 255))
+        y += 40
+
+    _THUMB_DIR.mkdir(parents=True, exist_ok=True)
+    out = _THUMB_DIR / f"{category}__{path.stem}.png"
+    img.save(out)
+    return out
+
+
+def _app_html(path: Path, category: str) -> Path:
+    """Path to the converted Pyodide app HTML for a panel (may not exist yet)."""
+    return _APPS_DIR / category / f"{path.stem}.html"
+
+
+def build_wheel() -> str:
+    """Build the local panelini wheel into the docs static tree; return its filename.
+
+    Uses ``pip wheel --no-deps`` so only the dev panelini code is packaged (its deps
+    are resolved separately in the browser).
+    """
+    _WHEELS_DIR.mkdir(parents=True, exist_ok=True)
+    for old in _WHEELS_DIR.glob("panelini-*.whl"):
+        old.unlink()
+    print("Building local panelini wheel...")
+    # uv-managed env (no pip); ``uv build`` produces a wheel from the project.
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(_WHEELS_DIR)],
+        cwd=str(_REPO),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    wheel = next(_WHEELS_DIR.glob("panelini-*.whl"))
+    _strip_metadata_dep(wheel, "watchfiles")
+    return wheel.name
+
+
+def _strip_metadata_dep(wheel: Path, dist: str) -> None:
+    """Remove ``Requires-Dist: <dist>`` lines from a wheel's METADATA.
+
+    ``watchfiles`` has no Pyodide wheel and is unused at runtime, so dropping it lets
+    micropip resolve panelini's remaining (compatible) dependencies in the browser.
+    """
+    import zipfile
+
+    tmp = wheel.with_suffix(".whl.tmp")
+    with zipfile.ZipFile(wheel) as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.endswith(".dist-info/METADATA"):
+                lines = data.decode("utf-8").splitlines(keepends=True)
+                data = "".join(ln for ln in lines if not ln.lower().startswith(f"requires-dist: {dist}")).encode(
+                    "utf-8"
+                )
+            zout.writestr(item, data)
+    tmp.replace(wheel)
+
+
+def convert_panel(path: Path, category: str, wheel_name: str) -> bool:
+    """Generate a wrapper for one panel and ``panel convert`` it to a Pyodide app.
+
+    Returns True on success. The wrapper inlines the example source so the converted
+    HTML is fully self-contained (Pyodide has no access to the repo files).
+    """
+    out_dir = _APPS_DIR / category
+    out_dir.mkdir(parents=True, exist_ok=True)
+    b64 = base64.b64encode(path.read_text(encoding="utf-8").encode("utf-8")).decode("ascii")
+    wrapper = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name)
+
+    # The app worker lives at apps/<category>/<stem>.js; the wheel at portfolio/wheels/,
+    # so a relative URL gets micropip to fetch it regardless of the docs base path.
+    wheel_url = f"../../wheels/{wheel_name}"
+    with tempfile.TemporaryDirectory() as tmp:
+        wrapper_path = Path(tmp) / f"{path.stem}.py"
+        wrapper_path.write_text(wrapper, encoding="utf-8")
+        cmd = [
+            "panel",
+            "convert",
+            str(wrapper_path),
+            "--to",
+            "pyodide-worker",
+            "--out",
+            str(out_dir),
+            "--requirements",
+            wheel_url,
+            *_REQUIREMENTS,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  ✗ {category}/{path.name}\n{result.stderr.strip()[:300]}")
+        return False
+
+    # The worker installs each env_spec entry with ``micropip.install('${pkg}')``.
+    # micropip can't resolve a relative wheel URL, so rewrite the call to resolve
+    # relative entries (the local wheel) to an absolute URL against the worker location.
+    worker_js = out_dir / f"{path.stem}.js"
+    js = worker_js.read_text(encoding="utf-8")
+    js = js.replace(
+        "micropip.install('${pkg}')",
+        "micropip.install('${pkg.startsWith('.') ? new URL(pkg, self.location.href).href : pkg}')",
+    )
+    worker_js.write_text(js, encoding="utf-8")
+
+    print(f"  ✓ {category}/{path.stem}.html")
+    return True
+
+
+def convert_all() -> None:
+    """Build the wheel and convert every included panel to a standalone Pyodide app."""
+    wheel_name = build_wheel()
+    print("Converting panels to Pyodide apps (panel convert)...")
+    for category, paths in sorted(discover().items()):
+        for path in paths:
+            convert_panel(path, category, wheel_name)
+
+
+def _embed_page(path: Path, category: str) -> Path:
+    """Path to the per-example docs page that embeds the app (may not exist yet)."""
+    return _PAGE.parent / category / f"{path.stem}.md"
+
+
+def _write_embed_page(path: Path, category: str) -> None:
+    """Write a docs page that embeds the converted app in an iframe (stays in-docs)."""
+    title = _title(path.stem)
+    # From docs/portfolio/<category>/<stem>.html to docs/_static/portfolio/apps/...
+    app_rel = f"../../_static/portfolio/apps/{category}/{path.stem}.html"
+    page = (
+        f"# {title}\n\n"
+        f"`{category}/{path.name}` — runs entirely in your browser via Pyodide. "
+        "The first load downloads packages, so give it a few seconds.\n\n"
+        "```{raw} html\n"
+        f'<iframe src="{app_rel}" title="{title}" loading="lazy" '
+        'style="width:100%;height:80vh;border:1px solid var(--color-background-border);'
+        'border-radius:8px;"></iframe>\n'
+        "```\n\n"
+        "{doc}`Back to the portfolio </portfolio/index>`\n"
+    )
+    target = _embed_page(path, category)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(page, encoding="utf-8")
+
+
+def _card(path: Path, category: str) -> str:
+    """Emit one sphinx_design grid-item-card for a panel.
+
+    Links to the in-docs embed page when the app exists; otherwise renders without a
+    link (so the page is valid before/without conversion).
+    """
+    thumb = f"/_static/portfolio/thumbs/{category}__{path.stem}.png"
+    link = ""
+    if _app_html(path, category).exists():
+        # Doc reference relative to docs/portfolio/index.md.
+        link = f":link: {category}/{path.stem}\n:link-type: doc\n"
+    return f":::{{grid-item-card}} {_title(path.stem)}\n:img-top: {thumb}\n{link}\n`{category}/{path.name}`\n:::\n"
+
+
+def generate() -> None:
+    """Generate thumbnails for every included panel and write the portfolio page."""
+    grouped = discover()
+    total = 0
+    sections: list[str] = []
+    toctree_entries: list[str] = []
+    for category in sorted(grouped):
+        paths = grouped[category]
+        _, label = _CATEGORY_META.get(category, ((0, 0, 0), category.title()))
+        cards = []
+        for path in paths:
+            _make_thumbnail(path, category)
+            cards.append(_card(path, category))
+            total += 1
+            # Embed page (+ toctree entry) only when the converted app exists.
+            if _app_html(path, category).exists():
+                _write_embed_page(path, category)
+                toctree_entries.append(f"{category}/{path.stem}")
+        sections.append(f"## {label}\n\n::::{{grid}} 1 2 2 3\n:gutter: 3\n\n" + "\n".join(cards) + "\n::::\n")
+
+    # Hidden toctree so the embed pages are not orphaned (would fail under -W).
+    toctree = ""
+    if toctree_entries:
+        toctree = "\n```{toctree}\n:hidden:\n\n" + "\n".join(sorted(toctree_entries)) + "\n```\n"
+
+    page = (
+        "# Portfolio\n\n"
+        "Interactive examples that run entirely in your browser via Pyodide — no server "
+        "required. Click a card to open the live example, embedded right here in the docs.\n\n"
+        "```{note}\n"
+        "Thumbnails are placeholders for now and will be replaced with real screenshots.\n"
+        "```\n\n" + "\n".join(sections) + toctree
+    )
+    _PAGE.parent.mkdir(parents=True, exist_ok=True)
+    _PAGE.write_text(page, encoding="utf-8")
+    print(f"Generated {total} thumbnails and {_PAGE.relative_to(_REPO)}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate the docs Pyodide portfolio.")
+    parser.add_argument(
+        "--convert",
+        action="store_true",
+        help="Also run `panel convert` to build the Pyodide apps (slower).",
+    )
+    args = parser.parse_args()
+    if args.convert:
+        convert_all()
+    generate()

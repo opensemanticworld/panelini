@@ -102,3 +102,22 @@ mermaid_init_js = (
 
 root_doc = "index"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+
+# -- Portfolio generation ----------------------------------------------------
+# Regenerate the portfolio page + placeholder thumbnails on every build so the
+# page always exists (links to Pyodide apps appear when those apps have been built
+# via ``make portfolio``). The heavy ``panel convert`` step is intentionally NOT run
+# here — it is an explicit, separate step.
+def _generate_portfolio(app, config):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import gen_portfolio
+
+    gen_portfolio.generate()
+
+
+def setup(app):
+    app.connect("config-inited", _generate_portfolio)
