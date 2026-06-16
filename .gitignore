@@ -144,3 +144,7 @@ cython_debug/
 # Local environment
 _ign/
 data/
+
+# Generated docs portfolio (build artifacts)
+docs/portfolio/
+docs/_static/portfolio/

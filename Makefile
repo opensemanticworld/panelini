@@ -61,6 +61,11 @@ build-and-publish: build publish ## Build and publish.
 docs-test: ## Test if documentation can be built without warnings or errors
 	@uv run sphinx-build -b html docs docs/_build/html -W --keep-going
 
+.PHONY: portfolio
+portfolio: ## Build the Pyodide portfolio apps (panel convert) for the docs
+	@echo "🚀 Building Pyodide portfolio apps (this can take a while)"
+	@uv run python docs/gen_portfolio.py --convert
+
 .PHONY: docs
 docs: ## Build and serve the documentation
 	@uv run sphinx-autobuild docs docs/_build/html --port 8000 --open-browser
