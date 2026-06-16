@@ -1,7 +1,7 @@
 """Test cases for the Panelini application."""
 
 # TODO: serve tests
-# [See panel git for serve_component tests](https://github.com/holoviz/panel/blob/3eaee8f710c010f203b897cb6c67a7f15697d608/panel/tests/ui/template/test_editabletemplate.py#L9) # noqa[E509]
+# [See panel git for serve_component tests](https://github.com/holoviz/panel/blob/3eaee8f710c010f203b897cb6c67a7f15697d608/panel/tests/ui/template/test_editabletemplate.py#L9)
 # TODO: Playwright tests
 # TODO: Util def tests
 
