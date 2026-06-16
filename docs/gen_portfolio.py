@@ -62,14 +62,22 @@ _WRAPPER_TEMPLATE = """\
 # panelini is installed by the converter's env bootstrap (a relative-URL wheel whose
 # unused ``watchfiles`` dependency was stripped so micropip can resolve it).
 import base64
+import types
 import panel as pn
 from panelini import Panelini
 
 pn.extension("tabulator", "jsoneditor", "plotly")
 
+# In WASM, panel.io exposes only ``serve`` (from panel.io.pyodide); the tornado-backed
+# ``panel.io.server`` submodule is never imported. Provide a patchable stand-in so the
+# interceptors below — and any inlined ``pn.io.server.serve(...)`` example calls —
+# resolve instead of raising ``AttributeError``.
+if not hasattr(pn.io, "server"):
+    pn.io.server = types.SimpleNamespace(serve=getattr(pn, "serve", None))
+
 __pf_orig = {{
-    "pn_serve": pn.serve,
-    "io_serve": pn.io.server.serve,
+    "pn_serve": getattr(pn, "serve", None),
+    "io_serve": getattr(pn.io.server, "serve", None),
     "viewable": pn.viewable.Viewable.servable,
     "panelini": Panelini.servable,
 }}
@@ -106,8 +114,10 @@ except Exception:
 
 Panelini.servable = __pf_orig["panelini"]
 pn.viewable.Viewable.servable = __pf_orig["viewable"]
-pn.serve = __pf_orig["pn_serve"]
-pn.io.server.serve = __pf_orig["io_serve"]
+if __pf_orig["pn_serve"] is not None:
+    pn.serve = __pf_orig["pn_serve"]
+if __pf_orig["io_serve"] is not None:
+    pn.io.server.serve = __pf_orig["io_serve"]
 
 
 def __pf_flat(items):
@@ -122,6 +132,12 @@ def __pf_flat(items):
     return out
 
 
+def __pf_is_view(o):
+    # Anything Panel can render: a Viewable/Viewer, or a duck-typed object exposing
+    # ``__panel__`` (e.g. a plain class like GraphDetailTool that defines __panel__).
+    return isinstance(o, (Panelini, pn.viewable.Viewable, pn.viewable.Viewer)) or hasattr(o, "__panel__")
+
+
 __pf_view = None
 for __pf_it in __pf_flat(__pf_captured):
     if isinstance(__pf_it, Panelini):
@@ -129,18 +145,17 @@ for __pf_it in __pf_flat(__pf_captured):
         break
 if __pf_view is None:
     for __pf_it in __pf_flat(__pf_captured):
-        if isinstance(__pf_it, (pn.viewable.Viewable, pn.viewable.Viewer)):
+        if __pf_is_view(__pf_it):
             __pf_view = __pf_it
             break
-if __pf_view is None:
-    __pf_app = globals().get("app")
-    if isinstance(__pf_app, (Panelini, pn.viewable.Viewable, pn.viewable.Viewer)):
-        __pf_view = __pf_app
+if __pf_view is None and __pf_is_view(globals().get("app")):
+    __pf_view = globals().get("app")
 
 if isinstance(__pf_view, Panelini):
     __pf_orig["panelini"](__pf_view)
 elif __pf_view is not None:
-    __pf_orig["viewable"](__pf_view)
+    # pn.panel() turns Viewables, Viewers, and ``__panel__`` objects into a servable.
+    pn.panel(__pf_view).servable()
 else:
     pn.pane.Markdown("# Could not render this example").servable()
 """
