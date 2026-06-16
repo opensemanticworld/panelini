@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 3
 
-panelini.panels.ai.plot.tools
 panelini.panels.ai.plot.utils
+panelini.panels.ai.plot.tools
 ```
 
 ## Submodules
@@ -23,6 +23,6 @@ panelini.panels.ai.plot.utils
 :titlesonly:
 :maxdepth: 1
 
-panelini.panels.ai.plot.model_selector
 panelini.panels.ai.plot.panel
+panelini.panels.ai.plot.model_selector
 ```

@@ -13,6 +13,6 @@
 :titlesonly:
 :maxdepth: 1
 
-panelini.panels.ai.utils.ai_interface
 panelini.panels.ai.utils.config
+panelini.panels.ai.utils.ai_interface
 ```
