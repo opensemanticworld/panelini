@@ -224,6 +224,21 @@ section > section > section#api > h3 {
     text-decoration: none;
 }
 
+/* "Open fullscreen ↗" footer action — must sit above the stretched card link so it
+   stays clickable, while the rest of the card still navigates to the embed page. */
+.sd-card .sd-card-footer a {
+    position: relative;
+    z-index: 2;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--color-brand-content);
+    text-decoration: none;
+}
+
+.sd-card .sd-card-footer a:hover {
+    text-decoration: underline;
+}
+
 /* Dark-mode card surface */
 body[data-theme="dark"] .sd-card {
     background: var(--color-background-secondary);

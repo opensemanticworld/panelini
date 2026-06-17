@@ -255,14 +255,40 @@ def _app_html(path: Path, category: str) -> Path:
     return _APPS_DIR / category / f"{path.stem}.html"
 
 
-def build_wheel() -> str:
+def _app_url_root(path: Path, category: str) -> str:
+    """Root-relative URL to the standalone app HTML (for the 'Open fullscreen' link)."""
+    return f"/_static/portfolio/apps/{category}/{path.stem}.html"
+
+
+def _wheel_signature() -> str:
+    """Signature of the inputs that change the built wheel: panelini's Python sources
+    and ``pyproject.toml`` (version, dependencies, build config). Non-Python package
+    assets are not tracked — use a force rebuild after changing those.
+    """
+    h = hashlib.sha256()
+    h.update(_panelini_signature().encode("utf-8"))
+    h.update((_REPO / "pyproject.toml").read_bytes())
+    return h.hexdigest()[:16]
+
+
+def build_wheel(force: bool = False) -> str:
     """Build the local panelini wheel into the docs static tree; return its filename.
 
-    Uses ``pip wheel --no-deps`` so only the dev panelini code is packaged (its deps
-    are resolved separately in the browser).
+    Uses ``uv build --wheel`` so only the dev panelini code is packaged (its deps are
+    resolved separately in the browser). The build is skipped when an existing wheel
+    already matches the current source signature (see ``_wheel_signature``); ``force``
+    rebuilds regardless.
     """
     _WHEELS_DIR.mkdir(parents=True, exist_ok=True)
-    for old in _WHEELS_DIR.glob("panelini-*.whl"):
+    sig = _wheel_signature()
+    sig_file = _WHEELS_DIR / ".wheel-sig"
+    existing = sorted(_WHEELS_DIR.glob("panelini-*.whl"))
+    # The sig file is written only after a successful build + metadata strip, so its
+    # presence guarantees the single existing wheel is current and already stripped.
+    if not force and len(existing) == 1 and sig_file.exists() and sig_file.read_text().strip() == sig:
+        print(f"Local panelini wheel unchanged ({existing[0].name}); skipping build.")
+        return existing[0].name
+    for old in existing:
         old.unlink()
     print("Building local panelini wheel...")
     # uv-managed env (no pip); ``uv build`` produces a wheel from the project.
@@ -275,6 +301,7 @@ def build_wheel() -> str:
     )
     wheel = next(_WHEELS_DIR.glob("panelini-*.whl"))
     _strip_metadata_dep(wheel, "watchfiles")
+    sig_file.write_text(sig, encoding="utf-8")
     return wheel.name
 
 
@@ -387,7 +414,7 @@ def convert_all(force: bool = False) -> None:
 
     Unchanged apps are skipped (see ``convert_panel``); ``force`` rebuilds all of them.
     """
-    wheel_name = build_wheel()
+    wheel_name = build_wheel(force=force)
     panelini_sig = _panelini_signature()
     print("Converting panels to Pyodide apps (panel convert)...")
     for category, paths in sorted(discover().items()):
@@ -409,6 +436,7 @@ def _write_embed_page(path: Path, category: str) -> None:
         f"# {title}\n\n"
         f"`{category}/{path.name}` — runs entirely in your browser via Pyodide. "
         "The first load downloads packages, so give it a few seconds.\n\n"
+        f'[Open fullscreen ↗]({app_rel}){{target="_blank" rel="noopener"}}\n\n'
         "```{raw} html\n"
         f'<iframe src="{app_rel}" title="{title}" loading="lazy" '
         'style="width:100%;height:80vh;border:1px solid var(--color-background-border);'
@@ -429,10 +457,17 @@ def _card(path: Path, category: str) -> str:
     """
     thumb = f"/_static/portfolio/thumbs/{category}__{path.stem}.png"
     link = ""
+    footer = ""
     if _app_html(path, category).exists():
         # Doc reference relative to docs/portfolio/index.md.
         link = f":link: {category}/{path.stem}\n:link-type: doc\n"
-    return f":::{{grid-item-card}} {_title(path.stem)}\n:img-top: {thumb}\n{link}\n`{category}/{path.name}`\n:::\n"
+        # Footer action that opens the standalone app in a new tab (sits above the
+        # stretched card link via z-index — see custom.css). Root-relative like :img-top:.
+        app_url = _app_url_root(path, category)
+        footer = f'+++\n[Open fullscreen ↗]({app_url}){{target="_blank" rel="noopener"}}\n'
+    return (
+        f":::{{grid-item-card}} {_title(path.stem)}\n:img-top: {thumb}\n{link}\n`{category}/{path.name}`\n{footer}:::\n"
+    )
 
 
 def generate() -> None:
