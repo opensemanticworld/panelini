@@ -11,17 +11,24 @@ What it does:
 
 Building & testing locally:
 
-    # 1. Build the Pyodide apps (slow; ~10 MB each, gitignored build artifacts)
-    make portfolio                # == python docs/gen_portfolio.py --convert
-
-    # 2. Serve the docs and open in a browser to test the live apps
-    make docs                     # sphinx-autobuild on http://localhost:8000
+    # Serve the docs with the live apps. The dependent ``portfolio`` target builds the
+    # Pyodide apps first; conversion is incremental, so the first run is slow (~10 MB
+    # per app, gitignored build artifacts) and later runs only rebuild changed examples.
+    make docs                     # builds apps, then sphinx-autobuild on :8000
 
     # Then open the "Portfolio" page and click a card — the example runs in your
     # browser via Pyodide (first load downloads packages, so give it a few seconds).
 
-    # Strict build (matches CI; no apps required, links just won't appear):
+    # Strict build with the apps (reproduces the release/CI docs build):
     make docs-test
+
+    # Force a full rebuild of every app (e.g. after changing non-Python assets):
+    make portfolio-force          # == python docs/gen_portfolio.py --convert --force
+
+Change detection: each built app embeds a signature over its example source, the
+wrapper template, the wheel name, and panelini's Python sources; ``convert_panel``
+skips an app whose signature is unchanged, so editing one example rebuilds only that
+app. Non-Python assets are not tracked — use ``--force`` / ``make portfolio-force``.
 
 The plain page + thumbnails are regenerated automatically on every Sphinx build (via
 a ``config-inited`` hook in conf.py), so ``docs/portfolio/index.md`` and
@@ -32,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
@@ -291,16 +299,50 @@ def _strip_metadata_dep(wheel: Path, dist: str) -> None:
     tmp.replace(wheel)
 
 
-def convert_panel(path: Path, category: str, wheel_name: str) -> bool:
+def _panelini_signature() -> str:
+    """Short hash of panelini's own Python sources.
+
+    Folded into each app's build signature so editing the library (not just an example)
+    invalidates the cached apps. Deterministic — hashes sorted relative paths + bytes,
+    not mtimes. Non-Python assets (vue/js) are not covered; use a force rebuild for those.
+    """
+    src = _REPO / "src" / "panelini"
+    h = hashlib.sha256()
+    for py in sorted(src.glob("**/*.py")):
+        h.update(py.relative_to(src).as_posix().encode("utf-8"))
+        h.update(py.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str = "", force: bool = False) -> bool:
     """Generate a wrapper for one panel and ``panel convert`` it to a Pyodide app.
 
     Returns True on success. The wrapper inlines the example source so the converted
     HTML is fully self-contained (Pyodide has no access to the repo files).
+
+    A build signature (over the example source, wrapper template, wheel name, and
+    panelini sources) is embedded as a comment in the wrapper — and so ends up in the
+    generated worker ``.js``. When an app already carries the current signature it is
+    skipped, so an unchanged example is not re-converted; editing the example (or the
+    library) changes the signature and that one app rebuilds. ``force`` rebuilds anyway.
     """
     out_dir = _APPS_DIR / category
     out_dir.mkdir(parents=True, exist_ok=True)
     b64 = base64.b64encode(path.read_text(encoding="utf-8").encode("utf-8")).decode("ascii")
-    wrapper = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name)
+    body = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name)
+    sig = hashlib.sha256(f"{body}{wheel_name}{panelini_sig}".encode()).hexdigest()[:16]
+    sig_marker = f"portfolio-sig: {sig}"
+    wrapper = f"# {sig_marker}\n{body}"
+
+    worker_js = out_dir / f"{path.stem}.js"
+    if (
+        not force
+        and _app_html(path, category).exists()
+        and worker_js.exists()
+        and sig_marker in worker_js.read_text(encoding="utf-8")
+    ):
+        print(f"  • {category}/{path.stem}.html (unchanged, skipped)")
+        return True
 
     # The app worker lives at apps/<category>/<stem>.js; the wheel at portfolio/wheels/,
     # so a relative URL gets micropip to fetch it regardless of the docs base path.
@@ -340,13 +382,17 @@ def convert_panel(path: Path, category: str, wheel_name: str) -> bool:
     return True
 
 
-def convert_all() -> None:
-    """Build the wheel and convert every included panel to a standalone Pyodide app."""
+def convert_all(force: bool = False) -> None:
+    """Build the wheel and convert every included panel to a standalone Pyodide app.
+
+    Unchanged apps are skipped (see ``convert_panel``); ``force`` rebuilds all of them.
+    """
     wheel_name = build_wheel()
+    panelini_sig = _panelini_signature()
     print("Converting panels to Pyodide apps (panel convert)...")
     for category, paths in sorted(discover().items()):
         for path in paths:
-            convert_panel(path, category, wheel_name)
+            convert_panel(path, category, wheel_name, panelini_sig=panelini_sig, force=force)
 
 
 def _embed_page(path: Path, category: str) -> Path:
@@ -432,9 +478,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--convert",
         action="store_true",
-        help="Also run `panel convert` to build the Pyodide apps (slower).",
+        help="Also run `panel convert` to build the Pyodide apps (slower). Unchanged apps are skipped.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="With --convert, rebuild every app even if its source is unchanged.",
     )
     args = parser.parse_args()
     if args.convert:
-        convert_all()
+        convert_all(force=args.force)
     generate()

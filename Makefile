@@ -57,17 +57,22 @@ publish: ## Publish a release to PyPI.
 .PHONY: build-and-publish
 build-and-publish: build publish ## Build and publish.
 
-.PHONY: docs-test
-docs-test: ## Test if documentation can be built without warnings or errors
-	@uv run sphinx-build -b html docs docs/_build/html -W --keep-going
-
 .PHONY: portfolio
-portfolio: ## Build the Pyodide portfolio apps (panel convert) for the docs
-	@echo "🚀 Building Pyodide portfolio apps (this can take a while)"
+portfolio: ## Build/refresh the Pyodide portfolio apps (incremental; only changed examples rebuild)
+	@echo "🚀 Building Pyodide portfolio apps (unchanged apps are skipped)"
 	@uv run python docs/gen_portfolio.py --convert
 
+.PHONY: portfolio-force
+portfolio-force: ## Rebuild every Pyodide portfolio app, even unchanged ones
+	@echo "🚀 Rebuilding all Pyodide portfolio apps"
+	@uv run python docs/gen_portfolio.py --convert --force
+
+.PHONY: docs-test
+docs-test: portfolio ## Test if documentation can be built without warnings or errors (with live apps)
+	@uv run sphinx-build -b html docs docs/_build/html -W --keep-going
+
 .PHONY: docs
-docs: ## Build and serve the documentation
+docs: portfolio ## Build and serve the documentation (with live apps)
 	@uv run sphinx-autobuild docs docs/_build/html --port 8000 --open-browser
 
 .PHONY: help
