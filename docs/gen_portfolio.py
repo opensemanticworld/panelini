@@ -255,9 +255,14 @@ def _app_html(path: Path, category: str) -> Path:
     return _APPS_DIR / category / f"{path.stem}.html"
 
 
-def _app_url_root(path: Path, category: str) -> str:
-    """Root-relative URL to the standalone app HTML (for the 'Open fullscreen' link)."""
-    return f"/_static/portfolio/apps/{category}/{path.stem}.html"
+def _app_url_from_index(path: Path, category: str) -> str:
+    """URL to the standalone app HTML, relative to ``docs/portfolio/index.md``.
+
+    Used in a raw ``<a>`` (so the link opens in a new tab instead of being treated as a
+    downloadable file). Raw-HTML hrefs are not rewritten by Sphinx, so this must be a
+    path relative to the rendered page, not root-relative.
+    """
+    return f"../_static/portfolio/apps/{category}/{path.stem}.html"
 
 
 def _wheel_signature() -> str:
@@ -436,8 +441,9 @@ def _write_embed_page(path: Path, category: str) -> None:
         f"# {title}\n\n"
         f"`{category}/{path.name}` — runs entirely in your browser via Pyodide. "
         "The first load downloads packages, so give it a few seconds.\n\n"
-        f'[Open fullscreen ↗]({app_rel}){{target="_blank" rel="noopener"}}\n\n'
         "```{raw} html\n"
+        f'<p><a class="pf-fullscreen" href="{app_rel}" target="_blank" '
+        'rel="noopener">Open fullscreen ↗</a></p>\n'
         f'<iframe src="{app_rel}" title="{title}" loading="lazy" '
         'style="width:100%;height:80vh;border:1px solid var(--color-background-border);'
         'border-radius:8px;"></iframe>\n'
@@ -462,9 +468,12 @@ def _card(path: Path, category: str) -> str:
         # Doc reference relative to docs/portfolio/index.md.
         link = f":link: {category}/{path.stem}\n:link-type: doc\n"
         # Footer action that opens the standalone app in a new tab (sits above the
-        # stretched card link via z-index — see custom.css). Root-relative like :img-top:.
-        app_url = _app_url_root(path, category)
-        footer = f'+++\n[Open fullscreen ↗]({app_url}){{target="_blank" rel="noopener"}}\n'
+        # stretched card link via z-index — see custom.css). A raw <a> avoids MyST
+        # turning a local .html link into a download reference.
+        app_url = _app_url_from_index(path, category)
+        footer = (
+            f'+++\n<a class="pf-fullscreen" href="{app_url}" target="_blank" rel="noopener">Open fullscreen ↗</a>\n'
+        )
     return (
         f":::{{grid-item-card}} {_title(path.stem)}\n:img-top: {thumb}\n{link}\n`{category}/{path.name}`\n{footer}:::\n"
     )
