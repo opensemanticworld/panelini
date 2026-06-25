@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 3
 
-panelini.components
 panelini.panels
+panelini.components
 ```
 
 ## Submodules

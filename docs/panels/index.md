@@ -29,6 +29,12 @@ High-level workspace that composes VisNetwork + JsonEditor with a detail pane.
 LangChain-powered chat panel with multi-provider support, tools, and live preview.
 :::
 
+:::{grid-item-card} TerminalMirror
+:link: terminalmirror
+:link-type: doc
+Mirror sys.stdout into an on-screen terminal widget with automatic collapse/expand buffer replay.
+:::
+
 ::::
 
 ```{mermaid}
@@ -38,6 +44,7 @@ graph LR
         vn(["VisNetwork"])
         gdt(["GraphDetailTool"])
         ai(["AiChat"])
+        tm(["TerminalMirror"])
     end
 
     panelini(["Panelini App"])
@@ -51,7 +58,7 @@ graph LR
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef targetNode fill:#1e293b,stroke:#334155,color:#f8fafc
 
-    class je,vn,gdt,ai panelNode
+    class je,vn,gdt,ai,tm panelNode
     class panelini,standalone,other targetNode
 ```
 
@@ -76,6 +83,9 @@ graph LR
 * - {doc}`AiChat <ai>`
   - LLM-powered chat interface with multi-provider support, tool execution, and live preview
   - [LangChain](https://python.langchain.com/) + Panel ChatInterface
+* - {doc}`TerminalMirror <terminalmirror>`
+  - Mirror sys.stdout into an on-screen terminal widget; auto-wires collapse/expand buffer replay
+  - Panel Terminal (xterm.js)
 ```
 
 ## Design Principles
@@ -95,4 +105,5 @@ All panels follow these design principles:
 jsoneditor
 visnetwork
 ai
+terminalmirror
 ```

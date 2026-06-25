@@ -14,6 +14,7 @@
 :maxdepth: 3
 
 panelini.panels.ai
+panelini.panels.terminalmirror
 panelini.panels.jsoneditor
 panelini.panels.visnetwork
 panelini.panels.wunderbaum
