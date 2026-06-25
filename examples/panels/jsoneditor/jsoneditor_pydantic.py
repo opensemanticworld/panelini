@@ -36,7 +36,7 @@ class PydanticEditor(JsonEditor):
         **params,
     ):
         self.pydantic_model = pydantic_model
-        self.schema = self.pydantic_model.schema()
+        self.schema = self.pydantic_model.model_json_schema()
 
         options = params.get("options", {})
 
