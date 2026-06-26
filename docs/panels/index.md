@@ -1,6 +1,6 @@
 # Panels
 
-Panels are **independent, standalone components** that can be used in any Panel application — with or without the Panelini framework. They're designed for maximum reusability.
+Panels are **independent, standalone components** that can be used in any Panel application - with or without the Panelini framework. They're designed for maximum reusability.
 
 ::::{grid} 1 1 2 2
 :gutter: 3

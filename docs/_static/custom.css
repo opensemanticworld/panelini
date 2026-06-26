@@ -1,4 +1,4 @@
-/* panelini docs — petrol + warm beige palette
+/* panelini docs - petrol + warm beige palette
    Light brand: #0d7377   Dark brand: #2fb4b0
    Beige surface: #faf7f2  Beige border: #e5dfd6 */
 
@@ -94,7 +94,7 @@ dl.py dl.py > dd {
     padding-bottom: 0.35em;
 }
 
-/* Attribute value strings like 'List(...)' — subdued */
+/* Attribute value strings like 'List(...)' - subdued */
 dl.py dl.py > dd > p:first-child:last-child {
     opacity: 0.55;
     font-size: 0.88em;
@@ -152,7 +152,7 @@ dt.sig:hover .viewcode-link:hover {
     opacity: 1;
 }
 
-/* --- Signature overflow — wrap gracefully --- */
+/* --- Signature overflow - wrap gracefully --- */
 dt.sig {
     word-break: break-word;
     overflow-wrap: break-word;
@@ -164,7 +164,7 @@ dt.sig {
     padding: 0 0.25em;
 }
 
-/* Header-link pilcrow — hide unless hovering the heading */
+/* Header-link pilcrow - hide unless hovering the heading */
 a.headerlink {
     opacity: 0;
     transition: opacity 0.15s;
@@ -178,7 +178,7 @@ a.headerlink:hover {
     opacity: 0.7 !important;
 }
 
-/* --- "API" section heading — the generic h3 inside autodoc pages --- */
+/* --- "API" section heading - the generic h3 inside autodoc pages --- */
 section > section > section#api > h3 {
     font-size: 0.8em;
     font-weight: 700;
@@ -224,7 +224,7 @@ section > section > section#api > h3 {
     text-decoration: none;
 }
 
-/* "Open fullscreen ↗" footer action — must sit above the stretched card link so it
+/* "Open fullscreen ↗" footer action - must sit above the stretched card link so it
    stays clickable, while the rest of the card still navigates to the embed page. */
 .sd-card .sd-card-footer a {
     position: relative;
@@ -269,13 +269,13 @@ div.admonition-tip {
     border-left-color: var(--color-brand-primary);
 }
 
-/* Mermaid diagrams — centred, responsive */
+/* Mermaid diagrams - centred, responsive */
 div.mermaid {
     text-align: center;
     margin: 1.5em 0;
 }
 
-/* Inline code in body text — softer background */
+/* Inline code in body text - softer background */
 :not(pre) > code {
     background: var(--color-background-secondary);
     padding: 0.1em 0.35em;

@@ -8,7 +8,7 @@ class JsonEditorPanel(pn.viewable.Viewer):
     """JSON editor with a live JSON preview and a save button.
 
     Defined inline (rather than imported from ``jsoneditor_panel_min``) so this
-    example is self-contained — the docs portfolio inlines a single file's source
+    example is self-contained - the docs portfolio inlines a single file's source
     into a standalone Pyodide app, where sibling example modules are unavailable.
     """
 

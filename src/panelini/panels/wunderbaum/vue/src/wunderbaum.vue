@@ -46,7 +46,7 @@ export default {
     },
     contextMenuItems: {
       type: Array,
-      default: () => []  // [{id, label, icon?}] — empty = no context menu
+      default: () => []  // [{id, label, icon?}] - empty = no context menu
     }
   },
 
@@ -215,7 +215,7 @@ export default {
             }
             const tip = lines.length > 1 ? lines.join('\n') : '';
             node.tooltip = tip;
-            // Set directly on DOM — wunderbaum only reads node.tooltip on initial create
+            // Set directly on DOM - wunderbaum only reads node.tooltip on initial create
             const titleSpan = e.nodeElem?.querySelector('.wb-title');
             if (titleSpan) titleSpan.title = tip;
           }
@@ -407,7 +407,7 @@ export default {
       // Expose tree instance on the container for external access (e.g. testing)
       container._wunderbaum = this.tree;
 
-      // Wunderbaum's root div needs explicit pixel width — CSS % resolves to 0
+      // Wunderbaum's root div needs explicit pixel width - CSS % resolves to 0
       // in Panel's shadow DOM. Walk up DOM to find actual available width,
       // then keep synced via ResizeObserver.
       this._fixTreeWidth(container);

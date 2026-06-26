@@ -144,7 +144,7 @@ class GetWebsiteHtmlInput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Tools (stubs — _run bodies implemented in step 9 via TDD)
+# Tools (stubs - _run bodies implemented in step 9 via TDD)
 # ---------------------------------------------------------------------------
 
 
@@ -239,7 +239,7 @@ class SparqlSearchTool(BaseTool):
 
 class FindOutEverythingAboutTool(BaseTool):
     name: str = "find_out_everything_about"
-    description: str = "Get all SPARQL triples (star shape) for an OSW element — all its properties and relations."
+    description: str = "Get all SPARQL triples (star shape) for an OSW element - all its properties and relations."
     args_schema: type[BaseModel] = FindOutEverythingAboutInput
 
     def _run(self, osw_id: str, depth: int = 1) -> Any:
@@ -333,7 +333,7 @@ class GetInstancesTool(BaseTool):
             )
             return _run_sparql(query)
         except Exception:
-            return "no instances found. The name of the class might not be available — try sparql_search first."
+            return "no instances found. The name of the class might not be available - try sparql_search first."
 
 
 class GetWebsiteHtmlTool(BaseTool):

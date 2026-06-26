@@ -18,7 +18,7 @@ hide-toc: true
 
 **A beautiful, batteries-included dashboard framework for [HoloViz Panel](https://panel.holoviz.org/).**
 
-panelini gives you a responsive, production-ready layout — header, sidebars, main area, footer — plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
+panelini gives you a responsive, production-ready layout - header, sidebars, main area, footer - plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
 
 ---
 
@@ -34,12 +34,12 @@ Responsive layout, sensible defaults, warm colour palette. No CSS wrestling befo
 
 :::{grid-item-card} Panel-native
 :columns: 12 12 4 4
-Every region accepts any `panel` object. Bring your own widgets, plots, and reactive state — panelini just composes the shell.
+Every region accepts any `panel` object. Bring your own widgets, plots, and reactive state - panelini just composes the shell.
 :::
 
 :::{grid-item-card} Reusable panels
 :columns: 12 12 4 4
-Standalone `JsonEditor`, `VisNetwork`, `GraphDetailTool`, and `AiChat` components — usable with or without panelini.
+Standalone `JsonEditor`, `VisNetwork`, `GraphDetailTool`, and `AiChat` components - usable with or without panelini.
 :::
 
 ::::
@@ -77,7 +77,7 @@ Run it:
 panel serve app.py --dev
 ```
 
-That's it — you now have a branded, responsive dashboard at `http://localhost:5006`.
+That's it - you now have a branded, responsive dashboard at `http://localhost:5006`.
 
 ---
 
@@ -95,7 +95,7 @@ Install, build your first app, learn the layout regions.
 :::{grid-item-card} 🧪 Examples
 :link: examples/index
 :link-type: doc
-Walkthroughs of every example in `examples/panels/` — AI chat, JSON editor, network graphs.
+Walkthroughs of every example in `examples/panels/` - AI chat, JSON editor, network graphs.
 :::
 
 :::{grid-item-card} 🧭 Architecture

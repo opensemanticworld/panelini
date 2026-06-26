@@ -20,3 +20,14 @@ repos:
       - id: ruff
         args: [--exit-non-zero-on-fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Repo-wide rule: never use the em dash (U+2014) anywhere - docs, markdown,
+      # comments, or strings. rephrase. (dist/ build artifacts excluded.)
+      - id: no-em-dash
+        name: No em dash (U+2014); rephrase
+        language: pygrep
+        entry: '\xe2\x80\x94'
+        types: [text]
+        exclude: '(^|/)(dist|node_modules)/|\.lock$'

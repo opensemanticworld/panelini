@@ -22,7 +22,7 @@ def panel_server(mock_langchain, mock_anthropic_sdk):
     """Serve the drawai example with LangChain + Anthropic SDK + config mocked."""
     lc1, lc2 = mock_langchain
     cfg_patch, anth_patch, _canned = mock_anthropic_sdk
-    # Import/reload the module BEFORE applying patches — the patches target names
+    # Import/reload the module BEFORE applying patches - the patches target names
     # inside the module's namespace, so the module must be importable first and
     # those names must exist before patch() can replace them. Reloading inside the
     # with-block would re-import the real ``load_config`` on top of the patch.
@@ -78,7 +78,7 @@ def test_drawai_upload_corrupt_png_shows_alert(ready_page: Page):
     file_input = page.locator("input[type=file][accept='.drawio,.drawio.png']").first
     file_input.set_input_files(str(_FIXTURES / "corrupt.drawio.png"))
     # The Alert text lives in a wrapper that Playwright reports as "hidden"
-    # even though the alert_pane.visible flag is True — wait for attachment
+    # even though the alert_pane.visible flag is True - wait for attachment
     # and just assert the error text is in the DOM.
     page.locator("text=Could not read file").first.wait_for(state="attached", timeout=5000)
     assert page.locator("text=mxfile").count() > 0

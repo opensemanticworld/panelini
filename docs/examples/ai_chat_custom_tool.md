@@ -40,7 +40,7 @@ class LocalStorageTool(BaseTool):
         return self._run(action=action, key=key, value=value)
 ```
 
-See the full source for the per-action handlers — they're straightforward dict operations.
+See the full source for the per-action handlers - they're straightforward dict operations.
 
 ## Wiring it into panelini
 
@@ -62,7 +62,7 @@ app.sidebar_set(objects=chat.sidebar_objects)
 
 Two things to notice:
 
-1. We use `AiChat` directly rather than `use_ai=True` — that gives us control over the `tools=` list.
+1. We use `AiChat` directly rather than `use_ai=True` - that gives us control over the `tools=` list.
 2. We stitch `chat.main_objects` and `chat.sidebar_objects` into the panelini layout by hand. `AiChat` is just a Panel component; you can compose it however you like.
 
 ## What you'll see
@@ -87,22 +87,22 @@ graph TB
 
 When you tick the `local_storage` box, the chat posts a system message:
 
-> **Tools updated** — 2 tool(s) now available
+> **Tools updated** - 2 tool(s) now available
 
-From that point on, the model can decide to call `local_storage` when it fits — e.g. ”store this note under `notes/today`”.
+From that point on, the model can decide to call `local_storage` when it fits - e.g. ”store this note under `notes/today`”.
 
 ## Adding your own tool
 
-Any LangChain `BaseTool` works — including:
+Any LangChain `BaseTool` works - including:
 
 - HTTP fetchers
 - Database lookups
 - Vector-store retrievers
 - Your own domain APIs
 
-The checkbox label comes from `tool.name`; the hover/tooltip text comes from `tool.description`. The checkbox state is wired through `AiBackend.update_tools()` — toggling it rebinds the tools on the underlying `AiInterface` without clearing history.
+The checkbox label comes from `tool.name`; the hover/tooltip text comes from `tool.description`. The checkbox state is wired through `AiBackend.update_tools()` - toggling it rebinds the tools on the underlying `AiInterface` without clearing history.
 
 ## See also
 
-- {doc}`../panels/ai` — AI panel guide, including the tool system
+- {doc}`../panels/ai` - AI panel guide, including the tool system
 - [LangChain tool authoring docs](https://python.langchain.com/docs/concepts/tools/)

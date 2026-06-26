@@ -32,11 +32,11 @@ def test_tree_renders(page: Page, port):
 
     # Column headers visible
     header = page.locator(".wb-header")
-    assert header.count() > 0, "No .wb-header — tree did not render"
+    assert header.count() > 0, "No .wb-header - tree did not render"
 
     # Tree rows visible
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row — tree did not render"
+    assert rows.count() > 0, "No .wb-row - tree did not render"
 
     server.stop()
 

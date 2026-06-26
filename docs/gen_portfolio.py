@@ -2,7 +2,7 @@
 
 What it does:
 - Discovers the example panels (excludes ``plot_by_code`` and, for now, the ``ai``
-  category — see the browser-native AI panel step).
+  category - see the browser-native AI panel step).
 - Emits a placeholder thumbnail per panel and writes ``docs/portfolio/index.md`` as a
   ``sphinx_design`` card grid grouped by category.
 - With ``--convert``, builds a standalone **Pyodide app** per panel via ``panel
@@ -16,7 +16,7 @@ Building & testing locally:
     # per app, gitignored build artifacts) and later runs only rebuild changed examples.
     make docs                     # builds apps, then sphinx-autobuild on :8000
 
-    # Then open the "Portfolio" page and click a card — the example runs in your
+    # Then open the "Portfolio" page and click a card - the example runs in your
     # browser via Pyodide (first load downloads packages, so give it a few seconds).
 
     # Strict build with the apps (reproduces the release/CI docs build):
@@ -28,7 +28,7 @@ Building & testing locally:
 Change detection: each built app embeds a signature over its example source, the
 wrapper template, the wheel name, and panelini's Python sources; ``convert_panel``
 skips an app whose signature is unchanged, so editing one example rebuilds only that
-app. Non-Python assets are not tracked — use ``--force`` / ``make portfolio-force``.
+app. Non-Python assets are not tracked - use ``--force`` / ``make portfolio-force``.
 
 The plain page + thumbnails are regenerated automatically on every Sphinx build (via
 a ``config-inited`` hook in conf.py), so ``docs/portfolio/index.md`` and
@@ -66,19 +66,24 @@ _REQUIREMENTS = ["numpy", "pydantic"]
 # the module globals keeps ``__name__ == "__main__"`` and correct class ``__module__``
 # so pydantic/LangChain forward references resolve.
 _WRAPPER_TEMPLATE = """\
-# AUTO-GENERATED for the Pyodide portfolio — do not edit.
+# AUTO-GENERATED for the Pyodide portfolio - do not edit.
 # panelini is installed by the converter's env bootstrap (a relative-URL wheel whose
 # unused ``watchfiles`` dependency was stripped so micropip can resolve it).
 import base64
+import os
 import types
 import panel as pn
 from panelini import Panelini
 
+# Force panelini's terminal mirror to its WASM-safe console view for the *build-time*
+# render too (panel convert snapshots on the host, where xterm.js would otherwise be
+# embedded and then throw in the browser before the worker hydrates).
+os.environ.setdefault("PANELINI_TERMINAL_MODE", "console")
 pn.extension("tabulator", "jsoneditor", "plotly")
 
 # In WASM, panel.io exposes only ``serve`` (from panel.io.pyodide); the tornado-backed
 # ``panel.io.server`` submodule is never imported. Provide a patchable stand-in so the
-# interceptors below — and any inlined ``pn.io.server.serve(...)`` example calls —
+# interceptors below - and any inlined ``pn.io.server.serve(...)`` example calls -
 # resolve instead of raising ``AttributeError``.
 if not hasattr(pn.io, "server"):
     pn.io.server = types.SimpleNamespace(serve=getattr(pn, "serve", None))
@@ -268,7 +273,7 @@ def _app_url_from_index(path: Path, category: str) -> str:
 def _wheel_signature() -> str:
     """Signature of the inputs that change the built wheel: panelini's Python sources
     and ``pyproject.toml`` (version, dependencies, build config). Non-Python package
-    assets are not tracked — use a force rebuild after changing those.
+    assets are not tracked - use a force rebuild after changing those.
     """
     h = hashlib.sha256()
     h.update(_panelini_signature().encode("utf-8"))
@@ -335,7 +340,7 @@ def _panelini_signature() -> str:
     """Short hash of panelini's own Python sources.
 
     Folded into each app's build signature so editing the library (not just an example)
-    invalidates the cached apps. Deterministic — hashes sorted relative paths + bytes,
+    invalidates the cached apps. Deterministic - hashes sorted relative paths + bytes,
     not mtimes. Non-Python assets (vue/js) are not covered; use a force rebuild for those.
     """
     src = _REPO / "src" / "panelini"
@@ -353,7 +358,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
     HTML is fully self-contained (Pyodide has no access to the repo files).
 
     A build signature (over the example source, wrapper template, wheel name, and
-    panelini sources) is embedded as a comment in the wrapper — and so ends up in the
+    panelini sources) is embedded as a comment in the wrapper - and so ends up in the
     generated worker ``.js``. When an app already carries the current signature it is
     skipped, so an unchanged example is not re-converted; editing the example (or the
     library) changes the signature and that one app rebuilds. ``force`` rebuilds anyway.
@@ -437,10 +442,23 @@ def _write_embed_page(path: Path, category: str) -> None:
     title = _title(path.stem)
     # From docs/portfolio/<category>/<stem>.html to docs/_static/portfolio/apps/...
     app_rel = f"../../_static/portfolio/apps/{category}/{path.stem}.html"
+    # In the browser the terminal panel cannot use xterm.js, so it renders an on-screen
+    # console mirror and also tees output to the browser developer console - call that out
+    # so developers know where to look.
+    note = ""
+    if category == "terminalmirror":
+        note = (
+            "```{note}\n"
+            "In the browser this example mirrors its output to the **developer console** "
+            "(open your browser's DevTools → Console) as well as the on-screen panel, so "
+            "developers can see what's happening.\n"
+            "```\n\n"
+        )
     page = (
         f"# {title}\n\n"
-        f"`{category}/{path.name}` — runs entirely in your browser via Pyodide. "
+        f"`{category}/{path.name}` - runs entirely in your browser via Pyodide. "
         "The first load downloads packages, so give it a few seconds.\n\n"
+        f"{note}"
         "```{raw} html\n"
         f'<p><a class="pf-fullscreen" href="{app_rel}" target="_blank" '
         'rel="noopener">Open fullscreen ↗</a></p>\n'
@@ -468,7 +486,7 @@ def _card(path: Path, category: str) -> str:
         # Doc reference relative to docs/portfolio/index.md.
         link = f":link: {category}/{path.stem}\n:link-type: doc\n"
         # Footer action that opens the standalone app in a new tab (sits above the
-        # stretched card link via z-index — see custom.css). A raw <a> avoids MyST
+        # stretched card link via z-index - see custom.css). A raw <a> avoids MyST
         # turning a local .html link into a download reference.
         app_url = _app_url_from_index(path, category)
         footer = (
@@ -506,7 +524,7 @@ def generate() -> None:
 
     page = (
         "# Portfolio\n\n"
-        "Interactive examples that run entirely in your browser via Pyodide — no server "
+        "Interactive examples that run entirely in your browser via Pyodide - no server "
         "required. Click a card to open the live example, embedded right here in the docs.\n\n"
         "```{note}\n"
         "Thumbnails are placeholders for now and will be replaced with real screenshots.\n"

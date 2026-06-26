@@ -22,6 +22,6 @@ def test_component(page: Page, port):
 
     # Tree rows must be visible
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row elements — tree did not render"
+    assert rows.count() > 0, "No .wb-row elements - tree did not render"
 
     server.stop()

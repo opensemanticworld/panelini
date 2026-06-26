@@ -30,7 +30,7 @@ graph TB
     class ingest_m,digest_m main
 ```
 
-Each tab hosts an independent `AiChat` instance with its own system prompt and welcome message. `jslink` keeps the active tab indices of the sidebar and main tabs in sync — clicking either one switches both.
+Each tab hosts an independent `AiChat` instance with its own system prompt and welcome message. `jslink` keeps the active tab indices of the sidebar and main tabs in sync - clicking either one switches both.
 
 ## The code (condensed)
 
@@ -77,7 +77,7 @@ Each `AiChat` carries its own:
 - tool set
 - preview pane
 
-That's exactly the isolation you want for domain-specialised assistants — the *Ingest* bot's conversation can't leak into *Digest*'s context.
+That's exactly the isolation you want for domain-specialised assistants - the *Ingest* bot's conversation can't leak into *Digest*'s context.
 
 ## The `jslink` trick
 
@@ -86,14 +86,14 @@ main_tabs.jslink(sidebar_tabs, active="active")
 sidebar_tabs.jslink(main_tabs, active="active")
 ```
 
-`jslink` is a Panel feature that syncs properties **purely in the browser** — no Python round-trip on every click. The `active` property is each `Tabs` widget's integer index; keeping them equal means the sidebar and main area always show the same AI.
+`jslink` is a Panel feature that syncs properties **purely in the browser** - no Python round-trip on every click. The `active` property is each `Tabs` widget's integer index; keeping them equal means the sidebar and main area always show the same AI.
 
 ```{tip}
-Need more than two? Just add more tabs — `jslink` scales trivially. The test exercises the sync: it clicks each tab header and asserts that every DOM element with the same tab name ends up with the `active` class.
+Need more than two? Just add more tabs - `jslink` scales trivially. The test exercises the sync: it clicks each tab header and asserts that every DOM element with the same tab name ends up with the `active` class.
 ```
 
 ## See also
 
-- {doc}`ai_chat_min` — the single-tab minimal form
-- {doc}`ai_chat_custom_tool` — adding tools to a chat
+- {doc}`ai_chat_min` - the single-tab minimal form
+- {doc}`ai_chat_custom_tool` - adding tools to a chat
 - [Panel `jslink` docs](https://panel.holoviz.org/how_to/links/examples/jslink_async.html)

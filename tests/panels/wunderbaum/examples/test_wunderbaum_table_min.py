@@ -24,10 +24,10 @@ def test_component(page: Page, port):
 
     # Column headers must be visible
     header = page.locator(".wb-header")
-    assert header.count() > 0, "No .wb-header — treegrid did not render"
+    assert header.count() > 0, "No .wb-header - treegrid did not render"
 
     # Tree rows must be visible
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row elements — tree did not render"
+    assert rows.count() > 0, "No .wb-row elements - tree did not render"
 
     server.stop()
