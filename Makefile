@@ -25,19 +25,33 @@ test-ui: ## Run UI tests with Playwright in headless mode
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Running UI tests with Playwright (headless)"
-	@uv run pytest -m "ui" --cov --cov-config=pyproject.toml --cov-report=xml
+	@uv run pytest -m "ui and not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-ui-headed
 test-ui-headed: ## Run UI tests with Playwright in headed mode
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Running UI tests with Playwright"
-	@uv run pytest -m "ui" --headed --slowmo 1000 --pdb --cov --cov-config=pyproject.toml --cov-report=xml
+	@uv run pytest -m "ui and not portfolio" --headed --slowmo 1000 --pdb --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-full
 test-full: ## Test the code with pytest
 	@echo "🚀 Testing code: Running full pytest"
-	@uv run pytest --cov --cov-config=pyproject.toml --cov-report=xml
+	@uv run pytest -m "not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
+
+.PHONY: test-portfolio
+test-portfolio: portfolio ## Verify representative built Pyodide apps render in a browser (one per category)
+	@echo "🚀 Installing Playwright browsers"
+	@uv run playwright install chromium
+	@echo "🚀 Verifying representative Pyodide apps (*_panel_min)"
+	@uv run pytest -m portfolio -k panel_min tests/portfolio
+
+.PHONY: test-portfolio-all
+test-portfolio-all: portfolio ## Verify ALL built Pyodide apps render in a browser (the scoreboard)
+	@echo "🚀 Installing Playwright browsers"
+	@uv run playwright install chromium
+	@echo "🚀 Verifying every Pyodide app"
+	@uv run pytest -m portfolio tests/portfolio
 
 .PHONY: build
 build: clean-build ## Build wheel file

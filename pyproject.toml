@@ -110,6 +110,7 @@ pythonpath = ["."]
 markers = [
     "ui: UI tests requiring Playwright (browser)",
     "ai: AI tests requiring langchain and related packages",
+    "portfolio: Pyodide portfolio app tests (slow, needs built apps via `make portfolio`)",
 ]
 
 [tool.ruff]
