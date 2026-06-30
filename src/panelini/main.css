@@ -12,6 +12,7 @@
   background-size: cover;
   background-position: top;
   height: 100%;
+  overflow-y: auto;
 }
 
 .sidebar {
