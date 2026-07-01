@@ -43,6 +43,54 @@ Drive a JSON editor from a Pydantic model — schema and initial value derived a
 Interactive network graph with `vis-network` + Vue.
 :::
 
+:::{grid-item-card} Wunderbaum tree — minimal
+:link: wunderbaum_panelini_min
+:link-type: doc
+The smallest nested tree, hosted in a Panelini card.
+:::
+
+:::{grid-item-card} Wunderbaum treegrid — columns
+:link: wunderbaum_table_min
+:link-type: doc
+Switch to tree + table mode with per-node column values.
+:::
+
+:::{grid-item-card} Checkbox tree
+:link: checkbox_tree
+:link-type: doc
+Hierarchical checkboxes with tri-state parent propagation.
+:::
+
+:::{grid-item-card} Context menu
+:link: context_menu
+:link-type: doc
+Right-click a node to add, rename, or delete via a callback.
+:::
+
+:::{grid-item-card} Lazy loading
+:link: lazy_loading
+:link-type: doc
+Load children on demand when a lazy node is expanded.
+:::
+
+:::{grid-item-card} Incremental tree updates
+:link: incremental_tree_demo
+:link-type: doc
+Build a folder structure step by step with action playbooks.
+:::
+
+:::{grid-item-card} DAG projection
+:link: dag_projection
+:link-type: doc
+Project a graph of `SubClassOf` / `HasPart` edges into a treegrid.
+:::
+
+:::{grid-item-card} Virtual filesystem
+:link: virtual_filesystem
+:link-type: doc
+The full demo — columns, DnD, context menu, rename, file drop.
+:::
+
 ::::
 
 ## Running the examples

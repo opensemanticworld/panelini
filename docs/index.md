@@ -145,6 +145,15 @@ examples/ai_chat_multi_tab
 examples/jsoneditor
 examples/jsoneditor_pydantic
 examples/visnetwork
+examples/wunderbaum_panel_min
+examples/wunderbaum_panelini_min
+examples/wunderbaum_table_min
+examples/checkbox_tree
+examples/context_menu
+examples/lazy_loading
+examples/incremental_tree_demo
+examples/dag_projection
+examples/virtual_filesystem
 ```
 
 ```{toctree}
