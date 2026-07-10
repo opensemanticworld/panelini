@@ -41,7 +41,7 @@ class TerminalMirror(pn.viewable.Viewer):
 
         When this instance is placed inside a ``pn.Card`` (directly or via a
         nested ``pn.viewable.Viewer``), collapse/expand buffer-replay is wired
-        automatically — no explicit :meth:`bind_collapse` call required.
+        automatically; no explicit :meth:`bind_collapse` call is required.
 
         Args:
             mirror: If True (default), immediately redirect ``sys.stdout`` into
@@ -213,7 +213,7 @@ def _patch_pn_card_for_terminal_mirror() -> None:
 
     def _patched_init(self: pn.Card, *args: Any, **kwargs: Any) -> None:
         _orig_init(self, *args, **kwargs)
-        # Use the original args — card.objects already has Viewers unwrapped
+        # Use the original args, since card.objects already has Viewers unwrapped
         original_objects = list(args) + list(kwargs.get("objects", []))
         visited: set[int] = set()
         for obj in original_objects:

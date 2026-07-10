@@ -300,7 +300,7 @@ class TestSparqlTools:
     def test_get_instances_handles_bad_id(self, osw_env: None) -> None:
         from panelini.panels.ai.plot.tools.osw_tools import GetInstancesTool
 
-        # Invalid osw_id (no UUID) — tool should return a string, not raise.
+        # Invalid osw_id (no UUID): tool should return a string, not raise.
         result = GetInstancesTool()._run(osw_id="not-an-osw-id")
         assert isinstance(result, str)
 

@@ -45,13 +45,13 @@ graph LR
 
 The Playwright test:
 
-1. Imports `app` and `jsoneditor_panel` from the example module (collection-time import — panelini's background images are disabled in `tests/conftest.py` so this is fast).
+1. Imports `app` and `jsoneditor_panel` from the example module (collection-time import; panelini's background images are disabled in `tests/conftest.py` so this is fast).
 2. Serves the app on a random port.
 3. Types into the `#root\[testxy\]` input, clicks *Save*, and asserts both the Python-side value and the rendered title updated.
 
-If the example breaks, the test fails — so the example is guaranteed to keep working.
+If the example breaks, the test fails, so the example is guaranteed to keep working.
 
 ## See also
 
-- {doc}`../panels/jsoneditor` — full `JsonEditor` guide with dynamic schemas
+- {doc}`../panels/jsoneditor`: full `JsonEditor` guide with dynamic schemas
 - [json-editor docs](https://github.com/json-editor/json-editor#options)

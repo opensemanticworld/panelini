@@ -64,7 +64,7 @@ def _load_plot_bytes(panel: PlotPanel) -> io.BytesIO:
     """Read the current plot's PNG bytes from ``panel.output_file_path``."""
     path = panel.output_file_path
     if path is None or not path.exists():
-        raise ValueError("No image available to attach — run plot_by_code first.")  # noqa: TRY003
+        raise ValueError("No image available to attach: run plot_by_code first.")  # noqa: TRY003
     return io.BytesIO(path.read_bytes())
 
 
@@ -97,7 +97,7 @@ class AttachPlotToOswTool(BaseTool):
             osw_obj = build_osw_express()
             entity = osw_obj.load_entity(osw_id)
             if entity is None:
-                return f"error loading entity with title: {osw_id} — was it formatted correctly?"
+                return f"error loading entity with title: {osw_id} (was it formatted correctly?)"
             bytesio = _load_plot_bytes(self.panel)
             plot_uuid = uuid.uuid4()
             wf = _build_wiki_file(osw_obj, plot_uuid)

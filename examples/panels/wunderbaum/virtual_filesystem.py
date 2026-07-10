@@ -178,7 +178,7 @@ def on_tree_event(event_name: str, event_params: dict) -> None:
         key = event_params.get("key", "")
         info = filesystem.get(key, {})
         status.object = (
-            f"**Selected:** `{key}` — "
+            f"**Selected:** `{key}`: "
             f"{info.get('type', 'unknown')}, "
             f"size: {info.get('size', 'n/a')}, "
             f"modified: {info.get('modified', 'n/a')}"

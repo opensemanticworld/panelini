@@ -30,7 +30,7 @@ _DEFAULT_PLOT_MODEL_NAME = "Claude Sonnet 4.6"
 
 _REGEN_SYSTEM_MESSAGE = (
     "You rewrite matplotlib plotting scripts for an llm_sandbox runtime. "
-    "Return ONLY the new Python code — no prose, no backticks. "
+    "Return ONLY the new Python code: no prose, no backticks. "
     "The script MUST save the figure to '/sandbox/output.png'. "
     "Use numpy, pandas, scipy, matplotlib. Do not import libraries "
     "outside this set."
@@ -100,7 +100,7 @@ def regenerate_plot(
     can surface it in the UI.
     """
     if not panel.current_python_code:
-        return "No code to regenerate — run a plot from chat first."
+        return "No code to regenerate: run a plot from chat first."
 
     config = _load_config(config_path)
     if provider is None:
@@ -180,7 +180,7 @@ def build_plot_context_sidebar(
 
     def _on_regen(_event: Any) -> None:
         if not panel.current_python_code:
-            status_md.object = "_No plot yet — run one from chat first._"
+            status_md.object = "_No plot yet: run one from chat first._"
             return
         intent = (intent_input.value or "").strip()
         if not intent:

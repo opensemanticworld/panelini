@@ -40,7 +40,7 @@ app.main_set(objects=[
 app.servable()
 ```
 
-The only difference from the standalone version is the wrapper: the tree drops into a `pn.Card`, which drops into `Panelini.main_set(...)`. The panel itself is unchanged — this is the whole point of the panels-are-standalone design.
+The only difference from the standalone version is the wrapper: the tree drops into a `pn.Card`, which drops into `Panelini.main_set(...)`. The panel itself is unchanged, which is the whole point of the panels-are-standalone design.
 
 ## How the test exercises it
 
@@ -48,5 +48,5 @@ The test imports `app` and `tree`, serves the app, and asserts the tree has thre
 
 ## See also
 
-- {doc}`wunderbaum_panel_min` — the same tree served on its own
-- {doc}`checkbox_tree` — add selection checkboxes with tri-state propagation
+- {doc}`wunderbaum_panel_min`: the same tree served on its own
+- {doc}`checkbox_tree`: add selection checkboxes with tri-state propagation

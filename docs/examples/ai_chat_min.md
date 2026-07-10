@@ -45,8 +45,8 @@ graph LR
     class chat,preview main
 ```
 
-- **Left sidebar** — provider/model pickers, temperature slider, tool toggles, chat export/clear.
-- **Main area** — a chat window on the left, a live markdown preview pane on the right that the `update_preview` tool can write to.
+- **Left sidebar**: provider/model pickers, temperature slider, tool toggles, chat export/clear.
+- **Main area**: a chat window on the left, a live markdown preview pane on the right that the `update_preview` tool can write to.
 
 ## Configuration
 
@@ -75,6 +75,6 @@ The fixture **imports the real example module** under a LangChain mock, so a reg
 
 ## See also
 
-- {doc}`ai_chat_custom_tool` — add your own tools to the chat
-- {doc}`ai_chat_multi_tab` — two chats in synced tabs
-- {doc}`../panels/ai` — full AI chat panel guide
+- {doc}`ai_chat_custom_tool`: add your own tools to the chat
+- {doc}`ai_chat_multi_tab`: two chats in synced tabs
+- {doc}`../panels/ai`: full AI chat panel guide

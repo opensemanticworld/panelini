@@ -33,7 +33,7 @@ def mock_langchain():
 
 @pytest.fixture(autouse=True)
 def server_cleanup():
-    """Override parent fixture — don't reset Panel state mid-run."""
+    """Override parent fixture: don't reset Panel state mid-run."""
     yield
 
 

@@ -26,6 +26,6 @@ def test_component(page: Page, port):
     time.sleep(1)
 
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row after step — tree did not render"
+    assert rows.count() > 0, "No .wb-row after step: tree did not render"
 
     server.stop()

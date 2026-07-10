@@ -39,11 +39,11 @@ class PydanticEditor(JsonEditor):
 
 Key points:
 
-- **Schema derivation** — `model_json_schema()` converts the Pydantic model (including nested models and `$defs`) into the JSON Schema consumed by `json-editor`.
-- **Pydantic instance as value** — if `value` is a `BaseModel`, it is converted with `model_dump()` before being assigned to the `value` param, so callers never need to serialize manually.
-- **Initial value preserved on serve** — `value` is passed as `startval` to the JavaScript editor at mount time, preventing the first `change` event from resetting the form to schema defaults.
-- **`format_array_tabs`** — adds `"format": "tabs"` to every `"type": "array"` node in the schema, rendering list items as tabs.
-- **`format_dict_categories`** — adds `"format": "categories"` to every `"type": "object"` node, rendering object properties as category panels.
+- **Schema derivation**: `model_json_schema()` converts the Pydantic model (including nested models and `$defs`) into the JSON Schema consumed by `json-editor`.
+- **Pydantic instance as value**: if `value` is a `BaseModel`, it is converted with `model_dump()` before being assigned to the `value` param, so callers never need to serialize manually.
+- **Initial value preserved on serve**: `value` is passed as `startval` to the JavaScript editor at mount time, preventing the first `change` event from resetting the form to schema defaults.
+- **`format_array_tabs`**: adds `"format": "tabs"` to every `"type": "array"` node in the schema, rendering list items as tabs.
+- **`format_dict_categories`**: adds `"format": "categories"` to every `"type": "object"` node, rendering object properties as category panels.
 
 ## Data flow
 
@@ -69,5 +69,5 @@ The Playwright test:
 
 ## See also
 
-- {doc}`../panels/jsoneditor` — full `JsonEditor` guide including initial value and Pydantic integration sections
+- {doc}`../panels/jsoneditor`: full `JsonEditor` guide including initial value and Pydantic integration sections
 - [json-editor format options](https://github.com/json-editor/json-editor#format)

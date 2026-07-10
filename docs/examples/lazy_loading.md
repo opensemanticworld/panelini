@@ -1,9 +1,9 @@
-# Lazy loading — children on demand
+# Lazy loading: children on demand
 
 **Source:** [`examples/panels/wunderbaum/lazy_loading.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/lazy_loading.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_lazy_loading.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_lazy_loading.py)
 
-Nodes marked `lazy: True` fetch their children only when first expanded. The `lazy_load_callback` runs on the Python side — in a real app it would hit a database, API, or filesystem.
+Nodes marked `lazy: True` fetch their children only when first expanded. The `lazy_load_callback` runs on the Python side; in a real app it would hit a database, API, or filesystem.
 
 ## The code
 
@@ -55,14 +55,14 @@ tree = Wunderbaum(
 Key points:
 
 - `lazy: True` on a node tells Wunderbaum to render an expander but defer loading. Mixing lazy and pre-loaded roots (like `Root 3`) is fine.
-- `lazy_load_callback(key, request_data)` returns the child list for that node. Returned children can themselves be `lazy: True`, enabling arbitrarily deep on-demand trees — here capped at three levels via the `depth` check.
+- `lazy_load_callback(key, request_data)` returns the child list for that node. Returned children can themselves be `lazy: True`, enabling arbitrarily deep on-demand trees (here capped at three levels via the `depth` check).
 - The callback runs server-side on expand, so it can perform real I/O.
 
 ## How the test exercises it
 
-The test serves the app and asserts the three roots render (`.wb-row` count `>= 3`) and the `.wunderbaum-wrapper` is visible — confirming the lazy roots render their expanders before any children are loaded.
+The test serves the app and asserts the three roots render (`.wb-row` count `>= 3`) and the `.wunderbaum-wrapper` is visible, confirming the lazy roots render their expanders before any children are loaded.
 
 ## See also
 
-- {doc}`incremental_tree_demo` — push nodes in from Python rather than pulling on expand
-- {doc}`virtual_filesystem` — a fully-loaded tree backed by an in-memory dict
+- {doc}`incremental_tree_demo`: push nodes in from Python rather than pulling on expand
+- {doc}`virtual_filesystem`: a fully-loaded tree backed by an in-memory dict

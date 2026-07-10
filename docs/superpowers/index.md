@@ -1,6 +1,6 @@
 # Superpowers
 
-Internal planning documents — design specs and implementation plans.
+Internal planning documents: design specs and implementation plans.
 
 ```{toctree}
 :maxdepth: 1

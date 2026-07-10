@@ -1,9 +1,9 @@
-# Context menu — right-click actions
+# Context menu: right-click actions
 
 **Source:** [`examples/panels/wunderbaum/context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/context_menu.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_context_menu.py)
 
-A tree-only Wunderbaum with a built-in context menu. Right-click a node to add a child, rename, or delete it — all handled by a single event callback that manipulates the tree via the Python API.
+A tree-only Wunderbaum with a built-in context menu. Right-click a node to add a child, rename, or delete it, all handled by a single event callback that manipulates the tree via the Python API.
 
 ## The code
 
@@ -69,9 +69,9 @@ Key points:
 
 ## How the test exercises it
 
-The test serves the app and asserts the tree renders with rows. Note that the sibling {doc}`virtual_filesystem` test marks its right-click assertion `xfail` — dispatching a real `contextmenu` event through the shadow DOM is unreliable under Playwright — so this example is verified for render and the callback logic is covered by the Python-API paths elsewhere.
+The test serves the app and asserts the tree renders with rows. Note that the sibling {doc}`virtual_filesystem` test marks its right-click assertion `xfail`, since dispatching a real `contextmenu` event through the shadow DOM is unreliable under Playwright, so this example is verified for render and the callback logic is covered by the Python-API paths elsewhere.
 
 ## See also
 
-- {doc}`virtual_filesystem` — context menu plus DnD, rename, and file drop
-- {doc}`incremental_tree_demo` — the same manipulation API, driven by buttons
+- {doc}`virtual_filesystem`: context menu plus DnD, rename, and file drop
+- {doc}`incremental_tree_demo`: the same manipulation API, driven by buttons

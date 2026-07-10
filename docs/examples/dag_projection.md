@@ -1,4 +1,4 @@
-# DAG projection — graph as a tree
+# DAG projection: graph as a tree
 
 **Source:** [`examples/panels/wunderbaum/dag_projection.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/dag_projection.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_dag_projection.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_dag_projection.py)
@@ -55,7 +55,7 @@ tree = Wunderbaum(source=source, columns=columns)
 
 Key points:
 
-- The projection is pure Python (`dag_to_tree_source`) — Wunderbaum only ever sees a plain nested `source`. Any graph model can be adapted this way.
+- The projection is pure Python (`dag_to_tree_source`); Wunderbaum only ever sees a plain nested `source`. Any graph model can be adapted this way.
 - Edge semantics are configurable: `parent_to_child_edges` (default `["HasPart"]`) lists relations where `from` is the parent; all others (like `SubClassOf`) are read child→parent.
 - Because a shared node (e.g. `Engine`) appears under every parent, keys are path-prefixed (`Car/Engine`, `Truck/Engine`) to stay unique.
 
@@ -66,5 +66,5 @@ The test serves the app and asserts the treegrid rendered: a non-empty `tree.sou
 ## See also
 
 - For a combined tree + graph view, see [`examples/usecases/wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/wunderbaum_visnetwork.py)
-- {doc}`wunderbaum_table_min` — the treegrid column basics
-- {doc}`visnetwork` — the graph side of the story
+- {doc}`wunderbaum_table_min`: the treegrid column basics
+- {doc}`visnetwork`: the graph side of the story

@@ -1,4 +1,4 @@
-# Wunderbaum treegrid — columns
+# Wunderbaum treegrid: columns
 
 **Source:** [`examples/panels/wunderbaum/wunderbaum_table_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/wunderbaum_table_min.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_wunderbaum_table_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_wunderbaum_table_min.py)
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 Key points:
 
 - The `columns` list turns on table mode. The first column uses the reserved id `"*"` for the tree/title column; the rest map to node properties by `id`.
-- Column values (`size`, `modified`, `permissions`) sit **at the node level**, not inside a nested `data` dict — Wunderbaum auto-moves any non-reserved keys into `node.data` for you.
+- Column values (`size`, `modified`, `permissions`) sit **at the node level**, not inside a nested `data` dict: Wunderbaum auto-moves any non-reserved keys into `node.data` for you.
 - `icon` uses [Bootstrap Icons](https://icons.getbootstrap.com/) class names (`bi bi-...`).
 
 ## How the test exercises it
@@ -63,6 +63,6 @@ The test serves the tree and asserts `len(tree.columns) == 4`, that the `.wb-hea
 
 ## See also
 
-- {doc}`wunderbaum_panel_min` — tree-only mode without columns
-- {doc}`dag_projection` — build a treegrid source from a graph
-- {doc}`virtual_filesystem` — a full editable filesystem in table mode
+- {doc}`wunderbaum_panel_min`: tree-only mode without columns
+- {doc}`dag_projection`: build a treegrid source from a graph
+- {doc}`virtual_filesystem`: a full editable filesystem in table mode

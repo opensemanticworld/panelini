@@ -59,7 +59,7 @@ The left sidebar is on by default, the right is off. Flip `sidebar_right_enabled
 
 ## Adding reactive content
 
-panelini doesn't reinvent reactivity — it plugs straight into Panel's param + `pn.bind`:
+panelini doesn't reinvent reactivity: it plugs straight into Panel's param + `pn.bind`:
 
 ```python
 import panel as pn
@@ -78,7 +78,7 @@ app.servable()
 
 ## Using a panel
 
-panelini ships with reusable panels under `panelini.panels.*`. Each one is usable standalone — panelini just hosts them in a nice layout.
+panelini ships with reusable panels under `panelini.panels.*`. Each one is usable standalone; panelini just hosts them in a nice layout.
 
 ```python
 import panel as pn
@@ -136,6 +136,6 @@ pn.serve(app.servable(), port=5006, show=False)
 
 ## Next
 
-- {doc}`../examples/index` — runnable walkthroughs
-- {doc}`../architecture` — how panelini is structured
-- {doc}`../modules` — API reference
+- {doc}`../examples/index`: runnable walkthroughs
+- {doc}`../architecture`: how panelini is structured
+- {doc}`../modules`: API reference
