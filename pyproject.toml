@@ -85,6 +85,7 @@ dev = [
     "pytest-playwright>=0.7.2",
     "pytest-asyncio>=0.23",
     "osw>=1.0.1",
+    "python-semantic-release>=10.6,<11",
 ]
 
 [build-system]
@@ -170,6 +171,15 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["src"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+tag_format = "{version}"
+commit_message = "chore(release): {version} [skip ci]"
+# current version is 0.x; PSR v10 defaults (allow_zero_version=false) would jump straight to 1.0.0 on first release
+allow_zero_version = true
+# keep uv.lock in sync with the bumped version within the same release commit
+build_command = "uv lock"
 
 [tool.deptry]
 exclude = ["src/panelini/components/migration"]
