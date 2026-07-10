@@ -114,6 +114,14 @@ Handwritten overview plus the full auto-generated API.
 
 ---
 
+## Releases
+
+Versions are cut automatically from [Conventional
+Commits](https://www.conventionalcommits.org/) on every merge to
+`main`. See the [CHANGELOG](https://github.com/opensemanticworld/panelini/blob/main/CHANGELOG.md)
+for release notes, and [CONTRIBUTING](https://github.com/opensemanticworld/panelini/blob/main/CONTRIBUTING.md)
+for the commit convention and pull request flow.
+
 ## Authors
 
 - [Andreas Räder](https://github.com/raederan)

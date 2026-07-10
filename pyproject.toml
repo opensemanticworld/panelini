@@ -181,6 +181,11 @@ allow_zero_version = true
 # keep uv.lock in sync with the bumped version within the same release commit
 build_command = "uv lock"
 
+[tool.semantic_release.changelog]
+# append new releases after the marker in the seeded CHANGELOG.md instead of
+# regenerating full history from non-conventional pre-existing commits
+mode = "update"
+
 [tool.deptry]
 exclude = ["src/panelini/components/migration"]
 
