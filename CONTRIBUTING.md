@@ -65,8 +65,13 @@ Please note this documentation assumes you already have `uv` and `Git` installed
    Then, install and activate the environment with:
 
       ```bash
-      uv sync
+      uv sync --all-extras
       ```
+
+      `--all-extras` is required: plain `uv sync` skips the optional
+      `ai`/`ai-drawio`/`ai-llm-sandbox`/`ai-osw` extras, and `make
+      check` (mypy, deptry) will fail on those code paths without
+      them installed.
 
 4. Install pre-commit to run linters/formatters at commit time:
 
