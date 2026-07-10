@@ -65,8 +65,13 @@ Please note this documentation assumes you already have `uv` and `Git` installed
    Then, install and activate the environment with:
 
       ```bash
-      uv sync
+      uv sync --all-extras
       ```
+
+      `--all-extras` is required: plain `uv sync` skips the optional
+      `ai`/`ai-drawio`/`ai-llm-sandbox`/`ai-osw` extras, and `make
+      check` (mypy, deptry) will fail on those code paths without
+      them installed.
 
 4. Install pre-commit to run linters/formatters at commit time:
 
@@ -119,11 +124,13 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       This requires you to have multiple versions of python installed.
       This step is also triggered in the CI/CD pipeline, so you could also choose to skip this step locally.
 
-11. Commit your changes and push your branch to GitHub:
+11. Commit your changes using
+    [Conventional Commits](https://www.conventionalcommits.org/) and
+    push your branch to GitHub:
 
       ```bash
       git add .
-      git commit -m "Your detailed description of your changes."
+      git commit -m "fix: correct sidebar collapse on small screens"
       git push origin name-of-your-bugfix-or-feature
       ```
 
@@ -137,3 +144,24 @@ Before you submit a pull request, check that it meets these guidelines:
 
 2. If the pull request adds functionality, the docs should be updated.
    Put your new functionality into a function with a docstring, and add the feature to the list in `README.md`.
+
+## Commit Messages and Releases
+
+Releases are fully automated with
+[python-semantic-release](https://python-semantic-release.readthedocs.io/),
+driven by your commit messages. Please write commits as
+`type(scope): subject`, for example:
+
+- `feat: ...` for a new feature (bumps the minor version)
+- `fix: ...` for a bug fix (bumps the patch version)
+- `perf: ...` for a performance improvement (bumps the patch version)
+- `BREAKING CHANGE:` in the commit body (bumps the major version)
+- `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `style:` for everything
+  else that shouldn't trigger a release on its own
+
+You do not need to bump the version yourself or edit `CHANGELOG.md`.
+Once your pull request is open, CI posts a comment with the version
+that would be released if it's merged, so you can check the outcome
+before merging. `main` requires one approving review; once merged, CI
+bumps the version, updates the changelog, tags the release, publishes
+to PyPI, and deploys the docs automatically.

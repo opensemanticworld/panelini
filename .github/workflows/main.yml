@@ -70,3 +70,43 @@ jobs:
 
       - name: Check if documentation can be built
         run: uv run sphinx-build -b html docs docs/_build/html -W --keep-going
+
+  version-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Compute next version (dry run)
+        id: preview
+        run: |
+          {
+            echo 'body<<EOF'
+            echo "### Next version if merged"
+            NEXT_VERSION=$(uv run semantic-release version --print 2>/dev/null || true)
+            if [ -z "$NEXT_VERSION" ]; then
+              echo "_No release-worthy commits on this PR yet (no version bump would be triggered)._"
+            else
+              echo "Merging this PR would release **$NEXT_VERSION**."
+              echo
+              echo '```'
+              uv run semantic-release changelog --print 2>/dev/null || true
+              echo '```'
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment next version on PR
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: version-preview
+          message: ${{ steps.preview.outputs.body }}

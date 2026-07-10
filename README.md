@@ -21,6 +21,7 @@
 - [🚀 Install](#-install)
 - [💥 Usage](#-usage)
 - [🛞 Commands](#-commands)
+- [📌 Releases](#-releases)
 - [🦥 Authors](#-authors)
 - [📜 Content Attribution](#-content-attribution)
 
@@ -92,6 +93,10 @@ panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src
 ```
 
 > When using `panel serve`, make sure to specify the correct paths for your static assets and favicon.
+
+## 📌 Releases
+
+Versions are cut automatically from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. See [CHANGELOG.md](CHANGELOG.md) for release notes and [Releases](https://github.com/opensemanticworld/panelini/releases) for published tags.
 
 ## 🦥 Authors
 
