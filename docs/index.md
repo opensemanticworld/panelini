@@ -153,6 +153,8 @@ examples/ai_chat_multi_tab
 examples/jsoneditor
 examples/jsoneditor_pydantic
 examples/visnetwork
+examples/visnetwork_context_menu
+examples/visnetwork_ctrl_drag_duplicate
 examples/wunderbaum_panel_min
 examples/wunderbaum_panelini_min
 examples/wunderbaum_table_min

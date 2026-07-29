@@ -43,6 +43,18 @@ Drive a JSON editor from a Pydantic model — schema and initial value derived a
 Interactive network graph with `vis-network` + Vue.
 :::
 
+:::{grid-item-card} VisNetwork context menus
+:link: visnetwork_context_menu
+:link-type: doc
+Right-click nodes and edges to run per-element actions from Python.
+:::
+
+:::{grid-item-card} VisNetwork Ctrl+drag duplicate
+:link: visnetwork_ctrl_drag_duplicate
+:link-type: doc
+Hold Ctrl and drag to clone nodes, with a post-processing callback.
+:::
+
 :::{grid-item-card} Wunderbaum tree — minimal
 :link: wunderbaum_panelini_min
 :link-type: doc

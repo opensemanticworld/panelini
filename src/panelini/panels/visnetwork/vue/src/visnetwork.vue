@@ -1193,41 +1193,27 @@ export default {
         for (const entry of entries) {
           const { width, height } = entry.contentRect;
 
-          if (width > 0 && height > 0) {
-            console.log(`Container resized: ${width}x${height}`);
-
+          if (width > 0 && height > 0 && this.network) {
             // Get the actual dimensions from the wrapper or host
             const host = container.getRootNode()?.host;
             const actualWidth = host?.offsetWidth || wrapper?.offsetWidth || width;
             const actualHeight = host?.offsetHeight || wrapper?.offsetHeight || height;
 
-            console.log(`Actual dimensions: ${actualWidth}x${actualHeight}`);
-
-            // Force the canvas to resize
-            if (this.network) {
-              // Update canvas dimensions directly
-              const canvas = container.querySelector('canvas');
-              if (canvas) {
-                canvas.style.width = `${actualWidth}px`;
-                canvas.style.height = `${actualHeight}px`;
-              }
-
-              // Redraw the network
-              this.network.redraw();
-              this.network.fit();
+            // Force the canvas to match the container, then redraw and refit
+            const canvas = container.querySelector('canvas');
+            if (canvas) {
+              canvas.style.width = `${actualWidth}px`;
+              canvas.style.height = `${actualHeight}px`;
             }
+            this.network.redraw();
+            this.network.fit();
           }
         }
       });
 
-      // Observe the container, wrapper, and shadow DOM host
-      this._resizeObserver.observe(container);
-      this._resizeObserver.observe(wrapper);
+      // Observe a single element: the shadow DOM host if present, else the container
       const host = container.getRootNode()?.host;
-      if (host) {
-        console.log('Observing host element:', host);
-        this._resizeObserver.observe(host);
-      }
+      this._resizeObserver.observe(host || container);
     }
   },
 
