@@ -86,13 +86,14 @@ edges = [
 
 if __name__ == "__main__":
     # Create the VisNetwork panel with initial nodes/edges
-    visnetwork_panel = VisNetwork(nodes=nodes, edges=edges)
+    # Use height parameter for fixed height; width will stretch to fill container
+    visnetwork_panel = VisNetwork(nodes=nodes, edges=edges, sizing_mode="stretch_both")
 
     # Slider controlling angular velocity of the rotation
-    vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1, width=600)
+    vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1)
 
     # Slider controlling the radius of the circle on which the fixed nodes lie
-    radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r, width=600)
+    radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r)
 
     # Layout: graph on top, sliders below
     col = pn.Column(visnetwork_panel, vel_slider, radius_slider)

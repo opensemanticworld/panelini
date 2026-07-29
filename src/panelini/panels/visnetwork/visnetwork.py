@@ -17,6 +17,10 @@ class VisNetwork(AnyWidgetComponent):
 
     This component wraps the vis-network JavaScript library to provide
     interactive network/graph visualization within Panel applications.
+
+    Nodes and edges can include a 'callback_name_dict' property to define
+    context menu items shown on right-click. The dict maps action IDs to
+    display labels (e.g., {"edit": "Edit Node", "delete": "Delete"}).
     """
 
     _esm = (bundled_assets_dir / "visnetwork_vue.mjs").read_text(encoding="utf-8")
@@ -50,6 +54,10 @@ class VisNetwork(AnyWidgetComponent):
         options: Optional[dict[str, Any]] = None,
         network_event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         file_drop_callback: Optional[Callable[[dict[str, Any]], None]] = None,
+        context_menu_callback: Optional[Callable[[str, str, str], None]] = None,
+        nodes_duplicated_callback: Optional[Callable[[list[dict[str, Any]]], None]] = None,
+        node_created_callback: Optional[Callable[[dict[str, Any]], None]] = None,
+        edge_created_callback: Optional[Callable[[dict[str, Any]], None]] = None,
         **params: Any,
     ) -> None:
         """Initialize the VisNetwork component.
@@ -60,8 +68,35 @@ class VisNetwork(AnyWidgetComponent):
             options: vis-network options for customizing appearance and behavior.
             network_event_callback: Callback function for network events (click, drag, etc.).
             file_drop_callback: Callback function for file drop events.
+            context_menu_callback: Callback for context menu item selection.
+                Called with (element_type, element_id, action_id) when user clicks a menu item.
+            nodes_duplicated_callback: Callback for when nodes are duplicated via Ctrl+drag.
+                Called with list of duplicated node dicts after dragEnd.
+            node_created_callback: Callback for when a node is created via manipulation controls.
+                Called with the newly created node dict.
+            edge_created_callback: Callback for when an edge is created via manipulation controls.
+                Called with the newly created edge dict.
             **params: Additional parameters passed to AnyWidgetComponent.
+                Use sizing_mode to control component sizing (default: "stretch_both").
+                Supported modes: "fixed", "stretch_width", "stretch_height", "stretch_both",
+                "scale_width", "scale_height", "scale_both".
+                For fixed dimensions, use height and width parameters (in pixels).
         """
+        # Set default sizing_mode based on width/height parameters
+        if "sizing_mode" not in params:
+            # If both width and height are specified, use fixed sizing
+            if "width" in params and "height" in params:
+                params["sizing_mode"] = "fixed"
+            # If only height is specified, stretch width
+            elif "height" in params and "width" not in params:
+                params["sizing_mode"] = "stretch_width"
+            # If only width is specified, stretch height
+            elif "width" in params and "height" not in params:
+                params["sizing_mode"] = "stretch_height"
+            # If neither is specified, stretch both
+            else:
+                params["sizing_mode"] = "stretch_both"
+
         super().__init__(**params)
 
         # Set initial values
@@ -75,6 +110,10 @@ class VisNetwork(AnyWidgetComponent):
         # Store callbacks
         self._network_event_callback = network_event_callback
         self._file_drop_callback = file_drop_callback
+        self._context_menu_callback = context_menu_callback
+        self._nodes_duplicated_callback = nodes_duplicated_callback
+        self._node_created_callback = node_created_callback
+        self._edge_created_callback = edge_created_callback
 
         # Watch for event data changes from JavaScript
         self.param.watch(self._on_event_data_change, ["_event_data"])
@@ -100,17 +139,57 @@ class VisNetwork(AnyWidgetComponent):
         """
         print(f"Network event: {event_name}")
 
-        # Handle file drop separately
-        if event_name == "fileDrop":
-            if self._file_drop_callback:
-                self._file_drop_callback(event_params)
-            else:
-                self.default_file_drop_callback(event_params)
-            return
+        # Dispatch to specific handlers
+        handlers = {
+            "contextmenu": self._handle_context_menu_event,
+            "nodesDuplicated": self._handle_nodes_duplicated_event,
+            "nodeCreated": self._handle_node_created_event,
+            "edgeCreated": self._handle_edge_created_event,
+            "fileDrop": self._handle_file_drop_event,
+        }
 
-        # Call the general network event callback if provided
-        if self._network_event_callback:
+        handler = handlers.get(event_name)
+        if handler:
+            handler(event_params)
+        elif self._network_event_callback:
             self._network_event_callback(event_name, event_params)
+
+    def _handle_context_menu_event(self, event_params: dict[str, Any]) -> None:
+        """Handle context menu event."""
+        if self._context_menu_callback:
+            element_type = event_params.get("element_type")
+            element_id = event_params.get("element_id")
+            action_id = event_params.get("action_id")
+            if element_type and element_id and action_id:
+                self._context_menu_callback(element_type, element_id, action_id)
+
+    def _handle_nodes_duplicated_event(self, event_params: dict[str, Any]) -> None:
+        """Handle nodes duplicated event."""
+        if self._nodes_duplicated_callback:
+            duplicated_nodes = event_params.get("nodes", [])
+            if duplicated_nodes:
+                self._nodes_duplicated_callback(duplicated_nodes)
+
+    def _handle_node_created_event(self, event_params: dict[str, Any]) -> None:
+        """Handle node created event."""
+        if self._node_created_callback:
+            node_data = event_params.get("node")
+            if node_data:
+                self._node_created_callback(node_data)
+
+    def _handle_edge_created_event(self, event_params: dict[str, Any]) -> None:
+        """Handle edge created event."""
+        if self._edge_created_callback:
+            edge_data = event_params.get("edge")
+            if edge_data:
+                self._edge_created_callback(edge_data)
+
+    def _handle_file_drop_event(self, event_params: dict[str, Any]) -> None:
+        """Handle file drop event."""
+        if self._file_drop_callback:
+            self._file_drop_callback(event_params)
+        else:
+            self.default_file_drop_callback(event_params)
 
     def default_file_drop_callback(self, event_params: dict[str, Any]) -> None:
         """Default handler for file drop events.
