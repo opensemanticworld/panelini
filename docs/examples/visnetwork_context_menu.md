@@ -1,7 +1,7 @@
 # VisNetwork context menus
 
 **Source:** [`examples/panels/visnetwork/context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/context_menu.py)
-**Test:** [`tests/panels/visnetwork/examples/test_context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_context_menu.py)
+**Test:** [`tests/panels/visnetwork/examples/test_visnetwork_context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_visnetwork_context_menu.py)
 
 Right-click a node or edge to open a per-element context menu, then act on the selection from Python.
 

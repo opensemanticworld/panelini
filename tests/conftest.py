@@ -10,10 +10,9 @@ Unit tests in ``test_main.py`` pass explicit values and are unaffected.
 
 import pytest
 
-from panelini import Panelini
+from panelini.testing import disable_panelini_backgrounds
 
-Panelini.param.header_background_image.default = None
-Panelini.param.content_background_image.default = None
+disable_panelini_backgrounds()
 
 
 def pytest_collection_modifyitems(items):

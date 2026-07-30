@@ -3,13 +3,12 @@
 import panel as pn
 import pytest
 
-PORT = [8000]
+from panelini.testing import free_port
 
 
 @pytest.fixture
 def port():
-    PORT[0] += 1
-    return PORT[0]
+    return free_port()
 
 
 @pytest.fixture(autouse=True)

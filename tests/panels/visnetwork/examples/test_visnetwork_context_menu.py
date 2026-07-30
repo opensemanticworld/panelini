@@ -8,6 +8,7 @@ import panel as pn
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.context_menu import demo, panel
+from panelini.testing import node_dom_pos
 
 
 def test_component(page: Page, port):
@@ -43,25 +44,9 @@ def test_right_click_opens_context_menu(page: Page, port):
     page.goto(url)
     time.sleep(3)
 
-    network_canvas = page.locator(".network-canvas").first
-    container_box = network_canvas.bounding_box()
-
     # "Root Folder" (id 1) is fixed at network coords (0, 0); map to DOM pixels.
-    node_pos = network_canvas.evaluate(
-        """
-        (el) => {
-            const network = el._visNetwork;
-            const positions = network.getPositions([1]);
-            return network.canvasToDOM(positions[1]);
-        }
-        """
-    )
-
-    page.mouse.click(
-        container_box["x"] + node_pos["x"],
-        container_box["y"] + node_pos["y"],
-        button="right",
-    )
+    x, y = node_dom_pos(page, 1)
+    page.mouse.click(x, y, button="right")
 
     menu = page.locator(".vn-context-menu")
     menu.wait_for(state="visible", timeout=5000)

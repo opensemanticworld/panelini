@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import socket
 import sys
 import time
 from pathlib import Path
@@ -29,16 +28,23 @@ import panel as pn
 from PIL import Image, ImageChops
 from playwright.sync_api import Page, sync_playwright
 
-from panelini import Panelini
+from panelini.testing import (
+    disable_panelini_backgrounds,
+    drag,
+    free_port,
+    node_dom_pos,
+    wb_checkbox,
+    wb_row_center,
+    wb_title_center,
+    wb_wait,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# Match tests/conftest.py: drop the heavy base64 background-image CSS so the
-# captured media stays small and focuses on the widget, not the page chrome.
-Panelini.param.header_background_image.default = None
-Panelini.param.content_background_image.default = None
+# Keep captured media small and focused on the widget, not the page chrome.
+disable_panelini_backgrounds()
 
 GIF_DIR = REPO_ROOT / "docs" / "_static" / "gifs"
 SHOT_DIR = REPO_ROOT / "docs" / "_static" / "screenshots"
@@ -81,29 +87,6 @@ _CURSOR_JS = """
 """
 
 
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-def _node_dom_pos(page: Page, node_id: object) -> tuple[float, float]:
-    network_canvas = page.locator(".network-canvas").first
-    box = network_canvas.bounding_box()
-    pos = network_canvas.evaluate(
-        """
-        (el, id) => {
-            const network = el._visNetwork;
-            const positions = network.getPositions([id]);
-            return network.canvasToDOM(positions[id]);
-        }
-        """,
-        node_id,
-    )
-    return box["x"] + pos["x"], box["y"] + pos["y"]
-
-
 def _glide(
     page: Page,
     shot: Shot,
@@ -119,31 +102,9 @@ def _glide(
         shot(dur)
 
 
-def _row_center(page: Page, title: str) -> tuple[float, float]:
-    row = page.locator(f".wb-row:has(.wb-title:text-is('{title}'))").first
-    box = row.bounding_box()
-    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-
-
-def _title_center(page: Page, title: str) -> tuple[float, float]:
-    """Center of the node's title cell.
-
-    In treegrid mode the row spans every column (including editable cells), so
-    DnD must grab the ``.wb-title`` cell, not the row center (mirrors
-    tests/panels/wunderbaum/test_wunderbaum_dnd.py).
-    """
-    el = page.locator(f".wb-title:text-is('{title}')").first
-    box = el.bounding_box()
-    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-
-
 def _wait_wb(page: Page) -> None:
-    """Wait for a wunderbaum tree to render.
-
-    Wunderbaum virtualises rows, so the first ``.wb-row`` is often reported as
-    not visible even though rows are present and clickable; wait on the wrapper.
-    """
-    page.locator(".wunderbaum-wrapper").first.wait_for(state="visible", timeout=10000)
+    """Wait for the tree to render, then a beat for row population."""
+    wb_wait(page)
     time.sleep(1.2)
 
 
@@ -191,7 +152,7 @@ def _save_gif(frames: list[bytes], durations: list[int], out_path: Path) -> int:
 
 def _i_vn_context_menu(page: Page, shot: Shot, served: object) -> None:
     shot(1000)
-    root = _node_dom_pos(page, 1)
+    root = node_dom_pos(page, 1)
     _glide(page, shot, (root[0] - 180, root[1] - 120), root, steps=8, dur=70)
     shot(400)
     page.mouse.click(root[0], root[1], button="right")
@@ -208,7 +169,7 @@ def _i_vn_context_menu(page: Page, shot: Shot, served: object) -> None:
 
 def _i_vn_ctrl_drag(page: Page, shot: Shot, served: object) -> None:
     shot(1000)
-    n1 = _node_dom_pos(page, 1)
+    n1 = node_dom_pos(page, 1)
     _glide(page, shot, (n1[0] - 160, n1[1] - 110), n1, steps=8, dur=70)
     shot(500)
     page.keyboard.down("Control")
@@ -239,7 +200,7 @@ def _i_vn_resize(page: Page, shot: Shot, served: object) -> None:
 
 def _i_vn_tooltip(page: Page, shot: Shot, served: object) -> None:
     shot(1000)
-    n1 = _node_dom_pos(page, "n1")
+    n1 = node_dom_pos(page, "n1")
     _glide(page, shot, (n1[0] - 160, n1[1] - 90), n1, steps=9, dur=80)
     page.locator("div.vis-tooltip").wait_for(state="visible", timeout=5000)
     shot(2400)
@@ -248,8 +209,8 @@ def _i_vn_tooltip(page: Page, shot: Shot, served: object) -> None:
 def _i_wb_checkbox(page: Page, shot: Shot, served: object) -> None:
     _wait_wb(page)
     shot(1100)
-    target = _row_center(page, "Vegetables")
-    cb = page.locator(".wb-row:has(.wb-title:text-is('Vegetables'))").first.locator(".wb-checkbox")
+    target = wb_row_center(page, "Vegetables")
+    cb = wb_checkbox(page, "Vegetables")
     cbox = cb.bounding_box()
     cb_center = (cbox["x"] + cbox["width"] / 2, cbox["y"] + cbox["height"] / 2)
     _glide(page, shot, (target[0] - 200, target[1] - 60), cb_center, steps=8, dur=70)
@@ -262,7 +223,7 @@ def _i_wb_checkbox(page: Page, shot: Shot, served: object) -> None:
 def _i_wb_context_menu(page: Page, shot: Shot, served: object) -> None:
     _wait_wb(page)
     shot(1000)
-    target = _row_center(page, "src")
+    target = wb_row_center(page, "src")
     _glide(page, shot, (target[0] - 160, target[1] - 70), target, steps=8, dur=70)
     shot(300)
     page.mouse.click(target[0], target[1], button="right")
@@ -282,7 +243,7 @@ def _i_gdt(page: Page, shot: Shot, served: object) -> None:
     page.locator(".vis-network canvas").first.wait_for(state="visible", timeout=8000)
     time.sleep(2.0)  # let the physics layout settle before clicking
     shot(1400)
-    node = _node_dom_pos(page, 1)  # "Alpha"
+    node = node_dom_pos(page, 1)  # "Alpha"
     _glide(page, shot, (node[0] - 180, node[1] - 120), node, steps=9, dur=70)
     shot(300)
     page.mouse.click(node[0], node[1])
@@ -310,19 +271,10 @@ def _i_wb_dnd(page: Page, shot: Shot, served: object) -> None:
     # Move "cache.dat" (under /tmp) into the "user" folder (under /home).
     _wait_wb(page)
     shot(1300)
-    src = _row_center(page, "cache.dat")
-    tgt = _row_center(page, "user")
+    src = wb_row_center(page, "cache.dat")
+    tgt = wb_row_center(page, "user")
     _glide(page, shot, (src[0] - 180, src[1] - 70), src, steps=7, dur=70)
-    shot(300)
-    page.mouse.down()
-    steps = 11
-    for i in range(1, steps + 1):
-        page.mouse.move(src[0] + (tgt[0] - src[0]) * i / steps, src[1] + (tgt[1] - src[1]) * i / steps)
-        time.sleep(0.06)  # let wunderbaum register dragover on each row
-        shot(90)
-    time.sleep(0.3)
-    shot(500)  # dwell over the drop target
-    page.mouse.up()
+    drag(page, src, tgt, steps=11, shot=shot)
     time.sleep(1.3)
     shot(2200)  # relocated result
 
@@ -331,7 +283,7 @@ def _i_uc_json_vis(page: Page, shot: Shot, served: object) -> None:
     page.locator(".vis-network canvas").first.wait_for(state="visible", timeout=8000)
     time.sleep(1.5)  # let the physics layout settle
     shot(1300)
-    node = _node_dom_pos(page, 0)  # "Alice"
+    node = node_dom_pos(page, 0)  # "Alice"
     _glide(page, shot, (node[0] - 180, node[1] - 120), node, steps=9, dur=70)
     shot(300)
     page.mouse.click(node[0], node[1])  # select -> form switches to single-node edit
@@ -356,19 +308,10 @@ def _i_uc_wb_vis(page: Page, shot: Shot, served: object) -> None:
     _wait_wb(page)
     time.sleep(1.2)  # let the graph physics settle
     shot(1600)
-    src = _title_center(page, "Truck")
-    tgt = _title_center(page, "Animal")
+    src = wb_title_center(page, "Truck")
+    tgt = wb_title_center(page, "Animal")
     _glide(page, shot, (src[0] - 200, src[1] - 90), src, steps=8, dur=70)
-    shot(300)
-    page.mouse.down()
-    steps = 12
-    for i in range(1, steps + 1):
-        page.mouse.move(src[0] + (tgt[0] - src[0]) * i / steps, src[1] + (tgt[1] - src[1]) * i / steps)
-        time.sleep(0.06)
-        shot(90)
-    time.sleep(0.3)
-    shot(500)  # dwell over "Animal"
-    page.mouse.up()
+    drag(page, src, tgt, steps=12, shot=shot)
     time.sleep(1.8)  # graph re-wires + physics re-settles
     shot(3200)
 
@@ -582,7 +525,7 @@ def generate(name: str, browser) -> tuple[Path, str]:
         pn.config.sizing_mode = entry["global_sizing"]
     try:
         served = entry["factory"]()
-        port = _free_port()
+        port = free_port()
         server = pn.serve(served, port=port, threaded=True, show=False)
         time.sleep(0.4)
         try:

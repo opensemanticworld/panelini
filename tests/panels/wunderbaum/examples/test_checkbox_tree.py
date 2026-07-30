@@ -14,6 +14,7 @@ from examples.panels.wunderbaum.checkbox_tree import (
     source,
     tree,
 )
+from panelini.testing import wb_checkbox
 
 _ORIGINAL_SOURCE = copy.deepcopy(source)
 
@@ -33,8 +34,7 @@ def _reset_tree():
 
 def _click_checkbox(page: Page, title: str) -> None:
     """Click the checkbox (``<i class="wb-checkbox">``) of the row with *title*."""
-    row = page.locator(f".wb-row:has(.wb-title:text-is('{title}'))").first
-    row.locator(".wb-checkbox").click()
+    wb_checkbox(page, title).click()
     time.sleep(1)
 
 

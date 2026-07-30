@@ -8,6 +8,8 @@ from typing import Any
 import panel as pn
 import pytest
 
+from panelini.testing import free_port
+
 # Skip the entire directory when langchain is not installed
 langchain = pytest.importorskip("langchain")
 
@@ -94,13 +96,9 @@ def mock_ai_interface(sample_provider: ProviderConfig) -> Any:
     return iface
 
 
-PORT = [6100]  # offset from jsoneditor (6000) to avoid port conflicts
-
-
 @pytest.fixture
 def port():
-    PORT[0] += 1
-    return PORT[0]
+    return free_port()
 
 
 @pytest.fixture(autouse=True)
