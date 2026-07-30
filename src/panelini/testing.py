@@ -1,12 +1,13 @@
-"""Shared Playwright + Panel helpers for UI tests and the docs media generator.
+"""Shared Playwright + Panel helpers for UI tests and docs-media recording.
 
-These are the low-level primitives that both ``tests/`` and
-``docs/scripts/generate_media.py`` rely on, kept in one place so the selectors,
-the shadow-DOM ``canvasToDOM`` trick and the drag gesture cannot drift between
-the test suite and the media generator.
+These are the low-level primitives the test suite relies on (selectors, the
+shadow-DOM ``canvasToDOM`` trick, the drag gesture) plus the cursor overlay and
+animation assembler used by the ``media`` recording plugin, kept in one place so
+nothing drifts between assertions and recorded media.
 
-The functions take a Playwright ``Page``/``Locator`` but this module does not
-import Playwright itself, so importing it is cheap and dependency-free.
+The Playwright helpers take a ``Page``/``Locator`` but this module does not import
+Playwright; ``assemble_animation`` imports Pillow lazily. Importing the module is
+therefore cheap and free of hard test-only dependencies.
 """
 
 from __future__ import annotations
@@ -126,3 +127,119 @@ def drag(
     if shot:
         shot(400)
     page.mouse.up()
+
+
+# Injected via page.add_init_script() when recording: a pointer arrow + red ring
+# that follows the mouse. Capture-phase + drag listeners keep it tracking during
+# a DnD, when the widget may stop propagation of mousemove.
+CURSOR_INIT_JS = """
+(() => {
+    const install = () => {
+        if (document.getElementById('__rec_cursor')) return;
+        const c = document.createElement('div');
+        c.id = '__rec_cursor';
+        c.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;'
+            + 'z-index:2147483647;will-change:transform;display:none;';
+        c.innerHTML =
+            '<div style="position:absolute;left:0;top:0;width:22px;height:22px;'
+            + 'margin-left:-11px;margin-top:-11px;border:3px solid #e53935;'
+            + 'border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.85);"></div>'
+            + '<svg width="20" height="28" viewBox="0 0 20 28" '
+            + 'style="position:absolute;left:0;top:0;overflow:visible;">'
+            + '<path d="M1,1 L1,20 L6,15 L9.5,24 L12.5,23 L9,14.5 L16,14.5 Z" '
+            + 'fill="#111827" stroke="#ffffff" stroke-width="1.5" '
+            + 'stroke-linejoin="round"/></svg>';
+        document.body.appendChild(c);
+        const move = e => {
+            if (e.clientX || e.clientY) {
+                c.style.display = 'block';
+                c.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)';
+            }
+        };
+        ['mousemove', 'pointermove', 'dragover', 'drag'].forEach(
+            ev => document.addEventListener(ev, move, true)
+        );
+    };
+    if (document.body) install();
+    else document.addEventListener('DOMContentLoaded', install);
+})();
+"""
+
+
+def assemble_animation(
+    frames: list,
+    out_path: Any,
+    *,
+    duration_ms: int = 100,
+    width: int = 1200,
+    fmt: str = "webp",
+    quality: int = 80,
+    colors: int = 128,
+    max_frame_ms: int = 1500,
+    diff_threshold: int = 24,
+) -> int:
+    """Assemble RGB PIL frames into a small animated WebP (default) or GIF.
+
+    Pads frames to a common size, merges identical consecutive frames (so static
+    holds cost one frame), downscales to ``width``, then writes ``fmt``:
+    ``"webp"`` uses lossy ``quality``; ``"gif"`` an adaptive ``colors`` palette.
+    Returns the number of frames written.
+    """
+    from PIL import Image, ImageChops
+
+    if not frames:
+        msg = "assemble_animation needs at least one frame"
+        raise ValueError(msg)
+
+    canvas_w = max(f.width for f in frames)
+    canvas_h = max(f.height for f in frames)
+    padded = []
+    for f in frames:
+        if f.size != (canvas_w, canvas_h):
+            bg = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
+            bg.paste(f, (0, 0))
+            f = bg
+        padded.append(f)
+
+    kept = [padded[0]]
+    durs = [duration_ms]
+    for f in padded[1:]:
+        # Merge frames with no *localised* change: threshold the diff (ignores
+        # low-magnitude video codec noise) then check for any surviving region.
+        diff = ImageChops.difference(f, kept[-1]).convert("L")
+        changed = diff.point(lambda p: 255 if p > diff_threshold else 0)
+        if changed.getbbox() is None:
+            durs[-1] += duration_ms
+        else:
+            kept.append(f)
+            durs.append(duration_ms)
+    # Cap long static holds (e.g. an initial load wait) so the loop stays snappy.
+    durs = [min(d, max_frame_ms) for d in durs]
+
+    if canvas_w > width:
+        new_h = round(canvas_h * width / canvas_w)
+        kept = [f.resize((width, new_h), Image.LANCZOS) for f in kept]
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "gif":
+        pal = [f.convert("P", palette=Image.ADAPTIVE, colors=colors) for f in kept]
+        pal[0].save(
+            out_path,
+            save_all=True,
+            append_images=pal[1:],
+            duration=durs,
+            loop=0,
+            optimize=True,
+            disposal=2,
+        )
+    else:  # webp
+        kept[0].save(
+            out_path,
+            save_all=True,
+            append_images=kept[1:],
+            duration=durs,
+            loop=0,
+            quality=quality,
+            method=6,
+        )
+    return len(kept)

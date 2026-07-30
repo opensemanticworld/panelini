@@ -295,7 +295,7 @@ def _i_uc_json_vis(page: Page, shot: Shot, served: object) -> None:
     _glide(page, shot, node, (nbox["x"] + nbox["width"] / 2, nbox["y"] + nbox["height"] / 2), steps=6, dur=80)
     shot(300)
     name.click()
-    name.fill("Alicia")
+    name.fill("Peter")
     shot(700)
     page.locator('[for="root[name]"]').first.click()  # blur -> commit -> graph relabels
     time.sleep(1.3)

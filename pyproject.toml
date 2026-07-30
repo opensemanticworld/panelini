@@ -86,6 +86,14 @@ dev = [
     "pytest-asyncio>=0.23",
     "osw>=1.0.1",
     "python-semantic-release>=10.6,<11",
+    "imageio>=2.37.4",
+    "imageio-ffmpeg>=0.6.0",
+    "langchain>=0.3.27",
+    "langchain-anthropic>=0.3.0",
+    "langchain-community>=0.3.27",
+    "langchain-openai>=0.3.32",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
 ]
 
 [build-system]
@@ -111,6 +119,7 @@ pythonpath = ["."]
 markers = [
     "ui: UI tests requiring Playwright (browser)",
     "ai: AI tests requiring langchain and related packages",
+    "media: UI tests that also record docs media when run with --record-media",
 ]
 
 [tool.ruff]

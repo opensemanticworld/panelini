@@ -65,6 +65,13 @@ docs-test: ## Test if documentation can be built without warnings or errors
 docs: ## Build and serve the documentation
 	@uv run sphinx-autobuild docs docs/_build/html --port 8000 --open-browser
 
+.PHONY: docs-media
+docs-media: ## Record docs media from @pytest.mark.media tests (commit the output)
+	@echo "🚀 Installing Playwright browsers"
+	@uv run playwright install
+	@echo "🚀 Recording docs media (Playwright video -> WebP/PNG/MP4)"
+	@uv run pytest -m media --record-media --slowmo 150
+
 .PHONY: help
 help:
 	@uv run python -c "import re; \
