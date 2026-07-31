@@ -82,4 +82,4 @@ The fixture **imports the real example module** under a LangChain mock, so a reg
 
 - {doc}`ai_chat_custom_tool` - add your own tools to the chat
 - {doc}`ai_chat_multi_tab` - two chats in synced tabs
-- {doc}`../panels/ai` - full AI chat panel guide
+- {doc}`../../panels/ai` - full AI chat panel guide

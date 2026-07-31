@@ -74,5 +74,5 @@ The Playwright test:
 
 ## See also
 
-- {doc}`../panels/jsoneditor` - full `JsonEditor` guide including initial value and Pydantic integration sections
+- {doc}`../../panels/jsoneditor` - full `JsonEditor` guide including initial value and Pydantic integration sections
 - [json-editor format options](https://github.com/json-editor/json-editor#format)

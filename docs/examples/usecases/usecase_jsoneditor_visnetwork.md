@@ -7,7 +7,7 @@
 
 **Source:** [`examples/usecases/jsoneditor_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/jsoneditor_visnetwork.py)
 
-A [`JsonEditor`](../panels/jsoneditor) form and a [`VisNetwork`](../panels/visnetwork) graph
+A [`JsonEditor`](../../panels/jsoneditor) form and a [`VisNetwork`](../../panels/visnetwork) graph
 driven by one shared data model. Editing the form rebuilds the graph; clicking a node in the
 graph switches the form to edit just that node. This is the core pattern behind a
 schema-driven knowledge-base editor: structured input bound to a live graph of the same
@@ -62,6 +62,6 @@ graph LR
 
 ## See also
 
-- {doc}`jsoneditor_pydantic` - deriving the form schema from a Pydantic model
-- {doc}`visnetwork` - the standalone graph widget
+- {doc}`../jsoneditor/jsoneditor_pydantic` - deriving the form schema from a Pydantic model
+- {doc}`../visnetwork/visnetwork` - the standalone graph widget
 - {doc}`usecase_wunderbaum_visnetwork` - the tree + graph variant

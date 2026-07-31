@@ -58,5 +58,5 @@ If the example breaks, the test fails - so the example is guaranteed to keep wor
 
 ## See also
 
-- {doc}`../panels/jsoneditor` - full `JsonEditor` guide with dynamic schemas
+- {doc}`../../panels/jsoneditor` - full `JsonEditor` guide with dynamic schemas
 - [json-editor docs](https://github.com/json-editor/json-editor#options)

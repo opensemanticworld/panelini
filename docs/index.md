@@ -164,14 +164,6 @@ examples/index
 
 ```{toctree}
 :maxdepth: 2
-:caption: Portfolio
-:hidden:
-
-portfolio/index
-```
-
-```{toctree}
-:maxdepth: 2
 :caption: Design
 :hidden:
 

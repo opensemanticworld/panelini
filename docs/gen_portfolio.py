@@ -569,6 +569,7 @@ if __name__ == "__main__":
         help="With --convert, rebuild every app even if its source is unchanged.",
     )
     args = parser.parse_args()
-    if args.convert:
-        convert_all(force=args.force)
-    generate()
+    # Build the Pyodide apps that the example pages embed as live playgrounds. The
+    # standalone portfolio page has been merged into the per-component Examples
+    # section, so we no longer generate a separate page here.
+    convert_all(force=args.force)

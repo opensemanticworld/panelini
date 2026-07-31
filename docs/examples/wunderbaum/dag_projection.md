@@ -72,4 +72,4 @@ The test serves the app and asserts the treegrid rendered: a non-empty `tree.sou
 
 - For a combined tree + graph view, see [`examples/usecases/wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/wunderbaum_visnetwork.py)
 - {doc}`wunderbaum_table_min` - the treegrid column basics
-- {doc}`visnetwork` - the graph side of the story
+- {doc}`../visnetwork/visnetwork` - the graph side of the story

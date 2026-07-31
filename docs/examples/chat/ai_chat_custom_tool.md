@@ -109,5 +109,5 @@ The checkbox label comes from `tool.name`; the hover/tooltip text comes from `to
 
 ## See also
 
-- {doc}`../panels/ai` - AI panel guide, including the tool system
+- {doc}`../../panels/ai` - AI panel guide, including the tool system
 - [LangChain tool authoring docs](https://python.langchain.com/docs/concepts/tools/)

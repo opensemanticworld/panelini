@@ -8,8 +8,8 @@
 **Source:** [`examples/usecases/wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/wunderbaum_visnetwork.py)
 **Test:** [`tests/usecases/test_wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/usecases/test_wunderbaum_visnetwork.py)
 
-A class hierarchy shown as both a [`Wunderbaum`](../panels/index) treegrid (left) and a
-[`VisNetwork`](../panels/visnetwork) graph (right), with a detail sidebar. One shared data
+A class hierarchy shown as both a [`Wunderbaum`](../../panels/index) treegrid (left) and a
+[`VisNetwork`](../../panels/visnetwork) graph (right), with a detail sidebar. One shared data
 model (`NODES`, `EDGES`) feeds both widgets, and every mutation flows through the model and
 the incremental APIs of each widget (`add_node` / `remove_node` / `add_edge` /
 `remove_edge`) so neither side does a full re-render.
@@ -66,5 +66,5 @@ graph LR
 ## See also
 
 - {doc}`usecase_jsoneditor_visnetwork` - the form + graph variant
-- {doc}`virtual_filesystem` - the full Wunderbaum feature demo (DnD, context menu, rename)
-- {doc}`../panels/visnetwork` - the standalone graph widget
+- {doc}`../wunderbaum/virtual_filesystem` - the full Wunderbaum feature demo (DnD, context menu, rename)
+- {doc}`../../panels/visnetwork` - the standalone graph widget

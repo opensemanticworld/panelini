@@ -60,7 +60,7 @@ graph LR
 
 ## Going further
 
-The example above is the smallest possible usage. Everything else - event callbacks, edit modes, file drops, batch updates - is documented with runnable snippets in {doc}`../panels/visnetwork`.
+The example above is the smallest possible usage. Everything else - event callbacks, edit modes, file drops, batch updates - is documented with runnable snippets in {doc}`../../panels/visnetwork`.
 
 For a richer demo, try:
 
@@ -70,5 +70,5 @@ For a richer demo, try:
 
 ## See also
 
-- {doc}`../panels/visnetwork` - full `VisNetwork` guide
-- {doc}`../panels/graph_detail_tool` - composed graph editing UI
+- {doc}`../../panels/visnetwork` - full `VisNetwork` guide
+- {doc}`../../panels/graph_detail_tool` - composed graph editing UI
