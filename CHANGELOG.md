@@ -5,6 +5,14 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v0.10.1 (2026-07-31)
+
+### Bug Fixes
+
+- **docs**: Repair cross-references broken by the examples restructure
+  ([`db35c9d`](https://github.com/opensemanticworld/panelini/commit/db35c9df8c879e242cf121d17d0cd223040fd436))
+
+
 ## v0.10.0 (2026-07-31)
 
 ### Bug Fixes
