@@ -273,6 +273,7 @@ Modified:
 
 No changes to `src/panelini/panels/ai/{frontend,backend,config,utils}.py`.
 
+(v1-1-addendum-right-sidebar-plot-model-override)=
 ## v1.1 addendum - Right-sidebar plot-model override
 
 **Status:** implemented, 2026-04-24

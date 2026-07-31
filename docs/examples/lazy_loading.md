@@ -1,5 +1,10 @@
 # Lazy loading - children on demand
 
+```{image} /_static/media/wunderbaum/lazy_loading_feature.webp
+:alt: lazy loading feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/lazy_loading.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/lazy_loading.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_lazy_loading.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_lazy_loading.py)
 

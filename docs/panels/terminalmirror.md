@@ -1,5 +1,10 @@
 # TerminalMirror
 
+```{image} /_static/media/terminalmirror/terminalmirror_panelini_min_feature.webp
+:alt: terminalmirror panelini min feature
+:class: docs-media
+```
+
 `TerminalMirror` mirrors `sys.stdout` into an on-screen `pn.widgets.Terminal` widget while forwarding every write to the original stream, so the real console still receives output.
 
 ## Usage

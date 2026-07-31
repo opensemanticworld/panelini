@@ -1,5 +1,10 @@
 # Virtual filesystem - the full demo
 
+```{image} /_static/media/wunderbaum/virtual_filesystem_overview.webp
+:alt: virtual filesystem overview
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/virtual_filesystem.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/virtual_filesystem.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_virtual_filesystem.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_virtual_filesystem.py)
 

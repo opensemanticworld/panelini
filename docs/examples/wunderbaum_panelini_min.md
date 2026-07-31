@@ -1,5 +1,10 @@
 # Wunderbaum tree inside panelini
 
+```{image} /_static/media/wunderbaum/wunderbaum_panelini_min_feature.png
+:alt: wunderbaum panelini min feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/wunderbaum_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/wunderbaum_panelini_min.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_wunderbaum_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_wunderbaum_panelini_min.py)
 

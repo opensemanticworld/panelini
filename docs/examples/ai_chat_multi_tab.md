@@ -1,5 +1,10 @@
 # Multi-tab AI chats
 
+```{image} /_static/media/ai/chat_multi_tab_feature.png
+:alt: chat multi tab feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/ai/chat_multi_tab.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_multi_tab.py)
 **Test:** [`tests/panels/ai/examples/test_chat_multi_tab.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_multi_tab.py)
 

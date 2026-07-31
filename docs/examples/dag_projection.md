@@ -1,5 +1,10 @@
 # DAG projection - graph as a tree
 
+```{image} /_static/media/wunderbaum/dag_projection_feature.png
+:alt: dag projection feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/dag_projection.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/dag_projection.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_dag_projection.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_dag_projection.py)
 

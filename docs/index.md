@@ -20,6 +20,11 @@ hide-toc: true
 
 panelini gives you a responsive, production-ready layout - header, sidebars, main area, footer - plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
 
+```{image} /_static/media/ai/chat_min_feature.png
+:alt: A panelini AI chat dashboard - chat, live preview, and a provider/model sidebar
+:class: docs-media
+```
+
 ---
 
 ## Why panelini?
@@ -143,27 +148,18 @@ getting_started/quickstart
 
 ```{toctree}
 :maxdepth: 2
+:caption: Panels
+:hidden:
+
+panels/index
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Examples
 :hidden:
 
 examples/index
-examples/ai_chat_min
-examples/ai_chat_custom_tool
-examples/ai_chat_multi_tab
-examples/jsoneditor
-examples/jsoneditor_pydantic
-examples/visnetwork
-examples/visnetwork_context_menu
-examples/visnetwork_ctrl_drag_duplicate
-examples/wunderbaum_panel_min
-examples/wunderbaum_panelini_min
-examples/wunderbaum_table_min
-examples/checkbox_tree
-examples/context_menu
-examples/lazy_loading
-examples/incremental_tree_demo
-examples/dag_projection
-examples/virtual_filesystem
 ```
 
 ```{toctree}
@@ -172,14 +168,6 @@ examples/virtual_filesystem
 :hidden:
 
 portfolio/index
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Panels
-:hidden:
-
-panels/index
 ```
 
 ```{toctree}

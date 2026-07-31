@@ -1,5 +1,10 @@
 # Pydantic-backed JSON editor
 
+```{image} /_static/media/jsoneditor/jsoneditor_pydantic_overview.png
+:alt: jsoneditor pydantic overview
+:class: docs-media
+```
+
 **Source:** [`examples/panels/jsoneditor/jsoneditor_pydantic.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/jsoneditor/jsoneditor_pydantic.py)
 **Test:** [`tests/panels/jsoneditor/examples/test_jsoneditor_pydantic.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/jsoneditor/examples/test_jsoneditor_pydantic.py)
 

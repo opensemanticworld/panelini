@@ -1,5 +1,10 @@
 # VisNetwork context menus
 
+```{image} /_static/media/visnetwork/visnetwork_context_menu_feature.webp
+:alt: visnetwork context menu feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/visnetwork/context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/context_menu.py)
 **Test:** [`tests/panels/visnetwork/examples/test_visnetwork_context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_visnetwork_context_menu.py)
 

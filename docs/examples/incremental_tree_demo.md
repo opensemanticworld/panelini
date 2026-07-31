@@ -1,5 +1,10 @@
 # Incremental updates - build a tree step by step
 
+```{image} /_static/media/wunderbaum/incremental_tree_demo_feature.webp
+:alt: incremental tree demo feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/incremental_tree_demo.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/incremental_tree_demo.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_incremental_tree_demo.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_incremental_tree_demo.py)
 

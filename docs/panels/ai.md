@@ -1,5 +1,10 @@
 # AI Chat Panel
 
+```{image} /_static/media/ai/chat_min_feature.png
+:alt: chat min feature
+:class: docs-media
+```
+
 The AI chat panel adds an LLM-powered chat interface to any Panel application or Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.
 
 ## Overview

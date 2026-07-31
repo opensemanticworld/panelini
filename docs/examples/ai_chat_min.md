@@ -1,5 +1,10 @@
 # Minimal AI chat
 
+```{image} /_static/media/ai/chat_min_feature.png
+:alt: chat min feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/ai/chat_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_min.py)
 **Test:** [`tests/panels/ai/examples/test_chat_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_min.py)
 

@@ -1,5 +1,10 @@
 # AI chat with a custom tool
 
+```{image} /_static/media/ai/chat_custom_tool_feature.png
+:alt: chat custom tool feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/ai/chat_custom_tool.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_custom_tool.py)
 **Test:** [`tests/panels/ai/examples/test_chat_custom_tool.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_custom_tool.py)
 

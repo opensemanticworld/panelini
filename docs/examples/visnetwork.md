@@ -1,5 +1,10 @@
 # VisNetwork graph inside panelini
 
+```{image} /_static/media/visnetwork/visnetwork_panelini_min_feature.png
+:alt: visnetwork panelini min feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/visnetwork/visnetwork_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/visnetwork_panelini_min.py)
 **Test:** [`tests/panels/visnetwork/examples/test_visnetwork_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_visnetwork_panelini_min.py)
 

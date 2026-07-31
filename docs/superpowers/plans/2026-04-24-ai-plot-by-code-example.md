@@ -554,7 +554,7 @@ Expected: `no override - good`. The `TYPE_CHECKING: Any` boundary handles the un
 
 ## Task 11: v1.1 - Right-sidebar plot-model override (implemented 2026-04-24)
 
-**Goal:** Let the user pick a model (default Sonnet 4.6) just for rewriting the current plot script, without disturbing the main chat loop or the `plot_by_code` tool signature. See the v1.1 addendum in the [spec](../specs/2026-04-24-ai-plot-by-code-example-design.md#v11-addendum--right-sidebar-plot-model-override) for rationale.
+**Goal:** Let the user pick a model (default Sonnet 4.6) just for rewriting the current plot script, without disturbing the main chat loop or the `plot_by_code` tool signature. See the v1.1 addendum in the [spec](../specs/2026-04-24-ai-plot-by-code-example-design.md#v1-1-addendum-right-sidebar-plot-model-override) for rationale.
 
 **Files:**
 - Create: `src/panelini/panels/ai/plot/model_selector.py`

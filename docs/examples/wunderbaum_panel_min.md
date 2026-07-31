@@ -1,5 +1,10 @@
 # Wunderbaum tree - minimal (standalone)
 
+```{image} /_static/media/wunderbaum/wunderbaum_panel_min_feature.png
+:alt: wunderbaum panel min feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/wunderbaum_panel_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/wunderbaum_panel_min.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_wunderbaum_panel_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_wunderbaum_panel_min.py)
 

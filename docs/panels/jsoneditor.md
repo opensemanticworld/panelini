@@ -1,5 +1,10 @@
 # JsonEditor
 
+```{image} /_static/media/jsoneditor/jsoneditor_pydantic_overview.png
+:alt: jsoneditor pydantic overview
+:class: docs-media
+```
+
 The `JsonEditor` panel provides a JSON Schema-based form editor, wrapping the [json-editor](https://github.com/json-editor/json-editor) JavaScript library.
 
 ## Overview

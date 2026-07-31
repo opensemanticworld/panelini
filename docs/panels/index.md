@@ -17,6 +17,12 @@ JSON-Schema driven form editor. Dynamic schemas, theming, bi-directional value s
 Interactive physics-simulated graph with edit modes, drag-drop files, and event callbacks.
 :::
 
+:::{grid-item-card} Wunderbaum
+:link: wunderbaum
+:link-type: doc
+Fast tree and tree-grid with columns, checkboxes, drag-and-drop, context menus, and lazy loading.
+:::
+
 :::{grid-item-card} GraphDetailTool
 :link: graph_detail_tool
 :link-type: doc
@@ -42,6 +48,7 @@ graph LR
     subgraph panels [" Available Panels "]
         je(["JsonEditor"])
         vn(["VisNetwork"])
+        wb(["Wunderbaum"])
         gdt(["GraphDetailTool"])
         ai(["AiChat"])
         tm(["TerminalMirror"])
@@ -58,7 +65,7 @@ graph LR
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef targetNode fill:#1e293b,stroke:#334155,color:#f8fafc
 
-    class je,vn,gdt,ai,tm panelNode
+    class je,vn,wb,gdt,ai,tm panelNode
     class panelini,standalone,other targetNode
 ```
 
@@ -77,6 +84,9 @@ graph LR
 * - {doc}`VisNetwork <visnetwork>`
   - Interactive network/graph visualization with manipulation
   - [vis-network](https://visjs.github.io/vis-network/docs/network/) + Vue.js
+* - {doc}`Wunderbaum <wunderbaum>`
+  - Tree / tree-grid with columns, checkboxes, drag-and-drop, and lazy loading
+  - [wunderbaum](https://mar10.github.io/wunderbaum/) + Vue.js
 * - {doc}`GraphDetailTool <graph_detail_tool>`
   - Complete graph editing UI with node detail visualization
   - Composes VisNetwork + JsonEditor
@@ -104,6 +114,8 @@ All panels follow these design principles:
 
 jsoneditor
 visnetwork
+wunderbaum
+graph_detail_tool
 ai
 terminalmirror
 ```

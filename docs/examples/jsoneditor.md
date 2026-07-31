@@ -1,5 +1,10 @@
 # JSON editor inside panelini
 
+```{image} /_static/media/jsoneditor/jsoneditor_panelini_min_feature.png
+:alt: jsoneditor panelini min feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/jsoneditor/jsoneditor_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/jsoneditor/jsoneditor_panelini_min.py)
 **Test:** [`tests/panels/jsoneditor/examples/test_jsoneditor_panelini_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/jsoneditor/examples/test_jsoneditor_panelini_min.py)
 

@@ -1,5 +1,10 @@
 # Context menu - right-click actions
 
+```{image} /_static/media/wunderbaum/context_menu_feature.webp
+:alt: context menu feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/context_menu.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_context_menu.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_context_menu.py)
 

@@ -1,5 +1,10 @@
 # Wunderbaum treegrid - columns
 
+```{image} /_static/media/wunderbaum/wunderbaum_table_min_overview.png
+:alt: wunderbaum table min overview
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/wunderbaum_table_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/wunderbaum_table_min.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_wunderbaum_table_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_wunderbaum_table_min.py)
 

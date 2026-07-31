@@ -1,5 +1,10 @@
 # Use case: form + graph editor
 
+```{image} /_static/media/usecases/jsoneditor_visnetwork_overview.webp
+:alt: jsoneditor visnetwork overview
+:class: docs-media
+```
+
 **Source:** [`examples/usecases/jsoneditor_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/jsoneditor_visnetwork.py)
 
 A [`JsonEditor`](../panels/jsoneditor) form and a [`VisNetwork`](../panels/visnetwork) graph

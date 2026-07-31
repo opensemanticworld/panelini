@@ -13,6 +13,17 @@
     width: auto;
 }
 
+/* Recorded screen captures embedded on example / panel pages */
+img.docs-media {
+    display: block;
+    margin: 1.2em auto;
+    max-width: min(100%, 900px);
+    height: auto;
+    border: 1px solid var(--color-background-border);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
 /* ── API Reference ────────────────────────────────────────────────── */
 
 /* --- Top-level class / exception / function signature --- */

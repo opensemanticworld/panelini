@@ -1,5 +1,10 @@
 # Checkbox tree - hierarchical selection
 
+```{image} /_static/media/wunderbaum/checkbox_tree_feature.webp
+:alt: checkbox tree feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/wunderbaum/checkbox_tree.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/checkbox_tree.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_checkbox_tree.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_checkbox_tree.py)
 

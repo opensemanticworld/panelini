@@ -1,5 +1,10 @@
 # VisNetwork Ctrl+drag duplicate
 
+```{image} /_static/media/visnetwork/ctrl_drag_duplicate_feature.webp
+:alt: ctrl drag duplicate feature
+:class: docs-media
+```
+
 **Source:** [`examples/panels/visnetwork/ctrl_drag_duplicate.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/ctrl_drag_duplicate.py)
 **Test:** [`tests/panels/visnetwork/examples/test_ctrl_drag_duplicate.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_ctrl_drag_duplicate.py)
 

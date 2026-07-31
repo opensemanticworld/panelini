@@ -1,5 +1,10 @@
 # Use case: tree + graph editor
 
+```{image} /_static/media/usecases/wunderbaum_visnetwork_overview.webp
+:alt: wunderbaum visnetwork overview
+:class: docs-media
+```
+
 **Source:** [`examples/usecases/wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/wunderbaum_visnetwork.py)
 **Test:** [`tests/usecases/test_wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/usecases/test_wunderbaum_visnetwork.py)
 

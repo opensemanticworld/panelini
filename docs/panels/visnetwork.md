@@ -1,5 +1,10 @@
 # VisNetwork
 
+```{image} /_static/media/visnetwork/visnetwork_context_menu_feature.webp
+:alt: visnetwork context menu feature
+:class: docs-media
+```
+
 The `VisNetwork` panel provides interactive network/graph visualization, wrapping the [vis-network](https://visjs.github.io/vis-network/docs/network/) JavaScript library.
 
 ## Overview
