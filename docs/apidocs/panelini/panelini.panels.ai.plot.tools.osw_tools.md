@@ -442,7 +442,7 @@ Bases: {py:obj}`langchain_core.tools.BaseTool`
 :canonical: panelini.panels.ai.plot.tools.osw_tools.FindOutEverythingAboutTool.description
 :type: str
 :value: >
-   'Get all SPARQL triples (star shape) for an OSW element — all its properties and relations.'
+   'Get all SPARQL triples (star shape) for an OSW element - all its properties and relations.'
 
 ```{autodoc2-docstring} panelini.panels.ai.plot.tools.osw_tools.FindOutEverythingAboutTool.description
 ```

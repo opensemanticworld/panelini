@@ -5,11 +5,19 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
-from examples.panels.jsoneditor.jsoneditor_panelini_min import app, jsoneditor_panel
+# Build the editor stretched so the form fills the card (matches how the
+# example is served standalone); restore the global afterwards.
+_prev_sizing = pn.config.sizing_mode
+pn.config.sizing_mode = "stretch_width"
+from examples.panels.jsoneditor.jsoneditor_panelini_min import app, jsoneditor_panel  # noqa: E402
+
+pn.config.sizing_mode = _prev_sizing
 
 
+@pytest.mark.media(role="feature", capture="screenshot", viewport=(1100, 760))
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 

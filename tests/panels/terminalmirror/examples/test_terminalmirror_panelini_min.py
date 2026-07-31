@@ -5,11 +5,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.terminalmirror.terminalmirror_panelini_min import app, terminalmirror_panel
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 

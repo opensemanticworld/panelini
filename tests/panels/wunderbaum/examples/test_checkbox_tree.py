@@ -14,6 +14,7 @@ from examples.panels.wunderbaum.checkbox_tree import (
     source,
     tree,
 )
+from panelini.testing import wb_checkbox
 
 _ORIGINAL_SOURCE = copy.deepcopy(source)
 
@@ -33,8 +34,11 @@ def _reset_tree():
 
 def _click_checkbox(page: Page, title: str) -> None:
     """Click the checkbox (``<i class="wb-checkbox">``) of the row with *title*."""
-    row = page.locator(f".wb-row:has(.wb-title:text-is('{title}'))").first
-    row.locator(".wb-checkbox").click()
+    cb = wb_checkbox(page, title)
+    box = cb.bounding_box()
+    if box:  # glide the cursor so recorded media reads well
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=15)
+    cb.click()
     time.sleep(1)
 
 
@@ -125,10 +129,10 @@ def test_tree_renders_with_checkboxes(page: Page, port):
     assert page.locator(".wunderbaum-wrapper").first.is_visible()
 
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row — tree did not render"
+    assert rows.count() > 0, "No .wb-row - tree did not render"
 
     checkboxes = page.locator(".wb-row .wb-checkbox")
-    assert checkboxes.count() > 0, "No .wb-checkbox — checkboxes not enabled"
+    assert checkboxes.count() > 0, "No .wb-checkbox - checkboxes not enabled"
 
     server.stop()
 
@@ -155,6 +159,7 @@ def test_check_leaf_node(page: Page, port):
     server.stop()
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_check_parent_selects_all_children(page: Page, port):
     """Clicking a parent checkbox selects it and all its children."""
     server = _serve_and_goto(page, port)

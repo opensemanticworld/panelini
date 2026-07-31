@@ -1,7 +1,7 @@
 """Tests for panelini.panels.ai.plot.model_selector.
 
 The right-sidebar plot context lets the user pick a model to *regenerate*
-the last plot. It is a pure-Python UI builder — all LLM calls are mocked.
+the last plot. It is a pure-Python UI builder - all LLM calls are mocked.
 """
 
 from __future__ import annotations

@@ -33,6 +33,6 @@ Compose a layout, populate the sidebar and main area, serve it locally.
 
 ## Where to go after
 
-- {doc}`../examples/index` — runnable walkthroughs of every example in `examples/panels/`
-- {doc}`../panels/index` — guide to each reusable panel (AI chat, JSON editor, network graph)
-- {doc}`../architecture` — how the pieces fit together
+- {doc}`../examples/index` - runnable walkthroughs of every example in `examples/panels/`
+- {doc}`../panels/index` - guide to each reusable panel (AI chat, JSON editor, network graph)
+- {doc}`../architecture` - how the pieces fit together

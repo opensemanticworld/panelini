@@ -4,6 +4,8 @@ Demonstrates how lazy nodes are loaded on demand when expanded.
 The lazy_load_callback is called when a lazy node is expanded for the first time.
 """
 
+import time
+
 import panel as pn
 
 from panelini.panels.wunderbaum import Wunderbaum
@@ -37,6 +39,9 @@ def on_lazy_load(key: str, request_data: dict) -> list[dict]:
     load_counts[key] = load_counts.get(key, 0) + 1
     count = load_counts[key]
     print(f"Lazy loading children for node '{key}' (load #{count})")
+
+    # Simulate real latency (DB/API/filesystem) so the loading state is visible.
+    time.sleep(0.8)
 
     depth = key.count("_")
     children = []

@@ -1,4 +1,4 @@
-"""DrawAI — AI-assisted drawio beautifier example.
+"""DrawAI - AI-assisted drawio beautifier example.
 
 Upload a .drawio or .drawio.png, chat a beautification intent,
 see a before/after compare rendered via the drawio web viewer,
@@ -38,7 +38,7 @@ def extract_xml_from_drawio_png(data: bytes) -> str:
         img.load()
         text = getattr(img, "text", {}) or {}
         if "mxfile" not in text:
-            msg = "No 'mxfile' tEXt chunk found — not a drawio PNG."
+            msg = "No 'mxfile' tEXt chunk found - not a drawio PNG."
             raise ValueError(msg) from None
         raw = text["mxfile"]
         if not raw.lstrip().startswith("<"):
@@ -83,13 +83,13 @@ def unwrap_drawio_xml(xml: str) -> tuple[str, str | None]:
     """Return (editable_xml, wrapper_template).
 
     drawio exports come in three flavors:
-      1. ``<mxGraphModel>…</mxGraphModel>`` — already editable, returned as-is
+      1. ``<mxGraphModel>…</mxGraphModel>`` - already editable, returned as-is
          with ``wrapper_template=None``.
       2. ``<mxfile>…<diagram>…<mxGraphModel>…</mxGraphModel>…</diagram></mxfile>``
-         (uncompressed) — returned as-is with ``wrapper_template=None``; the
+         (uncompressed) - returned as-is with ``wrapper_template=None``; the
          whole outer XML is already editable by the LLM.
       3. ``<mxfile>…<diagram>BASE64_DEFLATED_URLENCODED</diagram></mxfile>``
-         (compressed) — returns the decompressed ``<mxGraphModel>`` plus the
+         (compressed) - returns the decompressed ``<mxGraphModel>`` plus the
          original outer XML so ``rewrap_drawio_xml`` can re-compress and
          substitute after beautification.
     """
@@ -180,13 +180,13 @@ class BeautifyDrawioInput(BaseModel):
 _BEAUTIFY_SYSTEM_PROMPT = (
     "You beautify drawio diagrams. The user will send a complete "
     "<mxGraphModel> (or <mxfile>) XML document. You MUST return the "
-    "ENTIRE modified XML document, preserving every <mxCell> — both "
-    "vertex cells and edge cells — with their original ids, parents, "
+    "ENTIRE modified XML document, preserving every <mxCell> - both "
+    "vertex cells and edge cells - with their original ids, parents, "
     "sources, targets, and values intact. "
     "Only change visual attributes: geometry (x/y/width/height), style "
     "strings, and whitespace. Do NOT add cells, do NOT remove cells, do "
     "NOT rename ids, do NOT summarize, do NOT truncate. "
-    "Output raw XML only — no prose, no explanations, no markdown code fences."
+    "Output raw XML only - no prose, no explanations, no markdown code fences."
 )
 
 
@@ -209,7 +209,7 @@ class BeautifyDrawioTool(BaseTool):
     the returned XML, and writes ``state.beautified_xml``.
 
     Credentials (``api_key``, ``base_url``) come from the ``anthropic`` provider
-    block in ``config.yml`` — the same source the existing ``AiChat`` backend
+    block in ``config.yml`` - the same source the existing ``AiChat`` backend
     reads. This keeps DrawAI consistent with whatever endpoint / key the rest
     of the app is already using (official API, a proxy, an internal gateway).
     """
@@ -219,7 +219,7 @@ class BeautifyDrawioTool(BaseTool):
         "Beautify the currently loaded drawio diagram's XML. "
         "Call this when the user asks to clean up, realign, restyle, or otherwise "
         "improve the visual quality of the diagram they uploaded. "
-        "The uploaded file's XML is already available to the tool — do not pass it."
+        "The uploaded file's XML is already available to the tool - do not pass it."
     )
     args_schema: type[BaseModel] = BeautifyDrawioInput
 
@@ -299,7 +299,7 @@ _SYSTEM_MESSAGE = (
     "When the user expresses any intent about cleaning up, realigning, "
     "restyling, or otherwise improving the currently loaded diagram, call "
     "the `beautify_drawio` tool with that intent. "
-    "Do not ask the user for the XML — it is already available to the tool."
+    "Do not ask the user for the XML - it is already available to the tool."
 )
 
 

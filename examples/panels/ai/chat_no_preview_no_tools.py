@@ -1,6 +1,6 @@
 """Example: AI chat with preview and tool sidebar disabled.
 
-Demonstrates ``show_preview=False, show_tools=False`` — the chat fills
+Demonstrates ``show_preview=False, show_tools=False`` - the chat fills
 the full main area and the "Basic Tools" card is omitted from the sidebar.
 
 Prerequisites

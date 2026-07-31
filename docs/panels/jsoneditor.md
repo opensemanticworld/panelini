@@ -1,5 +1,10 @@
 # JsonEditor
 
+```{image} /_static/media/jsoneditor/jsoneditor_pydantic_overview.png
+:alt: jsoneditor pydantic overview
+:class: docs-media
+```
+
 The `JsonEditor` panel provides a JSON Schema-based form editor, wrapping the [json-editor](https://github.com/json-editor/json-editor) JavaScript library.
 
 ## Overview
@@ -75,7 +80,7 @@ editor = JsonEditor(
 
 ## Initial Value
 
-Pass `value` as a keyword argument to pre-populate the form. The value is preserved when the panel is served — the JavaScript editor is initialised with it as `startval`, so the first `change` event reflects the supplied data instead of schema defaults.
+Pass `value` as a keyword argument to pre-populate the form. The value is preserved when the panel is served - the JavaScript editor is initialised with it as `startval`, so the first `change` event reflects the supplied data instead of schema defaults.
 
 ```python
 editor = JsonEditor(

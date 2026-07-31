@@ -137,8 +137,6 @@ class VisNetwork(AnyWidgetComponent):
             event_name: Name of the event (click, doubleClick, dragEnd, etc.).
             event_params: Event parameters containing nodes, edges, positions, etc.
         """
-        print(f"Network event: {event_name}")
-
         # Dispatch to specific handlers
         handlers = {
             "contextmenu": self._handle_context_menu_event,

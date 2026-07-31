@@ -5,11 +5,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
+from panelini.testing import node_dom_pos
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_json_data_tooltip(page: Page, port):
     """Test that hovering over a node with json_data shows a YAML tooltip."""
     url = f"http://localhost:{port}"
@@ -41,28 +44,10 @@ def test_json_data_tooltip(page: Page, port):
     canvas = page.locator(".vis-network canvas").first
     assert canvas.is_visible()
 
-    # To hover precisely on the node we need its pixel position.
-    # The node is at (0,0) in vis-network coordinates, but that doesn't map to the
-    # container's pixel center because vis-network applies a view transform (fit/zoom).
-    # The component lives inside a shadow DOM, so page.evaluate() can't reach it.
-    # Playwright's locator() pierces shadow DOM, so we use locator.evaluate() to call
-    # vis-network's canvasToDOM() API on the container element directly.
-
-    # 1. Get the .network-canvas container's bounding box in page coordinates
-    network_canvas = page.locator(".network-canvas").first
-    container_box = network_canvas.bounding_box()
-
-    # 2. Use canvasToDOM() to convert network coords → container-relative pixel coords
-    node_pos = network_canvas.evaluate("""
-        (el) => {
-            const network = el._visNetwork;
-            const positions = network.getPositions(['n1']);
-            return network.canvasToDOM(positions['n1']);
-        }
-    """)
-
-    # 3. Move mouse to the node's exact page-level position
-    page.mouse.move(container_box["x"] + node_pos["x"], container_box["y"] + node_pos["y"])
+    # Move the mouse onto node 'n1'. node_dom_pos() resolves the shadow-DOM
+    # coordinates via vis-network's canvasToDOM (shared with the media generator).
+    x, y = node_dom_pos(page, "n1")
+    page.mouse.move(x, y)
 
     # Wait for the tooltip to appear
     tooltip = page.locator("div.vis-tooltip")

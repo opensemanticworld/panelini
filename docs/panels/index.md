@@ -1,6 +1,6 @@
-# Panels
+# Overview
 
-Panels are **independent, standalone components** that can be used in any Panel application — with or without the Panelini framework. They're designed for maximum reusability.
+Panels are **independent, standalone components** that can be used in any Panel application - with or without the Panelini framework. They're designed for maximum reusability.
 
 ::::{grid} 1 1 2 2
 :gutter: 3
@@ -15,6 +15,12 @@ JSON-Schema driven form editor. Dynamic schemas, theming, bi-directional value s
 :link: visnetwork
 :link-type: doc
 Interactive physics-simulated graph with edit modes, drag-drop files, and event callbacks.
+:::
+
+:::{grid-item-card} Wunderbaum
+:link: wunderbaum
+:link-type: doc
+Fast tree and tree-grid with columns, checkboxes, drag-and-drop, context menus, and lazy loading.
 :::
 
 :::{grid-item-card} GraphDetailTool
@@ -42,6 +48,7 @@ graph LR
     subgraph panels [" Available Panels "]
         je(["JsonEditor"])
         vn(["VisNetwork"])
+        wb(["Wunderbaum"])
         gdt(["GraphDetailTool"])
         ai(["AiChat"])
         tm(["TerminalMirror"])
@@ -58,7 +65,7 @@ graph LR
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef targetNode fill:#1e293b,stroke:#334155,color:#f8fafc
 
-    class je,vn,gdt,ai,tm panelNode
+    class je,vn,wb,gdt,ai,tm panelNode
     class panelini,standalone,other targetNode
 ```
 
@@ -77,6 +84,9 @@ graph LR
 * - {doc}`VisNetwork <visnetwork>`
   - Interactive network/graph visualization with manipulation
   - [vis-network](https://visjs.github.io/vis-network/docs/network/) + Vue.js
+* - {doc}`Wunderbaum <wunderbaum>`
+  - Tree / tree-grid with columns, checkboxes, drag-and-drop, and lazy loading
+  - [wunderbaum](https://mar10.github.io/wunderbaum/) + Vue.js
 * - {doc}`GraphDetailTool <graph_detail_tool>`
   - Complete graph editing UI with node detail visualization
   - Composes VisNetwork + JsonEditor
@@ -97,13 +107,3 @@ All panels follow these design principles:
 - **Vue.js frontend**: JS-based panels have a Vue.js wrapper around their JavaScript library
 - **Callback-driven**: User interactions are communicated via event callbacks
 - **Bundled assets**: JavaScript and CSS are pre-built and shipped with the package
-
-```{toctree}
-:maxdepth: 1
-:hidden:
-
-jsoneditor
-visnetwork
-ai
-terminalmirror
-```

@@ -3,11 +3,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.dag_projection import app, tree
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 
@@ -22,10 +24,10 @@ def test_component(page: Page, port):
 
     # Column headers must be visible
     header = page.locator(".wb-header")
-    assert header.count() > 0, "No .wb-header — treegrid did not render"
+    assert header.count() > 0, "No .wb-header - treegrid did not render"
 
     # Tree rows must be visible
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row elements — tree did not render"
+    assert rows.count() > 0, "No .wb-row elements - tree did not render"
 
     server.stop()

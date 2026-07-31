@@ -11,7 +11,7 @@ from panelini import Panelini
 # Core with the AI chat enabled
 app = Panelini(title="My app", use_ai=True)
 
-# Panels — standalone, no panelini dependency
+# Panels - standalone, no panelini dependency
 from panelini.panels.jsoneditor import JsonEditor
 from panelini.panels.visnetwork import VisNetwork, GraphDetailTool
 from panelini.panels.ai import AiChat
@@ -244,7 +244,7 @@ Underlying machinery:
 
 ## Full auto-generated reference
 
-Every public module, class, and function — generated from source docstrings — lives in the auto-generated reference:
+Every public module, class, and function - generated from source docstrings - lives in the auto-generated reference:
 
 ::::{grid} 1 1 2 2
 :gutter: 3

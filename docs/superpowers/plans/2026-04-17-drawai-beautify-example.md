@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a self-contained example (`examples/panels/ai/drawai_beautify.py`) that lets a user upload a `.drawio` or `.drawio.png`, chat a beautification intent, see a before/after visual comparison rendered via the drawio web viewer, and download the beautified result — with Claude Opus 4.7 called through the `anthropic` SDK (with prompt caching) from inside a LangChain tool plugged into the existing `AiChat` panel.
+**Goal:** Ship a self-contained example (`examples/panels/ai/drawai_beautify.py`) that lets a user upload a `.drawio` or `.drawio.png`, chat a beautification intent, see a before/after visual comparison rendered via the drawio web viewer, and download the beautified result - with Claude Opus 4.7 called through the `anthropic` SDK (with prompt caching) from inside a LangChain tool plugged into the existing `AiChat` panel.
 
 **Architecture:** One example file contains all helpers, the `DrawAiState` (`param.Parameterized`), the `BeautifyDrawioTool` (LangChain `BaseTool` that internally calls the `anthropic` SDK), and a `build_app()` that wires a custom main-area layout (chat left, upload + top-pane + bottom-pane + download-button right) while reusing `AiChat.chat_interface` and `AiChat.sidebar_objects` unchanged. The drawio web viewer is embedded via an iframe whose `src` carries the XML in the URL fragment (`#R<url-encoded-xml>`). Unit tests cover pure helpers + the tool (with the `anthropic` SDK mocked); Playwright UI tests cover layout + upload handling.
 
@@ -227,14 +227,14 @@ Run:
 uv run pytest tests/panels/ai/test_drawai_helpers.py -v
 ```
 
-Expected: collection error or fail — `examples/panels/ai/drawai_beautify.py` doesn't exist yet.
+Expected: collection error or fail - `examples/panels/ai/drawai_beautify.py` doesn't exist yet.
 
 - [ ] **Step 3: Create the example file with just this helper**
 
 Create `examples/panels/ai/drawai_beautify.py`:
 
 ```python
-"""DrawAI — AI-assisted drawio beautifier example.
+"""DrawAI - AI-assisted drawio beautifier example.
 
 Upload a .drawio or .drawio.png, chat a beautification intent,
 see a before/after compare rendered via the drawio web viewer,
@@ -266,7 +266,7 @@ def extract_xml_from_drawio_png(data: bytes) -> str:
         img.load()
         text = getattr(img, "text", {}) or {}
         if "mxfile" not in text:
-            raise ValueError("No 'mxfile' tEXt chunk found — not a drawio PNG.")
+            raise ValueError("No 'mxfile' tEXt chunk found - not a drawio PNG.")
         return text["mxfile"]
 ```
 
@@ -586,7 +586,7 @@ git commit -m "feat(drawai): DrawAiState param model + tests"
 
 ---
 
-## Task 8: TDD `BeautifyDrawioTool` — happy path
+## Task 8: TDD `BeautifyDrawioTool` - happy path
 
 **Files:**
 - Modify: `examples/panels/ai/drawai_beautify.py`
@@ -636,7 +636,7 @@ async def test_beautify_drawio_tool_updates_state_on_success(monkeypatch):
 
 - [ ] **Step 2: Ensure `pytest-asyncio` is available**
 
-The project uses `pytest` and langchain async tests already exist (`test_backend.py` — check it uses `@pytest.mark.asyncio`). Run:
+The project uses `pytest` and langchain async tests already exist (`test_backend.py` - check it uses `@pytest.mark.asyncio`). Run:
 
 ```bash
 uv run python -c "import pytest_asyncio; print(pytest_asyncio.__version__)"
@@ -702,7 +702,7 @@ class BeautifyDrawioTool(BaseTool):
     the returned XML, and writes ``state.beautified_xml``.
 
     Credentials (``api_key``, ``base_url``) come from the ``anthropic`` provider
-    block in ``config.yml`` — the same source the existing ``AiChat`` backend
+    block in ``config.yml`` - the same source the existing ``AiChat`` backend
     reads. This keeps DrawAI consistent with whatever endpoint / key the rest
     of the app is already using (official API, a proxy, an internal gateway).
     """
@@ -712,7 +712,7 @@ class BeautifyDrawioTool(BaseTool):
         "Beautify the currently loaded drawio diagram's XML. "
         "Call this when the user asks to clean up, realign, restyle, or otherwise "
         "improve the visual quality of the diagram they uploaded. "
-        "The uploaded file's XML is already available to the tool — do not pass it."
+        "The uploaded file's XML is already available to the tool - do not pass it."
     )
     args_schema: type[BaseModel] = BeautifyDrawioInput
 
@@ -772,7 +772,7 @@ class BeautifyDrawioTool(BaseTool):
             return f"Returned content did not parse as XML. Parse error: {e}. Please try again."
 
         self.state.beautified_xml = new_xml
-        return "Beautified — see the bottom pane. Click Download to save."
+        return "Beautified - see the bottom pane. Click Download to save."
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -793,12 +793,12 @@ git commit -m "feat(drawai): BeautifyDrawioTool happy path + test"
 
 ---
 
-## Task 9: TDD `BeautifyDrawioTool` — error paths
+## Task 9: TDD `BeautifyDrawioTool` - error paths
 
 **Files:**
 - Modify: `tests/panels/ai/test_drawai_helpers.py`
 
-No production changes — the error paths are already implemented in Task 8. This task adds regression tests for them.
+No production changes - the error paths are already implemented in Task 8. This task adds regression tests for them.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -920,12 +920,12 @@ git commit -m "test(drawai): regression tests for BeautifyDrawioTool error paths
 
 ---
 
-## Task 10: Build the app — upload handler, layout, download button
+## Task 10: Build the app - upload handler, layout, download button
 
 **Files:**
 - Modify: `examples/panels/ai/drawai_beautify.py`
 
-This task adds `build_app()` and the `if __name__ == "__main__"` block. No new tests at this step — UI behavior is tested by Playwright in Task 12.
+This task adds `build_app()` and the `if __name__ == "__main__"` block. No new tests at this step - UI behavior is tested by Playwright in Task 12.
 
 - [ ] **Step 1: Add `build_app` and module entry point**
 
@@ -946,7 +946,7 @@ _SYSTEM_MESSAGE = (
     "When the user expresses any intent about cleaning up, realigning, "
     "restyling, or otherwise improving the currently loaded diagram, call "
     "the `beautify_drawio` tool with that intent. "
-    "Do not ask the user for the XML — it is already available to the tool."
+    "Do not ask the user for the XML - it is already available to the tool."
 )
 
 
@@ -1148,7 +1148,7 @@ Keeping `build_app()` out of the module body means unit tests can `from examples
 
 - [ ] **Step 2: Smoke-test the file imports without error**
 
-Plain import first (should be cheap now — no `load_config()` triggered):
+Plain import first (should be cheap now - no `load_config()` triggered):
 
 ```bash
 uv run python -c "from examples.panels.ai.drawai_beautify import build_app, DrawAiState, BeautifyDrawioTool; print('import OK')"
@@ -1156,7 +1156,7 @@ uv run python -c "from examples.panels.ai.drawai_beautify import build_app, Draw
 
 Expected: prints `import OK` with no exceptions.
 
-Then smoke-test `build_app()` itself. The repo's `config.yml` references `${ANTHROPIC_FOUNDRY_API_KEY}` and `${ENDPOINT}` under the `anthropic` provider, and `load_config()` raises if either is unset — export dummies for the smoke test:
+Then smoke-test `build_app()` itself. The repo's `config.yml` references `${ANTHROPIC_FOUNDRY_API_KEY}` and `${ENDPOINT}` under the `anthropic` provider, and `load_config()` raises if either is unset - export dummies for the smoke test:
 
 ```bash
 ANTHROPIC_FOUNDRY_API_KEY=dummy ENDPOINT=https://localhost \
@@ -1241,7 +1241,7 @@ def mock_anthropic_sdk():
     return config_patch, anthropic_patch, canned_xml
 ```
 
-At the top of the same file, ensure the imports include `pytest` (already present) — no new imports needed.
+At the top of the same file, ensure the imports include `pytest` (already present) - no new imports needed.
 
 - [ ] **Step 2: Verify existing UI example tests still pass (no change expected)**
 
@@ -1250,7 +1250,7 @@ Run:
 uv run pytest tests/panels/ai/examples/ -v -m ui
 ```
 
-Expected: existing UI tests pass (or skip cleanly if playwright is missing — in which case you can skip this step).
+Expected: existing UI tests pass (or skip cleanly if playwright is missing - in which case you can skip this step).
 
 - [ ] **Step 3: Commit**
 
@@ -1398,9 +1398,9 @@ If neither exists, create `examples/panels/ai/README.md` with a minimal frame:
 ```markdown
 # AI panel examples
 
-- `chat_min.py` — minimal AI chat inside Panelini.
-- `chat_custom_tool.py` — AI chat wired with a custom in-memory storage tool.
-- `chat_multi_tab.py` — multiple AI chats in separate tabs, with config switching.
+- `chat_min.py` - minimal AI chat inside Panelini.
+- `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
+- `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
 ```
 
 - [ ] **Step 2: Add the DrawAI section**
@@ -1408,7 +1408,7 @@ If neither exists, create `examples/panels/ai/README.md` with a minimal frame:
 Append to the chosen README file:
 
 ```markdown
-## DrawAI — AI-assisted drawio beautifier
+## DrawAI - AI-assisted drawio beautifier
 
 `drawai_beautify.py` is a self-contained example that:
 
@@ -1418,7 +1418,7 @@ Append to the chosen README file:
    a LangChain tool to return new drawio XML.
 4. Renders a before/after visual comparison using the drawio web viewer
    (`viewer.diagrams.net`) embedded in an iframe.
-5. Lets the user download the beautified file — original pixels reused, new
+5. Lets the user download the beautified file - original pixels reused, new
    XML embedded in the PNG `tEXt` chunk (for `.drawio.png` inputs) or raw
    XML bytes (for `.drawio` inputs).
 
@@ -1449,7 +1449,7 @@ work well too.
 ### Known trade-offs
 
 - The downloaded `.drawio.png` reuses the **original pixels** with the new
-  XML embedded — drawio opens it correctly, but file-manager thumbnails
+  XML embedded - drawio opens it correctly, but file-manager thumbnails
   will still show the old pixels. Re-rasterization would require a drawio
   CLI dependency, deliberately out of scope for v1.
 - `.drawio.svg` input/output is not supported in v1.
@@ -1493,7 +1493,7 @@ Run:
 git diff --stat main -- src/panelini/panels/ai/
 ```
 
-Expected: no output (no files listed) — core panel code is untouched.
+Expected: no output (no files listed) - core panel code is untouched.
 
 - [ ] **Step 4: Confirm the commit graph looks clean**
 
@@ -1504,7 +1504,7 @@ git log --oneline main..HEAD
 
 Expected: commits from tasks 1–13, in order. No fixup commits, no reverts.
 
-- [ ] **Step 5: Done — ready for review.**
+- [ ] **Step 5: Done - ready for review.**
 
 ---
 

@@ -11,6 +11,7 @@ import panel as pn
 from playwright.sync_api import Page
 
 from panelini.panels.wunderbaum import Wunderbaum
+from panelini.testing import center, drag
 
 DND_SOURCE = [
     {
@@ -92,33 +93,6 @@ def _get_client_children(page: Page, parent_key: str) -> list[str]:
     )
 
 
-def _center(box: dict) -> tuple[float, float]:
-    return (
-        box["x"] + box["width"] / 2,
-        box["y"] + box["height"] / 2,
-    )
-
-
-def _drag(
-    page: Page,
-    sx: float,
-    sy: float,
-    tx: float,
-    ty: float,
-    steps: int = 5,
-):
-    page.mouse.move(sx, sy)
-    page.mouse.down()
-    for i in range(steps):
-        frac = (i + 1) / steps
-        page.mouse.move(
-            sx + (tx - sx) * frac,
-            sy + (ty - sy) * frac,
-        )
-        time.sleep(0.05)
-    page.mouse.up()
-
-
 def test_dnd_move(page: Page, port: int):
     """Default drag moves: emits drop with movedNodeId."""
     events: list = []
@@ -145,7 +119,7 @@ def test_dnd_move(page: Page, port: int):
         t = tgt.bounding_box()
         assert s and t
 
-        _drag(page, *_center(s), *_center(t))
+        drag(page, center(s), center(t), steps=5)
         time.sleep(2)
 
         drops = [e for e in events if e["name"] == "drop"]
@@ -199,7 +173,7 @@ def test_dnd_copy(page: Page, port: int):
 
         page.evaluate("window.__wbForceCopy = true")
         assert page.evaluate("window.__wbForceCopy")
-        _drag(page, *_center(s), *_center(t))
+        drag(page, center(s), center(t), steps=5)
         time.sleep(2)
         page.evaluate("window.__wbForceCopy = false")
 
@@ -251,7 +225,7 @@ def test_dnd_move_no_duplicate(page: Page, port: int):
         t = tgt.bounding_box()
         assert s and t
 
-        _drag(page, *_center(s), *_center(t))
+        drag(page, center(s), center(t), steps=5)
         time.sleep(2)
 
         titles = _get_titles(page)
@@ -308,7 +282,7 @@ def test_dnd_copy_preserves_source(page: Page, port: int):
         assert s and t
 
         page.evaluate("window.__wbForceCopy = true")
-        _drag(page, *_center(s), *_center(t))
+        drag(page, center(s), center(t), steps=5)
         time.sleep(2)
         page.evaluate("window.__wbForceCopy = false")
 

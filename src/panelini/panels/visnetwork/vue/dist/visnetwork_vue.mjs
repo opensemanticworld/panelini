@@ -25896,18 +25896,14 @@ const JV = (t, e) => {
         var I;
         for (const C of i) {
           const { width: n, height: r } = C.contentRect;
-          if (n > 0 && r > 0) {
-            console.log(`Container resized: ${n}x${r}`);
-            const o = (I = t.getRootNode()) == null ? void 0 : I.host, s = (o == null ? void 0 : o.offsetWidth) || (e == null ? void 0 : e.offsetWidth) || n, a = (o == null ? void 0 : o.offsetHeight) || (e == null ? void 0 : e.offsetHeight) || r;
-            if (console.log(`Actual dimensions: ${s}x${a}`), this.network) {
-              const l = t.querySelector("canvas");
-              l && (l.style.width = `${s}px`, l.style.height = `${a}px`), this.network.redraw(), this.network.fit();
-            }
+          if (n > 0 && r > 0 && this.network) {
+            const o = (I = t.getRootNode()) == null ? void 0 : I.host, s = (o == null ? void 0 : o.offsetWidth) || (e == null ? void 0 : e.offsetWidth) || n, a = (o == null ? void 0 : o.offsetHeight) || (e == null ? void 0 : e.offsetHeight) || r, l = t.querySelector("canvas");
+            l && (l.style.width = `${s}px`, l.style.height = `${a}px`), this.network.redraw(), this.network.fit();
           }
         }
-      }), this._resizeObserver.observe(t), this._resizeObserver.observe(e);
+      });
       const A = (g = t.getRootNode()) == null ? void 0 : g.host;
-      A && (console.log("Observing host element:", A), this._resizeObserver.observe(A));
+      this._resizeObserver.observe(A || t);
     }
   },
   beforeUnmount() {

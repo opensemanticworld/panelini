@@ -1,6 +1,9 @@
-:orphan:
-
 # GraphDetailTool
+
+```{image} /_static/media/visnetwork/graph_detail_tool_overview.webp
+:alt: graph detail tool overview
+:class: docs-media
+```
 
 The `GraphDetailTool` is a complete UI wrapper around `VisNetwork` that adds node detail visualization, JSON editing, and multi-node selection capabilities.
 
@@ -12,20 +15,20 @@ GraphDetailTool composes `VisNetwork` and `JsonEditor` into a full graph editing
 graph LR
     subgraph gdt [" GraphDetailTool "]
         controls(["Edit Controls"])
-        graph(["VisNetwork"])
+        vis(["VisNetwork"])
         details(["Detail Panel"])
     end
 
-    controls --> graph
-    graph -- "click/select" --> details
-    details -- "edit" --> graph
+    controls --> vis
+    vis -- "click/select" --> details
+    details -- "edit" --> vis
 
     classDef controlNode fill:#8b7355,stroke:#6b5840,color:#ffffff
     classDef graphNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef detailNode fill:#6366f1,stroke:#4f46e5,color:#ffffff
 
     class controls controlNode
-    class graph graphNode
+    class vis graphNode
     class details detailNode
 ```
 

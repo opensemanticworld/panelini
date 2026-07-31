@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** implemented (2026-04-24). Retained as a retrospective — future audits can walk this plan against the committed code.
+**Status:** implemented (2026-04-24). Retained as a retrospective - future audits can walk this plan against the committed code.
 
 **Goal:** Ship a first-class `src/panelini/panels/ai/plot/` subpackage + a runnable `examples/panels/ai/plot_by_code.py` that wires the existing `AiChat` to a `PlotPanel` via 3–5 plotting tools and 0–8 OSW connector tools. Sandbox execution via `llm_sandbox` (Docker `python:3.12-slim`). OSW tools degrade gracefully when the `osw` package is missing or when the four `OSW_*`/`BLAZEGRAPH_*` env vars aren't set. No changes to `src/panelini/panels/ai/{frontend,backend}.py`.
 
 **Architecture:** `PlotPanel` owns mutable plot state + a `pn.pane.Image`; it runs code inside `SandboxSession`, copies `/sandbox/output.png` back, validates with PIL, and updates the image. `make_plot_tools(panel)` returns 3 delegation `BaseTool`s plus (if `osw` importable) 2 more OSW-plot tools. `make_osw_tools()` returns 0 or 8 stateless `BaseTool`s gated by `osw_env_present()`. Mypy cleanliness without a global override via a local `TYPE_CHECKING: Any` boundary in every file that imports `osw.*`. Example composes everything: `tools = [*make_plot_tools(plot_panel), *make_osw_tools()]`, then `AiChat(system_message=..., tools=tools)`.
 
-**Tech Stack:** Python 3.10+, existing `panel`, `param`, `langchain-core`, pydantic v2; new transitive deps `llm-sandbox>=0.2`, `pillow>=10.0` (via existing `[ai-llm-sandbox]` extra) and `osw>=1.0`, `SPARQLWrapper>=2.0` (via new `[ai-osw]` extra). pytest + monkeypatch + `unittest.mock.patch` for tests — no Docker or OSW endpoint required.
+**Tech Stack:** Python 3.10+, existing `panel`, `param`, `langchain-core`, pydantic v2; new transitive deps `llm-sandbox>=0.2`, `pillow>=10.0` (via existing `[ai-llm-sandbox]` extra) and `osw>=1.0`, `SPARQLWrapper>=2.0` (via new `[ai-osw]` extra). pytest + monkeypatch + `unittest.mock.patch` for tests - no Docker or OSW endpoint required.
 
 **Spec:** [docs/superpowers/specs/2026-04-24-ai-plot-by-code-example-design.md](../specs/2026-04-24-ai-plot-by-code-example-design.md)
 
@@ -101,13 +101,13 @@ Create `tests/panels/ai/plot/test_sandbox_utils.py` covering:
 
 Use a `MagicMock()` for the session and `tmp_path` + real writes for the path-resolution tests.
 
-- [x] **Step 2: Run — expect ImportError (module missing)**
+- [x] **Step 2: Run - expect ImportError (module missing)**
 
 - [x] **Step 3: Create `utils/sandbox.py`**
 
 Port `_resolve_file_path`, `_copy_files_to_sandbox`, `_MICRESS_BIN_EXTS`, `_MICRESS_GEO_EXTS` from `migration/agent.py:48-102`. Refinement: `resolve_file_path` takes `download_dir` + `data_dir` as explicit args instead of reading `osw.express`-provided globals. Pure helpers only; no env reads at import time.
 
-- [x] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests - expect PASS**
 
 - [x] **Step 5: Commit**
 
@@ -133,13 +133,13 @@ Assertions:
 
 Drive via `monkeypatch.setenv` / `monkeypatch.delenv`.
 
-- [x] **Step 2: Run — expect ImportError**
+- [x] **Step 2: Run - expect ImportError**
 
 - [x] **Step 3: Implement `osw_env.py`**
 
 Centralizes the gating decision so both `make_osw_tools()` and future OSW-dependent code share one source of truth.
 
-- [x] **Step 4: Run — expect PASS**
+- [x] **Step 4: Run - expect PASS**
 
 - [x] **Step 5: Commit**
 
@@ -186,11 +186,11 @@ def test_plot_by_code_success(mock_session_cls, tmp_path):
 
 Additional tests: error path when `copy_from_runtime` raises, `run_code` returns stdout, `load_data_from_csv` populates `self.df` and returns column names.
 
-- [x] **Step 2: Run — expect failures**
+- [x] **Step 2: Run - expect failures**
 
 - [x] **Step 3: Implement `panel.py`**
 
-Port `PlotToolPanel` from `migration/agent.py:326-616`, stripping langchain-agent coupling. Keep `pn.pane.Image` + `plot_panel` Row + mutable state (`current_python_code`, `current_input_osw_id`, `output_file_path`, `df`). Public methods: `plot_by_code`, `run_code`, `load_data_from_csv`. Do NOT carry `generate_langchain_tools()` — that lives in `plot_tools.py`.
+Port `PlotToolPanel` from `migration/agent.py:326-616`, stripping langchain-agent coupling. Keep `pn.pane.Image` + `plot_panel` Row + mutable state (`current_python_code`, `current_input_osw_id`, `output_file_path`, `df`). Public methods: `plot_by_code`, `run_code`, `load_data_from_csv`. Do NOT carry `generate_langchain_tools()` - that lives in `plot_tools.py`.
 
 - [x] **Step 4: Create package `__init__.py`** that re-exports `PlotPanel`:
 
@@ -201,7 +201,7 @@ __all__ = ["PlotPanel"]
 
 (Remaining exports added in Task 5 and Task 7.)
 
-- [x] **Step 5: Run tests — expect PASS**
+- [x] **Step 5: Run tests - expect PASS**
 
 - [x] **Step 6: Commit**
 
@@ -218,16 +218,16 @@ git commit -m "feat(plot): PlotPanel class with sandbox plot_by_code/run_code/lo
 - Create: `src/panelini/panels/ai/plot/tools/__init__.py`
 - Create: `src/panelini/panels/ai/plot/tools/plot_tools.py`
 - Create: `tests/panels/ai/plot/test_plot_tools.py`
-- Modify: `src/panelini/panels/ai/plot/__init__.py` — add `make_plot_tools`
+- Modify: `src/panelini/panels/ai/plot/__init__.py` - add `make_plot_tools`
 
 - [x] **Step 1: Write failing tests**
 
 Tests:
 - Each of `PlotByCodeTool`, `RunCodeTool`, `LoadCsvTool`'s `_run` calls through to the matching `PlotPanel` method with the expected kwargs (use a `MagicMock` panel).
-- `make_plot_tools(panel)` returns `[PlotByCodeTool, RunCodeTool, LoadCsvTool]` when `osw_plot_tools` cannot be imported (simulate by `monkeypatch.setitem(sys.modules, "panelini.panels.ai.plot.tools.osw_plot_tools", None)` — produces ImportError on subsequent relative-import).
+- `make_plot_tools(panel)` returns `[PlotByCodeTool, RunCodeTool, LoadCsvTool]` when `osw_plot_tools` cannot be imported (simulate by `monkeypatch.setitem(sys.modules, "panelini.panels.ai.plot.tools.osw_plot_tools", None)` - produces ImportError on subsequent relative-import).
 - `make_plot_tools(panel)` includes `AttachPlotToOswTool` + `DocumentEvaluationTool` when `osw_plot_tools` imports successfully (this path is exercised fully in Task 6).
 
-- [x] **Step 2: Run — expect failures**
+- [x] **Step 2: Run - expect failures**
 
 - [x] **Step 3: Implement `plot_tools.py`**
 
@@ -258,7 +258,7 @@ from .tools.plot_tools import make_plot_tools
 __all__ = ["PlotPanel", "make_plot_tools"]
 ```
 
-- [x] **Step 5: Run tests — expect PASS**
+- [x] **Step 5: Run tests - expect PASS**
 
 - [x] **Step 6: Commit**
 
@@ -284,7 +284,7 @@ A `panel_with_png` fixture writes real PNG bytes to a `tmp_path` and points `pan
 
 Cover: happy path for both tools; `osw_obj.load_entity` returns `None` (entity-not-found); `panel.image_panel.object is None` (missing-image path); arbitrary exception inside `_run` returns the error string.
 
-- [x] **Step 2: Run — expect failures**
+- [x] **Step 2: Run - expect failures**
 
 - [x] **Step 3: Implement `osw_plot_tools.py`**
 
@@ -308,7 +308,7 @@ Add an explanatory comment: *`osw` ships no `py.typed` marker upstream; trade-of
 
 Port `AttachCurrentPlotToOswPageTool._run` and `DocumentCurrentEvaluationTool._run` from `migration/agent.py`. Use helpers `_load_plot_bytes(panel)` (reads `panel.image_panel.object`) and `_build_wiki_file(osw_obj, plot_uuid)`.
 
-- [x] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests - expect PASS**
 
 Verify that `make_plot_tools(panel)` now returns 5 tools (Task 5's "present" branch).
 
@@ -326,7 +326,7 @@ git commit -m "feat(plot): AttachPlotToOsw + DocumentEvaluation tools (lazy)"
 **Files:**
 - Create: `src/panelini/panels/ai/plot/tools/osw_tools.py`
 - Create: `tests/panels/ai/plot/test_osw_tools.py`
-- Modify: `src/panelini/panels/ai/plot/__init__.py` — add `make_osw_tools`
+- Modify: `src/panelini/panels/ai/plot/__init__.py` - add `make_osw_tools`
 
 - [x] **Step 1: Write failing tests**
 
@@ -346,12 +346,12 @@ def no_osw_env(monkeypatch):
 ```
 
 Tests:
-- Pure helpers: `_replace_special_characters`, `_check_for_uuid`, `_try_cast_str_to_uuid` — happy + edge cases.
+- Pure helpers: `_replace_special_characters`, `_check_for_uuid`, `_try_cast_str_to_uuid` - happy + edge cases.
 - `make_osw_tools()` returns `[]` under `no_osw_env`; returns 8 tools under `osw_env`.
 - Each tool's `_run`: one success + one exception path. For SPARQL tools, patch `SPARQLWrapper.SPARQLWrapper` so `fake.query.return_value.convert.return_value = {"results": {"bindings": []}}`. Assert the executed query contains expected SPARQL fragments (e.g. `rdfs:subClassOf+`).
 - `DownloadOslFileTool` patches `osw_download_file` to write a fake file to `"fake-path/downloaded.csv"`.
 
-- [x] **Step 2: Run — expect failures**
+- [x] **Step 2: Run - expect failures**
 
 - [x] **Step 3: Implement `osw_tools.py`**
 
@@ -361,10 +361,10 @@ Pure helpers:
 - `_UUID_RE` regex
 - `_replace_special_characters(s, replacer=" ")`
 - `_check_for_uuid(s)`
-- `_try_cast_str_to_uuid(s)` — accepts either a canonical UUID or an OSW-id tail
-- `_sparql_prefixes(domain)` — returns PREFIX declarations
-- `_run_sparql(query)` — reads `BLAZEGRAPH_*` env vars, returns JSON
-- `_osw_id_to_uuid(osw_id)` — extract UUID from `File:OSW<hex>.csv`
+- `_try_cast_str_to_uuid(s)` - accepts either a canonical UUID or an OSW-id tail
+- `_sparql_prefixes(domain)` - returns PREFIX declarations
+- `_run_sparql(query)` - reads `BLAZEGRAPH_*` env vars, returns JSON
+- `_osw_id_to_uuid(osw_id)` - extract UUID from `File:OSW<hex>.csv`
 
 `make_osw_tools()`:
 
@@ -392,7 +392,7 @@ from .tools.plot_tools import make_plot_tools
 __all__ = ["PlotPanel", "make_osw_tools", "make_plot_tools"]
 ```
 
-- [x] **Step 5: Run tests — expect PASS**
+- [x] **Step 5: Run tests - expect PASS**
 
 - [x] **Step 6: Run mypy + ruff on the new subpackage**
 
@@ -401,7 +401,7 @@ uv run ruff check src/panelini/panels/ai/plot tests/panels/ai/plot
 uv run mypy src/panelini/panels/ai/plot
 ```
 
-Expected: both clean. No global `[[tool.mypy.overrides]]` needed — the `TYPE_CHECKING: Any` boundary handles the untyped `osw` import locally.
+Expected: both clean. No global `[[tool.mypy.overrides]]` needed - the `TYPE_CHECKING: Any` boundary handles the untyped `osw` import locally.
 
 - [x] **Step 7: Commit**
 
@@ -421,10 +421,10 @@ git commit -m "feat(plot): 8 stateless OSW connector tools + make_osw_tools fact
 
 Top-of-file docstring contains, in this order:
 
-1. **Env vars** — LLM: `ANTHROPIC_API_KEY` OR (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`). OSW (optional): `OSW_DOMAIN`, `BLAZEGRAPH_ENDPOINT`, `BLAZEGRAPH_USER`, `BLAZEGRAPH_PASSWORD`. Panelini: `PANELINI_AI_CONFIG_PATH`.
-2. **Install hints** — `pip install panelini[ai,ai-llm-sandbox]` (core) / `pip install panelini[ai,ai-llm-sandbox,ai-osw]` (with OSW).
-3. **Runtime requirements** — Docker daemon running; `.env` loaded via `python-dotenv`.
-4. **OSW connector behaviour** — registered only when all four OSW env vars are set; otherwise silently omitted.
+1. **Env vars** - LLM: `ANTHROPIC_API_KEY` OR (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`). OSW (optional): `OSW_DOMAIN`, `BLAZEGRAPH_ENDPOINT`, `BLAZEGRAPH_USER`, `BLAZEGRAPH_PASSWORD`. Panelini: `PANELINI_AI_CONFIG_PATH`.
+2. **Install hints** - `pip install panelini[ai,ai-llm-sandbox]` (core) / `pip install panelini[ai,ai-llm-sandbox,ai-osw]` (with OSW).
+3. **Runtime requirements** - Docker daemon running; `.env` loaded via `python-dotenv`.
+4. **OSW connector behaviour** - registered only when all four OSW env vars are set; otherwise silently omitted.
 
 Body:
 
@@ -442,7 +442,7 @@ load_dotenv()
 
 SYSTEM_MESSAGE = (
     "You are a helpful assistant with access to tools. "
-    "ALWAYS call tools directly to fulfill the user's request — never describe "
+    "ALWAYS call tools directly to fulfill the user's request - never describe "
     "what a tool call would look like or output JSON of a hypothetical call. "
     ...  # MICRESS/micpy guidance ported from migration/agent.py:636-656
 )
@@ -499,7 +499,7 @@ git commit -m "feat(example): plot_by_code example wires AiChat + PlotPanel"
 Append to the top-of-file bullet list:
 
 ```markdown
-- `plot_by_code.py` — AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat; optional OSW connector tools when `OSW_DOMAIN` + Blazegraph env vars are set.
+- `plot_by_code.py` - AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat; optional OSW connector tools when `OSW_DOMAIN` + Blazegraph env vars are set.
 ```
 
 - [x] **Step 2: Commit**
@@ -543,26 +543,26 @@ Expected: no output. Core chat panel is untouched.
 - [x] **Step 4: Confirm `[[tool.mypy.overrides]]` was NOT added**
 
 ```bash
-grep -n "tool.mypy.overrides" pyproject.toml || echo "no override — good"
+grep -n "tool.mypy.overrides" pyproject.toml || echo "no override - good"
 ```
 
-Expected: `no override — good`. The `TYPE_CHECKING: Any` boundary handles the untyped `osw` import locally.
+Expected: `no override - good`. The `TYPE_CHECKING: Any` boundary handles the untyped `osw` import locally.
 
-- [x] **Step 5: Done — ready for review.**
+- [x] **Step 5: Done - ready for review.**
 
 ---
 
-## Task 11: v1.1 — Right-sidebar plot-model override (implemented 2026-04-24)
+## Task 11: v1.1 - Right-sidebar plot-model override (implemented 2026-04-24)
 
-**Goal:** Let the user pick a model (default Sonnet 4.6) just for rewriting the current plot script, without disturbing the main chat loop or the `plot_by_code` tool signature. See the v1.1 addendum in the [spec](../specs/2026-04-24-ai-plot-by-code-example-design.md#v11-addendum--right-sidebar-plot-model-override) for rationale.
+**Goal:** Let the user pick a model (default Sonnet 4.6) just for rewriting the current plot script, without disturbing the main chat loop or the `plot_by_code` tool signature. See the v1.1 addendum in the [spec](../specs/2026-04-24-ai-plot-by-code-example-design.md#v1-1-addendum-right-sidebar-plot-model-override) for rationale.
 
 **Files:**
 - Create: `src/panelini/panels/ai/plot/model_selector.py`
 - Create: `tests/panels/ai/plot/test_model_selector.py`
-- Modify: `src/panelini/panels/ai/plot/panel.py` — `on_plot(fn)` hook + `_fire_plot_callbacks()`
-- Modify: `src/panelini/panels/ai/plot/__init__.py` — re-export `build_plot_context_sidebar`, `regenerate_plot`
-- Modify: `tests/panels/ai/plot/test_plot_panel.py` — 4 new `TestOnPlotCallback` tests
-- Modify: `examples/panels/ai/plot_by_code.py` — enable right sidebar + wire the card
+- Modify: `src/panelini/panels/ai/plot/panel.py` - `on_plot(fn)` hook + `_fire_plot_callbacks()`
+- Modify: `src/panelini/panels/ai/plot/__init__.py` - re-export `build_plot_context_sidebar`, `regenerate_plot`
+- Modify: `tests/panels/ai/plot/test_plot_panel.py` - 4 new `TestOnPlotCallback` tests
+- Modify: `examples/panels/ai/plot_by_code.py` - enable right sidebar + wire the card
 
 - [x] **Step 1: TDD the `on_plot` hook**
 
@@ -596,7 +596,7 @@ def regenerate_plot(panel, user_intent, *, provider=None, model=None, config_pat
 def build_plot_context_sidebar(panel, config_path=None) -> list[pn.viewable.Viewable]: ...
 ```
 
-`regenerate_plot` uses `asyncio.run` when no loop is live, otherwise submits `asyncio.run(_call())` to a worker thread — matching the pattern used elsewhere for Panel callbacks.
+`regenerate_plot` uses `asyncio.run` when no loop is live, otherwise submits `asyncio.run(_call())` to a worker thread - matching the pattern used elsewhere for Panel callbacks.
 
 `build_plot_context_sidebar` returns a `[pn.Card(...)]` holding: Markdown code display (refreshed via `panel.on_plot`), `pn.widgets.Select` populated from the default provider, free-text intent input, "Regenerate plot" button, status Markdown.
 
@@ -621,9 +621,9 @@ app.sidebar_right_set(objects=build_plot_context_sidebar(plot_panel))
 app.main_set(objects=[pn.Row(chat.main_objects[0], plot_panel.plot_panel)])
 ```
 
-Docstring gets a new "Right sidebar — plot model override" section explaining that the chat still drives primary plotting and the sidebar is a user-triggered one-shot override.
+Docstring gets a new "Right sidebar - plot model override" section explaining that the chat still drives primary plotting and the sidebar is a user-triggered one-shot override.
 
-- [x] **Step 7: Verify — full plot test suite + lint**
+- [x] **Step 7: Verify - full plot test suite + lint**
 
 ```bash
 uv run pytest tests/panels/ai/plot/ -v
@@ -646,13 +646,13 @@ git commit -m "feat(plot): right-sidebar plot-model override with Regenerate but
 
 ---
 
-## Task 12 — OSW credentials from env vars (no prompt, no yaml)
+## Task 12 - OSW credentials from env vars (no prompt, no yaml)
 
 Goal: make the OSW tools runnable in a Panel server context without ever triggering `osw.express.OswExpress`'s interactive credential prompt or writing `osw_files/accounts.pwd.yaml`. Reference design: spec v1.2 section.
 
 - [x] **Step 1: Read the `osw.express.OswExpress.__init__` gate**
 
-Confirm the prompt-and-save branch is gated behind `if not cred_mngr.iri_in_file(domain)`. The override target is therefore `iri_in_file`, not `get_credential` — overriding only the probe is enough to disable both the prompt and the disk write in one change.
+Confirm the prompt-and-save branch is gated behind `if not cred_mngr.iri_in_file(domain)`. The override target is therefore `iri_in_file`, not `get_credential` - overriding only the probe is enough to disable both the prompt and the disk write in one change.
 
 - [x] **Step 2: Add `utils/osw_env.py`**
 
@@ -664,10 +664,10 @@ Ship `OSW_AUTH_ENV_VARS`, extended `OSW_ENV_VARS`, `check_osw_auth_env()` (raise
 
 - `TestOswEnvPresent` (4 tests)
 - `TestOswEnvVarsConstant` (2 tests)
-- `TestCheckOswAuthEnv` (5 tests — raises with actionable message)
-- `TestEnvCredentialManager` (3 tests — override returns True after `add_credential`)
-- `TestBuildOswExpress` (3 tests — patched `OswExpress`, assert kwargs)
-- `TestNoCredentialsFileWritten::test_save_credentials_to_file_is_not_invoked` — the contract test. Patches `osw.express.requests.get` and `osw.express.WtSite`, runs the real `OswExpress.__init__`, asserts `save_credentials_to_file` + `get_credential` were not called and `accounts.pwd.yaml` does not exist in `tmp_path`.
+- `TestCheckOswAuthEnv` (5 tests - raises with actionable message)
+- `TestEnvCredentialManager` (3 tests - override returns True after `add_credential`)
+- `TestBuildOswExpress` (3 tests - patched `OswExpress`, assert kwargs)
+- `TestNoCredentialsFileWritten::test_save_credentials_to_file_is_not_invoked` - the contract test. Patches `osw.express.requests.get` and `osw.express.WtSite`, runs the real `OswExpress.__init__`, asserts `save_credentials_to_file` + `get_credential` were not called and `accounts.pwd.yaml` does not exist in `tmp_path`.
 
 - [x] **Step 4: Rewire all `OswExpress(...)` callsites**
 
@@ -679,9 +679,9 @@ Replace `patch(f"{module}.OswExpress", ...)` with `patch(f"{module}.build_osw_ex
 
 - [x] **Step 6: Docs**
 
-- `examples/panels/ai/plot_by_code.py` — add the three auth env vars to the OSW block, plus a paragraph on the "stays in memory, no yaml, no prompt" contract.
-- `examples/panels/ai/README.md` — update the one-liner to say "six env vars" and call out in-memory credentials.
-- Spec file — v1.2 addendum (motivation, design, contract table, files touched, trade-offs).
+- `examples/panels/ai/plot_by_code.py` - add the three auth env vars to the OSW block, plus a paragraph on the "stays in memory, no yaml, no prompt" contract.
+- `examples/panels/ai/README.md` - update the one-liner to say "six env vars" and call out in-memory credentials.
+- Spec file - v1.2 addendum (motivation, design, contract table, files touched, trade-offs).
 
 - [ ] **Step 7: Verify**
 
@@ -705,7 +705,7 @@ git add src/panelini/panels/ai/plot/utils/osw_env.py \
         examples/panels/ai/README.md \
         docs/superpowers/specs/2026-04-24-ai-plot-by-code-example-design.md \
         docs/superpowers/plans/2026-04-24-ai-plot-by-code-example.md
-git commit -m "feat(plot): env-var OSW credentials — no prompt, no yaml on disk"
+git commit -m "feat(plot): env-var OSW credentials - no prompt, no yaml on disk"
 ```
 
 ---

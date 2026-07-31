@@ -1,4 +1,4 @@
-# DrawAI — drawio beautifier example (v1 design)
+# DrawAI - drawio beautifier example (v1 design)
 
 **Status:** design approved, not yet implemented
 **Date:** 2026-04-17
@@ -13,13 +13,13 @@
 - Let a user **upload** a drawio file (`.drawio` or `.drawio.png`), chat an "intent" for beautification, and get a **visual before/after comparison** in the browser.
 - **Non-destructive**: the original file is never modified. Output is a **download** (browser Downloads folder), never a server-side write.
 - Use **Claude Opus 4.7** (`claude-opus-4-7`) for the beautification itself, called directly through the official `anthropic` SDK with **prompt caching** on the system prompt and the XML input.
-- The layout is reusable — the ASCII diagram in this doc should lift cleanly into [docs/panels/](../../panels/index.md) when the example graduates to a panel module.
+- The layout is reusable - the ASCII diagram in this doc should lift cleanly into [docs/panels/](../../panels/index.md) when the example graduates to a panel module.
 
 ## Non-goals (v1)
 
 - Not a new panel module. That is a natural follow-up once the example's UX is validated.
 - No `.drawio.svg` support. Next iteration.
-- No re-rasterization of beautified diagrams. The bottom pane renders XML via the drawio web viewer; the downloaded `.drawio.png` reuses the **original pixels** with the **new XML** embedded in the `tEXt` chunk (so drawio opens it correctly; file-manager thumbnails still show the old pixels — documented trade-off).
+- No re-rasterization of beautified diagrams. The bottom pane renders XML via the drawio web viewer; the downloaded `.drawio.png` reuses the **original pixels** with the **new XML** embedded in the `tEXt` chunk (so drawio opens it correctly; file-manager thumbnails still show the old pixels - documented trade-off).
 - No server-side filesystem I/O (no reading from `local/`, no writing to `data/beautified/`).
 - No preset prompt templates (`polish`, `realign`, etc.). Free-form intent only. Presets can come later as canned system prompts or sidebar buttons.
 - No multi-file batch beautification. One file at a time.
@@ -34,11 +34,11 @@
    - `.drawio.png` → `pn.pane.Image` showing the uploaded PNG.
    - `.drawio` → embedded drawio viewer iframe rendering the uploaded XML.
 5. User types in the chat: e.g. *"make spacing tighter and align nodes on a grid"*.
-6. Chat model (whatever the sidebar selects — Sonnet, Haiku, …) receives the message, decides to call the `beautify_drawio` tool with `intent="make spacing tighter and align nodes on a grid"`.
+6. Chat model (whatever the sidebar selects - Sonnet, Haiku, …) receives the message, decides to call the `beautify_drawio` tool with `intent="make spacing tighter and align nodes on a grid"`.
 7. The tool calls Opus 4.7 directly, receives new XML, validates it parses, writes it to `state.beautified_xml`.
-8. Bottom pane's iframe rebuilds with the new XML — visual compare complete.
-9. User iterates in chat ("now recolor to match a blue theme") — each successful iteration overwrites `state.beautified_xml`, bottom pane updates.
-10. User clicks **Download beautified** — browser downloads `<stem>_beautified.drawio.png` (or `.drawio`).
+8. Bottom pane's iframe rebuilds with the new XML - visual compare complete.
+9. User iterates in chat ("now recolor to match a blue theme") - each successful iteration overwrites `state.beautified_xml`, bottom pane updates.
+10. User clicks **Download beautified** - browser downloads `<stem>_beautified.drawio.png` (or `.drawio`).
 
 ## Architecture
 
@@ -64,13 +64,13 @@
 - Outer: `Panelini(title="Panelini DrawAI", sidebar_enabled=True)`.
 - Sidebar: `AiChat.sidebar_objects` passed through as-is.
 - Main: `pn.Row(chat_card, compare_column, sizing_mode="stretch_both")`.
-- `chat_card` — reuses `AiChat.chat_interface` inside the same `pn.Card` pattern as [frontend.py:288-295](../../../src/panelini/panels/ai/frontend.py#L288-L295).
-- `compare_column` — `pn.Column(file_input, alert_pane, top_pane, bottom_pane, download_button)`.
+- `chat_card` - reuses `AiChat.chat_interface` inside the same `pn.Card` pattern as [frontend.py:288-295](../../../src/panelini/panels/ai/frontend.py#L288-L295).
+- `compare_column` - `pn.Column(file_input, alert_pane, top_pane, bottom_pane, download_button)`.
 - `alert_pane` is a hidden-by-default `pn.pane.Alert` above the top pane, surfaced only on upload errors.
 
 ### Component boundaries
 
-Every unit has a single purpose, a clear interface, and lives in the example file (v1 keeps the module count low — promotion to a package can split it later).
+Every unit has a single purpose, a clear interface, and lives in the example file (v1 keeps the module count low - promotion to a package can split it later).
 
 | Unit | Purpose | Interface | Depends on |
 |---|---|---|---|
@@ -113,7 +113,7 @@ class BeautifyDrawioTool(BaseTool):
         "Beautify the currently loaded drawio diagram's XML. "
         "Call this when the user asks to clean up, realign, restyle, or otherwise "
         "improve the visual quality of the diagram they uploaded. "
-        "The uploaded file's XML is already available to the tool — do not pass it."
+        "The uploaded file's XML is already available to the tool - do not pass it."
     )
     args_schema = BeautifyDrawioInput
 
@@ -161,10 +161,10 @@ class BeautifyDrawioTool(BaseTool):
             return f"Returned content did not parse as XML. Parse error: {e}. Please try again."
 
         self.state.beautified_xml = new_xml
-        return "Beautified — see the bottom pane. Click Download to save."
+        return "Beautified - see the bottom pane. Click Download to save."
 ```
 
-Prompt caching: both the system prompt and the `<drawio-xml>…</drawio-xml>` user-content block carry `cache_control: ephemeral`. The intent block is fresh per call, so iterations on the same file reuse the cached XML — matching the "XML is large and often reused across iterations" constraint.
+Prompt caching: both the system prompt and the `<drawio-xml>…</drawio-xml>` user-content block carry `cache_control: ephemeral`. The intent block is fresh per call, so iterations on the same file reuse the cached XML - matching the "XML is large and often reused across iterations" constraint.
 
 ### Upload handler
 
@@ -222,7 +222,7 @@ def on_download(event):
     )
 ```
 
-(Same base64-data-URL pattern the existing chat export already uses — see [frontend.py:428-460](../../../src/panelini/panels/ai/frontend.py#L428-L460).)
+(Same base64-data-URL pattern the existing chat export already uses - see [frontend.py:428-460](../../../src/panelini/panels/ai/frontend.py#L428-L460).)
 
 ### Viewer iframe
 
@@ -234,7 +234,7 @@ def make_viewer_html(xml: str) -> str:
     return f'<iframe src="{src}" width="100%" height="100%" frameborder="0"></iframe>'
 ```
 
-If the URL fragment approach proves unreliable for large XML (browser URL length limits), fall back to `postMessage` integration with `viewer.diagrams.net` — documented but not implemented in v1.
+If the URL fragment approach proves unreliable for large XML (browser URL length limits), fall back to `postMessage` integration with `viewer.diagrams.net` - documented but not implemented in v1.
 
 ## Dependencies
 
@@ -250,7 +250,7 @@ ai-drawio = [
 
 Document in `examples/panels/ai/README.md`: *"DrawAI example requires `pip install panelini[ai,ai-drawio]`."*
 
-If sentiment during implementation favors folding into `[ai]`, that's a trivial change — the extra split is a YAGNI hedge, not a load-bearing decision.
+If sentiment during implementation favors folding into `[ai]`, that's a trivial change - the extra split is a YAGNI hedge, not a load-bearing decision.
 
 ## Error handling
 
@@ -258,38 +258,38 @@ All user-facing; either surfaced in the chat log (model-driven) or inline in `al
 
 | Failure | Where caught | Handling |
 |---|---|---|
-| PNG without `mxfile` `tEXt` chunk | `on_upload` | `alert_pane` → *"Not a drawio PNG — try a file exported from drawio."*. State untouched. |
+| PNG without `mxfile` `tEXt` chunk | `on_upload` | `alert_pane` → *"Not a drawio PNG - try a file exported from drawio."*. State untouched. |
 | `.drawio` bytes fail XML parse | `on_upload` | `alert_pane` → *"File is not valid XML: {error}."*. State untouched. |
 | Unknown extension | `on_upload` | `alert_pane` → *"Unsupported extension. Use .drawio or .drawio.png."*. |
 | `ANTHROPIC_API_KEY` missing | `BeautifyDrawioTool._arun` (Anthropic SDK raises on first call) | Return *"Anthropic API error: missing ANTHROPIC_API_KEY."* to the chat model. |
 | Anthropic API error (network, rate limit, auth, timeout) | `BeautifyDrawioTool._arun` | Return the error string verbatim to the chat model; it can retry or surface it to the user. |
-| Model output is non-XML | `BeautifyDrawioTool._arun` | Return *"Returned content did not parse as XML. Parse error: {e}. Please try again."* — chat model naturally retries. |
+| Model output is non-XML | `BeautifyDrawioTool._arun` | Return *"Returned content did not parse as XML. Parse error: {e}. Please try again."* - chat model naturally retries. |
 | Beautify called with no file loaded | `BeautifyDrawioTool._arun` | Return *"No file loaded. Ask the user to upload a .drawio or .drawio.png first."*. |
 | Download clicked with no beautification | Disabled via `param.watch` on `beautified_xml`; handler never fires. | N/A |
 
-A failed beautify leaves `state.beautified_xml` untouched — the bottom pane continues showing the last successful result (or stays empty if none).
+A failed beautify leaves `state.beautified_xml` untouched - the bottom pane continues showing the last successful result (or stays empty if none).
 
 ## Testing
 
 **Fixtures** live at `tests/panels/ai/fixtures/drawai/` and describe the *scenario*, not the source project's demo files:
 
-- `diagram.drawio.png` — a minimal valid drawio PNG (a single `<mxCell>` with a rectangle). Used by happy-path extract/embed/UI tests.
-- `diagram.drawio` — raw XML matching the PNG's embedded XML. Used for the `.drawio` input path test.
-- `corrupt.drawio.png` — a plain PNG with no `mxfile` chunk. Used for the upload-error test.
-- `malformed.drawio` — invalid XML. Used for the parse-failure test.
+- `diagram.drawio.png` - a minimal valid drawio PNG (a single `<mxCell>` with a rectangle). Used by happy-path extract/embed/UI tests.
+- `diagram.drawio` - raw XML matching the PNG's embedded XML. Used for the `.drawio` input path test.
+- `corrupt.drawio.png` - a plain PNG with no `mxfile` chunk. Used for the upload-error test.
+- `malformed.drawio` - invalid XML. Used for the parse-failure test.
 
-Fixtures are generated deterministically by a committed script at `tests/panels/ai/fixtures/drawai/_make_fixtures.py`. The script is runnable (`python _make_fixtures.py`) to regenerate the binary assets; CI does not re-run it — the generated files are committed directly.
+Fixtures are generated deterministically by a committed script at `tests/panels/ai/fixtures/drawai/_make_fixtures.py`. The script is runnable (`python _make_fixtures.py`) to regenerate the binary assets; CI does not re-run it - the generated files are committed directly.
 
 The `local/fig*.drawio.png` files remain dev-only demo material; the test suite never reads them.
 
-**Unit tests** — [tests/panels/ai/test_drawai_helpers.py](../../../tests/panels/ai/test_drawai_helpers.py):
+**Unit tests** - [tests/panels/ai/test_drawai_helpers.py](../../../tests/panels/ai/test_drawai_helpers.py):
 
 - `extract_xml_from_drawio_png(diagram.drawio.png)` → XML whose root tag is `mxfile` or `mxGraphModel`.
 - Round-trip: `extract(embed(orig, extract(orig))) == extract(orig)`. Byte-equality of the PNG is not asserted (chunk ordering may differ across Pillow versions).
-- `validate_drawio_xml` — one pass, one fail.
+- `validate_drawio_xml` - one pass, one fail.
 - `extract_xml_from_drawio_png(corrupt.drawio.png)` → raises; assert error type.
 
-**UI tests** — [tests/panels/ai/examples/test_drawai_ui.py](../../../tests/panels/ai/examples/test_drawai_ui.py), marked `ui` + `ai`, following the Playwright pattern from commit `a391172`:
+**UI tests** - [tests/panels/ai/examples/test_drawai_ui.py](../../../tests/panels/ai/examples/test_drawai_ui.py), marked `ui` + `ai`, following the Playwright pattern from commit `a391172`:
 
 - Add a `_mock_anthropic_sdk` fixture that stubs `anthropic.AsyncAnthropic.messages.create` to return a canned "beautified" XML. Reuse the existing `_mock_langchain` fixture for the chat model. Both live in [tests/conftest.py](../../../tests/conftest.py).
 - Upload `diagram.drawio.png` via the `FileInput` → assert top pane renders (image or iframe, by locator).
@@ -303,7 +303,7 @@ Run target: keep the new UI tests under ~5 s combined (current AI UI tests run i
 
 New files:
 
-- `examples/panels/ai/drawai_beautify.py` — the example (~250-350 LOC expected).
+- `examples/panels/ai/drawai_beautify.py` - the example (~250-350 LOC expected).
 - `tests/panels/ai/test_drawai_helpers.py`
 - `tests/panels/ai/test_drawai_ui.py`
 - `tests/panels/ai/fixtures/drawai/diagram.drawio.png`
@@ -313,9 +313,9 @@ New files:
 
 Modified files:
 
-- `pyproject.toml` — add `[ai-drawio]` optional extra (`anthropic>=0.39`, `pillow>=10.0`).
-- `tests/conftest.py` — add `_mock_anthropic_sdk` fixture.
-- `examples/panels/ai/README.md` (or `examples/README.md`, whichever is canonical) — add a "DrawAI example" section with install + run instructions.
+- `pyproject.toml` - add `[ai-drawio]` optional extra (`anthropic>=0.39`, `pillow>=10.0`).
+- `tests/conftest.py` - add `_mock_anthropic_sdk` fixture.
+- `examples/panels/ai/README.md` (or `examples/README.md`, whichever is canonical) - add a "DrawAI example" section with install + run instructions.
 
 No changes to `src/panelini/panels/ai/`.
 
