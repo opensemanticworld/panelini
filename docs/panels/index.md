@@ -1,4 +1,4 @@
-# Panels
+# Overview
 
 Panels are **independent, standalone components** that can be used in any Panel application - with or without the Panelini framework. They're designed for maximum reusability.
 
@@ -107,15 +107,3 @@ All panels follow these design principles:
 - **Vue.js frontend**: JS-based panels have a Vue.js wrapper around their JavaScript library
 - **Callback-driven**: User interactions are communicated via event callbacks
 - **Bundled assets**: JavaScript and CSS are pre-built and shipped with the package
-
-```{toctree}
-:maxdepth: 1
-:hidden:
-
-jsoneditor
-visnetwork
-wunderbaum
-graph_detail_tool
-ai
-terminalmirror
-```

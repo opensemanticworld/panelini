@@ -1,4 +1,4 @@
-# Examples
+# Overview
 
 Walkthroughs of every example in [`examples/`](https://github.com/opensemanticworld/panelini/tree/main/examples), grouped by component. Each page explains the code, shows a short screen capture recorded from that example's Playwright test, and - where available - lets you run it live in your browser.
 
@@ -59,14 +59,4 @@ Every example under `examples/panels/` is exercised by a Playwright test that im
 ```bash
 make test-ui         # UI tests only
 make docs-media      # re-record the screen captures
-```
-
-```{toctree}
-:hidden:
-
-chat/index
-jsoneditor/index
-visnetwork/index
-wunderbaum/index
-usecases/index
 ```

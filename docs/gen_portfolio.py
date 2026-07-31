@@ -381,7 +381,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
         and worker_js.exists()
         and sig_marker in worker_js.read_text(encoding="utf-8")
     ):
-        print(f"  • {category}/{path.stem}.html (unchanged, skipped)")
+        print(f"  - {category}/{path.stem}.html (unchanged, skipped)")
         return True
 
     # The app worker lives at apps/<category>/<stem>.js; the wheel at portfolio/wheels/,
@@ -404,7 +404,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  ✗ {category}/{path.name}\n{result.stderr.strip()[:300]}")
+        print(f"  [FAIL] {category}/{path.name}\n{result.stderr.strip()[:300]}")
         return False
 
     # The worker installs each env_spec entry with ``micropip.install('${pkg}')``.
@@ -418,7 +418,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
     )
     worker_js.write_text(js, encoding="utf-8")
 
-    print(f"  ✓ {category}/{path.stem}.html")
+    print(f"  [ok] {category}/{path.stem}.html")
     return True
 
 

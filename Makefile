@@ -82,11 +82,11 @@ portfolio-force: ## Rebuild every Pyodide portfolio app, even unchanged ones
 	@uv run python docs/gen_portfolio.py --convert --force
 
 .PHONY: docs-test
-docs-test: portfolio ## Test if documentation can be built without warnings or errors (with live apps)
+docs-test: ## Test if documentation can be built without warnings or errors
 	@uv run sphinx-build -b html docs docs/_build/html -W --keep-going
 
 .PHONY: docs
-docs: portfolio ## Build and serve the documentation (with live apps)
+docs: ## Build and serve the documentation
 	@uv run sphinx-autobuild docs docs/_build/html --port 8000 --open-browser
 
 .PHONY: docs-media

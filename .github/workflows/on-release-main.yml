@@ -75,9 +75,6 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
-      - name: Build the Pyodide portfolio apps
-        run: make portfolio
-
       - name: Build documentation
         run: uv run sphinx-build -b html docs docs/_build/html -W
 

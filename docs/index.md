@@ -151,7 +151,13 @@ getting_started/quickstart
 :caption: Panels
 :hidden:
 
-panels/index
+Overview <panels/index>
+panels/jsoneditor
+panels/visnetwork
+panels/wunderbaum
+panels/graph_detail_tool
+panels/ai
+panels/terminalmirror
 ```
 
 ```{toctree}
@@ -159,7 +165,12 @@ panels/index
 :caption: Examples
 :hidden:
 
-examples/index
+Overview <examples/index>
+examples/chat/index
+examples/jsoneditor/index
+examples/visnetwork/index
+examples/wunderbaum/index
+examples/usecases/index
 ```
 
 ```{toctree}
