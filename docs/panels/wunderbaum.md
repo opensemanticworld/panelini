@@ -83,12 +83,12 @@ tree = Wunderbaum(
 
 ## Drag-and-drop
 
-Dropping a node onto another reparents it; the Vue bridge reports the moved node id and its new parent so Python can update `source` to match. See {doc}`../examples/virtual_filesystem` for the full demo and {doc}`../examples/usecase_wunderbaum_visnetwork` for a tree kept in sync with a graph.
+Dropping a node onto another reparents it; the Vue bridge reports the moved node id and its new parent so Python can update `source` to match. See {doc}`../examples/wunderbaum/virtual_filesystem` for the full demo and {doc}`../examples/usecases/usecase_wunderbaum_visnetwork` for a tree kept in sync with a graph.
 
 ## Checkboxes and lazy loading
 
-- **Checkboxes** with tri-state parent propagation: enable per node (`"checkbox": True`); checking a parent toggles its whole subtree (see {doc}`../examples/checkbox_tree`).
-- **Lazy loading**: mark a node `"lazy": True` and load its children on demand when it is expanded (see {doc}`../examples/lazy_loading`).
+- **Checkboxes** with tri-state parent propagation: enable per node (`"checkbox": True`); checking a parent toggles its whole subtree (see {doc}`../examples/wunderbaum/checkbox_tree`).
+- **Lazy loading**: mark a node `"lazy": True` and load its children on demand when it is expanded (see {doc}`../examples/wunderbaum/lazy_loading`).
 
 ## Options
 

@@ -110,7 +110,7 @@ instance = MyModel(name="Alice", score=42)
 editor = PydanticEditor(MyModel, value=instance, format_array_tabs=True)
 ```
 
-See {doc}`../examples/jsoneditor_pydantic` for the full walkthrough.
+See {doc}`../examples/jsoneditor/jsoneditor_pydantic` for the full walkthrough.
 
 ## API Reference
 
