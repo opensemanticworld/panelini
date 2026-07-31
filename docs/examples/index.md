@@ -7,19 +7,19 @@ Every example lives in [`examples/`](https://github.com/opensemanticworld/paneli
 ::::{grid} 1 1 2 2
 :gutter: 3
 
-:::{grid-item-card} AI chat — minimal
+:::{grid-item-card} AI chat - minimal
 :link: ai_chat_min
 :link-type: doc
 Drop an LLM chat into a Panelini dashboard with one flag.
 :::
 
-:::{grid-item-card} AI chat — custom tool
+:::{grid-item-card} AI chat - custom tool
 :link: ai_chat_custom_tool
 :link-type: doc
 Hook a LangChain `BaseTool` (a local key–value store) into the chat.
 :::
 
-:::{grid-item-card} AI chat — multi-tab
+:::{grid-item-card} AI chat - multi-tab
 :link: ai_chat_multi_tab
 :link-type: doc
 Host two independent chats in synced tabs with `jslink`.
@@ -34,7 +34,7 @@ Render a JSON-Schema driven form inside a Panelini card.
 :::{grid-item-card} Pydantic-backed JSON editor
 :link: jsoneditor_pydantic
 :link-type: doc
-Drive a JSON editor from a Pydantic model — schema and initial value derived automatically.
+Drive a JSON editor from a Pydantic model - schema and initial value derived automatically.
 :::
 
 :::{grid-item-card} VisNetwork graph
@@ -55,13 +55,13 @@ Right-click nodes and edges to run per-element actions from Python.
 Hold Ctrl and drag to clone nodes, with a post-processing callback.
 :::
 
-:::{grid-item-card} Wunderbaum tree — minimal
+:::{grid-item-card} Wunderbaum tree - minimal
 :link: wunderbaum_panelini_min
 :link-type: doc
 The smallest nested tree, hosted in a Panelini card.
 :::
 
-:::{grid-item-card} Wunderbaum treegrid — columns
+:::{grid-item-card} Wunderbaum treegrid - columns
 :link: wunderbaum_table_min
 :link-type: doc
 Switch to tree + table mode with per-node column values.
@@ -100,7 +100,7 @@ Project a graph of `SubClassOf` / `HasPart` edges into a treegrid.
 :::{grid-item-card} Virtual filesystem
 :link: virtual_filesystem
 :link-type: doc
-The full demo — columns, DnD, context menu, rename, file drop.
+The full demo - columns, DnD, context menu, rename, file drop.
 :::
 
 ::::
@@ -119,11 +119,11 @@ python examples/panels/jsoneditor/jsoneditor_panelini_min.py
 python examples/panels/visnetwork/visnetwork_panelini_min.py
 ```
 
-Each example ends with `pn.serve(...)` when run directly — just open the URL printed in the terminal.
+Each example ends with `pn.serve(...)` when run directly - just open the URL printed in the terminal.
 
 ## Tested end-to-end
 
-Every example under `examples/panels/` is exercised by a Playwright test that imports the real module and asserts on rendered DOM. If an example breaks, the corresponding test fails — see [`tests/panels/*/examples/`](https://github.com/opensemanticworld/panelini/tree/main/tests/panels).
+Every example under `examples/panels/` is exercised by a Playwright test that imports the real module and asserts on rendered DOM. If an example breaks, the corresponding test fails - see [`tests/panels/*/examples/`](https://github.com/opensemanticworld/panelini/tree/main/tests/panels).
 
 Run them locally:
 

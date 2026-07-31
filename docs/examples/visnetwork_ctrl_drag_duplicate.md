@@ -30,5 +30,5 @@ Enable `interaction.multiselect` so several nodes can be selected and duplicated
 
 ## See also
 
-- {doc}`../panels/visnetwork` — full `VisNetwork` guide
-- {doc}`visnetwork_context_menu` — right-click actions on nodes and edges
+- {doc}`../panels/visnetwork` - full `VisNetwork` guide
+- {doc}`visnetwork_context_menu` - right-click actions on nodes and edges

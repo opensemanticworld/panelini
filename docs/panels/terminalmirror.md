@@ -12,7 +12,7 @@ print("Hello!")                      # appears in widget and in the console
 terminal.stop()
 ```
 
-Pass `mirror=False` to defer redirection — useful when the component is
+Pass `mirror=False` to defer redirection - useful when the component is
 created at import time and you only want to start capturing on demand:
 
 ```python
@@ -35,7 +35,7 @@ with TerminalMirror() as terminal:
 
 When the terminal is placed inside a `pn.Card`, the xterm.js frontend buffer
 is destroyed on collapse. `TerminalMirror` **automatically** wires the
-collapse/expand replay when any `pn.Card` is constructed that contains it —
+collapse/expand replay when any `pn.Card` is constructed that contains it -
 no extra call needed:
 
 ```python
@@ -64,7 +64,7 @@ card = pn.Card(app, title="Output")   # TerminalMirror inside MyApp is found and
 ```
 
 To wire a card that was constructed *before* the terminal existed, call
-`bind_collapse` manually (it is idempotent — safe to call more than once):
+`bind_collapse` manually (it is idempotent - safe to call more than once):
 
 ```python
 terminal.bind_collapse(card)

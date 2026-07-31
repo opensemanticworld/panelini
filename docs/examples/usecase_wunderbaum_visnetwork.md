@@ -11,13 +11,13 @@ the incremental APIs of each widget (`add_node` / `remove_node` / `add_edge` /
 
 ## What it demonstrates
 
-- **Drag to reparent** — drag a class onto a new superclass in the tree; the model moves the
+- **Drag to reparent** - drag a class onto a new superclass in the tree; the model moves the
   node and the graph re-wires the `SubClassOf` edge (old edge removed, new one added).
-- **Context menu edits** — right-click a node to insert a subclass/sibling or delete it;
+- **Context menu edits** - right-click a node to insert a subclass/sibling or delete it;
   the change appears in both the tree and the graph.
-- **Linked selection** — activating a tree row highlights the node in the graph and fills
+- **Linked selection** - activating a tree row highlights the node in the graph and fills
   the detail pane, and clicking a graph node activates the matching tree row.
-- **Inline editing** — rename via `F2` or edit the description cell; the graph label and
+- **Inline editing** - rename via `F2` or edit the description cell; the graph label and
   tooltip update.
 
 ## The code
@@ -60,6 +60,6 @@ graph LR
 
 ## See also
 
-- {doc}`usecase_jsoneditor_visnetwork` — the form + graph variant
-- {doc}`virtual_filesystem` — the full Wunderbaum feature demo (DnD, context menu, rename)
-- {doc}`../panels/visnetwork` — the standalone graph widget
+- {doc}`usecase_jsoneditor_visnetwork` - the form + graph variant
+- {doc}`virtual_filesystem` - the full Wunderbaum feature demo (DnD, context menu, rename)
+- {doc}`../panels/visnetwork` - the standalone graph widget

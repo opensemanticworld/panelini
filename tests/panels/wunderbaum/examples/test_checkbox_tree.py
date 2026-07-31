@@ -129,10 +129,10 @@ def test_tree_renders_with_checkboxes(page: Page, port):
     assert page.locator(".wunderbaum-wrapper").first.is_visible()
 
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row — tree did not render"
+    assert rows.count() > 0, "No .wb-row - tree did not render"
 
     checkboxes = page.locator(".wb-row .wb-checkbox")
-    assert checkboxes.count() > 0, "No .wb-checkbox — checkboxes not enabled"
+    assert checkboxes.count() > 0, "No .wb-checkbox - checkboxes not enabled"
 
     server.stop()
 

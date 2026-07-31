@@ -1,6 +1,8 @@
 """Entrypoint of terminalmirror panel."""
 
 import contextlib
+import html
+import os
 import sys
 from types import TracebackType
 from typing import Any, Optional, TextIO
@@ -9,6 +11,22 @@ import panel as pn
 import param  # type: ignore[import-untyped]
 
 pn.extension()
+
+# Pyodide/WASM runs as the Emscripten platform. There, panel's xterm.js-backed
+# ``Terminal`` widget does not load (the xterm bundle is absent), so the on-screen
+# view falls back to a console mirror - see ``TerminalMirror``.
+_IN_PYODIDE = sys.platform == "emscripten"
+
+
+def _console_mode() -> bool:
+    """Whether to render the console-mirror view instead of the xterm widget.
+
+    True under Pyodide (xterm.js cannot load), or when ``PANELINI_TERMINAL_MODE`` is
+    set to ``console`` - the portfolio build sets this so the host-side *build* render
+    also avoids embedding xterm (which would throw in the browser before the WASM
+    worker hydrates).
+    """
+    return _IN_PYODIDE or os.environ.get("PANELINI_TERMINAL_MODE") == "console"
 
 
 class TerminalMirror(pn.viewable.Viewer):
@@ -41,7 +59,7 @@ class TerminalMirror(pn.viewable.Viewer):
 
         When this instance is placed inside a ``pn.Card`` (directly or via a
         nested ``pn.viewable.Viewer``), collapse/expand buffer-replay is wired
-        automatically — no explicit :meth:`bind_collapse` call required.
+        automatically - no explicit :meth:`bind_collapse` call required.
 
         Args:
             mirror: If True (default), immediately redirect ``sys.stdout`` into
@@ -55,6 +73,29 @@ class TerminalMirror(pn.viewable.Viewer):
             options=self.options,
             sizing_mode=self.sizing_mode,
         )
+        # In Pyodide the xterm widget cannot render, so output is mirrored into a
+        # monospace HTML pane (visible in the card) and the browser devtools console.
+        # The pane is kept in sync by ``write`` alongside ``self._terminal`` so the
+        # ``_terminal.output`` buffer - relied on by tests and ``redraw`` - stays valid.
+        self._console_buffer = ""
+        self._console: Optional[pn.pane.HTML] = None
+        if _console_mode():
+            self._console = pn.pane.HTML(
+                self._console_markup(),
+                sizing_mode=self.sizing_mode,
+                css_classes=["tm-console"],
+                styles={
+                    "background": "#1e1e1e",
+                    "color": "#d4d4d4",
+                    "font-family": "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    "font-size": "13px",
+                    "overflow": "auto",
+                    "padding": "8px",
+                    "border-radius": "4px",
+                    "min-height": "120px",
+                    "white-space": "pre-wrap",
+                },
+            )
         self._original_stdout: Optional[TextIO] = None
         self._bound_cards: set[int] = set()
 
@@ -94,9 +135,26 @@ class TerminalMirror(pn.viewable.Viewer):
             The number of characters written (file-like contract).
         """
         self._terminal.write(data)
+        if self._console is not None:
+            self._console_write(data)
         if self._original_stdout is not None:
             self._original_stdout.write(data)
         return len(data)
+
+    def _console_markup(self) -> str:
+        """Render the accumulated buffer as escaped ``<pre>`` text for the HTML pane."""
+        return f"<pre style='margin:0'>{html.escape(self._console_buffer)}</pre>"
+
+    def _console_write(self, data: str) -> None:
+        """Append output to the on-screen console-mirror HTML pane.
+
+        The browser devtools console is fed separately: in Pyodide the original
+        ``sys.stdout`` (teed in :meth:`write`) is already the line-buffered console, so
+        forwarding here too would double every line - hence this only updates the pane.
+        """
+        self._console_buffer += data
+        if self._console is not None:
+            self._console.object = self._console_markup()
 
     def flush(self) -> None:
         """Flush the terminal widget and the original stream."""
@@ -113,6 +171,8 @@ class TerminalMirror(pn.viewable.Viewer):
         ``Card`` is collapsed). Calling this on remount clears the widget and
         replays the accumulated output so nothing is lost.
         """
+        if self._console is not None:
+            self._console.object = self._console_markup()
         output = self._terminal.output
         self._terminal.clear()
         if output:
@@ -171,8 +231,14 @@ class TerminalMirror(pn.viewable.Viewer):
         with contextlib.suppress(Exception):
             self.stop()
 
-    def __panel__(self) -> pn.widgets.Terminal:
-        """Return the underlying terminal widget for rendering."""
+    def __panel__(self) -> pn.viewable.Viewable:
+        """Return the view to render.
+
+        The xterm ``Terminal`` widget off-WASM; in Pyodide the console-mirror HTML
+        pane, since xterm.js does not load there.
+        """
+        if self._console is not None:
+            return self._console
         return self._terminal
 
 
@@ -213,7 +279,7 @@ def _patch_pn_card_for_terminal_mirror() -> None:
 
     def _patched_init(self: pn.Card, *args: Any, **kwargs: Any) -> None:
         _orig_init(self, *args, **kwargs)
-        # Use the original args — card.objects already has Viewers unwrapped
+        # Use the original args - card.objects already has Viewers unwrapped
         original_objects = list(args) + list(kwargs.get("objects", []))
         visited: set[int] = set()
         for obj in original_objects:

@@ -1,9 +1,9 @@
-# Wunderbaum tree — minimal (standalone)
+# Wunderbaum tree - minimal (standalone)
 
 **Source:** [`examples/panels/wunderbaum/wunderbaum_panel_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/wunderbaum_panel_min.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_wunderbaum_panel_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_wunderbaum_panel_min.py)
 
-The smallest possible `Wunderbaum` usage — a nested tree served on its own, no Panelini shell.
+The smallest possible `Wunderbaum` usage - a nested tree served on its own, no Panelini shell.
 
 ## The code
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     pn.serve(tree)
 ```
 
-`Wunderbaum` is a standalone [`AnyWidgetComponent`](https://github.com/mar10/wunderbaum) panel. Each node is a dict with a `title`, a unique `key`, optional `children`, and an optional `expanded` flag — that's the entire contract for a read-only tree. Because it has no Panelini dependency, you can `pn.serve(tree)` directly.
+`Wunderbaum` is a standalone [`AnyWidgetComponent`](https://github.com/mar10/wunderbaum) panel. Each node is a dict with a `title`, a unique `key`, optional `children`, and an optional `expanded` flag - that's the entire contract for a read-only tree. Because it has no Panelini dependency, you can `pn.serve(tree)` directly.
 
 ## What's under the hood
 
@@ -52,7 +52,7 @@ graph LR
     wb --> dom[Shadow DOM rows]
 ```
 
-- `source` is a `param` list — reassign it and the frontend re-renders.
+- `source` is a `param` list - reassign it and the frontend re-renders.
 - The tree renders inside a shadow DOM; tests reach it via a small `findInShadowRoots` helper.
 
 ## How the test exercises it
@@ -61,6 +61,6 @@ The Playwright test imports `source` and `tree` from the module, serves it on a 
 
 ## See also
 
-- {doc}`wunderbaum_panelini_min` — the same tree inside a Panelini shell
-- {doc}`wunderbaum_table_min` — add columns for tree + table mode
+- {doc}`wunderbaum_panelini_min` - the same tree inside a Panelini shell
+- {doc}`wunderbaum_table_min` - add columns for tree + table mode
 - [Wunderbaum docs](https://mar10.github.io/wunderbaum/)

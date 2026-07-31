@@ -35,6 +35,6 @@ vis = VisNetwork(nodes=nodes, edges=edges, context_menu_callback=on_context_menu
 
 ## See also
 
-- {doc}`../panels/visnetwork` — full `VisNetwork` guide
-- {doc}`visnetwork_ctrl_drag_duplicate` — duplicate nodes with Ctrl+drag
-- {doc}`context_menu` — the Wunderbaum tree context menu
+- {doc}`../panels/visnetwork` - full `VisNetwork` guide
+- {doc}`visnetwork_ctrl_drag_duplicate` - duplicate nodes with Ctrl+drag
+- {doc}`context_menu` - the Wunderbaum tree context menu

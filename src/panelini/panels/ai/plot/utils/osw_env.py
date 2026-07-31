@@ -2,16 +2,16 @@
 
 The OSW connector tools need six environment variables to function:
 
-- ``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD`` — used by
+- ``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD`` - used by
   :class:`osw.express.OswExpress` to authenticate against the wiki.
-- ``BLAZEGRAPH_ENDPOINT``, ``BLAZEGRAPH_USER``, ``BLAZEGRAPH_PASSWORD`` —
+- ``BLAZEGRAPH_ENDPOINT``, ``BLAZEGRAPH_USER``, ``BLAZEGRAPH_PASSWORD`` -
   used by the SPARQL-backed tools.
 
 When any are missing, :func:`make_osw_tools` skips registration so the
 example remains runnable without an OSW instance. When a caller invokes
 :func:`build_osw_express` directly without the three auth vars,
 :func:`check_osw_auth_env` raises a :class:`RuntimeError` listing the
-missing variables — this replaces osw's default
+missing variables - this replaces osw's default
 ``input()``/``getpass.getpass()`` prompt (unsuitable for a Panel server)
 with an explicit startup-time failure.
 

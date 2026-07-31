@@ -10,17 +10,17 @@ entities.
 
 ## What it demonstrates
 
-- **Form to graph** — a JSON-Schema form holds a list of nodes (`name`, `connected_to`);
+- **Form to graph** - a JSON-Schema form holds a list of nodes (`name`, `connected_to`);
   every change rebuilds the `VisNetwork` nodes and edges.
-- **Graph to form** — clicking a node swaps the editor from the whole-network schema to a
+- **Graph to form** - clicking a node swaps the editor from the whole-network schema to a
   single-node schema, so you edit one entity at a time; clicking empty space returns to the
   full-network view.
-- **Live round trip** — editing a node's `name` in the form immediately relabels it in the
+- **Live round trip** - editing a node's `name` in the form immediately relabels it in the
   graph, with no manual refresh.
 
 ## The code
 
-The bridge is one converter plus two watchers — the form and the graph never talk to each
+The bridge is one converter plus two watchers - the form and the graph never talk to each
 other directly, only through the shared value:
 
 ```python
@@ -57,6 +57,6 @@ graph LR
 
 ## See also
 
-- {doc}`jsoneditor_pydantic` — deriving the form schema from a Pydantic model
-- {doc}`visnetwork` — the standalone graph widget
-- {doc}`usecase_wunderbaum_visnetwork` — the tree + graph variant
+- {doc}`jsoneditor_pydantic` - deriving the form schema from a Pydantic model
+- {doc}`visnetwork` - the standalone graph widget
+- {doc}`usecase_wunderbaum_visnetwork` - the tree + graph variant

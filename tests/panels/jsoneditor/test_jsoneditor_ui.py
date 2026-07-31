@@ -1,4 +1,4 @@
-"""UI tests for JsonEditor — require a headless browser via Playwright.
+"""UI tests for JsonEditor - require a headless browser via Playwright.
 
 Importing from playwright auto-marks every test in this module with the
 ``ui`` marker (see tests/conftest.py), so these tests are excluded from

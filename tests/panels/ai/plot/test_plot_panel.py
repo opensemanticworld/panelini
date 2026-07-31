@@ -202,6 +202,6 @@ class TestOnPlotCallback:
             raise RuntimeError
 
         panel.on_plot(boom)
-        # Should not raise — plotting must not be coupled to callback reliability
+        # Should not raise - plotting must not be coupled to callback reliability
         result = panel.plot_by_code(code="x")
         assert "Image successfully plotted" in result

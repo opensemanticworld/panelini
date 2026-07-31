@@ -146,10 +146,10 @@ graph LR
 
 Key points:
 
-- **Param → JS** — props (nodes, edges, options, value) sync automatically on change.
-- **JS → Param** — user events write to a single `_event_data` param, which Python callbacks unpack.
-- **One-shot actions** — methods like `add_node` or `set_schema` set a param that the frontend observes for a single tick.
-- **Bundled assets** — JS + CSS are pre-built and shipped with the package. No `npm install` at deploy time.
+- **Param → JS** - props (nodes, edges, options, value) sync automatically on change.
+- **JS → Param** - user events write to a single `_event_data` param, which Python callbacks unpack.
+- **One-shot actions** - methods like `add_node` or `set_schema` set a param that the frontend observes for a single tick.
+- **Bundled assets** - JS + CSS are pre-built and shipped with the package. No `npm install` at deploy time.
 
 ## Data flow for a user interaction
 
@@ -203,10 +203,10 @@ graph TB
     class anth,azure prov
 ```
 
-- **`AiChat`** — UI: chat widget, sidebar controls, markdown preview pane. Exposes `main_objects` and `sidebar_objects` for embedding.
-- **`AiBackend`** — business logic: provider/model switching, tool-call loop, history management, export/import.
-- **`AiInterface`** — thin LangChain wrapper that's provider-agnostic. Streaming + tool binding in one place.
-- **Config** — YAML file with env-var interpolation. Auto-discovered from `PANELINI_AI_CONFIG_PATH`, then `config.yml` walking upward, then the bundled default.
+- **`AiChat`** - UI: chat widget, sidebar controls, markdown preview pane. Exposes `main_objects` and `sidebar_objects` for embedding.
+- **`AiBackend`** - business logic: provider/model switching, tool-call loop, history management, export/import.
+- **`AiInterface`** - thin LangChain wrapper that's provider-agnostic. Streaming + tool binding in one place.
+- **Config** - YAML file with env-var interpolation. Auto-discovered from `PANELINI_AI_CONFIG_PATH`, then `config.yml` walking upward, then the bundled default.
 
 ## GraphDetailTool composition
 
@@ -254,13 +254,13 @@ Features:
 
 ## Design decisions
 
-- **No re-invention of reactivity.** panelini rides entirely on `param` — the same foundation Panel is built on.
+- **No re-invention of reactivity.** panelini rides entirely on `param` - the same foundation Panel is built on.
 - **Bundle the frontend.** Users don't need a JS toolchain to deploy a panelini app.
 - **Opt-in heaviness.** LangChain is an optional extra; background images can be switched off.
 - **Stable panels, evolving core.** Panels are versioned with their JS bundles; the Panelini class is where most churn lives.
 
 ## See also
 
-- {doc}`modules` — API reference overview
-- {doc}`panels/index` — guide to each reusable panel
-- {doc}`examples/index` — runnable walkthroughs
+- {doc}`modules` - API reference overview
+- {doc}`panels/index` - guide to each reusable panel
+- {doc}`examples/index` - runnable walkthroughs

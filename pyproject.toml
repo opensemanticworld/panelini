@@ -120,6 +120,7 @@ markers = [
     "ui: UI tests requiring Playwright (browser)",
     "ai: AI tests requiring langchain and related packages",
     "media: UI tests that also record docs media when run with --record-media",
+    "portfolio: Pyodide portfolio app tests (slow, needs built apps via `make portfolio`)",
 ]
 
 [tool.ruff]
@@ -170,6 +171,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+# Dev-only docs build script: trusted, hardcoded `uv`/`panel` CLI invocations.
+"docs/gen_portfolio.py" = ["S603", "S607"]
 
 [tool.ruff.format]
 preview = true

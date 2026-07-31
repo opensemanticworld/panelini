@@ -1,4 +1,4 @@
-# Checkbox tree — hierarchical selection
+# Checkbox tree - hierarchical selection
 
 **Source:** [`examples/panels/wunderbaum/checkbox_tree.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/checkbox_tree.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_checkbox_tree.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_checkbox_tree.py)
@@ -68,7 +68,7 @@ tree.param.watch(_on_source_change, ["source"])
 Key points:
 
 - Two options drive the behaviour: `checkbox: True` renders the boxes, `selectMode: "hier"` enables parent/child propagation and the indeterminate (tri-state) parent.
-- Selection state syncs back into `tree.source` as a `selected: True` flag on each node — no separate event wiring needed.
+- Selection state syncs back into `tree.source` as a `selected: True` flag on each node - no separate event wiring needed.
 - `tree.param.watch(..., ["source"])` fires whenever the client toggles a box, so `_get_checked_keys` can walk the tree and update the live display.
 
 ## How the test exercises it
@@ -85,5 +85,5 @@ An `autouse` fixture resets `tree.source` before each test to prevent state leak
 
 ## See also
 
-- {doc}`virtual_filesystem` — checkboxes combined with a "Delete Checked" batch action
-- {doc}`wunderbaum_panelini_min` — the minimal tree this builds on
+- {doc}`virtual_filesystem` - checkboxes combined with a "Delete Checked" batch action
+- {doc}`wunderbaum_panelini_min` - the minimal tree this builds on

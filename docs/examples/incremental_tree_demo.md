@@ -1,9 +1,9 @@
-# Incremental updates — build a tree step by step
+# Incremental updates - build a tree step by step
 
 **Source:** [`examples/panels/wunderbaum/incremental_tree_demo.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/wunderbaum/incremental_tree_demo.py)
 **Test:** [`tests/panels/wunderbaum/examples/test_incremental_tree_demo.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/wunderbaum/examples/test_incremental_tree_demo.py)
 
-Build a project folder structure one step at a time using the incremental update API. Each step is a list of action objects (`addNode`, `renameNode`, `moveNode`, …) sent straight to the JavaScript side — the same playbook notation as the VisNetwork incremental graph demo.
+Build a project folder structure one step at a time using the incremental update API. Each step is a list of action objects (`addNode`, `renameNode`, `moveNode`, …) sent straight to the JavaScript side - the same playbook notation as the VisNetwork incremental graph demo.
 
 ## The code
 
@@ -68,9 +68,9 @@ Key points:
 
 ## How the test exercises it
 
-The test asserts the "Next Step" and "Reset" buttons render, clicks **Next Step** once, and confirms a `.wb-row` appears — proving a single incremental `addNode` reaches the client and renders.
+The test asserts the "Next Step" and "Reset" buttons render, clicks **Next Step** once, and confirms a `.wb-row` appears - proving a single incremental `addNode` reaches the client and renders.
 
 ## See also
 
-- {doc}`context_menu` — the imperative `add_node` / `rename_node` / `remove_node` API
-- {doc}`lazy_loading` — pull children on expand instead of pushing them from Python
+- {doc}`context_menu` - the imperative `add_node` / `rename_node` / `remove_node` API
+- {doc}`lazy_loading` - pull children on expand instead of pushing them from Python

@@ -30,7 +30,7 @@ def test_renders(page: Page, port):
     assert len(graph.edges) == len(EDGES)
 
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row — tree did not render"
+    assert rows.count() > 0, "No .wb-row - tree did not render"
     assert page.locator(".vis-network canvas").first.is_visible()
 
     server.stop()

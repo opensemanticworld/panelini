@@ -2,7 +2,7 @@
 
 Components are **Panelini-coupled** building blocks that depend on the framework's layout and reactive wiring. Unlike {doc}`panels <../panels/index>`, a component typically can't be used outside a `Panelini` app.
 
-At the moment there are no active components — the AI chat moved from this layer to {doc}`../panels/ai` so it could be reused standalone.
+At the moment there are no active components - the AI chat moved from this layer to {doc}`../panels/ai` so it could be reused standalone.
 
 ## When to write a component (vs a panel)
 

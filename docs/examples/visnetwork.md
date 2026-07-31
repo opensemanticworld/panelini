@@ -36,7 +36,7 @@ app.main_set(objects=[
 app.servable()
 ```
 
-That's it — `VisNetwork` is a standalone panel wrapping [vis-network](https://visjs.github.io/vis-network/docs/network/). It renders immediately, animates physics-driven layout, and accepts drag interactions out of the box.
+That's it - `VisNetwork` is a standalone panel wrapping [vis-network](https://visjs.github.io/vis-network/docs/network/). It renders immediately, animates physics-driven layout, and accepts drag interactions out of the box.
 
 ## What's under the hood
 
@@ -49,21 +49,21 @@ graph LR
     canvas -- events --> vue
 ```
 
-- Python-side `nodes`, `edges`, and `options` are `param` properties — update them and the frontend re-renders.
+- Python-side `nodes`, `edges`, and `options` are `param` properties - update them and the frontend re-renders.
 - User interactions (clicks, drags, file drops) flow back via the `_event_data` param; Python callbacks run reactively.
-- Bundled JS + CSS mean there's no extra install step — vis-network ships with panelini.
+- Bundled JS + CSS mean there's no extra install step - vis-network ships with panelini.
 
 ## Going further
 
-The example above is the smallest possible usage. Everything else — event callbacks, edit modes, file drops, batch updates — is documented with runnable snippets in {doc}`../panels/visnetwork`.
+The example above is the smallest possible usage. Everything else - event callbacks, edit modes, file drops, batch updates - is documented with runnable snippets in {doc}`../panels/visnetwork`.
 
 For a richer demo, try:
 
-- [`examples/panels/visnetwork/graph_detail_tool.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/graph_detail_tool.py) — full `GraphDetailTool` workspace with node detail pane, multi-select, and drag position tracking
-- [`examples/panels/visnetwork/drop_file.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/drop_file.py) — drop images/CSVs onto the canvas to spawn nodes
-- [`examples/panels/visnetwork/device_hierarchy.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/device_hierarchy.py) — hierarchical layout with collapsible groups
+- [`examples/panels/visnetwork/graph_detail_tool.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/graph_detail_tool.py) - full `GraphDetailTool` workspace with node detail pane, multi-select, and drag position tracking
+- [`examples/panels/visnetwork/drop_file.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/drop_file.py) - drop images/CSVs onto the canvas to spawn nodes
+- [`examples/panels/visnetwork/device_hierarchy.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/device_hierarchy.py) - hierarchical layout with collapsible groups
 
 ## See also
 
-- {doc}`../panels/visnetwork` — full `VisNetwork` guide
-- {doc}`../panels/graph_detail_tool` — composed graph editing UI
+- {doc}`../panels/visnetwork` - full `VisNetwork` guide
+- {doc}`../panels/graph_detail_tool` - composed graph editing UI
