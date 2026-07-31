@@ -3,11 +3,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.wunderbaum_panel_min import source, tree
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 

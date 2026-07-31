@@ -4,12 +4,8 @@
 
 /* ── Global overrides ─────────────────────────────────────────────── */
 
-/* Warm off-white page background in light mode */
-body:not([data-theme="dark"]) {
-    --color-background-primary: #faf7f2;
-    --color-background-secondary: #f3ede4;
-    --color-background-border: #e5dfd6;
-}
+/* The warm off-white surfaces live in conf.py `light_css_variables` so Furo
+   applies them only for the resolved light theme (incl. auto -> light). */
 
 /* Sidebar brand logo */
 .sidebar-brand img {
