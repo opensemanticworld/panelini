@@ -3,15 +3,18 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.usecases.wunderbaum_visnetwork import (
     EDGES,
     NODES,
     app,
+    get_parent,
     graph,
     tree,
 )
+from panelini.testing import drag, wb_title_center, wb_wait
 
 
 def test_renders(page: Page, port):
@@ -365,4 +368,17 @@ def test_dnd_copy_node(page: Page, port):
     rows_after = page.locator(".wb-row").count()
     assert rows_after > 0
 
+    server.stop()
+
+
+@pytest.mark.media(role="overview", capture="gif", viewport=(1280, 720))
+def test_dnd_reparents(page: Page, port):
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(f"http://localhost:{port}")
+    wb_wait(page)
+    time.sleep(1.2)
+    drag(page, wb_title_center(page, "Truck"), wb_title_center(page, "Animal"), steps=12)
+    time.sleep(1.5)
+    assert get_parent("Truck") == "Animal"
     server.stop()

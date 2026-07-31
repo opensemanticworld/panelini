@@ -59,7 +59,12 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "media(role, capture='gif', name=None, viewport=None): record docs media")
+    config.addinivalue_line(
+        "markers",
+        "media(role, capture='gif', name=None, viewport=None): record docs media. "
+        "capture is 'gif'|'video'|'screenshot' with optional timing: '@S' from S to "
+        "end, '@S:E' a range, '@:E' up to E; screenshot takes the frame nearest S.",
+    )
     config._media_jobs = []
     if config.getoption("--record-media"):
         config._media_video_dir = Path(tempfile.mkdtemp(prefix="panelini_media_"))
@@ -198,27 +203,36 @@ def _sec(raw: str) -> float | None:
     return float(raw)
 
 
-def _is_blank(frame) -> bool:
-    """True if the frame is effectively a blank (pre-load) white page."""
+def _is_blank(frame, floor: float = 0.005) -> bool:
+    """True if the frame carries almost no ink (a pre-load / partial-render page).
+
+    Uses an absolute non-white pixel count, not a comparison to other frames, so
+    it robustly drops leading blank and half-painted frames without guessing about
+    content that legitimately grows later in a clip. A rendered dashboard has well
+    over ``floor`` of the canvas inked; a blank or barely-painting load frame does
+    not.
+    """
     from PIL import Image, ImageChops
 
     grey = Image.fromarray(frame).convert("L")
-    bbox = ImageChops.invert(grey).point(lambda p: 255 if p > 12 else 0).getbbox()
-    if bbox is None:
-        return True
+    ink = ImageChops.invert(grey).point(lambda p: 255 if p > 24 else 0).histogram()[255]
     w, h = grey.size
-    return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) < 0.01 * w * h
+    return ink < floor * w * h
 
 
 def _parse_capture(spec: str) -> tuple[str, float | None, float | None]:
+    """Parse ``kind[@timing]`` into ``(kind, start, end)`` seconds (None = open).
+
+    Timing forms: ``@S:E`` a range, ``@S:`` from S to the end, ``@:E`` up to E,
+    and a bare ``@S`` from S to the end. A single instant is only meaningful for a
+    screenshot, which resolves to the frame nearest ``start`` regardless of ``end``;
+    a bare ``@S`` never collapses an animation to one frame.
+    """
     kind, _, timing = spec.partition("@")
     start = end = None
     if timing:
-        if ":" in timing:
-            a, b = timing.split(":", 1)
-            start, end = _sec(a), _sec(b)
-        else:
-            start = end = _sec(timing)
+        a, _, b = timing.partition(":")
+        start, end = _sec(a), _sec(b)
     return kind or "gif", start, end
 
 

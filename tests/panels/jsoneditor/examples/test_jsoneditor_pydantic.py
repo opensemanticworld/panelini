@@ -26,9 +26,16 @@ class A(BaseModel):
 @pytest.fixture
 def editor():
     a = A(x=1, y=2, z=3, sub=[ASub(a=1, b=2), ASub(a=4, b=3)])
-    return PydanticEditor(A, value=a, format_array_tabs=True, format_dict_categories=False), a
+    prev_sizing = pn.config.sizing_mode
+    pn.config.sizing_mode = "stretch_width"  # fill the width so the form is not squeezed
+    try:
+        ed = PydanticEditor(A, value=a, format_array_tabs=True, format_dict_categories=False)
+    finally:
+        pn.config.sizing_mode = prev_sizing
+    return ed, a
 
 
+@pytest.mark.media(role="overview", capture="screenshot", viewport=(1200, 760))
 def test_initial_value_displayed(page: Page, port, editor):
     """Editor renders with the Pydantic instance value, not schema defaults."""
     my_editor, a = editor

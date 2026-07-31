@@ -34,7 +34,11 @@ def _reset_tree():
 
 def _click_checkbox(page: Page, title: str) -> None:
     """Click the checkbox (``<i class="wb-checkbox">``) of the row with *title*."""
-    wb_checkbox(page, title).click()
+    cb = wb_checkbox(page, title)
+    box = cb.bounding_box()
+    if box:  # glide the cursor so recorded media reads well
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=15)
+    cb.click()
     time.sleep(1)
 
 
@@ -155,6 +159,7 @@ def test_check_leaf_node(page: Page, port):
     server.stop()
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_check_parent_selects_all_children(page: Page, port):
     """Clicking a parent checkbox selects it and all its children."""
     server = _serve_and_goto(page, port)

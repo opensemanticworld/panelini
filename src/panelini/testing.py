@@ -177,15 +177,23 @@ def assemble_animation(
     colors: int = 128,
     max_frame_ms: int = 1500,
     diff_threshold: int = 24,
+    min_change_frac: float = 0.00005,
 ) -> int:
     """Assemble RGB PIL frames into a small animated WebP (default) or GIF.
 
-    Pads frames to a common size, merges identical consecutive frames (so static
-    holds cost one frame), downscales to ``width``, then writes ``fmt``:
+    Pads frames to a common size, merges near-identical consecutive frames (so
+    static holds cost one frame), downscales to ``width``, then writes ``fmt``:
     ``"webp"`` uses lossy ``quality``; ``"gif"`` an adaptive ``colors`` palette.
     Returns the number of frames written.
+
+    A frame duplicates its predecessor when, after thresholding the diff and
+    eroding away isolated speckle, fewer than ``min_change_frac`` of pixels of
+    *solid* change remain. Erosion is the key: a canvas redraw shimmers thin
+    anti-aliased speckle across the whole graph area (which must not spawn a
+    keyframe) while a dragged node, gliding cursor, or opening menu is a compact
+    blob that survives erosion, so drags stay smooth yet static holds collapse.
     """
-    from PIL import Image, ImageChops
+    from PIL import Image, ImageChops, ImageFilter
 
     if not frames:
         msg = "assemble_animation needs at least one frame"
@@ -201,14 +209,18 @@ def assemble_animation(
             f = bg
         padded.append(f)
 
+    min_changed_px = max(1, int(min_change_frac * canvas_w * canvas_h))
     kept = [padded[0]]
     durs = [duration_ms]
     for f in padded[1:]:
-        # Merge frames with no *localised* change: threshold the diff (ignores
-        # low-magnitude video codec noise) then check for any surviving region.
         diff = ImageChops.difference(f, kept[-1]).convert("L")
         changed = diff.point(lambda p: 255 if p > diff_threshold else 0)
-        if changed.getbbox() is None:
+        solid = changed.filter(ImageFilter.MinFilter(3))  # erode away scattered speckle
+        if solid.histogram()[255] < min_changed_px:
+            # Hold the run, but keep the *latest* image so a final thin change
+            # (e.g. a graph node relabel) is the frame that survives, not the
+            # stale earlier one it merged into.
+            kept[-1] = f
             durs[-1] += duration_ms
         else:
             kept.append(f)

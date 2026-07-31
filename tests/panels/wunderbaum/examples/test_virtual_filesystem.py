@@ -6,7 +6,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from examples.panels.wunderbaum.virtual_filesystem import app, tree
+from examples.panels.wunderbaum.virtual_filesystem import app, fs_to_tree_source, tree
+from panelini.testing import drag, wb_title_center, wb_wait
 
 
 def _expand_controls(page: Page) -> None:
@@ -211,6 +212,46 @@ def test_dnd_move_no_duplicate(page: Page, port):
     titles = page.locator(".wb-row .wb-title")
     count = sum(1 for i in range(titles.count()) if "document.txt" in titles.nth(i).text_content())
     assert count == 1, f"document.txt appears {count} times"
+
+    server.stop()
+
+
+@pytest.mark.media(role="overview", capture="gif")
+def test_dnd_move_cache_into_user(page: Page, port):
+    """Drag cache.dat from /tmp onto the /home/user folder (cross-folder move)."""
+    # `tree` is a module-level singleton shared across tests; reset it to the
+    # original filesystem so this test is independent of prior mutations.
+    tree.source = fs_to_tree_source()
+    server = pn.serve(app, port=port, threaded=True, show=False)
+    time.sleep(0.2)
+    page.goto(f"http://localhost:{port}")
+    wb_wait(page)
+    time.sleep(1)
+
+    # Sanity: cache.dat starts under /tmp, not /home/user.
+    before = _find_in_source(tree.source, "/tmp/cache.dat")  # noqa: S108
+    assert before is not None, "cache.dat missing from server source before move"
+    assert before[1] == "/tmp", f"cache.dat parent before move={before[1]}"  # noqa: S108
+
+    # Drag the TITLE cell of cache.dat onto the "user" folder title cell.
+    src = wb_title_center(page, "cache.dat")
+    tgt = wb_title_center(page, "user")
+    drag(page, src, tgt, steps=12)
+    time.sleep(1.3)
+
+    # Backend assertion: the panel's JS-synced source shows cache.dat now under
+    # /home/user and no longer under /tmp. (The example's `filesystem` dict is
+    # only read at init and never mutated on drop, so source is the truth here.)
+    after = _find_in_source(tree.source, "/tmp/cache.dat")  # noqa: S108
+    assert after is not None, "cache.dat vanished from server source after move"
+    _, parent_key = after
+    assert parent_key == "/home/user", f"Server: parent={parent_key}, expected '/home/user'"
+
+    # Client-side confirmation: /home/user gained cache.dat, /tmp lost it.
+    user_children = _get_client_children(page, "/home/user")
+    tmp_children = _get_client_children(page, "/tmp")  # noqa: S108
+    assert "/tmp/cache.dat" in user_children, f"Client: cache.dat not under /home/user: {user_children}"  # noqa: S108
+    assert "/tmp/cache.dat" not in tmp_children, f"Client: cache.dat still under /tmp: {tmp_children}"  # noqa: S108
 
     server.stop()
 

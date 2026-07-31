@@ -5,12 +5,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
 from panelini.testing import node_dom_pos
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_json_data_tooltip(page: Page, port):
     """Test that hovering over a node with json_data shows a YAML tooltip."""
     url = f"http://localhost:{port}"

@@ -3,25 +3,41 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
-from examples.panels.wunderbaum.context_menu import app, tree
+from examples.panels.wunderbaum.context_menu import app, status, tree
+from panelini.testing import wb_title_center, wb_wait
 
 
-def test_component(page: Page, port):
-    url = f"http://localhost:{port}"
-
+@pytest.mark.media(role="feature", capture="gif")
+def test_context_menu_add_child(page: Page, port):
+    """Right-click a node, then 'Add Child' via the context menu adds a node."""
     server = pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
 
-    page.goto(url)
-    time.sleep(5)
-
-    assert len(tree.source) == 1
+    page.goto(f"http://localhost:{port}")
+    wb_wait(page)
+    time.sleep(1)
     assert page.locator(".wunderbaum-wrapper").first.is_visible()
+    assert len(tree.source) == 1
+    rows_before = page.locator(".wb-row").count()
 
-    # Tree rows must be visible
-    rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row elements — tree did not render"
+    # Glide to the "src" folder and open its context menu.
+    tx, ty = wb_title_center(page, "src")
+    page.mouse.move(tx, ty, steps=20)
+    page.mouse.click(tx, ty, button="right")
+    menu = page.locator(".wb-context-menu")
+    menu.wait_for(state="visible", timeout=5000)
+
+    item = page.locator(".wb-context-menu-item", has_text="Add Child")
+    ibox = item.bounding_box()
+    page.mouse.move(ibox["x"] + ibox["width"] / 2, ibox["y"] + ibox["height"] / 2, steps=10)
+    item.click()
+    time.sleep(1.2)
+
+    # A child was added under "src" and the status reflects it.
+    assert "Added" in status.object
+    assert page.locator(".wb-row").count() > rows_before
 
     server.stop()

@@ -5,6 +5,7 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.context_menu import demo, panel
@@ -34,8 +35,9 @@ def test_component(page: Page, port):
     server.stop()
 
 
-def test_right_click_opens_context_menu(page: Page, port):
-    """Right-clicking a node with a callback_name_dict shows its context menu."""
+@pytest.mark.media(role="feature", capture="gif")
+def test_right_click_adds_child(page: Page, port):
+    """Right-clicking a node and choosing "Add Child" appends a child node."""
     url = f"http://localhost:{port}"
 
     server = pn.serve(panel, port=port, threaded=True, show=False)
@@ -50,8 +52,12 @@ def test_right_click_opens_context_menu(page: Page, port):
 
     menu = page.locator(".vn-context-menu")
     menu.wait_for(state="visible", timeout=5000)
+    assert "Add Child" in menu.inner_text()
 
-    # The Root Folder menu offers "Edit Label"
-    assert "Edit Label" in menu.inner_text()
+    before = len(demo.vis.nodes)
+    menu.locator(".vn-context-menu-item", has_text="Add Child").click()
+    time.sleep(1.6)  # let the new child node render before the recording ends
+
+    assert len(demo.vis.nodes) == before + 1
 
     server.stop()

@@ -5,11 +5,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.visnetwork import VisNetwork
 
 
+@pytest.mark.media(role="feature", capture="gif")
 def test_canvas_resizes_with_viewport(page: Page, port):
     """A stretch_both VisNetwork canvas follows its container when the viewport changes.
 
