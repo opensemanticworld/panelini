@@ -50,6 +50,9 @@ _DOCS = Path(__file__).resolve().parent
 _REPO = _DOCS.parent
 _PANELS_DIR = _REPO / "examples" / "panels"
 _THUMB_DIR = _DOCS / "_static" / "portfolio" / "thumbs"
+# Committed docs media (recorded from the @pytest.mark.media tests). When a clip or
+# still exists for an example it is used as the card thumbnail instead of a placeholder.
+_MEDIA_DIR = _DOCS / "_static" / "media"
 # Converted Pyodide apps + the local panelini wheel live under _static so Sphinx
 # copies them verbatim.
 _APPS_DIR = _DOCS / "_static" / "portfolio" / "apps"
@@ -473,13 +476,30 @@ def _write_embed_page(path: Path, category: str) -> None:
     target.write_text(page, encoding="utf-8")
 
 
+def _media_thumb(category: str, stem: str) -> str | None:
+    """Docs-root-relative URL of the committed clip/still for a panel, if recorded.
+
+    Prefers the richer ``overview`` role, then ``feature``; an animated WebP loops in
+    the card ``<img>``. Returns None when no media exists for this example, so the
+    card falls back to a generated placeholder.
+    """
+    # A few tests are renamed to avoid duplicate basenames (e.g. visnetwork's
+    # ``test_visnetwork_context_menu``), so also try the category-prefixed slug.
+    for slug in (stem, f"{category}_{stem}"):
+        for role in ("overview", "feature"):
+            for ext in ("webp", "gif", "png"):
+                if (_MEDIA_DIR / category / f"{slug}_{role}.{ext}").exists():
+                    return f"/_static/media/{category}/{slug}_{role}.{ext}"
+    return None
+
+
 def _card(path: Path, category: str) -> str:
     """Emit one sphinx_design grid-item-card for a panel.
 
     Links to the in-docs embed page when the app exists; otherwise renders without a
     link (so the page is valid before/without conversion).
     """
-    thumb = f"/_static/portfolio/thumbs/{category}__{path.stem}.png"
+    thumb = _media_thumb(category, path.stem) or f"/_static/portfolio/thumbs/{category}__{path.stem}.png"
     link = ""
     footer = ""
     if _app_html(path, category).exists():
@@ -508,7 +528,8 @@ def generate() -> None:
         _, label = _CATEGORY_META.get(category, ((0, 0, 0), category.title()))
         cards = []
         for path in paths:
-            _make_thumbnail(path, category)
+            if _media_thumb(category, path.stem) is None:
+                _make_thumbnail(path, category)  # placeholder only when no real clip
             cards.append(_card(path, category))
             total += 1
             # Embed page (+ toctree entry) only when the converted app exists.
