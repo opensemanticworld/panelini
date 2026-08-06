@@ -43,7 +43,12 @@ def _create_anthropic_client(
     api_key = provider.env_vars.get("api_key", "")
     endpoint = provider.env_vars.get("endpoint", "")
 
-    kwargs: dict[str, object] = {
+    # dict[str, Any] (not `object`): these values are passed straight through to
+    # ChatAnthropic's pydantic-validated constructor, whose individual keyword
+    # parameters accept a variety of concrete types (str, bool, float, ...). Typing
+    # this as `object` made every one of them look incompatible to ty; `Any` reflects
+    # that the values are genuinely heterogeneous and pydantic validates them at runtime.
+    kwargs: dict[str, Any] = {
         "model_name": model_name,
         "max_tokens_to_sample": max_tokens,
         "anthropic_api_key": api_key,
@@ -52,7 +57,7 @@ def _create_anthropic_client(
     if _model_supports_temperature(model_name):
         kwargs["temperature"] = temperature
 
-    return ChatAnthropic(**kwargs)  # type: ignore[arg-type]
+    return ChatAnthropic(**kwargs)
 
 
 def _create_azure_openai_client(
@@ -171,9 +176,14 @@ class AiInterface:
             tool: LangChain tool to add
         """
         self.tools.append(tool)
-        # Rebind all tools to the model
-        if hasattr(self.model, "bind_tools"):
-            self.model = self.model.bind_tools(self.tools)
+        # Rebind all tools to the model. `self.model` is typed as the generic
+        # `Runnable[Any, Any]` (it may be a `RunnableBinding` proxying attribute
+        # access to the underlying chat model via `__getattr__`, e.g. after a
+        # previous `bind_tools()` call), so `bind_tools` isn't a statically known
+        # attribute here; use getattr for the dynamic dispatch this depends on.
+        bind_tools = getattr(self.model, "bind_tools", None)
+        if bind_tools is not None:
+            self.model = bind_tools(self.tools)
 
     def clear_history(self) -> None:
         """Clear the conversation history."""

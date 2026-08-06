@@ -32,6 +32,7 @@ def test_context_menu_add_child(page: Page, port):
 
     item = page.locator(".wb-context-menu-item", has_text="Add Child")
     ibox = item.bounding_box()
+    assert ibox is not None
     page.mouse.move(ibox["x"] + ibox["width"] / 2, ibox["y"] + ibox["height"] / 2, steps=10)
     item.click()
     time.sleep(1.2)

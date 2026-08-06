@@ -43,6 +43,8 @@ def test_canvas_resizes_with_viewport(page: Page, port):
     time.sleep(2)  # allow ResizeObserver -> canvas resize -> redraw
     narrow = canvas.bounding_box()
 
+    assert wide is not None
+    assert narrow is not None
     assert narrow["width"] < wide["width"] - 50, (
         f"canvas did not shrink with the viewport: {wide['width']} -> {narrow['width']}"
     )

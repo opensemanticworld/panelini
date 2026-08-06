@@ -70,7 +70,7 @@ Please note this documentation assumes you already have `uv` and `Git` installed
 
       `--all-extras` is required: plain `uv sync` skips the optional
       `ai`/`ai-drawio`/`ai-llm-sandbox`/`ai-osw` extras, and `make
-      check` (mypy, deptry) will fail on those code paths without
+      check` (ty, deptry) will fail on those code paths without
       them installed.
 
 4. Install pre-commit to run linters/formatters at commit time:

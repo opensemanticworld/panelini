@@ -4,7 +4,7 @@ import time
 
 import panel as pn
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import FloatRect, Page
 
 from examples.panels.wunderbaum.virtual_filesystem import app, fs_to_tree_source, tree
 from panelini.testing import drag, wb_title_center, wb_wait
@@ -99,7 +99,7 @@ def test_python_api_delete(page: Page, port):
 # =========================================================================
 
 
-def _center(box: dict) -> tuple[float, float]:
+def _center(box: FloatRect) -> tuple[float, float]:
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
 
 
@@ -210,7 +210,7 @@ def test_dnd_move_no_duplicate(page: Page, port):
     time.sleep(2)
 
     titles = page.locator(".wb-row .wb-title")
-    count = sum(1 for i in range(titles.count()) if "document.txt" in titles.nth(i).text_content())
+    count = sum(1 for i in range(titles.count()) if "document.txt" in (titles.nth(i).text_content() or ""))
     assert count == 1, f"document.txt appears {count} times"
 
     server.stop()

@@ -76,7 +76,10 @@ def test_app_renders(page: Page, apps_base_url: str, category: str, stem: str):
         fallback = page.get_by_text("Could not render this example").count() > 0
         reason = "wrapper fell back to 'Could not render'" if fallback else "widget never appeared"
         errors = "\n  ".join(console_errors[-5:]) or "(none)"
+        # pytest.fail is `reason: str = "", pytrace: bool = True`, but ty
+        # misresolves the wrapping _WithException[...] protocol used by
+        # _pytest.outcomes and matches the positional arg against `pytrace`.
         pytest.fail(
-            f"{category}/{stem}: {reason} (selector {selector!r} not visible within "
+            f"{category}/{stem}: {reason} (selector {selector!r} not visible within "  # ty: ignore[invalid-argument-type]
             f"{_RENDER_TIMEOUT_MS // 1000}s).\nLast console errors:\n  {errors}"
         )

@@ -48,7 +48,7 @@ def _make_tree(events: list) -> Wunderbaum:
 def _get_titles(page: Page) -> list[str]:
     rows = page.locator("css=.wb-row .wb-title")
     count = rows.count()
-    return [rows.nth(i).text_content().strip() for i in range(count)]
+    return [(rows.nth(i).text_content() or "").strip() for i in range(count)]
 
 
 def _find_in_source(source: list[dict], key: str) -> tuple[dict, str | None] | None:

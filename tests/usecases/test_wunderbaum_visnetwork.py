@@ -151,7 +151,7 @@ def test_copy_node(page: Page, port):
         actions_sent.append(action)
         orig(action, payload)
 
-    tree._send_tree_action = spy
+    tree._send_tree_action = spy  # ty: ignore[invalid-assignment] (deliberate monkeypatch-and-restore for test spying)
 
     handle_copy_drop({
         "copy": True,
@@ -160,7 +160,7 @@ def test_copy_node(page: Page, port):
         "targetKey": "Thing/Vehicle",
         "region": "over",
     })
-    tree._send_tree_action = orig
+    tree._send_tree_action = orig  # ty: ignore[invalid-assignment] (restoring the original bound method after the spy)
     time.sleep(2)
 
     # Must use single batch (not separate addNode + expandNode)

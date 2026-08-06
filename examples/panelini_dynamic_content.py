@@ -4,8 +4,10 @@ import panel as pn
 
 from panelini import Panelini
 
-# Some example Panel objects
-panel_objects = [
+# Some example Panel objects. Annotated as list[Viewable] (not inferred as
+# list[Card]) since list is invariant: main_set expects list[Viewable] and a
+# narrower list[Card] is not assignable to it even though Card is a Viewable.
+panel_objects: list[pn.viewable.Viewable] = [
     # Use panel components to build your layout
     pn.Card(
         title="📊 Hello Panelini Minimal 🐍",

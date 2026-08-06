@@ -56,5 +56,12 @@ def test_provider_and_model_settings_present(ready_page: Page):
     """Provider and Model Settings cards are still visible in the sidebar."""
     page = ready_page
 
+    # The left sidebar starts collapsed (Panelini's sidebar_visible defaults to
+    # False), so it must be opened before its contents are interactable. Wait
+    # for the sidebar's open transition to finish before asserting visibility;
+    # is_visible() checks instantaneously and does not auto-wait like click().
+    page.locator(".left-navbar-button").first.click()
+    page.locator("text=Provider Settings").first.wait_for()
+
     assert page.locator("text=Provider Settings").first.is_visible()
     assert page.locator("text=Model Settings").first.is_visible()

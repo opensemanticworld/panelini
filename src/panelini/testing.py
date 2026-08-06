@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import socket
 import time
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from playwright.sync_api import FloatRect
 
 Point = tuple[float, float]
 
@@ -39,7 +42,7 @@ def disable_panelini_backgrounds() -> None:
     Panelini.param.content_background_image.default = None
 
 
-def center(box: dict) -> Point:
+def center(box: FloatRect) -> Point:
     """Center point of a Playwright bounding box."""
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
 
@@ -230,11 +233,11 @@ def assemble_animation(
 
     if canvas_w > width:
         new_h = round(canvas_h * width / canvas_w)
-        kept = [f.resize((width, new_h), Image.LANCZOS) for f in kept]
+        kept = [f.resize((width, new_h), Image.Resampling.LANCZOS) for f in kept]
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if fmt == "gif":
-        pal = [f.convert("P", palette=Image.ADAPTIVE, colors=colors) for f in kept]
+        pal = [f.convert("P", palette=Image.Palette.ADAPTIVE, colors=colors) for f in kept]
         pal[0].save(
             out_path,
             save_all=True,
