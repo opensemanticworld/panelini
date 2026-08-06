@@ -189,10 +189,3 @@ components/index
 
 modules
 ```
-
-```{toctree}
-:maxdepth: 2
-:hidden:
-
-superpowers/index
-```
