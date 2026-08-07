@@ -59,6 +59,7 @@ not the same number as a full-suite run, which amortizes that cost once
 overall and also includes untouched AI/unit tests).
 
 ```mermaid
+%%{{init: {{"themeVariables": {{"xyChart": {{"plotColorPalette": "#2a78d6, #eb6834"}}}}}}}}%%
 xychart-beta
     title "Per-directory duration: before vs after (seconds)"
     x-axis [{x_axis}]
