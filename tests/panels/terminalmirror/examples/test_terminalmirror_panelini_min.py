@@ -38,16 +38,19 @@ def test_component(page: Page, port):
     page.locator(".xterm").first.wait_for(state="hidden")
     header.click()  # expand
     page.locator(".xterm").first.wait_for(state="visible")
-    # redraw() clears first, then rewrites the buffer - the clear count can
-    # tick up slightly before the output text is restored, so wait on both.
-    # A longer timeout than the default: this round trip (collapse, expand,
-    # clear, rewrite) was observed to occasionally exceed 2s on loaded
-    # shared CI runners (e.g. 12 concurrent OS/Python matrix jobs), despite
-    # never doing so across repeated local runs.
+    # redraw() clears then rewrites the buffer in one synchronous callback
+    # (both change together, see TerminalMirror.redraw()), so the real
+    # bottleneck is the browser -> server websocket round trip for the
+    # "expand" click landing and the watcher firing, not a gap between the
+    # two. A generous timeout: on CI, that round trip was observed to
+    # occasionally exceed 2s (ubuntu/macOS) and then 5s (macOS specifically)
+    # under a loaded 12-job concurrent OS/Python matrix, despite never doing
+    # so across repeated local runs - macOS GitHub-hosted runners are known
+    # to be considerably slower/more resource-constrained than ubuntu/windows.
     wait_until(
         lambda: terminalmirror_panel.terminal._terminal._clears == clears_before + 1
         and "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output,
-        timeout=5.0,
+        timeout=15.0,
     )
     assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
 
