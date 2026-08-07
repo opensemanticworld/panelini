@@ -42,15 +42,17 @@ def test_component(page: Page, port):
     # (both change together, see TerminalMirror.redraw()), so the real
     # bottleneck is the browser -> server websocket round trip for the
     # "expand" click landing and the watcher firing, not a gap between the
-    # two. A generous timeout: on CI, that round trip was observed to
-    # occasionally exceed 2s (ubuntu/macOS) and then 5s (macOS specifically)
-    # under a loaded 12-job concurrent OS/Python matrix, despite never doing
-    # so across repeated local runs - macOS GitHub-hosted runners are known
-    # to be considerably slower/more resource-constrained than ubuntu/windows.
+    # two. A longer-than-default timeout: macOS GitHub-hosted runners are
+    # known to be considerably slower/more resource-constrained than
+    # ubuntu/windows, especially under a loaded 12-job concurrent OS/Python
+    # matrix. (A separate, now-fixed bug - test_terminalmirror.py's
+    # test_example_redraws_on_card_expand mutating this same module's
+    # shared singleton - was the actual cause of the worst failures seen
+    # while diagnosing this; see that test's docstring.)
     wait_until(
         lambda: terminalmirror_panel.terminal._terminal._clears == clears_before + 1
         and "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output,
-        timeout=15.0,
+        timeout=5.0,
     )
     assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
 
