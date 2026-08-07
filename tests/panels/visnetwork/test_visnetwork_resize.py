@@ -9,6 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.visnetwork import VisNetwork
+from panelini.testing import vn_wait, wait_until
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -32,18 +33,17 @@ def test_canvas_resizes_with_viewport(page: Page, port):
 
     page.set_viewport_size({"width": 1400, "height": 900})
     page.goto(url)
-    time.sleep(3)  # wait for page + network to render
+    vn_wait(page)
 
     canvas = page.locator(".vis-network canvas").first
-    canvas.wait_for(state="visible", timeout=5000)
     wide = canvas.bounding_box()
+    assert wide is not None
 
     # Shrink the viewport; the ResizeObserver should resize the canvas.
     page.set_viewport_size({"width": 700, "height": 900})
-    time.sleep(2)  # allow ResizeObserver -> canvas resize -> redraw
+    wait_until(lambda: (canvas.bounding_box() or {"width": wide["width"]})["width"] < wide["width"] - 50)
     narrow = canvas.bounding_box()
 
-    assert wide is not None
     assert narrow is not None
     assert narrow["width"] < wide["width"] - 50, (
         f"canvas did not shrink with the viewport: {wide['width']} -> {narrow['width']}"

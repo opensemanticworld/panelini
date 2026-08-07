@@ -69,6 +69,30 @@ def node_dom_pos(page: Any, node_id: Any) -> Point:
     return box["x"] + pos["x"], box["y"] + pos["y"]
 
 
+def wait_until(
+    predicate: Callable[[], bool],
+    timeout: float = 2.0,
+    interval: float = 0.05,
+) -> None:
+    """Poll *predicate* until it returns truthy, or raise on *timeout*.
+
+    For pure-Python state (e.g. a callback-recorded events list) that has
+    no DOM/JS signal Playwright can wait on directly.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(interval)
+    msg = f"wait_until: condition not met within {timeout}s"
+    raise TimeoutError(msg)
+
+
+def vn_wait(page: Any, timeout: int = 10000) -> None:
+    """Wait for a VisNetwork canvas to render."""
+    page.locator(".vis-network canvas").first.wait_for(state="visible", timeout=timeout)
+
+
 def wb_wait(page: Any, timeout: int = 10000) -> None:
     """Wait for a Wunderbaum tree to render.
 

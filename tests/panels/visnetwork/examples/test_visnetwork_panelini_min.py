@@ -23,7 +23,6 @@ def test_component(page: Page, port):
     # so the screenshot is not an empty card.
     canvas = page.locator(".vis-network canvas").first
     canvas.wait_for(state="visible", timeout=10000)
-    time.sleep(5)
 
     # Verify the VisNetwork component has the expected nodes and edges
     assert len(visnetwork_panel.nodes) == 3

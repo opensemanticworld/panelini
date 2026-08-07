@@ -9,6 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.terminalmirror.terminalmirror_panelini_min import app, terminalmirror_panel
+from panelini.testing import wait_until
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -19,29 +20,30 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for page to load
-
     # The terminal widget (xterm.js) is rendered within the Panelini app.
-    assert page.locator(".xterm").first.is_visible()
+    page.locator(".xterm").first.wait_for()
 
     # Check that the Panelini Card title is present.
     assert page.locator("text=Terminal Mirror").first.is_visible()
 
     # Click the button: output should be mirrored into the terminal widget.
     page.locator(".print_btn button").first.click()
-    time.sleep(1)
-    assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
+    wait_until(lambda: "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output)
 
     # Collapsing and re-expanding the card must not lose the mirrored output:
     # the buffer is replayed via redraw() on expand.
     clears_before = terminalmirror_panel.terminal._terminal._clears
     header = page.locator(".card-header").first
     header.click()  # collapse
-    time.sleep(1)
+    page.locator(".xterm").first.wait_for(state="hidden")
     header.click()  # expand
-    time.sleep(2)
-    assert terminalmirror_panel.terminal._terminal._clears == clears_before + 1
+    page.locator(".xterm").first.wait_for(state="visible")
+    # redraw() clears first, then rewrites the buffer - the clear count can
+    # tick up slightly before the output text is restored, so wait on both.
+    wait_until(
+        lambda: terminalmirror_panel.terminal._terminal._clears == clears_before + 1
+        and "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
+    )
     assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
-    assert page.locator(".xterm").first.is_visible()
 
     server.stop()

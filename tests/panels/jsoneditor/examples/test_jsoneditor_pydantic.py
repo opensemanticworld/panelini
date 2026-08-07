@@ -9,6 +9,7 @@ from playwright.sync_api import Page
 from pydantic import BaseModel, Field
 
 from examples.panels.jsoneditor.jsoneditor_pydantic import PydanticEditor
+from panelini.testing import wait_until
 
 
 class ASub(BaseModel):
@@ -43,7 +44,7 @@ def test_initial_value_displayed(page: Page, port, editor):
     time.sleep(0.2)
 
     page.goto(f"http://localhost:{port}")
-    time.sleep(3)  # wait for JSONEditor to initialise
+    page.locator("#root\\[x\\]").wait_for()
 
     # Python-side value must still match the Pydantic instance after JS init
     assert my_editor.value == a.model_dump(), (
@@ -64,11 +65,11 @@ def test_value_change_propagates_to_python(page: Page, port, editor):
     time.sleep(0.2)
 
     page.goto(f"http://localhost:{port}")
-    time.sleep(3)
+    page.locator("#root\\[x\\]").wait_for()
 
     page.locator("#root\\[x\\]").fill("42")
     page.locator("[for=root\\[x\\]]").click()  # blur to trigger change event
-    time.sleep(0.5)
+    wait_until(lambda: my_editor.value["x"] == 42)
 
     assert my_editor.value["x"] == 42
 

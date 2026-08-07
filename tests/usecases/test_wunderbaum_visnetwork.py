@@ -1,5 +1,6 @@
 # pytest test_wunderbaum_visnetwork.py --headed --slowmo 1000
 
+import copy
 import time
 
 import panel as pn
@@ -9,21 +10,65 @@ from playwright.sync_api import Page
 from examples.usecases.wunderbaum_visnetwork import (
     EDGES,
     NODES,
+    _counter,
     app,
+    build_tree_source,
     get_parent,
     graph,
+    handle_copy_drop,
+    handle_edit,
+    sync_add_node,
+    sync_remove_node,
     tree,
+    vis_edge,
+    vis_node,
 )
-from panelini.testing import drag, wb_title_center, wb_wait
+from panelini.testing import drag, wait_until, wb_title_center, wb_wait
+
+_PORT = 6610
+_ORIGINAL_NODES = copy.deepcopy(NODES)
+_ORIGINAL_EDGES = copy.deepcopy(EDGES)
+_ORIGINAL_COUNTER = _counter["v"]
 
 
-def test_renders(page: Page, port):
-    """Tree and graph render with correct data."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
+@pytest.fixture(scope="module")
+def panel_server():
+    """Serve the combined tree+graph demo once for the whole module."""
+    server = pn.serve(app, port=_PORT, threaded=True, show=False)
     time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    yield server
+    pn.state.kill_all_servers()
+
+
+@pytest.fixture
+def ready_page(browser, panel_server):
+    """Fresh browser page per test, against the module-scoped shared server.
+
+    ``NODES``/``EDGES``/``tree``/``graph`` are module-level singletons
+    mutated by most tests here (add/delete/move/copy/rename), so the whole
+    model is reset to its original state before navigating.
+    """
+    NODES.clear()
+    NODES.update(copy.deepcopy(_ORIGINAL_NODES))
+    EDGES[:] = copy.deepcopy(_ORIGINAL_EDGES)
+    _counter["v"] = _ORIGINAL_COUNTER
+    tree.source = build_tree_source()
+    graph.nodes = [vis_node(nid) for nid in NODES]
+    graph.edges = [vis_edge(e) for e in EDGES]
+
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(f"http://localhost:{_PORT}")
+    wb_wait(page)
+    page.locator(".vis-network canvas").first.wait_for()
+    yield page
+    page.goto("about:blank")
+    context.close()
+
+
+def test_renders(ready_page: Page):
+    """Tree and graph render with correct data."""
+    page = ready_page
 
     assert len(tree.source) > 0
     assert len(graph.nodes) == len(NODES)
@@ -33,59 +78,32 @@ def test_renders(page: Page, port):
     assert rows.count() > 0, "No .wb-row - tree did not render"
     assert page.locator(".vis-network canvas").first.is_visible()
 
-    server.stop()
 
-
-def test_description_column(page: Page, port):
+def test_description_column(ready_page: Page):
     """Description column shows data from the model."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    page = ready_page
 
     inputs = page.locator(".wb-col input[type='text']")
     assert inputs.count() > 0, "No input elements in description column"
 
-    server.stop()
 
-
-def test_card_collapse_expand(page: Page, port):
+def test_card_collapse_expand(ready_page: Page):
     """Tree rows survive Card collapse and re-expand."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    page = ready_page
 
     rows_before = page.locator(".wb-row").count()
     assert rows_before > 1, f"Only {rows_before} rows before collapse"
 
-    # Collapse
+    # Collapse then re-expand
     page.locator("text=Hierarchy").first.click()
-    time.sleep(1)
-
-    # Re-expand
     page.locator("text=Hierarchy").first.click()
-    time.sleep(2)
 
-    rows_after = page.locator(".wb-row").count()
-    assert rows_after == rows_before, f"Rows after expand: {rows_after}, expected {rows_before}"
-
-    server.stop()
+    wait_until(lambda: page.locator(".wb-row").count() == rows_before)
 
 
-def test_edit_name(page: Page, port):
+def test_edit_name(ready_page: Page):
     """Edit handler updates data model and graph label."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
-
     old_name = NODES["Dog"]["name"]
-
-    from examples.usecases.wunderbaum_visnetwork import handle_edit
 
     handle_edit({
         "key": "Thing/Animal/Dog",
@@ -93,7 +111,6 @@ def test_edit_name(page: Page, port):
         "newValue": "Puppy",
         "data": {"node_id": "Dog", "description": "Canis familiaris"},
     })
-    time.sleep(0.5)
 
     assert NODES["Dog"]["name"] == "Puppy"
 
@@ -102,46 +119,28 @@ def test_edit_name(page: Page, port):
     assert dog_node.get("label") == "Puppy"
 
     NODES["Dog"]["name"] = old_name
-    server.stop()
 
 
-def test_python_api_add_node(page: Page, port):
+def test_python_api_add_node(ready_page: Page):
     """Adding a node updates both tree and graph."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
-
     initial_nodes = len(NODES)
     initial_graph_nodes = len(graph.nodes)
 
-    from examples.usecases.wunderbaum_visnetwork import sync_add_node
-
     sync_add_node("TestNode", "Test Node", "A test", "Animal")
-    time.sleep(1)
 
     assert len(NODES) == initial_nodes + 1
     assert "TestNode" in NODES
     assert len(graph.nodes) == initial_graph_nodes + 1
 
-    server.stop()
 
-
-def test_copy_node(page: Page, port):
+def test_copy_node(ready_page: Page):
     """Ctrl+DnD copy adds node to data model, tree, and graph."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    page = ready_page
 
     initial_nodes = len(NODES)
     initial_graph_nodes = len(graph.nodes)
     initial_edges = len(EDGES)
     rows_before = page.locator(".wb-row").count()
-
-    from examples.usecases.wunderbaum_visnetwork import handle_copy_drop
 
     # Verify batch_update is used (single _tree_action write)
     actions_sent = []
@@ -161,7 +160,7 @@ def test_copy_node(page: Page, port):
         "region": "over",
     })
     tree._send_tree_action = orig  # ty: ignore[invalid-assignment] (restoring the original bound method after the spy)
-    time.sleep(2)
+    wait_until(lambda: page.locator(".wb-row").count() == rows_before + 1)
 
     # Must use single batch (not separate addNode + expandNode)
     assert actions_sent == ["batch"], f"Expected single 'batch' action, got {actions_sent}"
@@ -176,52 +175,21 @@ def test_copy_node(page: Page, port):
     assert len(graph.nodes) == initial_graph_nodes + 1
     assert any(n["id"] == copy_id for n in graph.nodes)
 
-    # Tree updated (new row visible)
-    rows_after = page.locator(".wb-row").count()
-    assert rows_after == rows_before + 1, f"Tree rows: {rows_after}, expected {rows_before + 1}"
 
-    server.stop()
-
-
-def test_python_api_delete_node(page: Page, port):
+def test_python_api_delete_node(ready_page: Page):
     """Deleting a node removes it from tree and graph."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
-
     assert "Cat" in NODES
 
-    from examples.usecases.wunderbaum_visnetwork import sync_remove_node
-
     sync_remove_node("Cat")
-    time.sleep(1)
 
     assert "Cat" not in NODES
     cat_in_graph = any(n["id"] == "Cat" for n in graph.nodes)
     assert not cat_in_graph, "Cat still in graph after delete"
 
-    server.stop()
-
 
 # =========================================================================
 # DnD helpers
 # =========================================================================
-
-
-def _center(box):
-    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-
-
-def _drag(page, sx, sy, tx, ty, steps=5):
-    page.mouse.move(sx, sy)
-    page.mouse.down()
-    for i in range(steps):
-        frac = (i + 1) / steps
-        page.mouse.move(sx + (tx - sx) * frac, sy + (ty - sy) * frac)
-        time.sleep(0.05)
-    page.mouse.up()
 
 
 def _find_in_source(source, key):
@@ -271,18 +239,14 @@ def _get_client_children(page, parent_key):
 # =========================================================================
 
 
-def test_dnd_move_node(page: Page, port):
+def test_dnd_move_node(ready_page: Page):
     """DnD move: Truck from Vehicle to Animal updates tree, graph, model."""
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    page = ready_page
 
     src = page.locator(".wb-row .wb-title", has_text="Truck").first
     tgt = page.locator(".wb-row .wb-title", has_text="Animal").first
     src.drag_to(tgt)
-    time.sleep(2)
+    wait_until(lambda: get_parent("Truck") == "Animal")
 
     # Server-side tree: Truck moved under Animal
     result = _find_in_source(
@@ -299,37 +263,23 @@ def test_dnd_move_node(page: Page, port):
     assert "Thing/Vehicle/Truck" in animal_kids
     assert "Thing/Vehicle/Truck" not in vehicle_kids
 
-    # Data model: edge updated
-    from examples.usecases.wunderbaum_visnetwork import get_parent
-
-    assert get_parent("Truck") == "Animal"
-
     # Graph: edge from Truck to Animal exists
     truck_edges = [e for e in graph.edges if e["from"] == "Truck"]
     assert any(e["to"] == "Animal" for e in truck_edges), f"No Truck->Animal edge: {truck_edges}"
 
-    server.stop()
 
-
-def test_dnd_copy_node(page: Page, port):
+def test_dnd_copy_node(ready_page: Page):
     """Copy drop: Dog copied under Vehicle, original stays.
 
     Uses handle_copy_drop directly (DnD copy mechanics are tested
     in test_wunderbaum_dnd.py); this validates the full example
     integration: data model, tree, and graph.
     """
-    url = f"http://localhost:{port}"
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(url)
-    time.sleep(5)
+    page = ready_page
 
     nodes_before = set(NODES.keys())
     graph_nodes_before = len(graph.nodes)
-
-    from examples.usecases.wunderbaum_visnetwork import (
-        handle_copy_drop,
-    )
+    rows_before = page.locator(".wb-row").count()
 
     handle_copy_drop({
         "copy": True,
@@ -338,7 +288,7 @@ def test_dnd_copy_node(page: Page, port):
         "targetKey": "Thing/Vehicle",
         "region": "over",
     })
-    time.sleep(2)
+    wait_until(lambda: page.locator(".wb-row").count() > rows_before)
 
     # Source node preserved in data model
     assert "Dog" in NODES
@@ -368,17 +318,9 @@ def test_dnd_copy_node(page: Page, port):
     rows_after = page.locator(".wb-row").count()
     assert rows_after > 0
 
-    server.stop()
-
 
 @pytest.mark.media(role="overview", capture="gif", viewport=(1280, 720))
-def test_dnd_reparents(page: Page, port):
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(f"http://localhost:{port}")
-    wb_wait(page)
-    time.sleep(1.2)
+def test_dnd_reparents(ready_page: Page):
+    page = ready_page
     drag(page, wb_title_center(page, "Truck"), wb_title_center(page, "Animal"), steps=12)
-    time.sleep(1.5)
-    assert get_parent("Truck") == "Animal"
-    server.stop()
+    wait_until(lambda: get_parent("Truck") == "Animal")
