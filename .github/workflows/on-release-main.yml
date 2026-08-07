@@ -14,17 +14,28 @@ jobs:
 
   release:
     runs-on: ubuntu-24.04
+    environment:
+      name: pypi
     permissions:
+      id-token: write
       contents: write
     outputs:
       released: ${{ steps.psr.outputs.released }}
       tag: ${{ steps.psr.outputs.tag }}
     steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Check out
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
@@ -32,43 +43,28 @@ jobs:
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Version and tag with python-semantic-release
         id: psr
         env:
-          # python-semantic-release needs a token to create the GitHub Release
-          # (the git push uses the checkout credential; the Releases API does not).
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: uv run semantic-release version
 
-  publish:
-    needs: release
-    if: needs.release.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Set up the environment
-        uses: ./.github/actions/setup-python-env
-
-      - name: Build package
+      - name: Build package distribution files
+        if: steps.psr.outputs.released == 'true'
         run: uv build
 
       - name: Check package metadata
+        if: steps.psr.outputs.released == 'true'
         run: uvx twine check dist/*
 
       - name: Publish package
+        if: steps.psr.outputs.released == 'true'
         run: uv publish --trusted-publishing always
 
   deploy-docs:
-    needs: [release, publish]
+    needs: release
     if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     permissions:
