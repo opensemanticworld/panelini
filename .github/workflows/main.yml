@@ -33,9 +33,10 @@ jobs:
         run: make check
 
   tests-and-type-check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
     defaults:
@@ -51,18 +52,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install Playwright browsers
-        run: uv run playwright install --with-deps chromium
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            uv run playwright install --with-deps chromium
+          else
+            uv run playwright install chromium
+          fi
 
       - name: Run full tests including headless ui tests
-        run: make test-full
+        run: uv run pytest -m "not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
 
       - name: Check typing
         run: uv run ty check
 
-
-      - name: Upload coverage reports to Codecov with GitHub Action on Python 3.11
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
-        if: ${{ matrix.python-version == '3.11' }}
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
