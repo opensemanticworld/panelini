@@ -27,7 +27,7 @@ xychart-beta
     x-axis ["wunderbaum", "visnetwork", "jsoneditor", "terminalmirror", "usecases", "Total"]
     y-axis "Duration (s)" 0 --> 400
     bar [181, 40, 27, 8, 75, 331]
-    bar [29, 16, 7, 1, 19, 73]
+    bar [29, 16, 7, 2, 19, 73]
 ```
 
 | directory | before (s) | after (s) | speedup |
@@ -35,9 +35,9 @@ xychart-beta
 | wunderbaum | 181.05 | 28.91 | 6.26x |
 | visnetwork | 40.00 | 16.02 | 2.50x |
 | jsoneditor | 27.00 | 7.24 | 3.73x |
-| terminalmirror | 8.00 | 1.49 | 5.37x |
+| terminalmirror | 8.00 | 1.62 | 4.94x |
 | usecases | 75.00 | 19.18 | 3.91x |
-| **Total** | **331.05** | **72.84** | **4.54x** |
+| **Total** | **331.05** | **72.97** | **4.54x** |
 
 ## Regenerating
 

@@ -8,8 +8,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from examples.panels.terminalmirror.terminalmirror_panelini_min import app, terminalmirror_panel
-from panelini.testing import wait_until
+from examples.panels.terminalmirror.terminalmirror_panelini_min import app
+from panelini.testing import xterm_wait_for_text
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -28,32 +28,17 @@ def test_component(page: Page, port):
 
     # Click the button: output should be mirrored into the terminal widget.
     page.locator(".print_btn button").first.click()
-    wait_until(lambda: "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output)
+    xterm_wait_for_text(page, "Hello from TerminalMirror!")
 
-    # Collapsing and re-expanding the card must not lose the mirrored output:
-    # the buffer is replayed via redraw() on expand.
-    clears_before = terminalmirror_panel.terminal._terminal._clears
+    # Collapsing and re-expanding the card must not lose the mirrored output
+    # (replayed via redraw() on expand). `.xterm` visibility is a client-only
+    # toggle and doesn't imply the server has redrawn yet, so check the
+    # actual rendered buffer instead of racing it.
     header = page.locator(".card-header").first
     header.click()  # collapse
     page.locator(".xterm").first.wait_for(state="hidden")
     header.click()  # expand
     page.locator(".xterm").first.wait_for(state="visible")
-    # redraw() clears then rewrites the buffer in one synchronous callback
-    # (both change together, see TerminalMirror.redraw()), so the real
-    # bottleneck is the browser -> server websocket round trip for the
-    # "expand" click landing and the watcher firing, not a gap between the
-    # two. A longer-than-default timeout: macOS GitHub-hosted runners are
-    # known to be considerably slower/more resource-constrained than
-    # ubuntu/windows, especially under a loaded 12-job concurrent OS/Python
-    # matrix. (A separate, now-fixed bug - test_terminalmirror.py's
-    # test_example_redraws_on_card_expand mutating this same module's
-    # shared singleton - was the actual cause of the worst failures seen
-    # while diagnosing this; see that test's docstring.)
-    wait_until(
-        lambda: terminalmirror_panel.terminal._terminal._clears == clears_before + 1
-        and "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output,
-        timeout=5.0,
-    )
-    assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
+    xterm_wait_for_text(page, "Hello from TerminalMirror!")
 
     server.stop()

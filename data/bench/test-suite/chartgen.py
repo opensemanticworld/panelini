@@ -31,7 +31,7 @@ AFTER_RUNS = {
     "wunderbaum": ("wunderbaum", "full-dir-fixed"),
     "visnetwork": ("visnetwork", "full-dir"),
     "jsoneditor": ("jsoneditor", "full-dir"),
-    "terminalmirror": ("terminalmirror-fixed", "full-dir"),
+    "terminalmirror": ("terminalmirror-deterministic", "full-dir"),
     "usecases": ("usecases", "full-dir"),
 }
 

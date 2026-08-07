@@ -88,6 +88,48 @@ def wait_until(
     raise TimeoutError(msg)
 
 
+def xterm_wait_for_text(page: Any, text: str, timeout: float = 30000) -> None:
+    """Wait until an xterm.js ``Terminal`` widget's rendered buffer contains *text*.
+
+    Checks the actual browser-rendered buffer rather than Python-side state,
+    via Bokeh's view registry (``Bokeh.index``), since Panel's ``Terminal``
+    doesn't expose its xterm.js instance on the DOM element directly.
+    """
+    page.wait_for_function(
+        """
+        (text) => {
+            function findTerm(view, depth) {
+                if (!view || depth > 15) return null;
+                if (view.term) return view.term;
+                const children = view.child_views;
+                if (Array.isArray(children)) {
+                    for (const c of children) {
+                        const r = findTerm(c, depth + 1);
+                        if (r) return r;
+                    }
+                }
+                return null;
+            }
+            let term = null;
+            for (const id in Bokeh.index) {
+                term = findTerm(Bokeh.index[id], 0);
+                if (term) break;
+            }
+            if (!term) return false;
+            const buf = term.buffer.active;
+            let out = '';
+            for (let i = 0; i < buf.length; i++) {
+                const line = buf.getLine(i);
+                if (line) out += line.translateToString(true);
+            }
+            return out.includes(text);
+        }
+        """,
+        arg=text,
+        timeout=timeout,
+    )
+
+
 def vn_wait(page: Any, timeout: int = 10000) -> None:
     """Wait for a VisNetwork canvas to render."""
     page.locator(".vis-network canvas").first.wait_for(state="visible", timeout=timeout)
