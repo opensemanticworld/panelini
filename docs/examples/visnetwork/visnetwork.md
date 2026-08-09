@@ -30,10 +30,10 @@ edges = [
 
 visnetwork_panel = VisNetwork(nodes=nodes, edges=edges)
 
-app = Panelini(title="Network Graph Demo")
+app = Panelini(title="Network Graph Demo", sidebar_visible=False)
 app.main_set(objects=[
     pn.Card(
-        title="VisNetwork",
+        title="VisNetwork Graph",
         objects=[visnetwork_panel],
         max_height=800,
     ),
@@ -68,6 +68,14 @@ For a richer demo, try:
 - [`examples/panels/visnetwork/drop_file.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/drop_file.py) - drop images/CSVs onto the canvas to spawn nodes
 - [`examples/panels/visnetwork/device_hierarchy.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/device_hierarchy.py) - hierarchical layout with collapsible groups
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/visnetwork/visnetwork_panelini_min.html" title="VisNetwork graph inside panelini" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/visnetwork/visnetwork_panelini_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`../../panels/visnetwork` - full `VisNetwork` guide

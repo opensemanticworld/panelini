@@ -26,6 +26,20 @@ Hook a LangChain `BaseTool` (a local key-value store) into the chat.
 Host two independent chats in synced tabs with `jslink`.
 :::
 
+:::{grid-item-card} AI chat - no preview or tools
+:link: ai_chat_no_preview_no_tools
+:link-type: doc
+:img-top: /_static/media/ai/chat_no_preview_no_tools_feature.png
+The chat fills the full width with the preview and tools sidebar disabled.
+:::
+
+:::{grid-item-card} DrawAI - drawio beautifier
+:link: drawai_beautify
+:link-type: doc
+:img-top: /_static/media/ai/drawai_beautify_feature.png
+Upload a drawio diagram and beautify it with an LLM, with a before and after compare.
+:::
+
 ::::
 
 ```{toctree}
@@ -34,4 +48,6 @@ Host two independent chats in synced tabs with `jslink`.
 ai_chat_min
 ai_chat_custom_tool
 ai_chat_multi_tab
+ai_chat_no_preview_no_tools
+drawai_beautify
 ```

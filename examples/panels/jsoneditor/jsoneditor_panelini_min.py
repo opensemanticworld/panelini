@@ -40,9 +40,10 @@ class JsonEditorPanel(pn.viewable.Viewer):
 # Create an instance of the App component
 jsoneditor_panel = JsonEditorPanel()
 
-# Create an instance of Panelini
+# Create an instance of Panelini (empty sidebar collapsed for full width)
 app = Panelini(
     title="📝 JSON Editor Demo",
+    sidebar_visible=False,
 )
 
 # Set the main content with the App component

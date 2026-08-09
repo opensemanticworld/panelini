@@ -21,7 +21,7 @@ from .jsoneditor_panel_min import App as JsonEditorPanel
 
 jsoneditor_panel = JsonEditorPanel()
 
-app = Panelini(title="📝 JSON Editor Demo")
+app = Panelini(title="📝 JSON Editor Demo", sidebar_visible=False)
 app.main_set(objects=[
     pn.Card(
         title="JSON Editor",
@@ -56,6 +56,14 @@ The Playwright test:
 
 If the example breaks, the test fails - so the example is guaranteed to keep working.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/jsoneditor/jsoneditor_panelini_min.html" title="JSON editor inside panelini" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/jsoneditor/jsoneditor_panelini_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`../../panels/jsoneditor` - full `JsonEditor` guide with dynamic schemas

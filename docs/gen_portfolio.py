@@ -168,6 +168,10 @@ if __pf_view is None and __pf_is_view(globals().get("app")):
     __pf_view = globals().get("app")
 
 if isinstance(__pf_view, Panelini):
+    # Collapse an empty sidebar so the embedded demo uses the full iframe width
+    # (the toggle button stays, so it can still be opened).
+    if not __pf_view.sidebar and not __pf_view.sidebar_right:
+        __pf_view.sidebar_visible = False
     __pf_orig["panelini"](__pf_view)
 elif __pf_view is not None:
     # pn.panel() turns Viewables, Viewers, and ``__panel__`` objects into a servable.

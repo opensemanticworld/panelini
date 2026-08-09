@@ -76,6 +76,14 @@ Key points:
 
 The test serves the app and asserts the tree renders with rows. Note that the sibling {doc}`virtual_filesystem` test marks its right-click assertion `xfail` - dispatching a real `contextmenu` event through the shadow DOM is unreliable under Playwright - so this example is verified for render and the callback logic is covered by the Python-API paths elsewhere.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/context_menu.html" title="Context menu - right-click actions" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/context_menu.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`virtual_filesystem` - context menu plus DnD, rename, and file drop

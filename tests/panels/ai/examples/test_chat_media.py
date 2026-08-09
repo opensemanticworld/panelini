@@ -43,3 +43,8 @@ def test_chat_custom_tool_media(page: Page, port, mock_langchain):
 @pytest.mark.media(role="feature", capture="screenshot", name="chat_multi_tab", viewport=_VIEWPORT)
 def test_chat_multi_tab_media(page: Page, port, mock_langchain):
     _shoot_chat(page, port, mock_langchain, "examples.panels.ai.chat_multi_tab", ".bk-tab")
+
+
+@pytest.mark.media(role="feature", capture="screenshot", name="chat_no_preview_no_tools", viewport=_VIEWPORT)
+def test_chat_no_preview_media(page: Page, port, mock_langchain):
+    _shoot_chat(page, port, mock_langchain, "examples.panels.ai.chat_no_preview_no_tools", "text=Hello! 👋")

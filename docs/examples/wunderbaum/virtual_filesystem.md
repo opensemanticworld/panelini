@@ -59,6 +59,14 @@ The test file is the broadest in the suite:
 - **Drag-and-drop**: dragging `document.txt` onto `/tmp` moves it (asserted on both server `tree.source` and client children) and leaves no duplicate.
 - **Context menu**: `test_context_menu_visible` is marked `xfail` - dispatching a `contextmenu` event through the shadow DOM is unreliable under Playwright, so it is expected to fail rather than flake.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/virtual_filesystem.html" title="Virtual filesystem - the full demo" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/virtual_filesystem.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`wunderbaum_table_min` - the columns foundation

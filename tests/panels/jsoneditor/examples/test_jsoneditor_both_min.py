@@ -3,11 +3,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_both_min import app, form_editor, tree_editor
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_both_editors(page: Page, port):
     url = f"http://localhost:{port}"
 

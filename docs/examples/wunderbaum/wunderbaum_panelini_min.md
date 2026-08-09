@@ -51,6 +51,14 @@ The only difference from the standalone version is the wrapper: the tree drops i
 
 The test imports `app` and `tree`, serves the app, and asserts the tree has three roots, the `.wunderbaum-wrapper` is visible, and `.wb-row` rows rendered inside the Panelini layout.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/wunderbaum_panelini_min.html" title="Wunderbaum tree inside panelini" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/wunderbaum_panelini_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`wunderbaum_panel_min` - the same tree served on its own

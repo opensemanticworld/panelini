@@ -72,6 +72,14 @@ The Playwright test:
 4. Asserts that `my_editor.value` still equals `a.model_dump()` after JS initialisation (regression test for the initial-value reset bug).
 5. Fills the `x` field with `42`, blurs the input, and asserts `my_editor.value["x"] == 42` (round-trip test).
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/jsoneditor/jsoneditor_pydantic.html" title="Pydantic-backed JSON editor" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/jsoneditor/jsoneditor_pydantic.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`../../panels/jsoneditor` - full `JsonEditor` guide including initial value and Pydantic integration sections

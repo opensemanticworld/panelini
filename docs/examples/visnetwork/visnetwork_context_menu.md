@@ -38,6 +38,14 @@ def on_context_menu(element_type, element_id, action_id):
 vis = VisNetwork(nodes=nodes, edges=edges, context_menu_callback=on_context_menu)
 ```
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/visnetwork/context_menu.html" title="VisNetwork context menus" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/visnetwork/context_menu.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`../../panels/visnetwork` - full `VisNetwork` guide

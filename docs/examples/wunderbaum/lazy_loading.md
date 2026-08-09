@@ -67,6 +67,14 @@ Key points:
 
 The test serves the app and asserts the three roots render (`.wb-row` count `>= 3`) and the `.wunderbaum-wrapper` is visible - confirming the lazy roots render their expanders before any children are loaded.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/lazy_loading.html" title="Lazy loading - children on demand" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/lazy_loading.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 ## See also
 
 - {doc}`incremental_tree_demo` - push nodes in from Python rather than pulling on expand

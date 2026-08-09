@@ -5,6 +5,10 @@
 :class: docs-media
 ```
 
+```{note}
+This example needs an LLM backend, so it is shown as a screen capture rather than a live in-browser demo.
+```
+
 **Source:** [`examples/panels/ai/chat_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_min.py)
 **Test:** [`tests/panels/ai/examples/test_chat_min.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_min.py)
 

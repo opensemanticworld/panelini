@@ -33,6 +33,13 @@ Interactive network graphs with context menus and drag interactions.
 Trees and tree-grids - columns, checkboxes, lazy loading, drag-and-drop, and more.
 :::
 
+:::{grid-item-card} Terminal Mirror
+:link: terminalmirror/index
+:link-type: doc
+:img-top: /_static/media/terminalmirror/terminalmirror_panelini_min_feature.webp
+Stream Python stdout and stderr into a live on-screen terminal.
+:::
+
 :::{grid-item-card} Use cases
 :link: usecases/index
 :link-type: doc
