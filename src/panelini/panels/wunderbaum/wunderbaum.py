@@ -1,5 +1,7 @@
 """Entrypoint of wunderbaum panel."""
 
+import asyncio
+import inspect
 import time
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional
@@ -105,6 +107,7 @@ class Wunderbaum(AnyWidgetComponent):
         self._tree_event_callback = tree_event_callback
         self._lazy_load_callback = lazy_load_callback
         self._file_drop_callback = file_drop_callback
+        self._lazy_tasks: set[asyncio.Task] = set()
 
         # Watch for event data changes from JavaScript
         self.param.watch(self._on_event_data_change, ["_event_data"])
@@ -142,16 +145,37 @@ class Wunderbaum(AnyWidgetComponent):
             self._tree_event_callback(event_name, event_params)
 
     def _on_lazy_request_change(self, event: Any) -> None:
-        """Handle lazy load requests from JavaScript."""
+        """Handle lazy load requests from JavaScript.
+
+        The callback may be a coroutine function, in which case it is awaited on the
+        running event loop and the children are sent when it resolves. That lets a
+        callback await real I/O (a database, an HTTP API) without blocking: a
+        synchronous wait would freeze the server thread, and in the browser
+        (Pyodide, single threaded) it would freeze the whole app.
+        """
         request_data = event.new
         if not request_data:
             return
 
         node_key = request_data.get("key")
-        if node_key and self._lazy_load_callback:
-            children = self._lazy_load_callback(node_key, request_data)
-            if children is not None:
-                self.respond_lazy_load(node_key, children)
+        if not node_key or not self._lazy_load_callback:
+            return
+
+        children = self._lazy_load_callback(node_key, request_data)
+        if inspect.isawaitable(children):
+            # Keep a strong reference: the event loop only holds a weak one, so an
+            # un-referenced task can be garbage collected before it responds.
+            task = asyncio.ensure_future(self._respond_lazy_load_async(node_key, children))
+            self._lazy_tasks.add(task)
+            task.add_done_callback(self._lazy_tasks.discard)
+        elif children is not None:
+            self.respond_lazy_load(node_key, children)
+
+    async def _respond_lazy_load_async(self, node_key: str, pending: Any) -> None:
+        """Await an async lazy-load callback and send its children to JavaScript."""
+        children = await pending
+        if children is not None:
+            self.respond_lazy_load(node_key, children)
 
     # =========================================================================
     # Public API - Commands sent to JavaScript
