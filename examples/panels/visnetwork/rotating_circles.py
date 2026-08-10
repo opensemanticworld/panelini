@@ -84,84 +84,39 @@ edges = [
     {"from": 5, "to": 10},
 ]
 
+# Build the app at module level so it can be served, tested, and converted to a
+# standalone browser app. The rotation runs on a periodic callback rather than a
+# blocking loop, so it animates under `panel serve` and in the browser (Pyodide)
+# alike; a `while True` loop would freeze the single-threaded WASM runtime.
+visnetwork_panel = VisNetwork(nodes=nodes, edges=edges, sizing_mode="stretch_both")
+
+vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1)
+radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r)
+
+app = pn.Column(visnetwork_panel, vel_slider, radius_slider)
+
+_anim = {"phi": phi_0, "t": time.time()}
+_offsets = (0.0, phi_1, phi_2, phi_3, phi_4)
+
+
+def rotate() -> None:
+    """Advance the ring by one frame and push the new positions to the graph."""
+    now = time.time()
+    _anim["phi"] += vel_slider.value * (now - _anim["t"])
+    _anim["t"] = now
+    radius = radius_slider.value
+    ring = [
+        {
+            **node,
+            "x": radius * np.cos(_anim["phi"] + offset),
+            "y": radius * np.sin(_anim["phi"] + offset),
+        }
+        for node, offset in zip(nodes[:5], _offsets, strict=True)
+    ]
+    visnetwork_panel.nodes = ring + nodes[5:]
+
+
+pn.state.onload(lambda: pn.state.add_periodic_callback(rotate, period=50))
+
 if __name__ == "__main__":
-    # Create the VisNetwork panel with initial nodes/edges
-    # Use height parameter for fixed height; width will stretch to fill container
-    visnetwork_panel = VisNetwork(nodes=nodes, edges=edges, sizing_mode="stretch_both")
-
-    # Slider controlling angular velocity of the rotation
-    vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1)
-
-    # Slider controlling the radius of the circle on which the fixed nodes lie
-    radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r)
-
-    # Layout: graph on top, sliders below
-    col = pn.Column(visnetwork_panel, vel_slider, radius_slider)
-
-    # Start Panel server in a separate thread so the loop below can run
-    pn.serve(col, threaded=True)
-
-    # Animation/update loop
-    while True:
-        # Advance base angle based on velocity and elapsed time since last frame
-        phi_0 += vel_slider.value * (time.time() - last_t)
-        last_t = time.time()
-
-        # Read current radius from slider
-        r = radius_slider.value
-
-        # Rebuild node list with updated positions for the 5 fixed nodes
-        nodes = [
-            {
-                "id": 1,
-                "label": "Node 1",
-                "color": "#e04141",
-                "x": r * np.cos(phi_0),
-                "y": r * np.sin(phi_0),
-                "fixed": True,
-            },
-            {
-                "id": 2,
-                "label": "Node 2",
-                "color": "#e09c41",
-                "x": r * np.cos(phi_0 + phi_1),
-                "y": r * np.sin(phi_0 + phi_1),
-                "fixed": True,
-            },
-            {
-                "id": 3,
-                "label": "Node 3",
-                "color": "#e0df41",
-                "x": r * np.cos(phi_0 + phi_2),
-                "y": r * np.sin(phi_0 + phi_2),
-                "fixed": True,
-            },
-            {
-                "id": 4,
-                "label": "Node 4",
-                "color": "#7be041",
-                "x": r * np.cos(phi_0 + phi_3),
-                "y": r * np.sin(phi_0 + phi_3),
-                "fixed": True,
-            },
-            {
-                "id": 5,
-                "label": "Node 5",
-                "color": "#41e0c9",
-                "x": r * np.cos(phi_0 + phi_4),
-                "y": r * np.sin(phi_0 + phi_4),
-                "fixed": True,
-            },
-            # Free nodes remain without fixed coordinates
-            {"id": 6, "label": "Node 6", "color": "#e04141"},
-            {"id": 7, "label": "Node 7", "color": "#e09c41"},
-            {"id": 8, "label": "Node 8", "color": "#e0df41"},
-            {"id": 9, "label": "Node 9", "color": "#7be041"},
-            {"id": 10, "label": "Node 10", "color": "#41e0c9"},
-        ]
-
-        # Push updated node positions to the VisNetwork panel
-        visnetwork_panel.nodes = nodes
-
-        # Small sleep to limit CPU usage and smoothen the animation
-        time.sleep(0.01)
+    pn.serve(app)

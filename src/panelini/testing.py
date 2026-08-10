@@ -24,7 +24,7 @@ def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("", 0))
-        return s.getsockname()[1]
+        return int(s.getsockname()[1])
 
 
 def disable_panelini_backgrounds() -> None:
@@ -230,11 +230,11 @@ def assemble_animation(
 
     if canvas_w > width:
         new_h = round(canvas_h * width / canvas_w)
-        kept = [f.resize((width, new_h), Image.LANCZOS) for f in kept]
+        kept = [f.resize((width, new_h), Image.Resampling.LANCZOS) for f in kept]
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if fmt == "gif":
-        pal = [f.convert("P", palette=Image.ADAPTIVE, colors=colors) for f in kept]
+        pal = [f.convert("P", palette=Image.Palette.ADAPTIVE, colors=colors) for f in kept]
         pal[0].save(
             out_path,
             save_all=True,

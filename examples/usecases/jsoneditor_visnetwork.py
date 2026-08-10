@@ -270,6 +270,7 @@ jsoneditor.param.watch(on_json_change, "value")
 # Create Panelini app
 app = Panelini(
     title="Network Editor",
+    sidebar_visible=False,
 )
 
 # Set the main content

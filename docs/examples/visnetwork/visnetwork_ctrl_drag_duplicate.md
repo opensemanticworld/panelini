@@ -41,6 +41,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/visnetwork/ctrl_drag_duplicate.html" title="VisNetwork Ctrl+drag duplicate" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/visnetwork/ctrl_drag_duplicate.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`../../panels/visnetwork` - full `VisNetwork` guide

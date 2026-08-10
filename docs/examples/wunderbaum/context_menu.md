@@ -84,6 +84,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/context_menu.html" title="Context menu - right-click actions" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/context_menu.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`virtual_filesystem` - context menu plus DnD, rename, and file drop

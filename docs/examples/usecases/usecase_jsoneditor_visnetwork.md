@@ -55,9 +55,18 @@ jsoneditor.param.watch(on_json_change, "value")
 ```{mermaid}
 graph LR
     form[JsonEditor form] -- "value change" --> conv[json_to_graph]
-    conv -- "nodes + edges" --> graph[VisNetwork]
-    graph -- "node click" --> sel[single-node schema]
+    conv -- "nodes + edges" --> vis[VisNetwork]
+    vis -- "node click" --> sel[single-node schema]
     sel -- "set_schema + startval" --> form
+```
+
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/usecases/jsoneditor_visnetwork.html" title="Form and graph editor" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/usecases/jsoneditor_visnetwork.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
 
 ## See also

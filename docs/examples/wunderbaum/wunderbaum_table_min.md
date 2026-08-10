@@ -74,6 +74,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/wunderbaum_table_min.html" title="Wunderbaum treegrid - columns" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/wunderbaum_table_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`wunderbaum_panel_min` - tree-only mode without columns

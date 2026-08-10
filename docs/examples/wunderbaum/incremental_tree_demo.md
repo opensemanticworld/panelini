@@ -83,6 +83,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/incremental_tree_demo.html" title="Incremental updates - build a tree step by step" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/incremental_tree_demo.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`context_menu` - the imperative `add_node` / `rename_node` / `remove_node` API

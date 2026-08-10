@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -49,6 +50,9 @@ from PIL import Image, ImageDraw, ImageFont
 _DOCS = Path(__file__).resolve().parent
 _REPO = _DOCS.parent
 _PANELS_DIR = _REPO / "examples" / "panels"
+# Multi-component highlights. They live outside ``examples/panels`` but are converted
+# too, under a ``usecases`` category that matches their docs media area.
+_USECASES_DIR = _REPO / "examples" / "usecases"
 _THUMB_DIR = _DOCS / "_static" / "portfolio" / "thumbs"
 # Committed docs media (recorded from the @pytest.mark.media tests). When a clip or
 # still exists for an example it is used as the card thumbnail instead of a placeholder.
@@ -168,9 +172,10 @@ if __pf_view is None and __pf_is_view(globals().get("app")):
     __pf_view = globals().get("app")
 
 if isinstance(__pf_view, Panelini):
-    # Collapse an empty sidebar so the embedded demo uses the full iframe width
-    # (the toggle button stays, so it can still be opened).
-    if not __pf_view.sidebar and not __pf_view.sidebar_right:
+    # Collapse the left sidebar when it is empty so the embedded demo uses the full
+    # iframe width (the toggle button stays, so it can still be opened). Judged on the
+    # left sidebar alone: a demo can fill only the right one and still waste the left.
+    if not __pf_view.sidebar:
         __pf_view.sidebar_visible = False
     __pf_orig["panelini"](__pf_view)
 elif __pf_view is not None:
@@ -191,6 +196,7 @@ _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
     "jsoneditor": ((13, 148, 136), "JSON Editor"),
     "visnetwork": ((37, 99, 235), "VisNetwork"),
     "wunderbaum": ((217, 119, 6), "Wunderbaum"),
+    "usecases": ((190, 24, 93), "Use cases"),
 }
 
 _THUMB_SIZE = (480, 270)  # 16:9 preview
@@ -208,6 +214,10 @@ def discover() -> dict[str, list[Path]]:
         if category in _EXCLUDE_CATEGORIES:
             continue
         grouped.setdefault(category, []).append(path)
+    for path in sorted(_USECASES_DIR.glob("*.py")):
+        if path.name == "__init__.py" or path.name.startswith("_"):
+            continue
+        grouped.setdefault("usecases", []).append(path)
     return grouped
 
 
@@ -388,9 +398,6 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
         print(f"  - {category}/{path.stem}.html (unchanged, skipped)")
         return True
 
-    # The app worker lives at apps/<category>/<stem>.js; the wheel at portfolio/wheels/,
-    # so a relative URL gets micropip to fetch it regardless of the docs base path.
-    wheel_url = f"../../wheels/{wheel_name}"
     with tempfile.TemporaryDirectory() as tmp:
         wrapper_path = Path(tmp) / f"{path.stem}.py"
         wrapper_path.write_text(wrapper, encoding="utf-8")
@@ -400,10 +407,19 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
             str(wrapper_path),
             "--to",
             "pyodide-worker",
+            # Do not embed the build-time pre-rendered snapshot. It stays on the page as a
+            # SECOND Bokeh document alongside the worker's live one, and clicks land on
+            # models whose ids the Python side never saw, so every callback silently
+            # no-ops (context menus, buttons, lazy loading, file drops). Skipping the
+            # embed leaves exactly one document, so events reach Python. It also removes
+            # the stale "Could not render this example" flash before hydration.
+            "--skip-embed",
             "--out",
             str(out_dir),
             "--requirements",
-            wheel_url,
+            # The local panelini wheel is NOT passed here: panel>=1.9 verifies local wheel
+            # paths and aborts on a relative one, and silently drops an absolute one. It is
+            # injected into the generated install list below instead.
             *_REQUIREMENTS,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -411,19 +427,55 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
         print(f"  [FAIL] {category}/{path.name}\n{result.stderr.strip()[:300]}")
         return False
 
-    # The worker installs each env_spec entry with ``micropip.install('${pkg}')``.
-    # micropip can't resolve a relative wheel URL, so rewrite the call to resolve
-    # relative entries (the local wheel) to an absolute URL against the worker location.
     worker_js = out_dir / f"{path.stem}.js"
     js = worker_js.read_text(encoding="utf-8")
-    js = js.replace(
-        "micropip.install('${pkg}')",
-        "micropip.install('${pkg.startsWith('.') ? new URL(pkg, self.location.href).href : pkg}')",
-    )
+    js = _pin_bokeh_from_pypi(js)
+    js = _inject_local_wheel(js, wheel_name)
     worker_js.write_text(js, encoding="utf-8")
 
     print(f"  [ok] {category}/{path.stem}.html")
     return True
+
+
+_BOKEH_CDN_WHEEL = re.compile(r"'https://cdn\.holoviz\.org/panel/wheels/bokeh-([0-9][^']*)-py3-none-any\.whl'")
+
+
+def _inject_local_wheel(js: str, wheel_name: str) -> str:
+    """Add the locally built panelini wheel to the worker's micropip install list.
+
+    ``panel convert`` will not carry a local wheel through ``--requirements`` (see
+    ``convert_panel``), so the entry is spliced into the generated
+    ``micropip.install([...])` call. The install list lives inside a JS template literal,
+    so ``${...}`` resolves the wheel relative to the worker's own URL and the app keeps
+    working under any docs base path (the app is at apps/<category>/<stem>.js, the wheel
+    at portfolio/wheels/).
+
+    Raises:
+        ValueError: if the generated worker has no recognisable install call, which means
+            the converter's output shape changed and this rewrite needs updating.
+    """
+    marker = "micropip.install(["
+    start = js.find(marker)
+    if start == -1:
+        msg = "could not find micropip.install([...]) in the generated worker"
+        raise ValueError(msg)
+    end = js.find("])", start)
+    if end == -1:
+        msg = "unterminated micropip.install([...]) in the generated worker"
+        raise ValueError(msg)
+    entry = ", '${new URL('../../wheels/" + wheel_name + "', self.location.href).href}'"
+    return js[:end] + entry + js[end:]
+
+
+def _pin_bokeh_from_pypi(js: str) -> str:
+    """Point the bokeh requirement at PyPI instead of the holoviz CDN.
+
+    ``panel convert`` writes a CDN wheel URL for bokeh, but that path is not published
+    for every release (it 403s for bokeh 3.9.2), which aborts the whole micropip install
+    and leaves the app with "No module named 'panel'". bokeh is a pure-Python wheel, so a
+    plain pinned requirement resolves from PyPI instead.
+    """
+    return _BOKEH_CDN_WHEEL.sub(lambda m: f"'bokeh=={m.group(1)}'", js)
 
 
 def convert_all(force: bool = False) -> None:

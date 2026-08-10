@@ -39,7 +39,8 @@ def test_both_editors(page: Page, port):
     time.sleep(0.5)
     assert form_editor.get_value()["name"] == "test123"
 
-    # Interact with tree editor: verify Python-side value unchanged
-    assert tree_editor.value["string"] == "A string"
+    # Both editors start from the same instance; the tree side is untouched by the form edit
+    assert tree_editor.value["name"] == "Sample A"
+    assert tree_editor.value["unit"] == "mm"
 
     server.stop()

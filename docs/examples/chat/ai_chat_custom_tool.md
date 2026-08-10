@@ -6,7 +6,7 @@
 ```
 
 ```{note}
-This example needs an LLM backend, so it is shown as a screen capture rather than a live in-browser demo.
+Shown as a screen capture rather than a live in-browser demo. The chat cannot run in the browser: `langchain-core` depends on `uuid-utils` and `zstandard`, native extensions with no pure-Python wheel, so the stack cannot be installed under Pyodide - and a real chat would additionally need provider credentials, which do not belong in a public page. Run it locally to try it.
 ```
 
 **Source:** [`examples/panels/ai/chat_custom_tool.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_custom_tool.py)

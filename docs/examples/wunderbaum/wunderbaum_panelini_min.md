@@ -59,6 +59,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/wunderbaum_panelini_min.html" title="Wunderbaum tree inside panelini" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/wunderbaum_panelini_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`wunderbaum_panel_min` - the same tree served on its own

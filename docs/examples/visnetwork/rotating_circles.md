@@ -10,7 +10,7 @@
 
 Five nodes are pinned at fixed coordinates equally spaced on a circle, and each is linked to one free node whose position the physics engine works out. The ring closes on itself, so the five fixed nodes form a pentagon with five satellites hanging off it.
 
-Run the script directly (`python rotating_circles.py`) and a background loop continuously recomputes the ring angle from a velocity slider, pushing new positions to `visnetwork_panel.nodes` so the whole ring spins. That loop only runs under `__main__`, so the live view below and the still above show the static ring rather than the animation.
+A periodic callback continuously recomputes the ring angle from a velocity slider and pushes new positions to `visnetwork_panel.nodes`, so the whole ring spins. Five nodes are pinned to the ring; the remaining five are laid out by the physics engine and get dragged along. Drag the sliders to change the angular velocity and the ring radius.
 
 ## The code
 
@@ -46,9 +46,34 @@ edges = [
 ]
 
 visnetwork_panel = VisNetwork(nodes=nodes, edges=edges, sizing_mode="stretch_both")
+
+vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1)
+radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r)
+
+app = pn.Column(visnetwork_panel, vel_slider, radius_slider)
+
+
+def rotate() -> None:
+    """Advance the ring by one frame and push the new positions to the graph."""
+    now = time.time()
+    _anim["phi"] += vel_slider.value * (now - _anim["t"])
+    _anim["t"] = now
+    radius = radius_slider.value
+    ring = [
+        {
+            **node,
+            "x": radius * np.cos(_anim["phi"] + offset),
+            "y": radius * np.sin(_anim["phi"] + offset),
+        }
+        for node, offset in zip(nodes[:5], _offsets, strict=True)
+    ]
+    visnetwork_panel.nodes = ring + nodes[5:]
+
+
+pn.state.onload(lambda: pn.state.add_periodic_callback(rotate, period=50))
 ```
 
-The rotation itself lives in the `__main__` block: a loop advances `phi_0` by `velocity * dt`, rebuilds the ring node positions, and assigns them back to `visnetwork_panel.nodes`. Two sliders control the angular velocity and the ring radius.
+The animation is a periodic callback rather than a blocking `while` loop, so it works under `panel serve` and in the browser alike - a blocking loop would freeze the single-threaded WASM runtime.
 
 ## Run it live
 

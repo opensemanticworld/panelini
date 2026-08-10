@@ -67,6 +67,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/virtual_filesystem.html" title="Virtual filesystem - the full demo" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/virtual_filesystem.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`wunderbaum_table_min` - the columns foundation

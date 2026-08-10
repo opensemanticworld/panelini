@@ -96,6 +96,7 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 <iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/checkbox_tree.html" title="Checkbox tree - hierarchical selection" loading="lazy"></iframe>
 <p><a href="../../_static/portfolio/apps/wunderbaum/checkbox_tree.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
+
 ## See also
 
 - {doc}`virtual_filesystem` - checkboxes combined with a "Delete Checked" batch action
