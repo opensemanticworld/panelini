@@ -68,6 +68,11 @@ _PAGE = _DOCS / "portfolio" / "index.md"
 # installed from the locally-built wheel inside the wrapper.
 _REQUIREMENTS = ["numpy", "pydantic"]
 
+# Extra packages a single category needs. The AI examples call ``load_dotenv()`` at
+# import time; python-dotenv is pure Python, so micropip can install it (unlike
+# LangChain itself, which is replaced by the stand-ins in the wrapper).
+_CATEGORY_REQUIREMENTS: dict[str, list[str]] = {"ai": ["python-dotenv"]}
+
 # Self-contained wrapper: inline the example source, run it with serve/servable
 # intercepted to capture the intended renderable, then servable that. Executing into
 # the module globals keeps ``__name__ == "__main__"`` and correct class ``__module__``
@@ -86,6 +91,19 @@ from panelini import Panelini
 # render too (panel convert snapshots on the host, where xterm.js would otherwise be
 # embedded and then throw in the browser before the worker hydrates).
 os.environ.setdefault("PANELINI_TERMINAL_MODE", "console")
+
+# The AI examples import LangChain and talk to a provider. LangChain cannot be
+# installed under Pyodide (langchain-core needs uuid-utils and zstandard, native
+# extensions with no pure-Python wheel), and provider credentials must never ship in a
+# public page. Registering the stand-ins here - before the example source is executed
+# below - makes the example's own ``import langchain...`` lines resolve to them, so the
+# example file itself stays untouched and still uses the real stack everywhere else.
+# Replies are canned; the pages say so.
+if {ai_stub}:
+    from panelini.ai_testing import install as __pf_install_ai_stub
+
+    __pf_install_ai_stub()
+
 pn.extension("tabulator", "jsoneditor", "plotly")
 
 # In WASM, panel.io exposes only ``serve`` (from panel.io.pyodide); the tornado-backed
@@ -186,9 +204,10 @@ else:
 """
 
 # Panels excluded from the Pyodide portfolio (server/sandbox-backed, can't run in WASM).
-_EXCLUDE_STEMS = {"plot_by_code"}
-# Categories handled in a later step (the browser-native AI panel replaces this stack).
-_EXCLUDE_CATEGORIES = {"ai"}
+# ``drawai_beautify`` drives the Anthropic SDK directly and renders through the hosted
+# drawio viewer, so the LangChain stand-ins do not cover it; it stays media-only.
+_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify"}
+_EXCLUDE_CATEGORIES: set[str] = set()
 
 # Per-category accent colour (background gradient base) + short human label.
 _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
@@ -383,7 +402,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
     out_dir = _APPS_DIR / category
     out_dir.mkdir(parents=True, exist_ok=True)
     b64 = base64.b64encode(path.read_text(encoding="utf-8").encode("utf-8")).decode("ascii")
-    body = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name)
+    body = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name, ai_stub=category == "ai")
     sig = hashlib.sha256(f"{body}{wheel_name}{panelini_sig}".encode()).hexdigest()[:16]
     sig_marker = f"portfolio-sig: {sig}"
     wrapper = f"# {sig_marker}\n{body}"
@@ -421,6 +440,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
             # paths and aborts on a relative one, and silently drops an absolute one. It is
             # injected into the generated install list below instead.
             *_REQUIREMENTS,
+            *_CATEGORY_REQUIREMENTS.get(category, []),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
