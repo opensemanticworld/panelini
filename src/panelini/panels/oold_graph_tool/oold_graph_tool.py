@@ -1230,7 +1230,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 continue
             if self._field_inner_model_type(entity, field_name) is None:
                 continue
-            val = getattr(entity, field_name, None)
+            field = entity.model_fields[field_name]
+            extra = field.json_schema_extra
+            if extra and isinstance(extra, dict) and "range" in extra:
+                continue
+            val = entity.__dict__.get(field_name)
             if not isinstance(val, list) or not val:
                 continue
             # Show if any element is unregistered or hidden
@@ -1401,7 +1405,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
         entity = self.entity_dict.get(entity_id)
         if entity is None:
             return
-        val = getattr(entity, field_name, None)
+        field = entity.model_fields.get(field_name)
+        extra = field.json_schema_extra if field else None
+        if extra and isinstance(extra, dict) and "range" in extra:
+            return
+        val = entity.__dict__.get(field_name)
         if not isinstance(val, list) or not val:
             return
         inner_type = self._field_inner_model_type(entity, field_name)
@@ -2340,10 +2348,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
         for field_name in entity.model_fields:
             if field_name in _SKIP_FIELDS:
                 continue
+            field = entity.model_fields[field_name]
+            extra = field.json_schema_extra
+            if extra and isinstance(extra, dict) and "range" in extra:
+                continue
             inner_type = self._field_inner_model_type(entity, field_name)
             if inner_type is None:
                 continue
-            val = getattr(entity, field_name, None)
+            val = entity.__dict__.get(field_name)
             if not val:
                 continue
             is_list = isinstance(val, list)
