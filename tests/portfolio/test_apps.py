@@ -38,6 +38,9 @@ _CATEGORY_SELECTOR = {
     # instead of the xterm widget (.xterm), which cannot load in WASM.
     "terminalmirror": ".tm-console, .xterm",
     "usecases": ".vis-network canvas",
+    # The chat runs against the LangChain stand-ins (see panelini.ai_testing); its
+    # prompt box is the signature widget.
+    "ai": "textarea",
 }
 
 # First load fetches Pyodide + wheels over the network; keep this well above a normal
@@ -115,6 +118,20 @@ def _wb_expand_lazy(page: Page, node: str) -> tuple[int, int]:
     return before, _await_more_rows(page, before)
 
 
+def _chat_exchange(page: Page) -> tuple[int, int]:
+    """Send a prompt and wait for the stubbed reply to stream back.
+
+    Exercises the whole chain in WASM: the prompt reaches Python, the LangChain
+    stand-ins answer, and the streamed chunks render.
+    """
+    box = page.locator("textarea").first
+    box.fill("Does this demo answer?")
+    box.press("Enter")
+    reply = page.get_by_text("simulated reply", exact=False).first
+    reply.wait_for(timeout=_ROUND_TRIP_MS * 3)
+    return 0, 1 if reply.is_visible() else 0
+
+
 # Per-app interaction that can only succeed if a JS -> Python -> JS round trip works.
 # Rendering alone is not enough: a stale pre-rendered snapshot, or a Panel version whose
 # ESM property sync is broken in WASM, still renders but silently ignores every callback.
@@ -124,6 +141,9 @@ _INTERACTIONS = {
     ("wunderbaum", "context_menu"): lambda p: _wb_add_via_context_menu(p, "src", "Add Child"),
     ("wunderbaum", "lazy_loading"): lambda p: _wb_expand_lazy(p, "Root 1"),
     ("wunderbaum", "incremental_tree_demo"): lambda p: _wb_click_button(p, "Next Step"),
+    ("ai", "chat_min"): _chat_exchange,
+    ("ai", "chat_custom_tool"): _chat_exchange,
+    ("ai", "chat_no_preview_no_tools"): _chat_exchange,
 }
 
 
@@ -163,6 +183,6 @@ def test_app_renders(page: Page, apps_base_url: str, category: str, stem: str):
         errors = "\n  ".join(console_errors[-5:]) or "(none)"
         pytest.fail(
             f"{category}/{stem}: rendered, but the interaction did not reach Python "
-            f"(tree rows {before} -> {after}, expected growth). The app is a dead "
+            f"(observed {before} -> {after}, expected growth). The app is a dead "
             f"screenshot: callbacks are silently dropped.\nLast console errors:\n  {errors}"
         )

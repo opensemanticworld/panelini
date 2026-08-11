@@ -1,12 +1,12 @@
 # Minimal AI chat
 
-```{image} /_static/media/ai/chat_min_feature.png
-:alt: chat min feature
+```{image} /_static/media/ai/chat_min_overview.webp
+:alt: A panelini AI chat answering a question
 :class: docs-media
 ```
 
 ```{note}
-Shown as a screen capture rather than a live in-browser demo. The chat cannot run in the browser: `langchain-core` depends on `uuid-utils` and `zstandard`, native extensions with no pure-Python wheel, so the stack cannot be installed under Pyodide - and a real chat would additionally need provider credentials, which do not belong in a public page. Run it locally to try it.
+The capture above and the live demo below both run against a stand-in model that streams one fixed answer: **no language model is running and no request leaves your browser**. LangChain cannot be installed under Pyodide (`langchain-core` needs `uuid-utils` and `zstandard`, native extensions with no pure-Python wheel), and provider credentials do not belong in a public page. Run the example locally with your own credentials to chat for real.
 ```
 
 **Source:** [`examples/panels/ai/chat_min.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_min.py)
@@ -81,6 +81,15 @@ def panel_server(mock_langchain):
 ```
 
 The fixture **imports the real example module** under a LangChain mock, so a regression in `chat_min.py` immediately fails the test. See [`tests/panels/ai/examples/conftest.py`](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/conftest.py) for the shared `mock_langchain` fixture.
+
+## Run it live
+
+This example runs entirely in your browser via Pyodide, with the stand-in model described above. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/ai/chat_min.html" title="Minimal AI chat" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/ai/chat_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 
 ## See also
 

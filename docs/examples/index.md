@@ -8,7 +8,7 @@ Walkthroughs of every example in [`examples/`](https://github.com/opensemanticwo
 :::{grid-item-card} Chat
 :link: chat/index
 :link-type: doc
-:img-top: /_static/media/ai/chat_min_feature.png
+:img-top: /_static/media/ai/chat_min_overview.webp
 LLM chat panels - drop-in, tool-augmented, and multi-tab.
 :::
 

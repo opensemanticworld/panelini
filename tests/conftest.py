@@ -242,7 +242,10 @@ def _media_target(test_path: str, role: str, name: str | None, kind: str, fmt: s
     area = rel[1] if rel and rel[0] == "panels" else (rel[0] if rel else "misc")
     module = Path(test_path).stem
     module_slug = module[5:] if module.startswith("test_") else module
-    slug = name if (role == "feature" and name) else module_slug
+    # An explicit ``name=`` always wins, whatever the role: one module can record media
+    # for several examples (the AI chat ones share a module), and tying the override to
+    # ``feature`` silently produced module-named files for the overview clip.
+    slug = name or module_slug
     ext = {"screenshot": "png", "video": "mp4"}.get(kind, "gif" if fmt == "gif" else "webp")
     return DOCS_MEDIA / area / f"{slug}_{role}.{ext}"
 
