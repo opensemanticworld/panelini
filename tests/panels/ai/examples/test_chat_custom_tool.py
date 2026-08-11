@@ -39,9 +39,11 @@ def test_custom_tool_renders(ready_page: Page):
     """Verify the custom-tool chat example renders its main UI elements."""
     page = ready_page
 
-    # Chat and Preview cards are visible
-    assert page.locator("text=Chat").first.is_visible()
-    assert page.locator("text=Preview").first.is_visible()
+    # Chat and Preview cards are visible. Exact heading match: a plain
+    # text=Chat/text=Preview locator also matches unrelated substrings
+    # ("Chat Management", the sidebar's "Update Preview" checkbox label).
+    assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
+    assert page.get_by_role("heading", name="Preview", exact=True).is_visible()
 
     # Welcome message is shown
     assert page.locator("text=Hello! 👋").first.is_visible()
@@ -50,6 +52,10 @@ def test_custom_tool_renders(ready_page: Page):
 def test_local_storage_tool_toggle(ready_page: Page):
     """Clicking the Local Storage checkbox in the sidebar sends a system message."""
     page = ready_page
+
+    # The left sidebar starts collapsed (Panelini's sidebar_visible defaults to
+    # False), so it must be opened before its contents are interactable.
+    page.locator(".left-navbar-button").first.click()
 
     # Click the actual <input> inside the Bokeh Checkbox shadow DOM.
     # get_by_text("Local Storage") finds the .bk-label sibling, not the input.

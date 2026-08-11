@@ -122,7 +122,9 @@ class TestMakePlotTools:
     def test_all_tools_bound_to_same_panel(self, mock_panel: MagicMock) -> None:
         tools = make_plot_tools(mock_panel)
         for t in tools:
-            assert t.panel is mock_panel
+            # make_plot_tools() returns list[BaseTool] (langchain); `panel` is
+            # declared by each concrete subclass, not the langchain base class.
+            assert t.panel is mock_panel  # ty: ignore[unresolved-attribute]
 
     def test_returns_three_tools_when_osw_missing(self, mock_panel: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
         """Simulate missing osw package by making the submodule import raise ImportError."""

@@ -12,6 +12,7 @@ import pytest
 from panel import Card, Column, Row, Spacer, config
 from panel.layout.gridstack import GridStack
 from panel.pane import Markdown
+from panel.viewable import Viewable
 
 from panelini.main import Panelini, image_to_base64
 
@@ -255,14 +256,14 @@ def test_panelini_method__sidebar_left_set():
 def test_panelini_method__sidebar_left_toggle():
     """Test the _sidebar_left_toggle method."""
     instance = Panelini(sidebar_enabled=True)
-    # Default visible = True
+    # Default visible = False
+    assert instance._sidebar_left.visible is False
+    # Toggle once should be visible = True
+    instance._sidebar_left_toggle(event=None)
     assert instance._sidebar_left.visible is True
-    # Toggle once should be visible = False
+    # Toggle again should be visible = False
     instance._sidebar_left_toggle(event=None)
     assert instance._sidebar_left.visible is False
-    # Toggle again should be visible = True
-    instance._sidebar_left_toggle(event=None)
-    assert instance._sidebar_left.visible is True
 
 
 def test_panelini_method__main_set():
@@ -318,7 +319,7 @@ def test_panelini_method__panel_set():
 def test_panelini_methods_sidebar_right_set_and_get():
     """Test the sidebar_right_set as well as sidebar_right_get methods."""
     instance = Panelini(sidebar_right_enabled=True)
-    sidebar_right = [Card(title="sidebar right test")]
+    sidebar_right: list[Viewable] = [Card(title="sidebar right test")]
     instance.sidebar_right_set(sidebar_right)
     assert instance.sidebar_right_get() == sidebar_right
 
@@ -326,7 +327,7 @@ def test_panelini_methods_sidebar_right_set_and_get():
 def test_panelini_methods_sidebar_set_and_get():
     """Test the sidebar_set as well as sidebar_get methods."""
     instance = Panelini(sidebar_enabled=True)
-    sidebar = [Card(title="sidebar left test")]
+    sidebar: list[Viewable] = [Card(title="sidebar left test")]
     instance.sidebar_set(sidebar)
     assert instance.sidebar_get() == sidebar
 

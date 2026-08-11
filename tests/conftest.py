@@ -274,7 +274,11 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
 
     reader = imageio.get_reader(video)
     src_fps = reader.get_meta_data().get("fps") or 25
-    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]
+    # imageio's bundled stub declares Reader.__iter__ -> Array instead of
+    # Iterator[Array], so it fails the Iterable protocol check even though
+    # Reader is iterable at runtime (this is how imageio.get_reader() is
+    # documented to be used).
+    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]  # ty: ignore[invalid-argument-type]
     reader.close()
 
     for m in job["markers"]:

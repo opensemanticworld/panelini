@@ -14,17 +14,43 @@ from examples.panels.wunderbaum.checkbox_tree import (
     source,
     tree,
 )
-from panelini.testing import wb_checkbox
+from panelini.testing import wait_until, wb_checkbox, wb_wait
 
+_PORT = 6410
 _ORIGINAL_SOURCE = copy.deepcopy(source)
 
 
-@pytest.fixture(autouse=True)
-def _reset_tree():
-    """Reset tree source and display before each test to avoid state leakage."""
+@pytest.fixture(scope="module")
+def panel_server():
+    """Serve the checkbox tree example once for the whole module."""
+    server = pn.serve(app, port=_PORT, threaded=True, show=False)
+    time.sleep(0.2)
+    yield server
+    # kill_all_servers() (not server.stop()) so panel's own server/thread
+    # registry is cleared too - a bare .stop() leaves a stale entry that a
+    # later, unrelated test's pn.state.reset() can trip over.
+    pn.state.kill_all_servers()
+
+
+@pytest.fixture
+def ready_page(browser, panel_server):
+    """Fresh browser page per test, against the module-scoped shared server.
+
+    ``tree``/``checked_display`` are module-level singletons shared by every
+    test, so their state is reset here before navigating - a fresh session
+    per test avoids reloading a page whose previous session might still have
+    an in-flight server round-trip (observed to be flaky), while still
+    avoiding the per-test ``pn.serve()`` startup cost this replaces.
+    """
     tree.source = copy.deepcopy(_ORIGINAL_SOURCE)
     checked_display.object = "**Checked:** (none)"
-    yield
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(f"http://localhost:{_PORT}")
+    wb_wait(page)
+    yield page
+    page.goto("about:blank")
+    context.close()
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +65,6 @@ def _click_checkbox(page: Page, title: str) -> None:
     if box:  # glide the cursor so recorded media reads well
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=15)
     cb.click()
-    time.sleep(1)
 
 
 _SHADOW_FIND = """
@@ -107,23 +132,14 @@ def _get_client_selected_keys(page: Page) -> list[str]:
     )
 
 
-def _serve_and_goto(page: Page, port: int):
-    """Serve the app and navigate to it. Returns the server handle."""
-    server = pn.serve(app, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(f"http://localhost:{port}")
-    time.sleep(5)
-    return server
-
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 
-def test_tree_renders_with_checkboxes(page: Page, port):
+def test_tree_renders_with_checkboxes(ready_page: Page):
     """Tree renders and checkbox elements are present."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     assert tree.source == source
     assert page.locator(".wunderbaum-wrapper").first.is_visible()
@@ -134,14 +150,13 @@ def test_tree_renders_with_checkboxes(page: Page, port):
     checkboxes = page.locator(".wb-row .wb-checkbox")
     assert checkboxes.count() > 0, "No .wb-checkbox - checkboxes not enabled"
 
-    server.stop()
 
-
-def test_check_leaf_node(page: Page, port):
+def test_check_leaf_node(ready_page: Page):
     """Clicking a leaf checkbox selects only that node."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     _click_checkbox(page, "Orange")
+    wait_until(lambda: "orange" in checked_display.object)
 
     # Backend
     checked = _get_checked_keys(tree.source)
@@ -156,15 +171,14 @@ def test_check_leaf_node(page: Page, port):
     assert _get_client_node_selected(page, "orange")
     assert not _get_client_node_selected(page, "lemon")
 
-    server.stop()
-
 
 @pytest.mark.media(role="feature", capture="gif")
-def test_check_parent_selects_all_children(page: Page, port):
+def test_check_parent_selects_all_children(ready_page: Page):
     """Clicking a parent checkbox selects it and all its children."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     _click_checkbox(page, "Citrus")
+    wait_until(lambda: "citrus" in checked_display.object)
 
     # Backend
     checked = _get_checked_keys(tree.source)
@@ -175,16 +189,16 @@ def test_check_parent_selects_all_children(page: Page, port):
     for key in ("citrus", "orange", "lemon", "lime"):
         assert _get_client_node_selected(page, key), f"{key} not selected in UI"
 
-    server.stop()
 
-
-def test_uncheck_parent_deselects_all_children(page: Page, port):
+def test_uncheck_parent_deselects_all_children(ready_page: Page):
     """Unchecking a parent deselects it and all its children."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     # Check then uncheck
     _click_checkbox(page, "Citrus")
+    wait_until(lambda: "citrus" in checked_display.object)
     _click_checkbox(page, "Citrus")
+    wait_until(lambda: "(none)" in checked_display.object)
 
     # Backend
     checked = _get_checked_keys(tree.source)
@@ -198,14 +212,13 @@ def test_uncheck_parent_deselects_all_children(page: Page, port):
     for key in ("citrus", "orange", "lemon", "lime"):
         assert not _get_client_node_selected(page, key), f"{key} still selected in UI"
 
-    server.stop()
 
-
-def test_partial_child_shows_indeterminate(page: Page, port):
+def test_partial_child_shows_indeterminate(ready_page: Page):
     """Checking one child makes the parent indeterminate, not fully selected."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     _click_checkbox(page, "Orange")
+    wait_until(lambda: "orange" in checked_display.object)
 
     # Backend: Orange selected, Citrus NOT fully selected
     checked = _get_checked_keys(tree.source)
@@ -216,14 +229,13 @@ def test_partial_child_shows_indeterminate(page: Page, port):
     assert not _get_client_node_selected(page, "citrus")
     assert _is_client_node_indeterminate(page, "citrus")
 
-    server.stop()
 
-
-def test_check_root_selects_entire_subtree(page: Page, port):
+def test_check_root_selects_entire_subtree(ready_page: Page):
     """Clicking the top-level parent selects the entire subtree."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     _click_checkbox(page, "Fruits")
+    wait_until(lambda: "fruits" in checked_display.object)
 
     # Backend: all Fruits descendants selected
     checked = _get_checked_keys(tree.source)
@@ -242,17 +254,17 @@ def test_check_root_selects_entire_subtree(page: Page, port):
     # Vegetables should NOT be affected
     assert "vegetables" not in checked
 
-    server.stop()
 
-
-def test_uncheck_grandchild_propagates_up(page: Page, port):
+def test_uncheck_grandchild_propagates_up(ready_page: Page):
     """Unchecking a grandchild makes parent and grandparent indeterminate."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     # Select all Fruits
     _click_checkbox(page, "Fruits")
+    wait_until(lambda: "fruits" in checked_display.object)
     # Uncheck Orange
     _click_checkbox(page, "Orange")
+    wait_until(lambda: "orange" not in checked_display.object)
 
     # Backend
     checked = _get_checked_keys(tree.source)
@@ -267,14 +279,13 @@ def test_uncheck_grandchild_propagates_up(page: Page, port):
     assert _is_client_node_indeterminate(page, "citrus")
     assert _is_client_node_indeterminate(page, "fruits")
 
-    server.stop()
 
-
-def test_independent_subtrees(page: Page, port):
+def test_independent_subtrees(ready_page: Page):
     """Checking one subtree does not affect a sibling subtree."""
-    server = _serve_and_goto(page, port)
+    page = ready_page
 
     _click_checkbox(page, "Citrus")
+    wait_until(lambda: "citrus" in checked_display.object)
 
     # Backend: Vegetables subtree untouched
     checked = _get_checked_keys(tree.source)
@@ -286,5 +297,3 @@ def test_independent_subtrees(page: Page, port):
     client_selected = _get_client_selected_keys(page)
     for key in veg_keys:
         assert key not in client_selected, f"{key} unexpectedly selected in UI"
-
-    server.stop()

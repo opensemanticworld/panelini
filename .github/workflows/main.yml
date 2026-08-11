@@ -6,6 +6,13 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.ref_type }}-
+    ${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -26,9 +33,10 @@ jobs:
         run: make check
 
   tests-and-type-check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
       fail-fast: false
     defaults:
@@ -44,18 +52,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install Playwright browsers
-        run: uv run playwright install --with-deps chromium
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            uv run playwright install --with-deps chromium
+          else
+            uv run playwright install chromium
+          fi
 
       - name: Run full tests including headless ui tests
-        run: make test-full
+        run: uv run pytest -m "not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
 
       - name: Check typing
-        run: uv run mypy
+        run: uv run ty check
 
-
-      - name: Upload coverage reports to Codecov with GitHub Action on Python 3.11
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
-        if: ${{ matrix.python-version == '3.11' }}
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -72,9 +84,10 @@ jobs:
         run: uv run sphinx-build -b html docs docs/_build/html -W --keep-going
 
   version-preview:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Check out
@@ -86,27 +99,43 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
-      - name: Compute next version (dry run)
+      - name: Compute release preview
         id: preview
         run: |
+          git checkout -B main >/dev/null 2>&1 || true
+          current=$(uv version --short 2>/dev/null || echo "unknown")
+          next=$(uv run semantic-release version --print 2>/dev/null || echo "")
+          if [ -n "$next" ] && [ "$next" != "$current" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          if [ -n "$next" ] && [ "$next" != "$current" ]; then
+            uv run semantic-release version --no-commit --no-tag --no-push --no-vcs-release --skip-build >/dev/null 2>&1 || true
+          fi
           {
-            echo 'body<<EOF'
-            echo "### Next version if merged"
-            NEXT_VERSION=$(uv run semantic-release version --print 2>/dev/null || true)
-            if [ -z "$NEXT_VERSION" ]; then
-              echo "_No release-worthy commits on this PR yet (no version bump would be triggered)._"
-            else
-              echo "Merging this PR would release **$NEXT_VERSION**."
-              echo
-              echo '```'
-              uv run semantic-release changelog --print 2>/dev/null || true
-              echo '```'
-            fi
-            echo EOF
+            echo "changelog<<PSR_EOF"
+            git --no-pager diff HEAD -- CHANGELOG.md | awk '/^\+/ && !/^\+\+\+/ {sub(/^\+/,""); print}' | head -80
+            echo "PSR_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Comment next version on PR
+      - name: Post release preview comment
         uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: version-preview
-          message: ${{ steps.preview.outputs.body }}
+          message: |
+            ## Release preview
+
+            ${{ steps.preview.outputs.released == 'true' && format('Merging this PR would release **{0}** (current: `{1}`).', steps.preview.outputs.next, steps.preview.outputs.current) || format('No version bump from the current commits (stays at `{0}`). Use conventional commit types (feat, fix, ...) to trigger a release.', steps.preview.outputs.current) }}
+
+            <details><summary>Changelog preview (truncated)</summary>
+
+            ```markdown
+            ${{ steps.preview.outputs.changelog }}
+            ```
+
+            </details>
+
+            <sub>Preview via python-semantic-release and conventional commits.</sub>

@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
-from panelini.testing import node_dom_pos
+from panelini.testing import node_dom_pos, vn_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -21,7 +21,7 @@ def test_json_data_tooltip(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for page to load
+    vn_wait(page)
 
     # Inject a visible cursor indicator (Playwright doesn't show the system cursor)
     page.evaluate("""

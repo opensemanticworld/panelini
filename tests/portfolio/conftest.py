@@ -25,8 +25,11 @@ _PORTFOLIO_ROOT = _REPO / "docs" / "_static" / "portfolio"
 _APPS_DIR = _PORTFOLIO_ROOT / "apps"
 
 if not _APPS_DIR.is_dir() or not any(_APPS_DIR.glob("*/*.html")):
+    # pytest.skip is `reason: str = "", *, allow_module_level: bool = False`, but ty
+    # misresolves the wrapping _WithException[...] protocol used by _pytest.outcomes
+    # and infers zero positional parameters for `reason`.
     pytest.skip(
-        "Pyodide portfolio apps not built, run `make portfolio` first.",
+        "Pyodide portfolio apps not built, run `make portfolio` first.",  # ty: ignore[too-many-positional-arguments]
         allow_module_level=True,
     )
 
@@ -46,7 +49,9 @@ def apps_base_url():
     """
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(_PORTFOLIO_ROOT))
     # Quiet the per-request logging that SimpleHTTPRequestHandler writes to stderr.
-    handler.log_message = lambda *a, **k: None  # type: ignore[assignment]
+    # `handler` is a functools.partial used as a request-handler factory; setting an
+    # attribute not declared on `partial` is a deliberate monkeypatch, not a real typo.
+    handler.log_message = lambda *a, **k: None  # ty: ignore[unresolved-attribute]
     port = _free_port()
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -22,11 +22,17 @@ def test_incremental_build(page: Page, port):
 
     step_btn = page.locator("button:has-text('Next Step')")
     box = step_btn.bounding_box()
+    assert box is not None
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=20)
 
-    for _ in range(len(SEQUENCE)):  # add nodes, rename, move -> full structure
+    for step in SEQUENCE:  # add nodes, rename, move -> full structure
         step_btn.click()
-        time.sleep(0.7)
+        # Every step sets the status text before executing its actions, in the
+        # same synchronous callback - waiting for it confirms this step's
+        # actions have already been applied server-side. status is always a
+        # str (only "actions" holds a list); str() narrows ty's inferred
+        # union of all SEQUENCE dict value types.
+        page.get_by_text(str(step["status"])).wait_for()
 
     # The playbook builds ~12 nodes (files/folders across src, models, tests).
     assert page.locator(".wb-row").count() >= 8

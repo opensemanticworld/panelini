@@ -140,10 +140,22 @@ def test_bind_collapse_ignores_collapse():
 
 
 def test_example_redraws_on_card_expand():
-    """The panelini example replays the buffer when the card is expanded."""
-    from examples.panels.terminalmirror.terminalmirror_panelini_min import card, terminalmirror_panel
+    """The panelini example's auto-bind-on-Card-construction wiring works.
 
-    term = terminalmirror_panel.terminal
+    Builds a fresh ``TerminalMirrorDemo`` + ``Card`` (same construction shape
+    as the real example), rather than importing its module-level singleton -
+    that singleton is also served by the UI test in
+    tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py,
+    and sharing it here caused rare cross-test interference under a loaded
+    CI runner (the UI test's own redraw-on-expand check would occasionally
+    never observe its own click's effect within a generous timeout).
+    """
+    from examples.panels.terminalmirror.terminalmirror_panelini_min import TerminalMirrorDemo
+
+    demo = TerminalMirrorDemo()
+    card = pn.Card(demo, collapsed=False)
+
+    term = demo.terminal
     term.write("persisted line\n")
     clears_before = term._terminal._clears
 
