@@ -21,6 +21,7 @@ def test_incremental_build(page: Page, port):
 
     step_btn = page.locator("button:has-text('Next Step')")
     box = step_btn.bounding_box()
+    assert box is not None
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=20)
 
     steps = min(5, len(SEQUENCE))

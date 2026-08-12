@@ -17,7 +17,7 @@ def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 
     tool = GraphDetailTool(nodes=nodes, edges=edges)
-    server = pn.serve(tool, port=port, threaded=True, show=False)
+    server = pn.serve(tool, port=port, threaded=True, show=False)  # ty: ignore[invalid-argument-type]
     time.sleep(0.2)
 
     page.goto(url)

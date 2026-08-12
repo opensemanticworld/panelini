@@ -103,7 +103,11 @@ def build_osw_express(domain: str | None = None) -> Any:
     username = os.environ["OSW_USER"]
     password = os.environ["OSW_PASSWORD"]
 
-    mgr = EnvCredentialManager()
+    # osw.auth.CredentialManager declares cred_filepath/cert_filepath as bare
+    # Optional[...] fields (no explicit "= None"); ty synthesizes a pydantic
+    # constructor that treats them as required, but the base class's own
+    # __init__(self, **data) makes both genuinely optional at runtime.
+    mgr = EnvCredentialManager()  # ty: ignore[missing-argument]
     mgr.add_credential(
         CredentialManager.UserPwdCredential(
             iri=resolved_domain,

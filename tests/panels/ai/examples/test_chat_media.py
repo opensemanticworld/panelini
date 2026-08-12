@@ -60,7 +60,9 @@ def test_chat_custom_tool_media(page: Page, port, mock_langchain):
 
 @pytest.mark.media(role="feature", capture="gif", name="chat_multi_tab", viewport=_VIEWPORT)
 def test_chat_multi_tab_media(page: Page, port, mock_langchain):
-    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_multi_tab", ".bk-tab")
+    # Scoped to .main: this app mirrors tabs into the (collapsed) sidebar too, and a
+    # bare ".bk-tab" can resolve to that hidden copy.
+    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_multi_tab", ".main .bk-tab")
 
 
 @pytest.mark.media(role="feature", capture="gif", name="chat_no_preview_no_tools", viewport=_VIEWPORT)

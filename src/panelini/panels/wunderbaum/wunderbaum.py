@@ -3,8 +3,9 @@
 import asyncio
 import inspect
 import time
+from collections.abc import Awaitable
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Optional
+from typing import Any, Callable, ClassVar, Optional, Union
 
 import panel as pn
 import param  # type: ignore[import-untyped]
@@ -74,7 +75,9 @@ class Wunderbaum(AnyWidgetComponent):
         types: Optional[dict[str, Any]] = None,
         context_menu_items: Optional[list[dict[str, Any]]] = None,
         tree_event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
-        lazy_load_callback: Optional[Callable[[str, dict[str, Any]], list[dict[str, Any]]]] = None,
+        lazy_load_callback: Optional[
+            Callable[[str, dict[str, Any]], Union[list[dict[str, Any]], Awaitable[list[dict[str, Any]]]]]
+        ] = None,
         file_drop_callback: Optional[Callable[[dict[str, Any]], None]] = None,
         **params: Any,
     ) -> None:

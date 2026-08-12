@@ -116,7 +116,11 @@ def rotate() -> None:
     visnetwork_panel.nodes = ring + nodes[5:]
 
 
-pn.state.onload(lambda: pn.state.add_periodic_callback(rotate, period=50))
+def _start_rotation() -> None:
+    pn.state.add_periodic_callback(rotate, period=50)
+
+
+pn.state.onload(_start_rotation)
 
 if __name__ == "__main__":
     pn.serve(app)

@@ -61,7 +61,7 @@ Bases: {py:obj}`FileNotFoundError`
 `````{py:class} Panelini(**params: typing.Any)
 :canonical: panelini.main.Panelini
 
-Bases: {py:obj}`param.Parameterized`
+Bases: {py:obj}`panel.viewable.Viewer`
 
 ```{autodoc2-docstring} panelini.main.Panelini
 ```
@@ -344,7 +344,7 @@ Bases: {py:obj}`param.Parameterized`
 
 ````
 
-````{py:method} servable(**kwargs: typing.Any) -> panel.viewable.Viewable
+````{py:method} servable(title: str | None = None, location: bool | panel.io.location.Location = True, area: str = 'main', target: str | None = None) -> panel.viewable.Viewable
 :canonical: panelini.main.Panelini.servable
 
 ```{autodoc2-docstring} panelini.main.Panelini.servable

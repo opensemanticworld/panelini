@@ -8,7 +8,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from examples.panels.terminalmirror.terminalmirror_panelini_min import app, terminalmirror_panel
+from examples.panels.terminalmirror.terminalmirror_panelini_min import app, card
+from panelini.testing import wait_until, xterm_wait_for_text
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -19,29 +20,30 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for page to load
-
     # The terminal widget (xterm.js) is rendered within the Panelini app.
-    assert page.locator(".xterm").first.is_visible()
+    page.locator(".xterm").first.wait_for()
 
     # Check that the Panelini Card title is present.
     assert page.locator("text=Terminal Mirror").first.is_visible()
 
     # Click the button: output should be mirrored into the terminal widget.
     page.locator(".print_btn button").first.click()
-    time.sleep(1)
-    assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
+    xterm_wait_for_text(page, "Hello from TerminalMirror!")
 
-    # Collapsing and re-expanding the card must not lose the mirrored output:
-    # the buffer is replayed via redraw() on expand.
-    clears_before = terminalmirror_panel.terminal._terminal._clears
+    # Collapsing and re-expanding the card must not lose the mirrored output
+    # (replayed via redraw() on expand). `.xterm` visibility toggles instantly
+    # client-side, but the server only redraws once it has actually processed
+    # the collapse; clicking expand before that round trip lands can coalesce
+    # into a no-op collapsed update and skip redraw() entirely. Wait on the
+    # real server-side state (same process, threaded server) instead of
+    # racing the websocket round trip.
     header = page.locator(".card-header").first
     header.click()  # collapse
-    time.sleep(1)
+    wait_until(lambda: card.collapsed is True, timeout=10)
+    page.locator(".xterm").first.wait_for(state="hidden")
     header.click()  # expand
-    time.sleep(2)
-    assert terminalmirror_panel.terminal._terminal._clears == clears_before + 1
-    assert "Hello from TerminalMirror!" in terminalmirror_panel.terminal._terminal.output
-    assert page.locator(".xterm").first.is_visible()
+    wait_until(lambda: card.collapsed is False, timeout=10)
+    page.locator(".xterm").first.wait_for(state="visible")
+    xterm_wait_for_text(page, "Hello from TerminalMirror!")
 
     server.stop()

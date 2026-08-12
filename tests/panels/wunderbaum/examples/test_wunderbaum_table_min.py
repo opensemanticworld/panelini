@@ -7,6 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.wunderbaum_table_min import tree
+from panelini.testing import wb_wait
 
 
 @pytest.mark.media(role="overview", capture="screenshot")
@@ -17,7 +18,7 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(5)
+    wb_wait(page)
 
     assert len(tree.source) == 3
     assert len(tree.columns) == 4

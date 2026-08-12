@@ -246,7 +246,14 @@ def _title(stem: str) -> str:
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.load_default(size=size)
+    # load_default() is typed as FreeTypeFont | ImageFont, but passing a
+    # concrete size always takes the truetype() branch, which returns
+    # FreeTypeFont.
+    font = ImageFont.load_default(size=size)
+    if not isinstance(font, ImageFont.FreeTypeFont):
+        msg = "expected FreeTypeFont"
+        raise TypeError(msg)
+    return font
 
 
 def _make_thumbnail(path: Path, category: str) -> Path:

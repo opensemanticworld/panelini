@@ -24,7 +24,10 @@ app.main_set(
 )
 
 
-sidebar_objects = [
+# Annotated as list[Viewable] (not inferred as list[Card]) since list is
+# invariant: sidebar_set/sidebar_right_set expect list[Viewable] and a
+# narrower list[Card] is not assignable to it even though Card is a Viewable.
+sidebar_objects: list[pn.viewable.Viewable] = [
     pn.Card(
         title="Set complete sidebar objects",
         objects=["Some sidebar content goes here"],

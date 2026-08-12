@@ -1,6 +1,5 @@
 import panel as pn
 from pydantic import BaseModel, Field
-from pydantic._internal._model_construction import ModelMetaclass
 
 from panelini.panels.jsoneditor import JsonEditor
 
@@ -29,7 +28,7 @@ def _apply_formats(schema: dict, array_tabs: bool, dict_categories: bool) -> dic
 class PydanticEditor(JsonEditor):
     def __init__(
         self,
-        pydantic_model: ModelMetaclass,
+        pydantic_model: type[BaseModel],
         value=None,
         format_array_tabs: bool = False,
         format_dict_categories: bool = False,

@@ -39,12 +39,24 @@ def test_chat_min_renders(ready_page: Page):
     """Verify the minimal AI chat example renders its main UI elements."""
     page = ready_page
 
-    # Chat and Preview cards are visible
-    assert page.locator("text=Chat").first.is_visible()
-    assert page.locator("text=Preview").first.is_visible()
+    # Chat and Preview cards are visible. Exact heading match: a plain
+    # text=Chat/text=Preview locator also matches unrelated sidebar
+    # substrings ("Chat Management", "Update Preview" checkbox label).
+    assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
+    assert page.get_by_role("heading", name="Preview", exact=True).is_visible()
 
     # Welcome message is shown
     assert page.locator("text=Hello! 👋").first.is_visible()
+
+    # The left sidebar starts collapsed (Panelini's sidebar_visible defaults
+    # to False), so it must be opened before its contents are interactable.
+    # ready_page is module-scoped and shared with other tests in this file,
+    # so only toggle if it's still closed. Wait for the open transition to
+    # finish; is_visible() checks instantaneously and does not auto-wait.
+    general_setup = page.locator("text=General Setup").first
+    if not general_setup.is_visible():
+        page.locator(".left-navbar-button").first.click()
+        general_setup.wait_for()
 
     # Sidebar: General Setup card is present
     assert page.locator("text=General Setup").first.is_visible()
@@ -60,8 +72,16 @@ def test_chat_min_clear_chat(ready_page: Page):
     # Welcome message should be visible before clearing
     assert page.locator("text=Hello! 👋").first.is_visible()
 
+    # Clear Chat lives in the sidebar's General Setup card, which starts
+    # collapsed (Panelini's sidebar_visible defaults to False). ready_page is
+    # module-scoped and shared with test_chat_min_renders, which may have
+    # already opened it, so only toggle if it's still closed.
+    clear_chat_button = page.locator("button:has-text('Clear Chat')")
+    if not clear_chat_button.is_visible():
+        page.locator(".left-navbar-button").first.click()
+
     # Click clear chat button
-    page.locator("button:has-text('Clear Chat')").click()
+    clear_chat_button.click()
 
     # System message about clearing should appear
     page.locator("text=Chat and conversation history cleared").first.wait_for()

@@ -77,6 +77,20 @@ def _marker_viewport(item):
     return {"width": int(w), "height": int(h)}
 
 
+def _media_test_dir(request):
+    """A per-test directory that collects every video recorded during the test.
+
+    One test can open more than one browser context: pytest-playwright's ``page``
+    fixture opens one, and the shared-server UI tests open their own via
+    ``browser.new_context()``. Both are pointed here, and the one with real content
+    (the largest file) is the clip; the throwaway blank context is ignored.
+    """
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in request.node.nodeid)
+    out = Path(request.config._media_video_dir) / safe
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
 def _install_glide(page, default_steps: int = 24):
     """Record-mode only: make the mouse glide so recorded cursors read well.
 
@@ -133,7 +147,7 @@ def browser_context_args(browser_context_args, request):
     if request.config.getoption("--record-media") and request.node.get_closest_marker("media"):
         vp = _marker_viewport(request.node)
         args["viewport"] = vp
-        args["record_video_dir"] = str(request.config._media_video_dir)
+        args["record_video_dir"] = str(_media_test_dir(request))
         # Match the viewport so the video keeps full resolution (Playwright
         # otherwise scales the video down to fit 800x800).
         args["record_video_size"] = vp
@@ -150,6 +164,29 @@ def _media_record(request):
     captures = [(m.args[1] if len(m.args) > 1 else m.kwargs.get("capture", "gif")) for m in media_markers]
     animate = any(not c.startswith("screenshot") for c in captures)
 
+    from playwright.sync_api import Browser
+
+    test_dir = _media_test_dir(request)
+    vp = _marker_viewport(request.node)
+
+    # Shared-server UI tests open their own context with ``browser.new_context()``,
+    # which bypasses the ``browser_context_args`` video wiring above and would record
+    # nothing. Patch new_context so any context opened during the test also records
+    # into this test's directory (and shows the cursor for animations).
+    orig_new_context = Browser.new_context
+
+    def _recording_new_context(self, **kwargs):
+        kwargs.setdefault("record_video_dir", str(test_dir))
+        kwargs.setdefault("record_video_size", vp)
+        kwargs.setdefault("viewport", vp)
+        ctx = orig_new_context(self, **kwargs)
+        if animate:
+            with contextlib.suppress(Exception):
+                ctx.add_init_script(CURSOR_INIT_JS)
+        return ctx
+
+    Browser.new_context = _recording_new_context
+
     page = request.getfixturevalue("page")
     restore_glide = None
     if animate:
@@ -161,15 +198,18 @@ def _media_record(request):
     finally:
         if restore_glide:
             restore_glide()
+        Browser.new_context = orig_new_context
     if animate:
         with contextlib.suppress(Exception):
             page.wait_for_timeout(TAIL_HOLD_MS)  # hold the final frame
-    video_path = None
-    try:
-        if page.video:
-            video_path = page.video.path()
-    except Exception:
-        video_path = None
+
+    # Videos finalise when their context closes (during fixture teardown, which runs
+    # before this point). Pick the largest .webm in the test dir: the throwaway page
+    # fixture context that navigated nowhere leaves a near-empty file.
+    with contextlib.suppress(Exception):
+        page.context.close()  # flush the page fixture's own video before we scan
+    videos = sorted(test_dir.glob("*.webm"), key=lambda p: p.stat().st_size, reverse=True)
+    video_path = str(videos[0]) if videos else None
     if not video_path:
         return
     markers = [
@@ -277,7 +317,11 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
 
     reader = imageio.get_reader(video)
     src_fps = reader.get_meta_data().get("fps") or 25
-    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]
+    # imageio's bundled stub declares Reader.__iter__ -> Array instead of
+    # Iterator[Array], so it fails the Iterable protocol check even though
+    # Reader is iterable at runtime (this is how imageio.get_reader() is
+    # documented to be used).
+    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]  # ty: ignore[invalid-argument-type]
     reader.close()
 
     for m in job["markers"]:
