@@ -1,6 +1,6 @@
 # AI Chat Panel
 
-```{image} /_static/media/ai/chat_min_feature.png
+```{image} /_static/media/ai/chat_min_overview.webp
 :alt: chat min feature
 :class: docs-media
 ```

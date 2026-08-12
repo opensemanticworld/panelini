@@ -7,6 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.wunderbaum_panel_min import source, tree
+from panelini.testing import wb_wait
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -17,7 +18,7 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(5)  # extra time for shadow DOM layout
+    wb_wait(page)
 
     assert tree.source == source
     assert len(tree.source) == 3

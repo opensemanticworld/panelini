@@ -8,7 +8,7 @@ Walkthroughs of every example in [`examples/`](https://github.com/opensemanticwo
 :::{grid-item-card} Chat
 :link: chat/index
 :link-type: doc
-:img-top: /_static/media/ai/chat_min_feature.png
+:img-top: /_static/media/ai/chat_min_overview.webp
 LLM chat panels - drop-in, tool-augmented, and multi-tab.
 :::
 
@@ -31,6 +31,13 @@ Interactive network graphs with context menus and drag interactions.
 :link-type: doc
 :img-top: /_static/media/wunderbaum/virtual_filesystem_overview.webp
 Trees and tree-grids - columns, checkboxes, lazy loading, drag-and-drop, and more.
+:::
+
+:::{grid-item-card} Terminal Mirror
+:link: terminalmirror/index
+:link-type: doc
+:img-top: /_static/media/terminalmirror/terminalmirror_panelini_min_feature.webp
+Stream Python stdout and stderr into a live on-screen terminal.
 :::
 
 :::{grid-item-card} Use cases

@@ -16,6 +16,8 @@ import pytest
 from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from panelini.testing import wb_row, wb_title_center
+
 _REPO = Path(__file__).resolve().parents[2]
 _APPS_DIR = _REPO / "docs" / "_static" / "portfolio" / "apps"
 sys.path.insert(0, str(_REPO / "docs"))
@@ -35,6 +37,10 @@ _CATEGORY_SELECTOR = {
     # In Pyodide TerminalMirror renders its console-mirror HTML pane (.tm-console)
     # instead of the xterm widget (.xterm), which cannot load in WASM.
     "terminalmirror": ".tm-console, .xterm",
+    "usecases": ".vis-network canvas",
+    # The chat runs against the LangChain stand-ins (see panelini.ai_testing); its
+    # prompt box is the signature widget.
+    "ai": "textarea",
 }
 
 # First load fetches Pyodide + wheels over the network; keep this well above a normal
@@ -53,6 +59,92 @@ def _discover_apps():
 
 
 _APPS = _discover_apps()
+
+# Settle time after the widget appears, before interacting: the worker may still be
+# installing packages, so a click sent too early lands before Python is listening.
+_SETTLE_MS = 8_000
+# Interaction budget once Python is up (a round trip is fast; this is generous).
+_ROUND_TRIP_MS = 10_000
+
+
+def _rows(page: Page) -> int:
+    return page.locator(".wb-row").count()
+
+
+def _await_more_rows(page: Page, before: int) -> int:
+    """Poll until the tree grows past *before*, or the round-trip budget runs out.
+
+    Polling (rather than one fixed sleep) keeps the check fast when the round trip is
+    quick and still tolerant when the worker is busy, which is what made a fixed wait
+    flaky under load.
+    """
+    deadline, step = _ROUND_TRIP_MS, 250
+    waited = 0
+    while waited < deadline:
+        page.wait_for_timeout(step)
+        waited += step
+        after = _rows(page)
+        if after > before:
+            return after
+    return _rows(page)
+
+
+def _wb_add_via_context_menu(page: Page, node: str, item: str) -> tuple[int, int]:
+    """Right-click the node titled *node* and run *item*; return rows before/after.
+
+    Targets the node by title through ``panelini.testing`` rather than by position:
+    Wunderbaum virtualises rows and its column header is a ``.wb-row`` too, so
+    positional selectors pick the wrong element.
+    """
+    before = _rows(page)
+    tx, ty = wb_title_center(page, node)
+    page.mouse.click(tx, ty, button="right")
+    page.locator(".wb-context-menu").wait_for(state="visible", timeout=10_000)
+    page.locator(".wb-context-menu-item", has_text=item).first.click()
+    return before, _await_more_rows(page, before)
+
+
+def _wb_click_button(page: Page, label: str) -> tuple[int, int]:
+    """Click a Panel button that mutates the tree from Python."""
+    before = _rows(page)
+    page.locator(f"button:has-text('{label}')").first.click()
+    return before, _await_more_rows(page, before)
+
+
+def _wb_expand_lazy(page: Page, node: str) -> tuple[int, int]:
+    """Expand the lazy node titled *node*; children arrive only if Python answers."""
+    before = _rows(page)
+    wb_row(page, node).locator(".wb-expander").click()
+    return before, _await_more_rows(page, before)
+
+
+def _chat_exchange(page: Page) -> tuple[int, int]:
+    """Send a prompt and wait for the stubbed reply to stream back.
+
+    Exercises the whole chain in WASM: the prompt reaches Python, the LangChain
+    stand-ins answer, and the streamed chunks render.
+    """
+    box = page.locator("textarea").first
+    box.fill("Does this demo answer?")
+    box.press("Enter")
+    reply = page.get_by_text("simulated reply", exact=False).first
+    reply.wait_for(timeout=_ROUND_TRIP_MS * 3)
+    return 0, 1 if reply.is_visible() else 0
+
+
+# Per-app interaction that can only succeed if a JS -> Python -> JS round trip works.
+# Rendering alone is not enough: a stale pre-rendered snapshot, or a Panel version whose
+# ESM property sync is broken in WASM, still renders but silently ignores every callback.
+# Each entry maps to a callable returning (before, after) counts that must strictly grow.
+_INTERACTIONS = {
+    ("wunderbaum", "virtual_filesystem"): lambda p: _wb_add_via_context_menu(p, "user", "New Folder"),
+    ("wunderbaum", "context_menu"): lambda p: _wb_add_via_context_menu(p, "src", "Add Child"),
+    ("wunderbaum", "lazy_loading"): lambda p: _wb_expand_lazy(p, "Root 1"),
+    ("wunderbaum", "incremental_tree_demo"): lambda p: _wb_click_button(p, "Next Step"),
+    ("ai", "chat_min"): _chat_exchange,
+    ("ai", "chat_custom_tool"): _chat_exchange,
+    ("ai", "chat_no_preview_no_tools"): _chat_exchange,
+}
 
 
 @pytest.mark.parametrize(
@@ -76,7 +168,24 @@ def test_app_renders(page: Page, apps_base_url: str, category: str, stem: str):
         fallback = page.get_by_text("Could not render this example").count() > 0
         reason = "wrapper fell back to 'Could not render'" if fallback else "widget never appeared"
         errors = "\n  ".join(console_errors[-5:]) or "(none)"
+        # pytest.fail is `reason: str = "", pytrace: bool = True`, but ty
+        # misresolves the wrapping _WithException[...] protocol used by
+        # _pytest.outcomes and matches the positional arg against `pytrace`.
         pytest.fail(
-            f"{category}/{stem}: {reason} (selector {selector!r} not visible within "
+            f"{category}/{stem}: {reason} (selector {selector!r} not visible within "  # ty: ignore[invalid-argument-type]
             f"{_RENDER_TIMEOUT_MS // 1000}s).\nLast console errors:\n  {errors}"
+        )
+
+    interaction = _INTERACTIONS.get((category, stem))
+    if interaction is None:
+        return
+
+    page.wait_for_timeout(_SETTLE_MS)
+    before, after = interaction(page)
+    if after <= before:
+        errors = "\n  ".join(console_errors[-5:]) or "(none)"
+        pytest.fail(
+            f"{category}/{stem}: rendered, but the interaction did not reach Python "  # ty: ignore[invalid-argument-type]
+            f"(observed {before} -> {after}, expected growth). The app is a dead "
+            f"screenshot: callbacks are silently dropped.\nLast console errors:\n  {errors}"
         )

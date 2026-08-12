@@ -144,7 +144,14 @@ cython_debug/
 # Local environment
 .ign/
 _ign/
-data/
+
+
+# Data cherry picking
+data/*
+!data/bench/
+data/bench/*
+!data/bench/test-suite/
+
 
 # Raw Playwright recordings kept via `pytest --record-media --keep-video`
 docs/_static/media/_videos/

@@ -238,10 +238,14 @@ class BeautifyDrawioTool(BaseTool):
             return "No file loaded. Ask the user to upload a .drawio or .drawio.png first."
 
         try:
-            client_kwargs: dict[str, str] = {"api_key": self.api_key}
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-            client = anthropic.AsyncAnthropic(**client_kwargs)
+            # Built explicitly (rather than via a dict[str, str] unpacked with
+            # **) so each keyword lines up with its real parameter type on
+            # AsyncAnthropic.__init__ (e.g. timeout, max_retries are not str).
+            client = (
+                anthropic.AsyncAnthropic(api_key=self.api_key, base_url=self.base_url)
+                if self.base_url
+                else anthropic.AsyncAnthropic(api_key=self.api_key)
+            )
             resp = await client.messages.create(
                 model=self.model_name,
                 # 16k headroom: typical editable mxGraphModel is 5-15k chars;
@@ -275,7 +279,14 @@ class BeautifyDrawioTool(BaseTool):
         except Exception as e:
             return f"Anthropic API error: {e}"
 
-        new_xml = _strip_fences(resp.content[0].text)
+        first_block = resp.content[0]
+        # resp.content is a union of block types (tool-use, thinking, ...) and
+        # only TextBlock has .text; getattr keeps this robust to whichever
+        # block type actually comes back instead of assuming index 0 is text.
+        text = getattr(first_block, "text", None)
+        if not isinstance(text, str):
+            return f"Unexpected response block type: {type(first_block).__name__}. Please try again."
+        new_xml = _strip_fences(text)
         try:
             validate_drawio_xml(new_xml)
         except ET.ParseError as e:

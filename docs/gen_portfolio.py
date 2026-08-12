@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -49,6 +50,9 @@ from PIL import Image, ImageDraw, ImageFont
 _DOCS = Path(__file__).resolve().parent
 _REPO = _DOCS.parent
 _PANELS_DIR = _REPO / "examples" / "panels"
+# Multi-component highlights. They live outside ``examples/panels`` but are converted
+# too, under a ``usecases`` category that matches their docs media area.
+_USECASES_DIR = _REPO / "examples" / "usecases"
 _THUMB_DIR = _DOCS / "_static" / "portfolio" / "thumbs"
 # Committed docs media (recorded from the @pytest.mark.media tests). When a clip or
 # still exists for an example it is used as the card thumbnail instead of a placeholder.
@@ -63,6 +67,11 @@ _PAGE = _DOCS / "portfolio" / "index.md"
 # beyond panel/param (which the base environment provides). panelini itself is
 # installed from the locally-built wheel inside the wrapper.
 _REQUIREMENTS = ["numpy", "pydantic"]
+
+# Extra packages a single category needs. The AI examples call ``load_dotenv()`` at
+# import time; python-dotenv is pure Python, so micropip can install it (unlike
+# LangChain itself, which is replaced by the stand-ins in the wrapper).
+_CATEGORY_REQUIREMENTS: dict[str, list[str]] = {"ai": ["python-dotenv"]}
 
 # Self-contained wrapper: inline the example source, run it with serve/servable
 # intercepted to capture the intended renderable, then servable that. Executing into
@@ -82,6 +91,19 @@ from panelini import Panelini
 # render too (panel convert snapshots on the host, where xterm.js would otherwise be
 # embedded and then throw in the browser before the worker hydrates).
 os.environ.setdefault("PANELINI_TERMINAL_MODE", "console")
+
+# The AI examples import LangChain and talk to a provider. LangChain cannot be
+# installed under Pyodide (langchain-core needs uuid-utils and zstandard, native
+# extensions with no pure-Python wheel), and provider credentials must never ship in a
+# public page. Registering the stand-ins here - before the example source is executed
+# below - makes the example's own ``import langchain...`` lines resolve to them, so the
+# example file itself stays untouched and still uses the real stack everywhere else.
+# Replies are canned; the pages say so.
+if {ai_stub}:
+    from panelini.ai_testing import install as __pf_install_ai_stub
+
+    __pf_install_ai_stub()
+
 pn.extension("tabulator", "jsoneditor", "plotly")
 
 # In WASM, panel.io exposes only ``serve`` (from panel.io.pyodide); the tornado-backed
@@ -168,6 +190,11 @@ if __pf_view is None and __pf_is_view(globals().get("app")):
     __pf_view = globals().get("app")
 
 if isinstance(__pf_view, Panelini):
+    # Collapse the left sidebar when it is empty so the embedded demo uses the full
+    # iframe width (the toggle button stays, so it can still be opened). Judged on the
+    # left sidebar alone: a demo can fill only the right one and still waste the left.
+    if not __pf_view.sidebar:
+        __pf_view.sidebar_visible = False
     __pf_orig["panelini"](__pf_view)
 elif __pf_view is not None:
     # pn.panel() turns Viewables, Viewers, and ``__panel__`` objects into a servable.
@@ -177,9 +204,10 @@ else:
 """
 
 # Panels excluded from the Pyodide portfolio (server/sandbox-backed, can't run in WASM).
-_EXCLUDE_STEMS = {"plot_by_code"}
-# Categories handled in a later step (the browser-native AI panel replaces this stack).
-_EXCLUDE_CATEGORIES = {"ai"}
+# ``drawai_beautify`` drives the Anthropic SDK directly and renders through the hosted
+# drawio viewer, so the LangChain stand-ins do not cover it; it stays media-only.
+_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify"}
+_EXCLUDE_CATEGORIES: set[str] = set()
 
 # Per-category accent colour (background gradient base) + short human label.
 _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
@@ -187,6 +215,7 @@ _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
     "jsoneditor": ((13, 148, 136), "JSON Editor"),
     "visnetwork": ((37, 99, 235), "VisNetwork"),
     "wunderbaum": ((217, 119, 6), "Wunderbaum"),
+    "usecases": ((190, 24, 93), "Use cases"),
 }
 
 _THUMB_SIZE = (480, 270)  # 16:9 preview
@@ -204,6 +233,10 @@ def discover() -> dict[str, list[Path]]:
         if category in _EXCLUDE_CATEGORIES:
             continue
         grouped.setdefault(category, []).append(path)
+    for path in sorted(_USECASES_DIR.glob("*.py")):
+        if path.name == "__init__.py" or path.name.startswith("_"):
+            continue
+        grouped.setdefault("usecases", []).append(path)
     return grouped
 
 
@@ -213,7 +246,14 @@ def _title(stem: str) -> str:
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.load_default(size=size)
+    # load_default() is typed as FreeTypeFont | ImageFont, but passing a
+    # concrete size always takes the truetype() branch, which returns
+    # FreeTypeFont.
+    font = ImageFont.load_default(size=size)
+    if not isinstance(font, ImageFont.FreeTypeFont):
+        msg = "expected FreeTypeFont"
+        raise TypeError(msg)
+    return font
 
 
 def _make_thumbnail(path: Path, category: str) -> Path:
@@ -369,7 +409,7 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
     out_dir = _APPS_DIR / category
     out_dir.mkdir(parents=True, exist_ok=True)
     b64 = base64.b64encode(path.read_text(encoding="utf-8").encode("utf-8")).decode("ascii")
-    body = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name)
+    body = _WRAPPER_TEMPLATE.format(b64=b64, name=path.name, ai_stub=category == "ai")
     sig = hashlib.sha256(f"{body}{wheel_name}{panelini_sig}".encode()).hexdigest()[:16]
     sig_marker = f"portfolio-sig: {sig}"
     wrapper = f"# {sig_marker}\n{body}"
@@ -384,9 +424,6 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
         print(f"  - {category}/{path.stem}.html (unchanged, skipped)")
         return True
 
-    # The app worker lives at apps/<category>/<stem>.js; the wheel at portfolio/wheels/,
-    # so a relative URL gets micropip to fetch it regardless of the docs base path.
-    wheel_url = f"../../wheels/{wheel_name}"
     with tempfile.TemporaryDirectory() as tmp:
         wrapper_path = Path(tmp) / f"{path.stem}.py"
         wrapper_path.write_text(wrapper, encoding="utf-8")
@@ -396,30 +433,76 @@ def convert_panel(path: Path, category: str, wheel_name: str, panelini_sig: str 
             str(wrapper_path),
             "--to",
             "pyodide-worker",
+            # Do not embed the build-time pre-rendered snapshot. It stays on the page as a
+            # SECOND Bokeh document alongside the worker's live one, and clicks land on
+            # models whose ids the Python side never saw, so every callback silently
+            # no-ops (context menus, buttons, lazy loading, file drops). Skipping the
+            # embed leaves exactly one document, so events reach Python. It also removes
+            # the stale "Could not render this example" flash before hydration.
+            "--skip-embed",
             "--out",
             str(out_dir),
             "--requirements",
-            wheel_url,
+            # The local panelini wheel is NOT passed here: panel>=1.9 verifies local wheel
+            # paths and aborts on a relative one, and silently drops an absolute one. It is
+            # injected into the generated install list below instead.
             *_REQUIREMENTS,
+            *_CATEGORY_REQUIREMENTS.get(category, []),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  [FAIL] {category}/{path.name}\n{result.stderr.strip()[:300]}")
         return False
 
-    # The worker installs each env_spec entry with ``micropip.install('${pkg}')``.
-    # micropip can't resolve a relative wheel URL, so rewrite the call to resolve
-    # relative entries (the local wheel) to an absolute URL against the worker location.
     worker_js = out_dir / f"{path.stem}.js"
     js = worker_js.read_text(encoding="utf-8")
-    js = js.replace(
-        "micropip.install('${pkg}')",
-        "micropip.install('${pkg.startsWith('.') ? new URL(pkg, self.location.href).href : pkg}')",
-    )
+    js = _pin_bokeh_from_pypi(js)
+    js = _inject_local_wheel(js, wheel_name)
     worker_js.write_text(js, encoding="utf-8")
 
     print(f"  [ok] {category}/{path.stem}.html")
     return True
+
+
+_BOKEH_CDN_WHEEL = re.compile(r"'https://cdn\.holoviz\.org/panel/wheels/bokeh-([0-9][^']*)-py3-none-any\.whl'")
+
+
+def _inject_local_wheel(js: str, wheel_name: str) -> str:
+    """Add the locally built panelini wheel to the worker's micropip install list.
+
+    ``panel convert`` will not carry a local wheel through ``--requirements`` (see
+    ``convert_panel``), so the entry is spliced into the generated
+    ``micropip.install([...])` call. The install list lives inside a JS template literal,
+    so ``${...}`` resolves the wheel relative to the worker's own URL and the app keeps
+    working under any docs base path (the app is at apps/<category>/<stem>.js, the wheel
+    at portfolio/wheels/).
+
+    Raises:
+        ValueError: if the generated worker has no recognisable install call, which means
+            the converter's output shape changed and this rewrite needs updating.
+    """
+    marker = "micropip.install(["
+    start = js.find(marker)
+    if start == -1:
+        msg = "could not find micropip.install([...]) in the generated worker"
+        raise ValueError(msg)
+    end = js.find("])", start)
+    if end == -1:
+        msg = "unterminated micropip.install([...]) in the generated worker"
+        raise ValueError(msg)
+    entry = ", '${new URL('../../wheels/" + wheel_name + "', self.location.href).href}'"
+    return js[:end] + entry + js[end:]
+
+
+def _pin_bokeh_from_pypi(js: str) -> str:
+    """Point the bokeh requirement at PyPI instead of the holoviz CDN.
+
+    ``panel convert`` writes a CDN wheel URL for bokeh, but that path is not published
+    for every release (it 403s for bokeh 3.9.2), which aborts the whole micropip install
+    and leaves the app with "No module named 'panel'". bokeh is a pure-Python wheel, so a
+    plain pinned requirement resolves from PyPI instead.
+    """
+    return _BOKEH_CDN_WHEEL.sub(lambda m: f"'bokeh=={m.group(1)}'", js)
 
 
 def convert_all(force: bool = False) -> None:

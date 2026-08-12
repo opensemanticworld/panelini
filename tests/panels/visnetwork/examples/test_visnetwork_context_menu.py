@@ -2,6 +2,7 @@
 # playwright install
 # pytest test_context_menu.py --headed --slowmo 1000
 
+import copy
 import time
 
 import panel as pn
@@ -9,18 +10,45 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.context_menu import demo, panel
-from panelini.testing import node_dom_pos
+from panelini.testing import node_dom_pos, vn_wait, wait_until
+
+_PORT = 6520
+_ORIGINAL_NODES = copy.deepcopy(demo.vis.nodes)
+_ORIGINAL_EDGES = copy.deepcopy(demo.vis.edges)
+_ORIGINAL_NEXT_ID = demo.next_id
 
 
-def test_component(page: Page, port):
-    """The demo renders and its graph carries the expected data."""
-    url = f"http://localhost:{port}"
-
-    server = pn.serve(panel, port=port, threaded=True, show=False)
+@pytest.fixture(scope="module")
+def panel_server():
+    """Serve the context-menu demo once for the whole module."""
+    server = pn.serve(panel, port=_PORT, threaded=True, show=False)
     time.sleep(0.2)
+    yield server
+    pn.state.kill_all_servers()
 
-    page.goto(url)
-    time.sleep(3)  # wait for page to load
+
+@pytest.fixture
+def ready_page(browser, panel_server):
+    """Fresh browser page per test, against the module-scoped shared server.
+
+    ``demo`` is a module-level singleton mutated by the add-child test, so
+    its nodes/edges/id counter are reset here before navigating.
+    """
+    demo.vis.nodes = copy.deepcopy(_ORIGINAL_NODES)
+    demo.vis.edges = copy.deepcopy(_ORIGINAL_EDGES)
+    demo.next_id = _ORIGINAL_NEXT_ID
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(f"http://localhost:{_PORT}")
+    vn_wait(page)
+    yield page
+    page.goto("about:blank")
+    context.close()
+
+
+def test_component(ready_page: Page):
+    """The demo renders and its graph carries the expected data."""
+    page = ready_page
 
     # Three seed nodes, two seed edges
     assert len(demo.vis.nodes) == 3
@@ -32,19 +60,11 @@ def test_component(page: Page, port):
     # Canvas renders
     assert page.locator(".vis-network canvas").first.is_visible()
 
-    server.stop()
-
 
 @pytest.mark.media(role="feature", capture="gif")
-def test_right_click_adds_child(page: Page, port):
+def test_right_click_adds_child(ready_page: Page):
     """Right-clicking a node and choosing "Add Child" appends a child node."""
-    url = f"http://localhost:{port}"
-
-    server = pn.serve(panel, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-
-    page.goto(url)
-    time.sleep(3)
+    page = ready_page
 
     # "Root Folder" (id 1) is fixed at network coords (0, 0); map to DOM pixels.
     x, y = node_dom_pos(page, 1)
@@ -56,8 +76,4 @@ def test_right_click_adds_child(page: Page, port):
 
     before = len(demo.vis.nodes)
     menu.locator(".vn-context-menu-item", has_text="Add Child").click()
-    time.sleep(1.6)  # let the new child node render before the recording ends
-
-    assert len(demo.vis.nodes) == before + 1
-
-    server.stop()
+    wait_until(lambda: len(demo.vis.nodes) == before + 1)

@@ -35,8 +35,9 @@ source = [
 ]
 
 
-def on_lazy_load(key: str, request_data: dict) -> list[dict]:
+async def on_lazy_load(key: str, request_data: dict) -> list[dict]:
     """Return children for a lazy node."""
+    await asyncio.sleep(0.8)  # stand-in for a database or API call
     depth = key.count("_")
     children = []
     for i in range(1, 4):
@@ -61,11 +62,20 @@ Key points:
 
 - `lazy: True` on a node tells Wunderbaum to render an expander but defer loading. Mixing lazy and pre-loaded roots (like `Root 3`) is fine.
 - `lazy_load_callback(key, request_data)` returns the child list for that node. Returned children can themselves be `lazy: True`, enabling arbitrarily deep on-demand trees - here capped at three levels via the `depth` check.
-- The callback runs server-side on expand, so it can perform real I/O.
+- The callback runs server-side on expand, so it can perform real I/O. It may be a coroutine, as here: `await` the database or API call instead of blocking, which would otherwise freeze the server thread (and, in the browser, the whole app).
 
 ## How the test exercises it
 
 The test serves the app and asserts the three roots render (`.wb-row` count `>= 3`) and the `.wunderbaum-wrapper` is visible - confirming the lazy roots render their expanders before any children are loaded.
+
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/lazy_loading.html" title="Lazy loading - children on demand" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/lazy_loading.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 
 ## See also
 

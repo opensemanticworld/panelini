@@ -31,6 +31,18 @@
   - ```{autodoc2-docstring} panelini.testing.node_dom_pos
     :summary:
     ```
+* - {py:obj}`wait_until <panelini.testing.wait_until>`
+  - ```{autodoc2-docstring} panelini.testing.wait_until
+    :summary:
+    ```
+* - {py:obj}`xterm_wait_for_text <panelini.testing.xterm_wait_for_text>`
+  - ```{autodoc2-docstring} panelini.testing.xterm_wait_for_text
+    :summary:
+    ```
+* - {py:obj}`vn_wait <panelini.testing.vn_wait>`
+  - ```{autodoc2-docstring} panelini.testing.vn_wait
+    :summary:
+    ```
 * - {py:obj}`wb_wait <panelini.testing.wb_wait>`
   - ```{autodoc2-docstring} panelini.testing.wb_wait
     :summary:
@@ -103,7 +115,7 @@
 ```
 ````
 
-````{py:function} center(box: dict) -> panelini.testing.Point
+````{py:function} center(box: playwright.sync_api.FloatRect) -> panelini.testing.Point
 :canonical: panelini.testing.center
 
 ```{autodoc2-docstring} panelini.testing.center
@@ -114,6 +126,27 @@
 :canonical: panelini.testing.node_dom_pos
 
 ```{autodoc2-docstring} panelini.testing.node_dom_pos
+```
+````
+
+````{py:function} wait_until(predicate: typing.Callable[[], bool], timeout: float = 2.0, interval: float = 0.05) -> None
+:canonical: panelini.testing.wait_until
+
+```{autodoc2-docstring} panelini.testing.wait_until
+```
+````
+
+````{py:function} xterm_wait_for_text(page: typing.Any, text: str, timeout: float = 30000) -> None
+:canonical: panelini.testing.xterm_wait_for_text
+
+```{autodoc2-docstring} panelini.testing.xterm_wait_for_text
+```
+````
+
+````{py:function} vn_wait(page: typing.Any, timeout: int = 10000) -> None
+:canonical: panelini.testing.vn_wait
+
+```{autodoc2-docstring} panelini.testing.vn_wait
 ```
 ````
 

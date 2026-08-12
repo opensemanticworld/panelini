@@ -28,6 +28,7 @@ from typing import Any
 
 import panel
 import param  # type: ignore[import-untyped]
+from panel.io.location import Location
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN LOCAL DIR PATH $$$$$$$$$$$$$$$$$$$$$$$$$$$
 _ROOT = Path(__file__).parent
@@ -60,7 +61,7 @@ def image_to_base64(image_path: str) -> str:
         raise ImageFileNotFoundError(image_path)
 
 
-class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
+class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     """Main class for the Panelini application."""
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -129,7 +130,7 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     )
 
     sidebar_visible = param.Boolean(
-        default=True,
+        default=False,
         doc="Enable or disable the collapsing of the left sidebar.",
     )
 
@@ -515,7 +516,24 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._panel_set()
         # print("TRIGGER: _panel_update_sidebar_right")
 
-    @param.depends("footer", watch=footer_enabled)
+    @param.depends("sidebar_visible", watch=True)
+    def _panel_update_sidebar_left_visible(self) -> None:
+        """Reflect a runtime change of ``sidebar_visible`` onto the rendered sidebar.
+
+        The Column reads ``sidebar_visible`` once at construction, so without this
+        watcher setting the param afterwards would be a no-op. The toggle button stays,
+        so a collapsed sidebar can still be opened.
+        """
+        if hasattr(self, "_sidebar_left"):
+            self._sidebar_left.visible = self.sidebar_visible
+
+    @param.depends("sidebar_right_visible", watch=True)
+    def _panel_update_sidebar_right_visible(self) -> None:
+        """Reflect a runtime change of ``sidebar_right_visible`` onto the right sidebar."""
+        if hasattr(self, "_sidebar_right"):
+            self._sidebar_right.visible = self.sidebar_right_visible
+
+    @param.depends("footer", watch=True)
     def _panel_update_footer(self) -> None:
         """Update the panel with the current layout of the footer."""
         self._footer_set()
@@ -573,10 +591,17 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         self._css_classes_extend(self.main, ["main-object"])
         return list(self.main)
 
-    def servable(self, **kwargs: Any) -> panel.viewable.Viewable:
+    def servable(
+        self,
+        title: str | None = None,
+        location: bool | Location = True,
+        area: str = "main",
+        target: str | None = None,
+    ) -> panel.viewable.Viewable:
         """Make the application servable with additional parameters."""
-        kwargs["title"] = kwargs.get("title", self.title)
-        return panel.viewable.Viewable.servable(self._panel, **kwargs)
+        if title is None:
+            title = self.title
+        return panel.viewable.Viewable.servable(self._panel, title, location, area, target)
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF PUBL DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
 

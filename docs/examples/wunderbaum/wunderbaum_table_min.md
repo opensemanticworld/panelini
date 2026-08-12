@@ -66,6 +66,15 @@ Key points:
 
 The test serves the tree and asserts `len(tree.columns) == 4`, that the `.wb-header` column header row rendered (proving table mode is active), and that `.wb-row` data rows are visible.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/wunderbaum_table_min.html" title="Wunderbaum treegrid - columns" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/wunderbaum_table_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
 ## See also
 
 - {doc}`wunderbaum_panel_min` - tree-only mode without columns

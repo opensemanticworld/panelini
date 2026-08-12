@@ -2,6 +2,7 @@
 # playwright install
 # pytest test_ctrl_drag_duplicate.py --headed --slowmo 1000
 
+import copy
 import time
 
 import panel as pn
@@ -9,18 +10,43 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.ctrl_drag_duplicate import demo, panel
-from panelini.testing import node_dom_pos
+from panelini.testing import node_dom_pos, vn_wait, wait_until
+
+_PORT = 6510
+_ORIGINAL_NODES = copy.deepcopy(demo.vis.nodes)
+_ORIGINAL_EDGES = copy.deepcopy(demo.vis.edges)
 
 
-def test_component(page: Page, port):
-    """The demo renders, seeds its graph, and wires the duplication callback."""
-    url = f"http://localhost:{port}"
-
-    server = pn.serve(panel, port=port, threaded=True, show=False)
+@pytest.fixture(scope="module")
+def panel_server():
+    """Serve the ctrl-drag-duplicate demo once for the whole module."""
+    server = pn.serve(panel, port=_PORT, threaded=True, show=False)
     time.sleep(0.2)
+    yield server
+    pn.state.kill_all_servers()
 
-    page.goto(url)
-    time.sleep(3)  # wait for page to load
+
+@pytest.fixture
+def ready_page(browser, panel_server):
+    """Fresh browser page per test, against the module-scoped shared server.
+
+    ``demo.vis`` is a module-level singleton mutated by the duplicate test,
+    so its nodes/edges are reset here before navigating.
+    """
+    demo.vis.nodes = copy.deepcopy(_ORIGINAL_NODES)
+    demo.vis.edges = copy.deepcopy(_ORIGINAL_EDGES)
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(f"http://localhost:{_PORT}")
+    vn_wait(page)
+    yield page
+    page.goto("about:blank")
+    context.close()
+
+
+def test_component(ready_page: Page):
+    """The demo renders, seeds its graph, and wires the duplication callback."""
+    page = ready_page
 
     # Three seed nodes, two seed edges
     assert len(demo.vis.nodes) == 3
@@ -33,22 +59,17 @@ def test_component(page: Page, port):
     assert page.locator(".vis-network canvas").first.is_visible()
     assert page.locator("text=Enable Post-Processing").is_visible()
 
-    server.stop()
 
-
-# Open the clip after the graph has fitted (a ResizeObserver frames it ~5s in).
-@pytest.mark.media(role="feature", capture="gif@5.2")
-def test_ctrl_drag_duplicates(page: Page, port):
+# The test fits the graph itself (fit(animation:false) below), so the clip can open
+# from the start; the leading-blank trim drops the pre-load frames.
+@pytest.mark.media(role="feature", capture="gif")
+def test_ctrl_drag_duplicates(ready_page: Page):
     """Ctrl+dragging a node duplicates it, adding a node to the graph."""
-    server = pn.serve(panel, port=port, threaded=True, show=False)
-    time.sleep(0.2)
-    page.goto(f"http://localhost:{port}")
-    time.sleep(3)  # let the page load + graph draw (load is reliably under 3s)
+    page = ready_page
     # Physics is disabled, so vis-network draws at 1:1 (zoomed in); fit without
     # animation so the fitted view is in place immediately (default fit animates
     # over ~1-2s, which would leave the clip opening on the zoomed state).
     page.locator(".network-canvas").first.evaluate("el => el._visNetwork && el._visNetwork.fit({animation: false})")
-    time.sleep(1)  # fitted graph is static from ~4s
     before = len(demo.vis.nodes)
     x, y = node_dom_pos(page, 1)
     page.mouse.move(x, y)
@@ -57,6 +78,4 @@ def test_ctrl_drag_duplicates(page: Page, port):
     page.mouse.move(x + 190, y + 120)
     page.mouse.up()
     page.keyboard.up("Control")
-    time.sleep(1.2)
-    assert len(demo.vis.nodes) > before
-    server.stop()
+    wait_until(lambda: len(demo.vis.nodes) > before)

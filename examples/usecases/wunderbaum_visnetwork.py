@@ -447,6 +447,9 @@ def show_details(nid: str) -> None:
 app = Panelini(
     title="Class Hierarchy Editor",
     sidebar_right_enabled=True,
+    # Details live in the right sidebar; the left one stays empty, so collapse it for
+    # more width (the toggle button remains, so it can still be opened).
+    sidebar_visible=False,
 )
 app.main_set(
     objects=[

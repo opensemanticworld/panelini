@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
-from panelini.testing import node_dom_pos
+from panelini.testing import node_dom_pos, vn_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -21,12 +21,16 @@ def test_json_data_tooltip(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for page to load
+    vn_wait(page)
 
-    # Inject a visible cursor indicator (Playwright doesn't show the system cursor)
+    # Inject a visible cursor (Playwright hides the system cursor). A SOLID, semi-opaque
+    # disc, not a thin ring: the media dedup erodes away isolated speckle to keep static
+    # holds compact, and a 2px ring erodes to nothing, so the moving cursor would leave no
+    # keyframes and the clip would collapse to a single frame. A filled disc survives.
     page.evaluate("""
         const cursor = document.createElement('div');
-        cursor.style.cssText = 'width:20px;height:20px;border:2px solid red;border-radius:50%;'
+        cursor.style.cssText = 'width:26px;height:26px;background:rgba(229,57,53,0.55);'
+            + 'border:3px solid #e53935;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.9);'
             + 'position:fixed;pointer-events:none;z-index:999999;transform:translate(-50%,-50%);';
         document.body.appendChild(cursor);
         document.addEventListener('mousemove', e => {
@@ -44,14 +48,18 @@ def test_json_data_tooltip(page: Page, port):
     canvas = page.locator(".vis-network canvas").first
     assert canvas.is_visible()
 
-    # Move the mouse onto node 'n1'. node_dom_pos() resolves the shadow-DOM
-    # coordinates via vis-network's canvasToDOM (shared with the media generator).
+    # Approach node 'n1' from a corner so the hover reads as a deliberate motion in the
+    # recording (a single move onto a centred node barely animates). node_dom_pos()
+    # resolves the shadow-DOM coordinates via vis-network's canvasToDOM.
     x, y = node_dom_pos(page, "n1")
+    page.mouse.move(x - 240, y + 160)
+    time.sleep(0.8)  # a clear "before hover" frame (node, no tooltip)
     page.mouse.move(x, y)
 
     # Wait for the tooltip to appear
     tooltip = page.locator("div.vis-tooltip")
     tooltip.wait_for(state="visible", timeout=5000)
+    time.sleep(1.2)  # dwell so the YAML tooltip is readable in the clip
 
     # Verify tooltip contains expected YAML content
     tooltip_text = tooltip.inner_text()
@@ -65,5 +73,14 @@ def test_json_data_tooltip(page: Page, port):
     # Verify tooltip has colored spans (DOM element rendering)
     spans = tooltip.locator("span")
     assert spans.count() > 0, "Tooltip should contain colored <span> elements"
+
+    # vis-network hides the tooltip once the pointer sits idle, so the last recorded
+    # frame would lose it. Nudge the pointer gently over the node to keep the tooltip
+    # shown through the end of the clip, and stop while it is still visible.
+    for _ in range(12):
+        page.mouse.move(x + 2, y - 2)
+        page.mouse.move(x, y)
+        time.sleep(0.1)
+    assert tooltip.is_visible()
 
     server.stop()

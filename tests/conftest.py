@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -77,27 +78,48 @@ def _marker_viewport(item):
     return {"width": int(w), "height": int(h)}
 
 
-def _install_glide(page, default_steps: int = 24):
-    """Record-mode only: make the mouse glide so recorded cursors read well.
+def _media_test_dir(request):
+    """A per-test directory that collects every video recorded during the test.
 
-    Patches ``mouse.move``/``mouse.click`` (default to multi-step moves) and
-    ``Locator.click``/``hover`` (pre-glide to the element centre). Returns a
-    callable that restores the class-level patches. Tests need no ``steps=``.
+    One test can open more than one browser context: pytest-playwright's ``page``
+    fixture opens one, and the shared-server UI tests open their own via
+    ``browser.new_context()``. Both are pointed here, and the one with real content
+    (the largest file) is the clip; the throwaway blank context is ignored.
     """
-    from playwright.sync_api import Locator
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in request.node.nodeid)
+    out = Path(request.config._media_video_dir) / safe
+    out.mkdir(parents=True, exist_ok=True)
+    return out
 
-    mouse = page.mouse
-    orig_move, orig_click = mouse.move, mouse.click
 
-    def move(x, y, *, steps=None):
-        orig_move(x, y, steps=steps or default_steps)
+def _install_glide(default_steps: int = 28, step_delay: float = 0.014):
+    """Record-mode only: make the pointer glide smoothly across ANY page.
 
-    def click(x, y, **kw):
-        move(x, y)
-        orig_click(x, y, **kw)
+    Patches the Playwright ``Mouse`` and ``Locator`` classes - not one page's mouse -
+    so the shared-server UI tests, which drive their own ``browser.new_context()`` page,
+    also get smooth pointer motion. The move is interpolated with real sleeps between
+    sub-steps: a single stepped ``move`` completes too fast to leave intermediate video
+    frames, so a drag would teleport; the timed interpolation is what the recording
+    captures as a smooth drag. Returns a callable that restores the patches.
+    """
+    from playwright.sync_api import Locator, Mouse
 
-    mouse.move = move
-    mouse.click = click
+    pos = {"x": 640.0, "y": 360.0}
+    orig_move, orig_click = Mouse.move, Mouse.click
+
+    def move(self, x, y, *, steps=None):
+        n = max(1, steps or default_steps)
+        x0, y0 = pos["x"], pos["y"]
+        for i in range(1, n + 1):
+            orig_move(self, x0 + (x - x0) * i / n, y0 + (y - y0) * i / n, steps=1)
+            time.sleep(step_delay)
+        pos["x"], pos["y"] = float(x), float(y)
+
+    def click(self, x, y, **kw):
+        move(self, x, y)
+        return orig_click(self, x, y, **kw)
+
+    Mouse.move, Mouse.click = move, click
 
     loc_click, loc_hover = Locator.click, Locator.hover
 
@@ -107,7 +129,7 @@ def _install_glide(page, default_steps: int = 24):
         except Exception:
             box = None
         if box:
-            move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            locator.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
 
     def lclick(self, **kw):
         _preglide(self)
@@ -121,6 +143,7 @@ def _install_glide(page, default_steps: int = 24):
     Locator.hover = lhover
 
     def restore():
+        Mouse.move, Mouse.click = orig_move, orig_click
         Locator.click = loc_click
         Locator.hover = loc_hover
 
@@ -133,7 +156,7 @@ def browser_context_args(browser_context_args, request):
     if request.config.getoption("--record-media") and request.node.get_closest_marker("media"):
         vp = _marker_viewport(request.node)
         args["viewport"] = vp
-        args["record_video_dir"] = str(request.config._media_video_dir)
+        args["record_video_dir"] = str(_media_test_dir(request))
         # Match the viewport so the video keeps full resolution (Playwright
         # otherwise scales the video down to fit 800x800).
         args["record_video_size"] = vp
@@ -150,26 +173,52 @@ def _media_record(request):
     captures = [(m.args[1] if len(m.args) > 1 else m.kwargs.get("capture", "gif")) for m in media_markers]
     animate = any(not c.startswith("screenshot") for c in captures)
 
+    from playwright.sync_api import Browser
+
+    test_dir = _media_test_dir(request)
+    vp = _marker_viewport(request.node)
+
+    # Shared-server UI tests open their own context with ``browser.new_context()``,
+    # which bypasses the ``browser_context_args`` video wiring above and would record
+    # nothing. Patch new_context so any context opened during the test also records
+    # into this test's directory (and shows the cursor for animations).
+    orig_new_context = Browser.new_context
+
+    def _recording_new_context(self, **kwargs):
+        kwargs.setdefault("record_video_dir", str(test_dir))
+        kwargs.setdefault("record_video_size", vp)
+        kwargs.setdefault("viewport", vp)
+        ctx = orig_new_context(self, **kwargs)
+        if animate:
+            with contextlib.suppress(Exception):
+                ctx.add_init_script(CURSOR_INIT_JS)
+        return ctx
+
+    Browser.new_context = _recording_new_context
+
     page = request.getfixturevalue("page")
     restore_glide = None
     if animate:
         # Cursor + glide only for animations; keep screenshots cursor-free.
         page.add_init_script(CURSOR_INIT_JS)
-        restore_glide = _install_glide(page)
+        restore_glide = _install_glide()
     try:
         yield
     finally:
         if restore_glide:
             restore_glide()
-    if animate:
-        with contextlib.suppress(Exception):
-            page.wait_for_timeout(TAIL_HOLD_MS)  # hold the final frame
-    video_path = None
-    try:
-        if page.video:
-            video_path = page.video.path()
-    except Exception:
-        video_path = None
+        Browser.new_context = orig_new_context
+    # The final-state hold is synthesized in _emit_job (see the animation branch): a
+    # wait_for_timeout here would hold the page fixture's page, but the shared-server
+    # tests have already navigated their own page to about:blank by now.
+
+    # Videos finalise when their context closes (during fixture teardown, which runs
+    # before this point). Pick the largest .webm in the test dir: the throwaway page
+    # fixture context that navigated nowhere leaves a near-empty file.
+    with contextlib.suppress(Exception):
+        page.context.close()  # flush the page fixture's own video before we scan
+    videos = sorted(test_dir.glob("*.webm"), key=lambda p: p.stat().st_size, reverse=True)
+    video_path = str(videos[0]) if videos else None
     if not video_path:
         return
     markers = [
@@ -242,7 +291,10 @@ def _media_target(test_path: str, role: str, name: str | None, kind: str, fmt: s
     area = rel[1] if rel and rel[0] == "panels" else (rel[0] if rel else "misc")
     module = Path(test_path).stem
     module_slug = module[5:] if module.startswith("test_") else module
-    slug = name if (role == "feature" and name) else module_slug
+    # An explicit ``name=`` always wins, whatever the role: one module can record media
+    # for several examples (the AI chat ones share a module), and tying the override to
+    # ``feature`` silently produced module-named files for the overview clip.
+    slug = name or module_slug
     ext = {"screenshot": "png", "video": "mp4"}.get(kind, "gif" if fmt == "gif" else "webp")
     return DOCS_MEDIA / area / f"{slug}_{role}.{ext}"
 
@@ -274,7 +326,11 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
 
     reader = imageio.get_reader(video)
     src_fps = reader.get_meta_data().get("fps") or 25
-    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]
+    # imageio's bundled stub declares Reader.__iter__ -> Array instead of
+    # Iterator[Array], so it fails the Iterable protocol check even though
+    # Reader is iterable at runtime (this is how imageio.get_reader() is
+    # documented to be used).
+    frames = [(i / src_fps, fr) for i, fr in enumerate(reader)]  # ty: ignore[invalid-argument-type]
     reader.close()
 
     for m in job["markers"]:
@@ -292,8 +348,17 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
             seq = window
             while len(seq) > 1 and _is_blank(seq[0][1]):  # drop pre-load blank lead
                 seq = seq[1:]
+            while len(seq) > 1 and _is_blank(seq[-1][1]):  # drop teardown blank tail
+                seq = seq[:-1]
             step = max(1, round(src_fps / TARGET_FPS))
             imgs = [Image.fromarray(fr).convert("RGB") for _, fr in seq[::step]]
+            if imgs:
+                # Hold the final state. assemble_animation merges identical trailing
+                # frames into one, extending its duration (capped at max_frame_ms), so
+                # appending copies of the last frame yields a clean end-hold even for
+                # shared-server tests that navigate their page to about:blank at teardown.
+                hold = max(1, round(TAIL_HOLD_MS / (1000 / TARGET_FPS)))
+                imgs.extend([imgs[-1]] * hold)
             assemble_animation(imgs, target, duration_ms=round(1000 / TARGET_FPS), fmt=fmt)
         size_kb = target.stat().st_size / 1024 if target.exists() else 0
         print(f"[media] {target.relative_to(REPO_ROOT)} ({size_kb:.0f} kB)")

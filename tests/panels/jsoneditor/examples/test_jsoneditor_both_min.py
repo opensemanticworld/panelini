@@ -3,11 +3,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_both_min import app, form_editor, tree_editor
+from panelini.testing import wait_until
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_both_editors(page: Page, port):
     url = f"http://localhost:{port}"
 
@@ -19,13 +22,10 @@ def test_both_editors(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for both editors to load
-
     # Panelini form editor rendered (json-editor/json-editor uses .je-object__title)
-    assert page.locator(".je-object__title").count() > 0, "Form editor did not render"
-
+    page.locator(".je-object__title").first.wait_for()
     # Panel JSONEditor rendered (josdejong/jsoneditor uses .jsoneditor class)
-    assert page.locator(".jsoneditor").count() > 0, "Tree editor did not render"
+    page.locator(".jsoneditor").first.wait_for()
 
     # No JS errors from global name conflicts
     conflict_errors = [e for e in js_errors if "JSONEditor" in e]
@@ -34,10 +34,11 @@ def test_both_editors(page: Page, port):
     # Interact with form editor: fill the "name" field
     page.locator("#root\\[name\\]").fill("test123")
     page.locator("[for=root\\[name\\]]").click()
-    time.sleep(0.5)
+    wait_until(lambda: form_editor.get_value().get("name") == "test123")
     assert form_editor.get_value()["name"] == "test123"
 
-    # Interact with tree editor: verify Python-side value unchanged
-    assert tree_editor.value["string"] == "A string"
+    # Both editors start from the same instance; the tree side is untouched by the form edit
+    assert tree_editor.value["name"] == "Sample A"
+    assert tree_editor.value["unit"] == "mm"
 
     server.stop()

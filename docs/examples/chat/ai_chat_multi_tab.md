@@ -1,8 +1,12 @@
 # Multi-tab AI chats
 
-```{image} /_static/media/ai/chat_multi_tab_feature.png
+```{image} /_static/media/ai/chat_multi_tab_feature.webp
 :alt: chat multi tab feature
 :class: docs-media
+```
+
+```{note}
+The capture above and the live demo below both run against a stand-in model that streams one fixed answer: **no language model is running and no request leaves your browser**. LangChain cannot be installed under Pyodide (`langchain-core` needs `uuid-utils` and `zstandard`, native extensions with no pure-Python wheel), and provider credentials do not belong in a public page. Run the example locally with your own credentials to chat for real.
 ```
 
 **Source:** [`examples/panels/ai/chat_multi_tab.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_multi_tab.py)
@@ -95,6 +99,15 @@ sidebar_tabs.jslink(main_tabs, active="active")
 
 ```{tip}
 Need more than two? Just add more tabs - `jslink` scales trivially. The test exercises the sync: it clicks each tab header and asserts that every DOM element with the same tab name ends up with the `active` class.
+```
+
+## Run it live
+
+This example runs entirely in your browser via Pyodide, with the stand-in model described above. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/ai/chat_multi_tab.html" title="Multi-tab AI chats" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/ai/chat_multi_tab.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
 
 ## See also
