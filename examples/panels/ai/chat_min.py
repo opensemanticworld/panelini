@@ -15,7 +15,7 @@ from panelini import Panelini
 
 load_dotenv()  # load .env if present
 
-app = Panelini(title="Panelini AI Chat", use_ai=True, sidebar_visible=True)
+app = Panelini(title="Panelini AI Chat", use_ai=True)
 
 if __name__ == "__main__":
     serve(app.servable(), title="Panelini AI Chat", port=5006)

@@ -36,7 +36,15 @@ def _record_exchange(page, port, mock_langchain, module_name, ready_selector):
         time.sleep(0.5)
         page.goto(f"http://localhost:{port}")
         page.locator(ready_selector).first.wait_for(timeout=20000)
-        time.sleep(1.5)  # settle so the capture starts on a clean frame
+        time.sleep(1.0)
+
+        # The sidebar starts collapsed (panelini's default); open it so the clip shows
+        # the provider/model controls that make the chat example what it is.
+        toggle = page.locator(".left-navbar-button").first
+        if toggle.count():
+            toggle.click()
+            time.sleep(1.2)  # let the open transition finish
+        time.sleep(1.0)  # settle so the capture starts on a clean frame
 
         box = page.locator("textarea").first
         box.click()

@@ -25,7 +25,7 @@ chat = AiChat(
     show_preview=False,
 )
 
-app = Panelini(title="AI Chat (no preview, no tools)", sidebar_enabled=True, sidebar_visible=True)
+app = Panelini(title="AI Chat (no preview, no tools)", sidebar_enabled=True)
 app.main_set(objects=[pn.Row(*chat.main_objects)])
 app.sidebar_set(objects=chat.sidebar_objects)
 
