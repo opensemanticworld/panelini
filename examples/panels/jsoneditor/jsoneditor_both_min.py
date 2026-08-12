@@ -6,28 +6,29 @@ from panelini.panels.jsoneditor import JsonEditor
 
 pn.extension("jsoneditor")
 
-form_editor = JsonEditor(
-    options={
-        "schema": {
-            "title": "Form Editor",
-            "required": ["name"],
-            "properties": {
-                "name": {"type": "string"},
-                "value": {"type": "number"},
-            },
-        },
+# Both editors are driven by the same schema and the same instance, so the two views
+# can be compared directly: a schema-driven form on the left, the raw JSON tree of the
+# very same document on the right.
+SCHEMA = {
+    "title": "Measurement",
+    "required": ["name"],
+    "properties": {
+        "name": {"type": "string"},
+        "value": {"type": "number"},
+        "unit": {"type": "string"},
     },
+}
+
+INSTANCE = {"name": "Sample A", "value": 3.14, "unit": "mm"}
+
+form_editor = JsonEditor(
+    options={"schema": SCHEMA},
+    value=dict(INSTANCE),
     max_height=500,
 )
 
 tree_editor = pn.widgets.JSONEditor(
-    value={
-        "dict": {"key": "value"},
-        "float": 3.14,
-        "int": 1,
-        "list": [1, 2, 3],
-        "string": "A string",
-    },
+    value=dict(INSTANCE),
     width=400,
 )
 

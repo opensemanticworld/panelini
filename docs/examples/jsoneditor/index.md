@@ -19,6 +19,20 @@ Render a JSON-Schema driven form inside a Panelini card.
 Drive a JSON editor from a Pydantic model - schema and initial value derived automatically.
 :::
 
+:::{grid-item-card} JSON editor - standalone
+:link: jsoneditor_panel_min
+:link-type: doc
+:img-top: /_static/media/jsoneditor/jsoneditor_panel_min_feature.png
+The JSON editor as a plain Panel app with a live preview and a save button.
+:::
+
+:::{grid-item-card} Two editors side by side
+:link: jsoneditor_both_min
+:link-type: doc
+:img-top: /_static/media/jsoneditor/jsoneditor_both_min_feature.png
+panelini's `JsonEditor` and Panel's `JSONEditor` coexisting without a name clash.
+:::
+
 ::::
 
 ```{toctree}
@@ -26,4 +40,6 @@ Drive a JSON editor from a Pydantic model - schema and initial value derived aut
 
 jsoneditor
 jsoneditor_pydantic
+jsoneditor_panel_min
+jsoneditor_both_min
 ```

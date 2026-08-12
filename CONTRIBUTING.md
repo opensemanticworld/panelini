@@ -144,6 +144,35 @@ Please note this documentation assumes you already have `uv` and `Git` installed
 
 12. Submit a pull request through the GitHub website.
 
+## Building the documentation
+
+The docs are built with Sphinx (strict, warnings-as-errors in CI). To preview locally:
+
+```bash
+make docs            # live-reload server on http://localhost:8000
+```
+
+Two things to keep in mind:
+
+- **Always clean-build before trusting a `-W` result.** `sphinx-autobuild` and repeated
+  `make docs-test` reuse cached doctrees, which can hide moved cross-references and stale
+  navigation. Reproduce the CI build on a clean tree:
+
+  ```bash
+  rm -rf docs/_build && make docs-test
+  ```
+
+- **The "Run it live" players need the Pyodide apps built first.** They are gitignored build
+  artifacts, so run `make portfolio` before `make docs` (the release deploy does this too), or the
+  embedded iframes will not resolve:
+
+  ```bash
+  make portfolio && make docs
+  ```
+
+Screen captures on the example pages are recorded from the `@pytest.mark.media` tests; regenerate
+them with `make docs-media` and commit the output.
+
 ## Pull Request Guidelines
 
 Before you submit a pull request, check that it meets these guidelines:

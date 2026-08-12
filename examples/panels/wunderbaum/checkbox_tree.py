@@ -96,7 +96,7 @@ def _on_source_change(*args: object) -> None:
 
 tree.param.watch(_on_source_change, ["source"])
 
-app = Panelini(title="Checkbox Tree Demo")
+app = Panelini(title="Checkbox Tree Demo", sidebar_visible=False)
 app.main_set(
     objects=[
         pn.Card(

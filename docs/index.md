@@ -20,7 +20,7 @@ hide-toc: true
 
 panelini gives you a responsive, production-ready layout - header, sidebars, main area, footer - plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
 
-```{image} /_static/media/ai/chat_min_feature.png
+```{image} /_static/media/ai/chat_min_overview.webp
 :alt: A panelini AI chat dashboard - chat, live preview, and a provider/model sidebar
 :class: docs-media
 ```
@@ -170,6 +170,7 @@ examples/chat/index
 examples/jsoneditor/index
 examples/visnetwork/index
 examples/wunderbaum/index
+examples/terminalmirror/index
 examples/usecases/index
 ```
 

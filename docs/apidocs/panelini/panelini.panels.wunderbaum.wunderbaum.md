@@ -45,7 +45,7 @@
 
 ````
 
-`````{py:class} Wunderbaum(source: typing.Optional[list[dict[str, typing.Any]]] = None, columns: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, types: typing.Optional[dict[str, typing.Any]] = None, context_menu_items: typing.Optional[list[dict[str, typing.Any]]] = None, tree_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, lazy_load_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], list[dict[str, typing.Any]]]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
+`````{py:class} Wunderbaum(source: typing.Optional[list[dict[str, typing.Any]]] = None, columns: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, types: typing.Optional[dict[str, typing.Any]] = None, context_menu_items: typing.Optional[list[dict[str, typing.Any]]] = None, tree_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, lazy_load_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], typing.Union[list[dict[str, typing.Any]], collections.abc.Awaitable[list[dict[str, typing.Any]]]]]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
 :canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum
 
 Bases: {py:obj}`panel.custom.AnyWidgetComponent`

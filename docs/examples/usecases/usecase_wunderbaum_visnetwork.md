@@ -57,10 +57,19 @@ def on_graph_event(event_name, params):
 ```{mermaid}
 graph LR
     tree[Wunderbaum tree] -- "drop / contextmenu / activate" --> model[(NODES / EDGES)]
-    graph[VisNetwork] -- "node click" --> model
+    vis[VisNetwork] -- "node click" --> model
     model -- "add/remove node + edge" --> tree
-    model -- "add/remove node + edge" --> graph
+    model -- "add/remove node + edge" --> vis
     model -- "show_details" --> detail[Detail sidebar]
+```
+
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/usecases/wunderbaum_visnetwork.html" title="Tree and graph editor" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/usecases/wunderbaum_visnetwork.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
 
 ## See also

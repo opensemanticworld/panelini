@@ -68,6 +68,15 @@ Key points:
 
 The test serves the app and asserts the treegrid rendered: a non-empty `tree.source`, a visible `.wb-header` (columns), and at least one `.wb-row`.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/dag_projection.html" title="DAG projection - graph as a tree" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/dag_projection.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
 ## See also
 
 - For a combined tree + graph view, see [`examples/usecases/wunderbaum_visnetwork.py`](https://github.com/opensemanticworld/panelini/blob/main/examples/usecases/wunderbaum_visnetwork.py)

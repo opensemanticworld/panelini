@@ -94,7 +94,7 @@ docs-media: ## Record docs media from @pytest.mark.media tests (commit the outpu
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Recording docs media (Playwright video -> WebP/PNG/MP4)"
-	@uv run pytest -m media --record-media --slowmo 150
+	@uv run pytest -m media --record-media
 
 .PHONY: help
 help:

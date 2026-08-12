@@ -21,7 +21,7 @@ source = [
 
 tree = Wunderbaum(source=source)
 
-app = Panelini(title="Wunderbaum Tree Demo")
+app = Panelini(title="Wunderbaum Tree Demo", sidebar_visible=False)
 
 app.main_set(
     objects=[

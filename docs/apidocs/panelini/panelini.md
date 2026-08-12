@@ -13,8 +13,8 @@
 :titlesonly:
 :maxdepth: 3
 
-panelini.panels
 panelini.components
+panelini.panels
 ```
 
 ## Submodules
@@ -23,6 +23,7 @@ panelini.components
 :titlesonly:
 :maxdepth: 1
 
+panelini.ai_testing
 panelini.main
 panelini.testing
 ```

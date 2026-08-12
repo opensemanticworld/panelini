@@ -15,7 +15,7 @@ class JsonEditorPanel(pn.viewable.Viewer):
     def __init__(self, **params):
         super().__init__(**params)
 
-        self.jsoneditor = JsonEditor(max_height=500, max_width=800)
+        self.jsoneditor = JsonEditor(max_height=500, sizing_mode="stretch_width")
 
         self.save_btn = pn.widgets.Button(css_classes=["save_btn"], name="Save", button_type="primary")
         pn.bind(self.on_save, self.save_btn, watch=True)
@@ -24,6 +24,7 @@ class JsonEditorPanel(pn.viewable.Viewer):
             self.jsoneditor,
             pn.pane.JSON(self.jsoneditor.param.value, theme="light"),
             self.save_btn,
+            sizing_mode="stretch_width",
         )
 
     def on_save(self, event):
@@ -40,9 +41,10 @@ class JsonEditorPanel(pn.viewable.Viewer):
 # Create an instance of the App component
 jsoneditor_panel = JsonEditorPanel()
 
-# Create an instance of Panelini
+# Create an instance of Panelini (empty sidebar collapsed for full width)
 app = Panelini(
     title="📝 JSON Editor Demo",
+    sidebar_visible=False,
 )
 
 # Set the main content with the App component

@@ -5,12 +5,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_panel_min import edges, nodes, vis
 from panelini.testing import vn_wait
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 

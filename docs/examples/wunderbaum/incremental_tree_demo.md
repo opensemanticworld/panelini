@@ -75,6 +75,15 @@ Key points:
 
 The test asserts the "Next Step" and "Reset" buttons render, clicks **Next Step** once, and confirms a `.wb-row` appears - proving a single incremental `addNode` reaches the client and renders.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/wunderbaum/incremental_tree_demo.html" title="Incremental updates - build a tree step by step" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/wunderbaum/incremental_tree_demo.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
 ## See also
 
 - {doc}`context_menu` - the imperative `add_node` / `rename_node` / `remove_node` API

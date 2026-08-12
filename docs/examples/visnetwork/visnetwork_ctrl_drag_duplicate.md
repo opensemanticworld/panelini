@@ -33,6 +33,15 @@ vis = VisNetwork(
 
 Enable `interaction.multiselect` so several nodes can be selected and duplicated at once.
 
+## Run it live
+
+This example runs entirely in your browser via Pyodide. The first load downloads packages, so give it a few seconds.
+
+```{raw} html
+<iframe class="pf-live" src="../../_static/portfolio/apps/visnetwork/ctrl_drag_duplicate.html" title="VisNetwork Ctrl+drag duplicate" loading="lazy"></iframe>
+<p><a href="../../_static/portfolio/apps/visnetwork/ctrl_drag_duplicate.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
 ## See also
 
 - {doc}`../../panels/visnetwork` - full `VisNetwork` guide

@@ -83,6 +83,27 @@ jobs:
       - name: Check if documentation can be built
         run: uv run sphinx-build -b html docs docs/_build/html -W --keep-going
 
+  portfolio-gate:
+    # Build the Pyodide portfolio apps and verify each one renders in a browser.
+    # The example pages embed these as live players, and the release deploy ships
+    # them, so a broken app must block the merge (and thus the release).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Install Playwright browsers
+        run: uv run playwright install --with-deps chromium
+
+      - name: Build the Pyodide portfolio apps
+        run: uv run python docs/gen_portfolio.py --convert
+
+      - name: Verify every app renders in a browser
+        run: uv run pytest -m portfolio tests/portfolio
+
   version-preview:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest

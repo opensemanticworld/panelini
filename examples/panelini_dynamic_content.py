@@ -55,7 +55,7 @@ app.sidebar_set(
                     button_type="primary",
                     on_click=lambda event: [
                         print(f"Before: {app.main_get()}"),
-                        app.main_remove_index(index=index_selector.value),
+                        app.main_remove_index(index=index_selector.value or 0),
                         print(f"After: {app.main_get()}"),
                         print(f"Main objects count: {len(app.main_get())}"),
                     ],

@@ -5,12 +5,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_panel_min import App
 from panelini.testing import wait_until
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     app = App()
     url = f"http://localhost:{port}"

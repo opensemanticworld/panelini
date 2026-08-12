@@ -70,6 +70,12 @@ if __name__ == "__main__":
 
     a = A(x=1, y=2, z=3, sub=[ASub(a=1, b=2), ASub(a=4, b=3)])
 
-    my_editor = PydanticEditor(A, value=a, format_array_tabs=True, format_dict_categories=False)
+    my_editor = PydanticEditor(
+        A,
+        value=a,
+        format_array_tabs=True,
+        format_dict_categories=False,
+        sizing_mode="stretch_width",
+    )
     time.sleep(1)
     pn.serve(my_editor, threaded=True)
