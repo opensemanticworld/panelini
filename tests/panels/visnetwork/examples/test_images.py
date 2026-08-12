@@ -22,15 +22,23 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(8)  # wait for the remote Wikimedia images to download and render
+    canvas = page.locator(".vis-network canvas").first
+    canvas.wait_for(state="visible", timeout=15000)
+
+    # The image nodes fetch remote Wikimedia photos; vis-network only paints them once
+    # each Image has loaded. Give the downloads time, then force a redraw + fit so the
+    # captured frame shows the images rather than the empty placeholders.
+    time.sleep(12)  # remote images download
+    page.locator(".network-canvas").first.evaluate(
+        "el => el._visNetwork && (el._visNetwork.redraw(), el._visNetwork.fit({animation: false}))"
+    )
+    time.sleep(3)  # let the redraw settle before the frame is captured
 
     # Verify the VisNetwork component has the expected nodes and edges
     assert vis.nodes == nodes
     assert vis.edges == edges
     assert len(vis.nodes) == 7
     assert len(vis.edges) == 6
-
-    # Check that the vis-network canvas is rendered
-    assert page.locator(".vis-network canvas").first.is_visible()
+    assert canvas.is_visible()
 
     server.stop()

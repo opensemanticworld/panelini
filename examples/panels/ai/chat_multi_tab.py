@@ -58,7 +58,7 @@ sidebar_tabs.jslink(main_tabs, active="active")
 
 # -- Create and link Panelini instance
 
-app = Panelini(title="AI Chat Multi Tab", sidebar_enabled=True)
+app = Panelini(title="AI Chat Multi Tab", sidebar_enabled=True, sidebar_visible=True)
 app.main_set(objects=[main_tabs])
 app.sidebar_set(objects=[sidebar_tabs])
 

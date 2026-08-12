@@ -60,8 +60,9 @@ def test_component(ready_page: Page):
     assert page.locator("text=Enable Post-Processing").is_visible()
 
 
-# Open the clip after the graph has fitted (a ResizeObserver frames it ~5s in).
-@pytest.mark.media(role="feature", capture="gif@5.2")
+# The test fits the graph itself (fit(animation:false) below), so the clip can open
+# from the start; the leading-blank trim drops the pre-load frames.
+@pytest.mark.media(role="feature", capture="gif")
 def test_ctrl_drag_duplicates(ready_page: Page):
     """Ctrl+dragging a node duplicates it, adding a node to the graph."""
     page = ready_page

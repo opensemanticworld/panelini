@@ -136,7 +136,7 @@ chat = AiChat(
     tools=[local_storage_tool],
 )
 
-app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
+app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True, sidebar_visible=True)
 app.main_set(objects=[pn.Row(*chat.main_objects)])
 app.sidebar_set(objects=chat.sidebar_objects)
 

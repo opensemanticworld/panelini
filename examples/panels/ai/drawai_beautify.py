@@ -602,7 +602,7 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
         styles={"display": "flex", "width": "100%", "max-width": "100%", "flex-wrap": "nowrap"},
     )
 
-    app = Panelini(title="Panelini DrawAI", sidebar_enabled=True)
+    app = Panelini(title="Panelini DrawAI", sidebar_enabled=True, sidebar_visible=True)
     app.main_set(objects=[main_layout])
     app.sidebar_set(objects=chat.sidebar_objects)
     return app

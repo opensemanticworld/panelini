@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -91,27 +92,34 @@ def _media_test_dir(request):
     return out
 
 
-def _install_glide(page, default_steps: int = 24):
-    """Record-mode only: make the mouse glide so recorded cursors read well.
+def _install_glide(default_steps: int = 28, step_delay: float = 0.014):
+    """Record-mode only: make the pointer glide smoothly across ANY page.
 
-    Patches ``mouse.move``/``mouse.click`` (default to multi-step moves) and
-    ``Locator.click``/``hover`` (pre-glide to the element centre). Returns a
-    callable that restores the class-level patches. Tests need no ``steps=``.
+    Patches the Playwright ``Mouse`` and ``Locator`` classes - not one page's mouse -
+    so the shared-server UI tests, which drive their own ``browser.new_context()`` page,
+    also get smooth pointer motion. The move is interpolated with real sleeps between
+    sub-steps: a single stepped ``move`` completes too fast to leave intermediate video
+    frames, so a drag would teleport; the timed interpolation is what the recording
+    captures as a smooth drag. Returns a callable that restores the patches.
     """
-    from playwright.sync_api import Locator
+    from playwright.sync_api import Locator, Mouse
 
-    mouse = page.mouse
-    orig_move, orig_click = mouse.move, mouse.click
+    pos = {"x": 640.0, "y": 360.0}
+    orig_move, orig_click = Mouse.move, Mouse.click
 
-    def move(x, y, *, steps=None):
-        orig_move(x, y, steps=steps or default_steps)
+    def move(self, x, y, *, steps=None):
+        n = max(1, steps or default_steps)
+        x0, y0 = pos["x"], pos["y"]
+        for i in range(1, n + 1):
+            orig_move(self, x0 + (x - x0) * i / n, y0 + (y - y0) * i / n, steps=1)
+            time.sleep(step_delay)
+        pos["x"], pos["y"] = float(x), float(y)
 
-    def click(x, y, **kw):
-        move(x, y)
-        orig_click(x, y, **kw)
+    def click(self, x, y, **kw):
+        move(self, x, y)
+        return orig_click(self, x, y, **kw)
 
-    mouse.move = move
-    mouse.click = click
+    Mouse.move, Mouse.click = move, click
 
     loc_click, loc_hover = Locator.click, Locator.hover
 
@@ -121,7 +129,7 @@ def _install_glide(page, default_steps: int = 24):
         except Exception:
             box = None
         if box:
-            move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            locator.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
 
     def lclick(self, **kw):
         _preglide(self)
@@ -135,6 +143,7 @@ def _install_glide(page, default_steps: int = 24):
     Locator.hover = lhover
 
     def restore():
+        Mouse.move, Mouse.click = orig_move, orig_click
         Locator.click = loc_click
         Locator.hover = loc_hover
 
@@ -192,16 +201,16 @@ def _media_record(request):
     if animate:
         # Cursor + glide only for animations; keep screenshots cursor-free.
         page.add_init_script(CURSOR_INIT_JS)
-        restore_glide = _install_glide(page)
+        restore_glide = _install_glide()
     try:
         yield
     finally:
         if restore_glide:
             restore_glide()
         Browser.new_context = orig_new_context
-    if animate:
-        with contextlib.suppress(Exception):
-            page.wait_for_timeout(TAIL_HOLD_MS)  # hold the final frame
+    # The final-state hold is synthesized in _emit_job (see the animation branch): a
+    # wait_for_timeout here would hold the page fixture's page, but the shared-server
+    # tests have already navigated their own page to about:blank by now.
 
     # Videos finalise when their context closes (during fixture teardown, which runs
     # before this point). Pick the largest .webm in the test dir: the throwaway page
@@ -339,8 +348,17 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
             seq = window
             while len(seq) > 1 and _is_blank(seq[0][1]):  # drop pre-load blank lead
                 seq = seq[1:]
+            while len(seq) > 1 and _is_blank(seq[-1][1]):  # drop teardown blank tail
+                seq = seq[:-1]
             step = max(1, round(src_fps / TARGET_FPS))
             imgs = [Image.fromarray(fr).convert("RGB") for _, fr in seq[::step]]
+            if imgs:
+                # Hold the final state. assemble_animation merges identical trailing
+                # frames into one, extending its duration (capped at max_frame_ms), so
+                # appending copies of the last frame yields a clean end-hold even for
+                # shared-server tests that navigate their page to about:blank at teardown.
+                hold = max(1, round(TAIL_HOLD_MS / (1000 / TARGET_FPS)))
+                imgs.extend([imgs[-1]] * hold)
             assemble_animation(imgs, target, duration_ms=round(1000 / TARGET_FPS), fmt=fmt)
         size_kb = target.stat().st_size / 1024 if target.exists() else 0
         print(f"[media] {target.relative_to(REPO_ROOT)} ({size_kb:.0f} kB)")
