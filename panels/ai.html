@@ -1,0 +1,1417 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="TerminalMirror" href="terminalmirror.html"><link rel="prev" title="GraphDetailTool" href="graph_detail_tool.html">
+        <link rel="prefetch" href="../_static/panelini-logo.svg" as="image">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>AI Chat Panel - panelini</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=adff1e16" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #0d7377;
+  --color-brand-content: #0d7377;
+  --color-background-primary: #faf7f2;
+  --color-background-secondary: #f3ede4;
+  --color-background-border: #e5dfd6;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #2fb4b0;
+  --color-brand-content: #2fb4b0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #2fb4b0;
+  --color-brand-content: #2fb4b0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">panelini</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../_static/panelini-logo.svg" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">panelini</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/index.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Panels</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="jsoneditor.html">JsonEditor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="visnetwork.html">VisNetwork</a></li>
+<li class="toctree-l1"><a class="reference internal" href="wunderbaum.html">Wunderbaum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph_detail_tool.html">GraphDetailTool</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">AI Chat Panel</a></li>
+<li class="toctree-l1"><a class="reference internal" href="terminalmirror.html">TerminalMirror</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/chat/index.html">Chat</a><input aria-label="Toggle navigation of Chat" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/chat/ai_chat_min.html">Minimal AI chat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/chat/ai_chat_custom_tool.html">AI chat with a custom tool</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/chat/ai_chat_multi_tab.html">Multi-tab AI chats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/chat/ai_chat_no_preview_no_tools.html">AI chat without preview or tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/chat/drawai_beautify.html">DrawAI - drawio beautifier</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/jsoneditor/index.html">JSON Editor</a><input aria-label="Toggle navigation of JSON Editor" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/jsoneditor/jsoneditor.html">JSON editor inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/jsoneditor/jsoneditor_pydantic.html">Pydantic-backed JSON editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/jsoneditor/jsoneditor_panel_min.html">Standalone JSON editor panel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/jsoneditor/jsoneditor_both_min.html">Two JSON editors side by side</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/visnetwork/index.html">VisNetwork</a><input aria-label="Toggle navigation of VisNetwork" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/visnetwork.html">VisNetwork graph inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/visnetwork_context_menu.html">VisNetwork context menus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/visnetwork_ctrl_drag_duplicate.html">VisNetwork Ctrl+drag duplicate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/visnetwork_panel_min.html">Standalone VisNetwork</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/visnetwork_json_data_min.html">Node tooltips from JSON data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/device_hierarchy.html">Device hierarchy ontology</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/hierarchy.html">Family tree with fixed positions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/group_filtering.html">Team and project structure with colored groups</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/images.html">Image nodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/rotating_circles.html">Rotating circles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/drop_file.html">Drop files onto the graph</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/graph_detail_tool_2.html">GraphDetailTool file-drop workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/visnetwork/incremental_graph_demo.html">Incremental knowledge graph</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/wunderbaum/index.html">Wunderbaum</a><input aria-label="Toggle navigation of Wunderbaum" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/wunderbaum_panelini_min.html">Wunderbaum tree inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/wunderbaum_panel_min.html">Wunderbaum tree - minimal (standalone)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/wunderbaum_table_min.html">Wunderbaum treegrid - columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/checkbox_tree.html">Checkbox tree - hierarchical selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/context_menu.html">Context menu - right-click actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/lazy_loading.html">Lazy loading - children on demand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/incremental_tree_demo.html">Incremental updates - build a tree step by step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/dag_projection.html">DAG projection - graph as a tree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/wunderbaum/virtual_filesystem.html">Virtual filesystem - the full demo</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/terminalmirror/index.html">Terminal Mirror</a><input aria-label="Toggle navigation of Terminal Mirror" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/terminalmirror/terminalmirror_panelini_min.html">Terminal mirror inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/terminalmirror/terminalmirror_panel_min.html">Terminal mirror - minimal (standalone)</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples/usecases/index.html">Use cases</a><input aria-label="Toggle navigation of Use cases" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/usecases/usecase_jsoneditor_visnetwork.html">Use case: form + graph editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/usecases/usecase_wunderbaum_visnetwork.html">Use case: tree + graph editor</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Design</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../components/index.html">Components</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../modules.html">API reference</a><input aria-label="Toggle navigation of API reference" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../apidocs/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini</span></code></a><input aria-label="Toggle navigation of panelini" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels</span></code></a><input aria-label="Toggle navigation of panelini.panels" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.jsoneditor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.jsoneditor</span></code></a><input aria-label="Toggle navigation of panelini.panels.jsoneditor" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.jsoneditor.jsoneditor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.jsoneditor.jsoneditor</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.wunderbaum.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.wunderbaum</span></code></a><input aria-label="Toggle navigation of panelini.panels.wunderbaum" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.wunderbaum.wunderbaum.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.wunderbaum.wunderbaum</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.visnetwork.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork</span></code></a><input aria-label="Toggle navigation of panelini.panels.visnetwork" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.visnetwork.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.utils</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.visnetwork.graph_detail_tool.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.graph_detail_tool</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.visnetwork.visnetwork.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.visnetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.terminalmirror.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.terminalmirror</span></code></a><input aria-label="Toggle navigation of panelini.panels.terminalmirror" class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.terminalmirror.terminalmirror.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.terminalmirror.terminalmirror</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai" class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot" class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot.tools" class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l8"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.tools.plot_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.plot_tools</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.tools.osw_plot_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.osw_plot_tools</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.tools.osw_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.osw_tools</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l7 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot.utils" class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l8"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.utils.sandbox.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils.sandbox</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.utils.osw_env.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils.osw_env</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l7"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.model_selector.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.model_selector</span></code></a></li>
+<li class="toctree-l7"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.plot.panel.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.panel</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.tools</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.tools" class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.tools.basic_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.tools.basic_tools</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.utils" class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.utils.config.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils.config</span></code></a></li>
+<li class="toctree-l7"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.utils.ai_interface.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils.ai_interface</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.backend.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.backend</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../apidocs/panelini/panelini.panels.ai.frontend.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.frontend</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../apidocs/panelini/panelini.components.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.components</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../apidocs/panelini/panelini.main.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.main</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../apidocs/panelini/panelini.ai_testing.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.ai_testing</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../apidocs/panelini/panelini.testing.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.testing</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/opensemanticworld/panelini/blob/main/docs/panels/ai.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/opensemanticworld/panelini/edit/main/docs/panels/ai.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="ai-chat-panel">
+<h1>AI Chat Panel<a class="headerlink" href="#ai-chat-panel" title="Link to this heading">¶</a></h1>
+<img alt="chat min feature" class="docs-media" src="../_images/chat_min_overview.webp" />
+<p>The AI chat panel adds an LLM-powered chat interface to any Panel application or Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<pre  class="mermaid">
+        graph TB
+    subgraph ai [&quot; AI Chat Panel &quot;]
+        direction TB
+        frontend([&quot;AiChat&quot;])
+        backend([&quot;AiBackend&quot;])
+        iface([&quot;AiInterface&quot;])
+        config([&quot;Config Loader&quot;])
+        tools([&quot;Tools&quot;])
+    end
+
+    subgraph panelini [&quot; Panelini &quot;]
+        sidebar([&quot;Left Sidebar&quot;])
+        main([&quot;Main Content&quot;])
+    end
+
+    subgraph providers [&quot; LLM Providers &quot;]
+        anthropic([&quot;Anthropic&quot;])
+        azure([&quot;Azure OpenAI&quot;])
+    end
+
+    frontend -- &quot;sidebar_objects&quot; --&gt; sidebar
+    frontend -- &quot;main_objects&quot; --&gt; main
+    frontend --&gt; backend
+    backend --&gt; iface
+    backend --&gt; config
+    backend --&gt; tools
+    iface --&gt; anthropic
+    iface --&gt; azure
+
+    classDef aiNode fill:#0d7377,stroke:#095c5f,color:#ffffff
+    classDef paneliniNode fill:#1e293b,stroke:#334155,color:#f8fafc
+    classDef providerNode fill:#6366f1,stroke:#4f46e5,color:#ffffff
+
+    class frontend,backend,iface,config,tools aiNode
+    class sidebar,main paneliniNode
+    class anthropic,azure providerNode
+    </pre><p>The panel is structured in layers:</p>
+<ul class="simple">
+<li><p><strong>AiChat</strong> – UI widgets (chat interface, sidebar controls, preview pane)</p></li>
+<li><p><strong>AiBackend</strong> – Business logic (provider management, tool execution, message routing)</p></li>
+<li><p><strong>AiInterface</strong> – Provider-agnostic LLM wrapper (LangChain-based)</p></li>
+<li><p><strong>Config</strong> – YAML configuration with environment variable resolution</p></li>
+<li><p><strong>Tools</strong> – Extensible LangChain tool system</p></li>
+</ul>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>The AI chat panel is an optional extra:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>add<span class="w"> </span>panelini<span class="o">[</span>ai<span class="o">]</span>
+</pre></div>
+</div>
+<p>or with pip:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>panelini<span class="o">[</span>ai<span class="o">]</span>
+</pre></div>
+</div>
+<p>This installs the required dependencies: <code class="docutils literal notranslate"><span class="pre">langchain</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain-anthropic</span></code>, <code class="docutils literal notranslate"><span class="pre">langchain-openai</span></code>, <code class="docutils literal notranslate"><span class="pre">pyyaml</span></code>, and <code class="docutils literal notranslate"><span class="pre">python-dotenv</span></code>.</p>
+</section>
+<section id="quick-start">
+<h2>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">panelini</span><span class="w"> </span><span class="kn">import</span> <span class="n">Panelini</span>
+
+<span class="n">app</span> <span class="o">=</span> <span class="n">Panelini</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;My AI App&quot;</span><span class="p">,</span> <span class="n">use_ai</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">app</span><span class="o">.</span><span class="n">servable</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>That’s it. The <code class="docutils literal notranslate"><span class="pre">use_ai=True</span></code> flag adds the chat interface to the main area and provider/model controls to the left sidebar.</p>
+<section id="standalone-usage-without-panelini">
+<h3>Standalone Usage (without Panelini)<a class="headerlink" href="#standalone-usage-without-panelini" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">panel</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pn</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">panelini.panels.ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">AiChat</span>
+
+<span class="n">chat</span> <span class="o">=</span> <span class="n">AiChat</span><span class="p">(</span>
+    <span class="n">system_message</span><span class="o">=</span><span class="s2">&quot;You are a helpful assistant.&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Use sidebar_objects and main_objects in any Panel layout</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">pn</span><span class="o">.</span><span class="n">Row</span><span class="p">(</span><span class="o">*</span><span class="n">chat</span><span class="o">.</span><span class="n">main_objects</span><span class="p">)</span>
+<span class="n">app</span><span class="o">.</span><span class="n">servable</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="configuration-parameters">
+<h3>Configuration Parameters<a class="headerlink" href="#configuration-parameters" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">app</span> <span class="o">=</span> <span class="n">Panelini</span><span class="p">(</span>
+    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;My AI App&quot;</span><span class="p">,</span>
+    <span class="n">use_ai</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">ai_system_message</span><span class="o">=</span><span class="s2">&quot;You are a data analysis assistant.&quot;</span><span class="p">,</span>
+    <span class="n">ai_welcome_message</span><span class="o">=</span><span class="s2">&quot;Hello! How can I help you today?&quot;</span><span class="p">,</span>
+    <span class="n">ai_config_path</span><span class="o">=</span><span class="s2">&quot;/path/to/config.yml&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 15.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">use_ai</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Boolean</span></code></p></td>
+<td><p>Enable the AI chat panel (default: <code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ai_system_message</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">String</span></code></p></td>
+<td><p>System message for the AI backend (default: <code class="docutils literal notranslate"><span class="pre">&quot;You</span> <span class="pre">are</span> <span class="pre">a</span> <span class="pre">helpful</span> <span class="pre">assistant.&quot;</span></code>).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ai_welcome_message</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">String</span></code></p></td>
+<td><p>Initial greeting shown in the chat. Uses a built-in default if <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ai_config_path</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span> <span class="pre">|</span> <span class="pre">Path</span></code></p></td>
+<td><p>Path to a custom <code class="docutils literal notranslate"><span class="pre">config.yml</span></code>. Auto-discovered if <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="provider-configuration">
+<h2>Provider Configuration<a class="headerlink" href="#provider-configuration" title="Link to this heading">¶</a></h2>
+<p>Providers and models are defined in a YAML configuration file. The panel searches for configuration in this order:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PANELINI_AI_CONFIG_PATH</span></code> environment variable</p></li>
+<li><p>Walk upward from the working directory looking for <code class="docutils literal notranslate"><span class="pre">config.yml</span></code> or <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code></p></li>
+<li><p>Fall back to the bundled default configuration</p></li>
+</ol>
+<section id="configuration-format">
+<h3>Configuration Format<a class="headerlink" href="#configuration-format" title="Link to this heading">¶</a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">anthropic</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Anthropic&quot;</span>
+<span class="w">    </span><span class="nt">client_type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;anthropic&quot;</span>
+<span class="w">    </span><span class="nt">env_vars</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${ANTHROPIC_API_KEY}&quot;</span>
+<span class="w">      </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${ANTHROPIC_ENDPOINT}&quot;</span>
+<span class="w">    </span><span class="nt">models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Claude</span><span class="nv"> </span><span class="s">Sonnet</span><span class="nv"> </span><span class="s">4.5&quot;</span>
+<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;anthropic/claude-sonnet-4-5&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Claude</span><span class="nv"> </span><span class="s">Haiku</span><span class="nv"> </span><span class="s">4.5&quot;</span>
+<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;anthropic/claude-haiku-4-5&quot;</span>
+
+<span class="w">  </span><span class="nt">azure_openai</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Azure</span><span class="nv"> </span><span class="s">OpenAI&quot;</span>
+<span class="w">    </span><span class="nt">client_type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;azure_openai&quot;</span>
+<span class="w">    </span><span class="nt">env_vars</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${AZURE_OPENAI_API_KEY}&quot;</span>
+<span class="w">      </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${AZURE_OPENAI_ENDPOINT}&quot;</span>
+<span class="w">      </span><span class="nt">api_version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${AZURE_OPENAI_API_VERSION}&quot;</span>
+<span class="w">    </span><span class="nt">models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;GPT-4o&quot;</span>
+<span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;azure_openai/gpt-4o-2024-11-20&quot;</span>
+</pre></div>
+</div>
+<p>Model values use the <a class="reference external" href="https://docs.litellm.ai/docs/providers">LiteLLM naming convention</a>: <code class="docutils literal notranslate"><span class="pre">provider_prefix/model-id</span></code>. The prefix is stripped before passing the model name to LangChain. When <code class="docutils literal notranslate"><span class="pre">client_type</span></code> is omitted, it is derived directly from the first model’s prefix. Bare model names (without a prefix) still work when <code class="docutils literal notranslate"><span class="pre">client_type</span></code> is set explicitly.</p>
+<p>Environment variables referenced with <code class="docutils literal notranslate"><span class="pre">${VAR_NAME}</span></code> are resolved at load time. A <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> is raised if a referenced variable is not set.</p>
+</section>
+<section id="supported-providers">
+<h3>Supported Providers<a class="headerlink" href="#supported-providers" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 25.0%" />
+<col style="width: 50.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Provider</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">client_type</span></code></p></th>
+<th class="head"><p>Required Environment Variables</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Anthropic</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">anthropic</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ANTHROPIC_API_KEY</span></code>, <code class="docutils literal notranslate"><span class="pre">ANTHROPIC_ENDPOINT</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Azure OpenAI</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">azure_openai</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AZURE_OPENAI_API_KEY</span></code>, <code class="docutils literal notranslate"><span class="pre">AZURE_OPENAI_ENDPOINT</span></code>, <code class="docutils literal notranslate"><span class="pre">AZURE_OPENAI_API_VERSION</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="ui-layout">
+<h2>UI Layout<a class="headerlink" href="#ui-layout" title="Link to this heading">¶</a></h2>
+<p>When <code class="docutils literal notranslate"><span class="pre">use_ai=True</span></code>, the panel injects two areas into the Panelini dashboard:</p>
+<section id="sidebar-controls">
+<h3>Sidebar Controls<a class="headerlink" href="#sidebar-controls" title="Link to this heading">¶</a></h3>
+<p>The left sidebar receives a <strong>General Setup</strong> card containing:</p>
+<ul class="simple">
+<li><p><strong>Provider Settings</strong> – Select the LLM provider</p></li>
+<li><p><strong>Model Settings</strong> – Select the model and adjust temperature</p></li>
+<li><p><strong>Basic Tools</strong> – Toggle available tools on/off</p></li>
+<li><p><strong>Chat Management</strong> – Clear history, export/import chat as JSON</p></li>
+</ul>
+</section>
+<section id="main-content">
+<h3>Main Content<a class="headerlink" href="#main-content" title="Link to this heading">¶</a></h3>
+<p>The main area receives a two-column layout:</p>
+<ul class="simple">
+<li><p><strong>Chat</strong> (left) – The chat interface with streaming responses</p></li>
+<li><p><strong>Preview</strong> (right) – A markdown preview pane updated by the <code class="docutils literal notranslate"><span class="pre">update_preview</span></code> tool</p></li>
+</ul>
+</section>
+</section>
+<section id="tools">
+<h2>Tools<a class="headerlink" href="#tools" title="Link to this heading">¶</a></h2>
+<p>The panel includes a tool system based on LangChain’s <code class="docutils literal notranslate"><span class="pre">BaseTool</span></code>. Tools are toggled via sidebar checkboxes.</p>
+<section id="built-in-tools">
+<h3>Built-in Tools<a class="headerlink" href="#built-in-tools" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 75.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_current_time</span></code></p></td>
+<td><p>Returns the current date and time with optional timezone support. Enabled by default.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">update_preview</span></code></p></td>
+<td><p>Renders markdown content in the preview pane. Supports headers, tables, code blocks, and images.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="streaming-vs-tool-mode">
+<h3>Streaming vs Tool Mode<a class="headerlink" href="#streaming-vs-tool-mode" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>No tools selected</strong> – Responses stream token-by-token inside a collapsible <code class="docutils literal notranslate"><span class="pre">&lt;details&gt;</span></code> block, then expand when complete.</p></li>
+<li><p><strong>Tools selected</strong> – The model runs a tool execution loop (up to 10 iterations). The final text response is displayed after all tool calls complete.</p></li>
+</ul>
+</section>
+<section id="adding-custom-tools">
+<h3>Adding Custom Tools<a class="headerlink" href="#adding-custom-tools" title="Link to this heading">¶</a></h3>
+<p>Custom tools can be passed directly to <code class="docutils literal notranslate"><span class="pre">AiChat</span></code> via the <code class="docutils literal notranslate"><span class="pre">tools</span></code> parameter. They appear as additional checkboxes in the sidebar alongside the built-in tools:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">panelini.panels.ai</span><span class="w"> </span><span class="kn">import</span> <span class="n">AiChat</span>
+
+<span class="n">chat</span> <span class="o">=</span> <span class="n">AiChat</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">MyTool</span><span class="p">()])</span>
+</pre></div>
+</div>
+<p>To create a custom tool, subclass LangChain’s <code class="docutils literal notranslate"><span class="pre">BaseTool</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">langchain_core.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseTool</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyToolInput</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">query</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;The search query&quot;</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyTool</span><span class="p">(</span><span class="n">BaseTool</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;my_tool&quot;</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Describe what this tool does.&quot;</span>
+    <span class="n">args_schema</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">]</span> <span class="o">=</span> <span class="n">MyToolInput</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Result for: </span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_arun</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="n">query</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>See <code class="docutils literal notranslate"><span class="pre">examples/panels/ai/ai_chat_custom_tool.py</span></code> for a complete working example with a LocalStorage tool.</p>
+</section>
+</section>
+<section id="module-structure">
+<h2>Module Structure<a class="headerlink" href="#module-structure" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>panelini/panels/ai/
+├── __init__.py
+├── frontend.py          # UI layer (AiChat class)
+├── backend.py           # Business logic (AiBackend class)
+├── default_config.yml   # Bundled default provider config
+├── tools/
+│   ├── __init__.py
+│   └── basic_tools.py   # Built-in tools
+└── utils/
+    ├── __init__.py
+    ├── ai_interface.py   # Provider-agnostic LLM interface
+    └── config.py         # YAML config loader
+</pre></div>
+</div>
+</section>
+<section id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">¶</a></h2>
+<section id="aichat">
+<h3><code class="docutils literal notranslate"><span class="pre">AiChat</span></code><a class="headerlink" href="#aichat" title="Link to this heading">¶</a></h3>
+<p>Standalone AI chat panel. Can be used independently in any Panel app or integrated into Panelini. Exposes widget lists for integration.</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Property / Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AiChat(system_message,</span> <span class="pre">welcome_message,</span> <span class="pre">config_path,</span> <span class="pre">tools)</span></code></p></td>
+<td><p>Constructor. All parameters are optional. Pass custom <code class="docutils literal notranslate"><span class="pre">BaseTool</span></code> instances via <code class="docutils literal notranslate"><span class="pre">tools</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sidebar_objects</span></code></p></td>
+<td><p>Property returning a list of Panel viewables for the sidebar.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">main_objects</span></code></p></td>
+<td><p>Property returning a list of Panel viewables for the main area.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="aibackend">
+<h3><code class="docutils literal notranslate"><span class="pre">AiBackend</span></code><a class="headerlink" href="#aibackend" title="Link to this heading">¶</a></h3>
+<p>Business logic layer managing providers, models, tools, and message processing.</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AiBackend(system_message,</span> <span class="pre">config_path)</span></code></p></td>
+<td><p>Constructor. Loads config and creates the initial AI interface.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_available_providers()</span></code></p></td>
+<td><p>Returns <code class="docutils literal notranslate"><span class="pre">{display_name:</span> <span class="pre">ProviderConfig}</span></code> dict.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_available_models(provider)</span></code></p></td>
+<td><p>Returns <code class="docutils literal notranslate"><span class="pre">{display_name:</span> <span class="pre">ModelConfig}</span></code> dict for a given provider.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">update_provider(provider)</span></code></p></td>
+<td><p>Switch provider, reset model, clear history.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">update_model(model)</span></code></p></td>
+<td><p>Switch model, preserve history.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">update_temperature(temperature)</span></code></p></td>
+<td><p>Update sampling temperature, preserve history.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">update_tools(tools)</span></code></p></td>
+<td><p>Update available tools, preserve history.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">process_message(message,</span> <span class="pre">use_tools)</span></code></p></td>
+<td><p>Process a user message. Returns <code class="docutils literal notranslate"><span class="pre">{&quot;response&quot;:</span> <span class="pre">str,</span> <span class="pre">&quot;preview_updates&quot;:</span> <span class="pre">list}</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stream_message(message)</span></code></p></td>
+<td><p>Async generator yielding response token chunks.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">clear_history()</span></code></p></td>
+<td><p>Clear conversation history.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">export_chat_data(...)</span></code></p></td>
+<td><p>Export chat to a JSON-serializable dict.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">restore_chat_data(chat_data)</span></code></p></td>
+<td><p>Restore conversation from exported JSON.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="aiinterface">
+<h3><code class="docutils literal notranslate"><span class="pre">AiInterface</span></code><a class="headerlink" href="#aiinterface" title="Link to this heading">¶</a></h3>
+<p>Low-level provider-agnostic LLM interface built on LangChain.</p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AiInterface(provider,</span> <span class="pre">model_name,</span> <span class="pre">temperature,</span> <span class="pre">max_tokens,</span> <span class="pre">tools,</span> <span class="pre">system_message)</span></code></p></td>
+<td><p>Constructor. Initializes the LLM client and binds tools.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_response(user_message,</span> <span class="pre">stream)</span></code></p></td>
+<td><p>Get a response (streaming or non-streaming).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_response_with_tools(user_message)</span></code></p></td>
+<td><p>Get a response that may include tool calls.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">add_tool(tool)</span></code></p></td>
+<td><p>Dynamically add a tool to the interface.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">clear_history()</span></code></p></td>
+<td><p>Clear conversation history.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="configuration-classes">
+<h3>Configuration Classes<a class="headerlink" href="#configuration-classes" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 70.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Class / Function</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AppConfig</span></code></p></td>
+<td><p>Top-level config dataclass. Contains a <code class="docutils literal notranslate"><span class="pre">providers</span></code> dict and a <code class="docutils literal notranslate"><span class="pre">default_provider</span></code> property.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ProviderConfig</span></code></p></td>
+<td><p>Frozen dataclass for a provider (key, display_name, client_type, env_vars, models).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ModelConfig</span></code></p></td>
+<td><p>Frozen dataclass for a model (name, value).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">load_config(path=None)</span></code></p></td>
+<td><p>Load and validate a YAML config file. Auto-discovers if path is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="data-flow">
+<h3>Data Flow<a class="headerlink" href="#data-flow" title="Link to this heading">¶</a></h3>
+<pre  class="mermaid">
+        sequenceDiagram
+    participant User as User
+    participant Chat as ChatInterface
+    participant FE as AiChat
+    participant BE as AiBackend
+    participant AI as AiInterface
+    participant LLM as LLM Provider
+
+    User-&gt;&gt;Chat: Type message
+    Chat-&gt;&gt;FE: _handle_message()
+    FE-&gt;&gt;BE: process_message() or stream_message()
+    BE-&gt;&gt;AI: get_response() or get_response_with_tools()
+    AI-&gt;&gt;LLM: ainvoke() / astream()
+    LLM--&gt;&gt;AI: Response / chunks
+    AI--&gt;&gt;BE: Text + tool_calls
+    BE-&gt;&gt;BE: Execute tools (if any)
+    BE--&gt;&gt;FE: {&quot;response&quot;, &quot;preview_updates&quot;}
+    FE--&gt;&gt;Chat: Yield response
+    Chat--&gt;&gt;User: Display message
+    </pre></section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="terminalmirror.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">TerminalMirror</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="graph_detail_tool.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">GraphDetailTool</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, panelini contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">AI Chat Panel</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#quick-start">Quick Start</a><ul>
+<li><a class="reference internal" href="#standalone-usage-without-panelini">Standalone Usage (without Panelini)</a></li>
+<li><a class="reference internal" href="#configuration-parameters">Configuration Parameters</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#provider-configuration">Provider Configuration</a><ul>
+<li><a class="reference internal" href="#configuration-format">Configuration Format</a></li>
+<li><a class="reference internal" href="#supported-providers">Supported Providers</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ui-layout">UI Layout</a><ul>
+<li><a class="reference internal" href="#sidebar-controls">Sidebar Controls</a></li>
+<li><a class="reference internal" href="#main-content">Main Content</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tools">Tools</a><ul>
+<li><a class="reference internal" href="#built-in-tools">Built-in Tools</a></li>
+<li><a class="reference internal" href="#streaming-vs-tool-mode">Streaming vs Tool Mode</a></li>
+<li><a class="reference internal" href="#adding-custom-tools">Adding Custom Tools</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-structure">Module Structure</a></li>
+<li><a class="reference internal" href="#api-reference">API Reference</a><ul>
+<li><a class="reference internal" href="#aichat"><code class="docutils literal notranslate"><span class="pre">AiChat</span></code></a></li>
+<li><a class="reference internal" href="#aibackend"><code class="docutils literal notranslate"><span class="pre">AiBackend</span></code></a></li>
+<li><a class="reference internal" href="#aiinterface"><code class="docutils literal notranslate"><span class="pre">AiInterface</span></code></a></li>
+<li><a class="reference internal" href="#configuration-classes">Configuration Classes</a></li>
+<li><a class="reference internal" href="#data-flow">Data Flow</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=f3b36f1a"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);</script>
+    <script src="../_static/mermaid-theme.js?v=de141bab"></script>
+    </body>
+</html>

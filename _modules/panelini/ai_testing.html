@@ -1,0 +1,1095 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+        <link rel="prefetch" href="../../_static/panelini-logo.svg" as="image">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>panelini.ai_testing - panelini</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=adff1e16" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --color-brand-primary: #0d7377;
+  --color-brand-content: #0d7377;
+  --color-background-primary: #faf7f2;
+  --color-background-secondary: #f3ede4;
+  --color-background-border: #e5dfd6;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #2fb4b0;
+  --color-brand-content: #2fb4b0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  --color-brand-primary: #2fb4b0;
+  --color-brand-content: #2fb4b0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">panelini</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/panelini-logo.svg" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">panelini</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/index.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Panels</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/index.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/jsoneditor.html">JsonEditor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/visnetwork.html">VisNetwork</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/wunderbaum.html">Wunderbaum</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/graph_detail_tool.html">GraphDetailTool</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/ai.html">AI Chat Panel</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../panels/terminalmirror.html">TerminalMirror</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/chat/index.html">Chat</a><input aria-label="Toggle navigation of Chat" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/chat/ai_chat_min.html">Minimal AI chat</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/chat/ai_chat_custom_tool.html">AI chat with a custom tool</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/chat/ai_chat_multi_tab.html">Multi-tab AI chats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/chat/ai_chat_no_preview_no_tools.html">AI chat without preview or tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/chat/drawai_beautify.html">DrawAI - drawio beautifier</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/jsoneditor/index.html">JSON Editor</a><input aria-label="Toggle navigation of JSON Editor" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/jsoneditor/jsoneditor.html">JSON editor inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/jsoneditor/jsoneditor_pydantic.html">Pydantic-backed JSON editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/jsoneditor/jsoneditor_panel_min.html">Standalone JSON editor panel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/jsoneditor/jsoneditor_both_min.html">Two JSON editors side by side</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/visnetwork/index.html">VisNetwork</a><input aria-label="Toggle navigation of VisNetwork" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/visnetwork.html">VisNetwork graph inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/visnetwork_context_menu.html">VisNetwork context menus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/visnetwork_ctrl_drag_duplicate.html">VisNetwork Ctrl+drag duplicate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/visnetwork_panel_min.html">Standalone VisNetwork</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/visnetwork_json_data_min.html">Node tooltips from JSON data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/device_hierarchy.html">Device hierarchy ontology</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/hierarchy.html">Family tree with fixed positions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/group_filtering.html">Team and project structure with colored groups</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/images.html">Image nodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/rotating_circles.html">Rotating circles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/drop_file.html">Drop files onto the graph</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/graph_detail_tool_2.html">GraphDetailTool file-drop workspace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/visnetwork/incremental_graph_demo.html">Incremental knowledge graph</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/wunderbaum/index.html">Wunderbaum</a><input aria-label="Toggle navigation of Wunderbaum" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/wunderbaum_panelini_min.html">Wunderbaum tree inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/wunderbaum_panel_min.html">Wunderbaum tree - minimal (standalone)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/wunderbaum_table_min.html">Wunderbaum treegrid - columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/checkbox_tree.html">Checkbox tree - hierarchical selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/context_menu.html">Context menu - right-click actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/lazy_loading.html">Lazy loading - children on demand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/incremental_tree_demo.html">Incremental updates - build a tree step by step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/dag_projection.html">DAG projection - graph as a tree</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/wunderbaum/virtual_filesystem.html">Virtual filesystem - the full demo</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/terminalmirror/index.html">Terminal Mirror</a><input aria-label="Toggle navigation of Terminal Mirror" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/terminalmirror/terminalmirror_panelini_min.html">Terminal mirror inside panelini</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/terminalmirror/terminalmirror_panel_min.html">Terminal mirror - minimal (standalone)</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples/usecases/index.html">Use cases</a><input aria-label="Toggle navigation of Use cases" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/usecases/usecase_jsoneditor_visnetwork.html">Use case: form + graph editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../examples/usecases/usecase_wunderbaum_visnetwork.html">Use case: tree + graph editor</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Design</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../components/index.html">Components</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../modules.html">API reference</a><input aria-label="Toggle navigation of API reference" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../apidocs/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini</span></code></a><input aria-label="Toggle navigation of panelini" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels</span></code></a><input aria-label="Toggle navigation of panelini.panels" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.jsoneditor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.jsoneditor</span></code></a><input aria-label="Toggle navigation of panelini.panels.jsoneditor" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.jsoneditor.jsoneditor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.jsoneditor.jsoneditor</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.wunderbaum.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.wunderbaum</span></code></a><input aria-label="Toggle navigation of panelini.panels.wunderbaum" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.wunderbaum.wunderbaum.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.wunderbaum.wunderbaum</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.visnetwork.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork</span></code></a><input aria-label="Toggle navigation of panelini.panels.visnetwork" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.visnetwork.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.utils</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.visnetwork.graph_detail_tool.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.graph_detail_tool</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.visnetwork.visnetwork.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.visnetwork.visnetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.terminalmirror.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.terminalmirror</span></code></a><input aria-label="Toggle navigation of panelini.panels.terminalmirror" class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" role="switch" type="checkbox"/><label for="toctree-checkbox-14"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.terminalmirror.terminalmirror.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.terminalmirror.terminalmirror</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l5 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai" class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" role="switch" type="checkbox"/><label for="toctree-checkbox-15"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot" class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" role="switch" type="checkbox"/><label for="toctree-checkbox-16"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot.tools" class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" role="switch" type="checkbox"/><label for="toctree-checkbox-17"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l8"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.tools.plot_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.plot_tools</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.tools.osw_plot_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.osw_plot_tools</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.tools.osw_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.tools.osw_tools</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l7 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.plot.utils" class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" role="switch" type="checkbox"/><label for="toctree-checkbox-18"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l8"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.utils.sandbox.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils.sandbox</span></code></a></li>
+<li class="toctree-l8"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.utils.osw_env.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.utils.osw_env</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l7"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.model_selector.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.model_selector</span></code></a></li>
+<li class="toctree-l7"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.plot.panel.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.plot.panel</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.tools</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.tools" class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" role="switch" type="checkbox"/><label for="toctree-checkbox-19"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.tools.basic_tools.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.tools.basic_tools</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6 has-children"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils</span></code></a><input aria-label="Toggle navigation of panelini.panels.ai.utils" class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" role="switch" type="checkbox"/><label for="toctree-checkbox-20"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l7"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.utils.config.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils.config</span></code></a></li>
+<li class="toctree-l7"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.utils.ai_interface.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.utils.ai_interface</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.backend.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.backend</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="../../apidocs/panelini/panelini.panels.ai.frontend.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.panels.ai.frontend</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../../apidocs/panelini/panelini.components.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.components</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../apidocs/panelini/panelini.main.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.main</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../apidocs/panelini/panelini.ai_testing.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.ai_testing</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../apidocs/panelini/panelini.testing.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">panelini.testing</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for panelini.ai_testing</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Offline stand-ins for the LangChain stack used by ``panelini.panels.ai``.</span>
+
+<span class="sd">The AI examples import LangChain and talk to a real provider. Two places need them to</span>
+<span class="sd">run without either:</span>
+
+<span class="sd">- the docs media tests, which record a scripted exchange and must be deterministic</span>
+<span class="sd">- the Pyodide portfolio apps, where LangChain cannot be installed at all</span>
+<span class="sd">  (``langchain-core`` requires ``uuid-utils`` and ``zstandard``, native extensions with</span>
+<span class="sd">  no pure-Python wheel) and where credentials must never be shipped</span>
+
+<span class="sd">:func:`install` registers stand-in modules in ``sys.modules`` **before** the example is</span>
+<span class="sd">imported, so the example&#39;s own ``import langchain...`` lines resolve to these. The</span>
+<span class="sd">example files are never modified: run them normally and they get the real LangChain and</span>
+<span class="sd">a real model.</span>
+
+<span class="sd">The stub answers with a fixed reply, so anything rendered from it is a simulation, not</span>
+<span class="sd">model output. Label it as such wherever it is shown.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">types</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">ClassVar</span>
+
+<span class="n">DEFAULT_REPLY</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;This is a simulated reply: the demo runs without a language model, so the &quot;</span>
+    <span class="s2">&quot;answer is canned. Run the example locally with your own provider &quot;</span>
+    <span class="s2">&quot;credentials to chat for real.&quot;</span>
+<span class="p">)</span>
+
+<span class="c1"># Environment variables referenced by the packaged default_config.yml. Values are</span>
+<span class="c1"># placeholders; nothing is ever sent anywhere because the model is a stub.</span>
+<span class="n">_PLACEHOLDER_ENV</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;ANTHROPIC_API_KEY&quot;</span><span class="p">:</span> <span class="s2">&quot;stub-key&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ANTHROPIC_ENDPOINT&quot;</span><span class="p">:</span> <span class="s2">&quot;https://localhost&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AZURE_OPENAI_API_KEY&quot;</span><span class="p">:</span> <span class="s2">&quot;stub-key&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AZURE_OPENAI_ENDPOINT&quot;</span><span class="p">:</span> <span class="s2">&quot;https://localhost&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AZURE_OPENAI_API_VERSION&quot;</span><span class="p">:</span> <span class="s2">&quot;2024-01-01&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Message</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimal stand-in for a LangChain message.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">content</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tool_calls</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;tool_calls&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tool_call_id</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;tool_call_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_kwargs</span> <span class="o">=</span> <span class="n">kwargs</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="si">!r}</span><span class="s2">)&quot;</span>
+
+
+<div class="viewcode-block" id="BaseMessage">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.BaseMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BaseMessage</span><span class="p">(</span><span class="n">_Message</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="AIMessage">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.AIMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AIMessage</span><span class="p">(</span><span class="n">_Message</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="HumanMessage">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.HumanMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">HumanMessage</span><span class="p">(</span><span class="n">_Message</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="SystemMessage">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.SystemMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SystemMessage</span><span class="p">(</span><span class="n">_Message</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="ToolMessage">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.ToolMessage">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ToolMessage</span><span class="p">(</span><span class="n">_Message</span><span class="p">):</span>
+    <span class="k">pass</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Chunk</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One streamed piece of an assistant reply.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">content</span>
+
+
+<div class="viewcode-block" id="StubChatModel">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.StubChatModel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StubChatModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Chat model that streams a fixed reply and never calls a tool.</span>
+
+<span class="sd">    Mirrors the slice of the LangChain runnable interface that</span>
+<span class="sd">    ``panelini.panels.ai`` actually uses: ``bind_tools``, ``ainvoke`` and ``astream``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reply</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_REPLY</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">delay</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.04</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reply</span> <span class="o">=</span> <span class="n">reply</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span> <span class="o">=</span> <span class="n">chunk_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delay</span> <span class="o">=</span> <span class="n">delay</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="StubChatModel.bind_tools">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.StubChatModel.bind_tools">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bind_tools</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StubChatModel</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tools</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">tools</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="StubChatModel.ainvoke">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.StubChatModel.ainvoke">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AIMessage</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">AIMessage</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">,</span> <span class="n">tool_calls</span><span class="o">=</span><span class="p">[])</span></div>
+
+
+<div class="viewcode-block" id="StubChatModel.astream">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.StubChatModel.astream">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">astream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Yield the reply in small pieces so the UI shows it typing.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">:</span>
+                <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delay</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">_Chunk</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reply</span><span class="p">[</span><span class="n">start</span> <span class="p">:</span> <span class="n">start</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunk_size</span><span class="p">])</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_make_base_tool</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">type</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a ``BaseTool`` base class that examples can subclass.</span>
+
+<span class="sd">    It has to be a real class (the custom-tool example subclasses it), and pydantic is</span>
+<span class="sd">    available both under pytest and in Pyodide, so the shape matches the real one</span>
+<span class="sd">    closely enough for tool definitions to import and instantiate.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">ConfigDict</span>
+
+    <span class="k">class</span><span class="w"> </span><span class="nc">BaseTool</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+        <span class="n">model_config</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="n">ConfigDict</span><span class="p">]</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">arbitrary_types_allowed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;tool&quot;</span>
+        <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">args_schema</span><span class="p">:</span> <span class="nb">type</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_arun</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tool_input</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tool_input</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">(</span><span class="o">**</span><span class="n">tool_input</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">(</span><span class="n">tool_input</span><span class="p">)</span> <span class="k">if</span> <span class="n">tool_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_run</span><span class="p">()</span>
+
+        <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tool_input</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tool_input</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_arun</span><span class="p">(</span><span class="o">**</span><span class="n">tool_input</span><span class="p">)</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_arun</span><span class="p">(</span><span class="n">tool_input</span><span class="p">)</span> <span class="k">if</span> <span class="n">tool_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_arun</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">BaseTool</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_module</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">attrs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">types</span><span class="o">.</span><span class="n">ModuleType</span><span class="p">:</span>
+    <span class="n">mod</span> <span class="o">=</span> <span class="n">types</span><span class="o">.</span><span class="n">ModuleType</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">attrs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">mod</span>
+    <span class="k">return</span> <span class="n">mod</span>
+
+
+<div class="viewcode-block" id="install">
+<a class="viewcode-back" href="../../apidocs/panelini/panelini.ai_testing.html#panelini.ai_testing.install">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">install</span><span class="p">(</span><span class="n">reply</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_REPLY</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register the LangChain stand-ins and placeholder credentials.</span>
+
+<span class="sd">    Call this **before** importing an AI example (or ``panelini.panels.ai``). It is a</span>
+<span class="sd">    no-op if the real ``langchain_core`` is already imported, so a normal run is never</span>
+<span class="sd">    affected.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        reply: The canned assistant answer streamed for every prompt.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;langchain_core&quot;</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="s2">&quot;langchain_core&quot;</span><span class="p">],</span> <span class="s2">&quot;_panelini_stub&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Pin the packaged config. Discovery otherwise walks up from the working directory</span>
+    <span class="c1"># and can pick up a developer&#39;s own config.yml, whose provider blocks reference</span>
+    <span class="c1"># environment variables this stub knows nothing about.</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;PANELINI_AI_CONFIG_PATH&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span>
+        <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;panels&quot;</span> <span class="o">/</span> <span class="s2">&quot;ai&quot;</span> <span class="o">/</span> <span class="s2">&quot;default_config.yml&quot;</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">_PLACEHOLDER_ENV</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+    <span class="n">base_tool</span> <span class="o">=</span> <span class="n">_make_base_tool</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_model_factory</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StubChatModel</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StubChatModel</span><span class="p">(</span><span class="n">reply</span><span class="o">=</span><span class="n">reply</span><span class="p">)</span>
+
+    <span class="n">core</span> <span class="o">=</span> <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_core&quot;</span><span class="p">)</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">core</span><span class="p">,</span> <span class="s2">&quot;_panelini_stub&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>  <span class="c1"># noqa: B010 - dynamic module attribute</span>
+    <span class="n">_module</span><span class="p">(</span>
+        <span class="s2">&quot;langchain_core.messages&quot;</span><span class="p">,</span>
+        <span class="n">AIMessage</span><span class="o">=</span><span class="n">AIMessage</span><span class="p">,</span>
+        <span class="n">BaseMessage</span><span class="o">=</span><span class="n">BaseMessage</span><span class="p">,</span>
+        <span class="n">HumanMessage</span><span class="o">=</span><span class="n">HumanMessage</span><span class="p">,</span>
+        <span class="n">SystemMessage</span><span class="o">=</span><span class="n">SystemMessage</span><span class="p">,</span>
+        <span class="n">ToolMessage</span><span class="o">=</span><span class="n">ToolMessage</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_core.tools&quot;</span><span class="p">,</span> <span class="n">BaseTool</span><span class="o">=</span><span class="n">base_tool</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_core.runnables&quot;</span><span class="p">,</span> <span class="n">Runnable</span><span class="o">=</span><span class="n">StubChatModel</span><span class="p">,</span> <span class="n">RunnableConfig</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_core.language_models&quot;</span><span class="p">,</span> <span class="n">BaseChatModel</span><span class="o">=</span><span class="n">StubChatModel</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_core.language_models.chat_models&quot;</span><span class="p">,</span> <span class="n">BaseChatModel</span><span class="o">=</span><span class="n">StubChatModel</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_anthropic&quot;</span><span class="p">,</span> <span class="n">ChatAnthropic</span><span class="o">=</span><span class="n">_model_factory</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_openai&quot;</span><span class="p">,</span> <span class="n">AzureChatOpenAI</span><span class="o">=</span><span class="n">_model_factory</span><span class="p">,</span> <span class="n">ChatOpenAI</span><span class="o">=</span><span class="n">_model_factory</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain&quot;</span><span class="p">,</span> <span class="n">__version__</span><span class="o">=</span><span class="s2">&quot;stub&quot;</span><span class="p">)</span>
+    <span class="n">_module</span><span class="p">(</span><span class="s2">&quot;langchain_community&quot;</span><span class="p">)</span>
+
+    <span class="c1"># ``import langchain_core.messages`` works through sys.modules, but attribute access</span>
+    <span class="c1"># on the parent package (``langchain_core.messages`` after ``import langchain_core``)</span>
+    <span class="c1"># needs these bindings too.</span>
+    <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;messages&quot;</span><span class="p">,</span> <span class="s2">&quot;tools&quot;</span><span class="p">,</span> <span class="s2">&quot;runnables&quot;</span><span class="p">,</span> <span class="s2">&quot;language_models&quot;</span><span class="p">):</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">core</span><span class="p">,</span> <span class="n">attr</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;langchain_core.</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">])</span></div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, panelini contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=f3b36f1a"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}`;
+    document.head.appendChild(defaultStyle);
+
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+    document.head.appendChild(fullscreenStyle);
+}
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
+        return brightness < 128;
+    }
+    // console.log("No dark or light theme detected, defaulting to light theme");
+    return false;
+};
+
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
+
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(() => runMermaid(false), 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(() => runMermaid(false), 200);
+        return;
+    }
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+        container.appendChild(fullscreenBtn);
+    });
+};
+
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);</script>
+    <script src="../../_static/mermaid-theme.js?v=de141bab"></script>
+    </body>
+</html>
