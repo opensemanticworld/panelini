@@ -7,6 +7,8 @@ from typing import Any
 import panel as pn
 
 from .backend import AiBackend
+from .history.store import ChatHistoryStore
+from .history.user import UserResolver, ensure_anonymous_cookie, resolve_user
 from .tools.basic_tools import AVAILABLE_TOOLS
 
 _DEFAULT_WELCOME = """Hello! 👋
@@ -37,6 +39,8 @@ class AiChat:
         tools: list | None = None,
         show_tools: bool = True,
         show_preview: bool = True,
+        history_store: ChatHistoryStore | None = None,
+        user_resolver: UserResolver | None = None,
     ) -> None:
         """Initialize the AI chat frontend.
 
@@ -51,14 +55,33 @@ class AiChat:
                 hidden and tool toggles are not rendered.
             show_preview: When *False*, the preview split-pane is omitted
                 and the chat fills the full main area.
+            history_store: Optional per-user chat history store; enables
+                persistence and turns the Clear button into "New Chat".
+            user_resolver: Optional callable resolving the history owner id;
+                defaults to Panel auth user or an anonymous browser cookie.
         """
         self._show_tools = show_tools
         self._show_preview = show_preview
+        self._welcome_message = welcome_message or _DEFAULT_WELCOME
+
+        # Called after each persisted exchange (used by history UIs).
+        self.on_history_changed: Any = None
+
+        # Resolve the history owner once per session
+        self._cookie_pane: pn.viewable.Viewable | None = None
+        user_id: str | None = None
+        if history_store is not None:
+            if user_resolver is not None:
+                user_id = resolve_user(user_resolver)
+            else:
+                user_id, self._cookie_pane = ensure_anonymous_cookie()
 
         # Initialize backend
         self.backend = AiBackend(
             system_message=system_message,
             config_path=config_path,
+            history_store=history_store,
+            user_id=user_id,
         )
 
         # Initialize with get_current_time + any user-supplied tools enabled by default
@@ -135,10 +158,11 @@ class AiChat:
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
-        # Create chat management buttons
+        # Create chat management buttons; with history the button starts a
+        # new chat (kept in history), without it the clear is destructive
         self.clear_chat_button = pn.widgets.Button(
-            name="Clear Chat & History",
-            button_type="danger",
+            name="New Chat" if self.backend.history_enabled else "Clear Chat & History",
+            button_type="primary" if self.backend.history_enabled else "danger",
             sizing_mode="stretch_width",
             margin=(5, 5, 5, 5),
         )
@@ -340,10 +364,12 @@ class AiChat:
             )
 
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]
+        if self._cookie_pane is not None:
+            self._main_objects.append(self._cookie_pane)
 
         # Send welcome message from assistant
         self.chat_interface.send(
-            value=welcome_message or _DEFAULT_WELCOME,
+            value=self._welcome_message,
             user="🤖 Assistant",
             respond=False,
         )
@@ -465,9 +491,36 @@ class AiChat:
         )
         return tool_count
 
+    def start_new_chat(self) -> None:
+        """Start a fresh conversation; stored conversations stay intact."""
+        self.backend.start_new_conversation()
+        self.chat_interface.clear()
+        self.chat_interface.send(
+            value=self._welcome_message,
+            user="🤖 Assistant",
+            respond=False,
+        )
+
+    def open_conversation(self, conversation_id: str) -> None:
+        """Replace the chat feed with a stored conversation."""
+        pairs = self.backend.load_conversation(conversation_id)
+        self.chat_interface.clear()
+        for role, content in pairs:
+            user = "🧑 User" if role == "human" else "🤖 Assistant"
+            self.chat_interface.send(content, user=user, respond=False)
+
+    def _notify_history_changed(self) -> None:
+        if self.on_history_changed is not None:
+            self.on_history_changed()
+
     def _on_clear_chat(self, event: Any) -> None:
-        """Handle clear chat & history button click."""
+        """Start a new chat (history kept) or clear destructively without a store."""
         _ = event
+
+        if self.backend.history_enabled:
+            self.start_new_chat()
+            self._notify_history_changed()
+            return
 
         self.backend.clear_history()
         self.chat_interface.clear()
@@ -531,6 +584,8 @@ class AiChat:
                 self.chat_interface.send(msg["content"], user=msg["user"], respond=False)
 
             self.backend.restore_chat_data(chat_data)
+            self.backend.persist_imported_history(title=f"Imported: {filename}")
+            self._notify_history_changed()
 
             self.uploaded_filename_display.object = (
                 f'<span style="font-size: 0.85em; color: black;">Restored: <code>{filename}</code></span>'
@@ -579,8 +634,11 @@ class AiChat:
                 full += chunk
                 yield (f"<details>\n<summary>Generating response...</summary>\n\n{full}\n\n</details>")
             yield full
+            self.backend.persist_exchange(contents, full)
         else:
             result = await self.backend.process_message(contents, use_tools=use_tools)
             for preview_update in result.get("preview_updates", []):
                 self._update_preview_content(preview_update["title"], preview_update["content"])
             yield result["response"]
+            self.backend.persist_exchange(contents, result["response"])
+        self._notify_history_changed()
