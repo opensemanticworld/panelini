@@ -1,20 +1,10 @@
 """User identity resolution for per-user chat history.
 
-Provides a pluggable resolver that turns "who is talking to this session"
-into a stable string id, the key all chat history is stored under.
-
-Default resolution order:
-
-1. ``pn.state.user``: the authenticated user when Panel auth is enabled.
-2. ``panelini_uid`` request cookie: a previously generated anonymous id.
-3. A freshly generated anonymous id, persisted client-side via
-   :class:`CookieSetterPane` (Panel has no server-side Set-Cookie for
-   websocket sessions).
-4. ``"local"`` when there is no real browser session (Pyodide, scripts,
-   plain unit tests).
-
-Apps can override the whole chain with a custom resolver, for example a
-reverse-proxy header::
+``resolve_user()`` returns the stable string id chat history is keyed under.
+Default chain: ``pn.state.user`` (Panel auth) > ``panelini_uid`` cookie >
+generated anonymous id (persisted client-side via :class:`CookieSetterPane`)
+> ``"local"`` without a browser session (Pyodide, scripts, tests).
+Custom resolver example::
 
     resolve_user(lambda: pn.state.headers.get("X-Forwarded-User", "anonymous"))
 """
@@ -42,20 +32,16 @@ COOKIE_NAME = "panelini_uid"
 COOKIE_MAX_AGE_SECONDS = 31536000  # one year
 LOCAL_USER_ID = "local"
 
-# Anonymous ids are uuid4().hex; accept nothing looser from the browser.
+# Cookie values are browser input; accept nothing looser than uuid-like ids.
 _ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,64}")
 
-# One generated id per session document, so repeated resolution within a
-# session stays stable without leaking ids across sessions.
+# Keeps repeated resolution within one session stable.
 _generated_ids: weakref.WeakKeyDictionary[Document, str] = weakref.WeakKeyDictionary()
 
 
 class CookieSetterPane(ReactiveHTML):
-    """Invisible pane that persists the anonymous user id as a browser cookie.
-
-    Rendered once into the app layout; its only effect is assigning
-    ``document.cookie`` client-side so the id survives page reloads.
-    """
+    """Invisible pane assigning ``document.cookie`` on render (Panel has no
+    server-side Set-Cookie for websocket sessions)."""
 
     cookie = param.String(doc="Full cookie string assigned to document.cookie.")
 
@@ -97,9 +83,8 @@ def ensure_anonymous_cookie() -> tuple[str, CookieSetterPane | None]:
     """Resolve the default user id, generating an anonymous one if needed.
 
     Returns:
-        Tuple of ``(user_id, cookie_pane)``. The pane is not ``None`` only
-        the first time an id is generated for the current session; callers
-        embed it (invisible) so the browser persists the id across reloads.
+        ``(user_id, cookie_pane)``; the pane is only returned the first time
+        an id is generated for the session and must be embedded to persist it.
     """
     user = _auth_user()
     if user:
