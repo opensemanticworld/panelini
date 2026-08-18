@@ -9,6 +9,10 @@ Prerequisites
 2. Set the required environment variables for your chosen provider
    (see ``src/panelini/panels/ai/default_config.yml``).
 3. Run this script: ``python examples/panels/ai/chat_multi_tab.py``
+
+The app is served through a factory so every browser session gets its own
+instance (multi-user isolation). A module-level ``app`` shares one instance
+across all browsers and is kept here only for Pyodide/portfolio builds.
 """
 
 from pathlib import Path
@@ -27,42 +31,49 @@ config_path = Path("config.yml") if Path("config.yml").is_file() else None
 
 # -- Create chat instances ------------------------------------------------------
 
-ingest_ai = AiChat(
-    system_message="You are an assistant specialized in data ingestion tasks.",
-    welcome_message="Hi! I'm **Ingest AI**. I can help you with data ingestion tasks.",
-    config_path=config_path,
-)
 
-digest_ai = AiChat(
-    system_message="You are an assistant specialized in data analysis and summarization.",
-    welcome_message="Hi! I'm **Digest AI**. I can help you analyze and summarize data.",
-    config_path=config_path,
-)
+def create_app() -> Panelini:
+    """Create a fresh app instance (one per browser session)."""
+    ingest_ai = AiChat(
+        system_message="You are an assistant specialized in data ingestion tasks.",
+        welcome_message="Hi! I'm **Ingest AI**. I can help you with data ingestion tasks.",
+        config_path=config_path,
+    )
 
-# -- Tabbed layout inside Panelini --------------------------------------------
+    digest_ai = AiChat(
+        system_message="You are an assistant specialized in data analysis and summarization.",
+        welcome_message="Hi! I'm **Digest AI**. I can help you analyze and summarize data.",
+        config_path=config_path,
+    )
 
-main_tabs = pn.Tabs(
-    ("Ingest AI", pn.Row(*ingest_ai.main_objects)),
-    ("Digest AI", pn.Row(*digest_ai.main_objects)),
-)
+    # -- Tabbed layout inside Panelini ----------------------------------------
 
-sidebar_tabs = pn.Tabs(
-    ("Ingest AI", pn.Card(*ingest_ai.sidebar_objects, title="Ingest AI Settings")),
-    ("Digest AI", pn.Card(*digest_ai.sidebar_objects, title="Digest AI Settings")),
-)
+    main_tabs = pn.Tabs(
+        ("Ingest AI", pn.Row(*ingest_ai.main_objects)),
+        ("Digest AI", pn.Row(*digest_ai.main_objects)),
+    )
 
-# -- Link Tabs in main and sidebar
+    sidebar_tabs = pn.Tabs(
+        ("Ingest AI", pn.Card(*ingest_ai.sidebar_objects, title="Ingest AI Settings")),
+        ("Digest AI", pn.Card(*digest_ai.sidebar_objects, title="Digest AI Settings")),
+    )
 
-main_tabs.jslink(sidebar_tabs, active="active")
-sidebar_tabs.jslink(main_tabs, active="active")
+    # -- Link Tabs in main and sidebar -----------------------------------------
 
-# -- Create and link Panelini instance
+    main_tabs.jslink(sidebar_tabs, active="active")
+    sidebar_tabs.jslink(main_tabs, active="active")
 
-app = Panelini(title="AI Chat Multi Tab", sidebar_enabled=True)
-app.main_set(objects=[main_tabs])
-app.sidebar_set(objects=[sidebar_tabs])
+    # -- Create and link Panelini instance -------------------------------------
+
+    app = Panelini(title="AI Chat Multi Tab", sidebar_enabled=True)
+    app.main_set(objects=[main_tabs])
+    app.sidebar_set(objects=[sidebar_tabs])
+    return app
+
+
+app = create_app()  # module-level instance for Pyodide/portfolio builds
 
 
 if __name__ == "__main__":
     "Run AI Chat Multi Tab"
-    pn.serve(app.servable(), title="AI Chat Multi Tab", port=5008)
+    pn.serve(create_app, title="AI Chat Multi Tab", port=5008)

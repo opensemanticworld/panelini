@@ -9,6 +9,10 @@ Prerequisites
 2. Set the required environment variables for your chosen provider
    (see ``src/panelini/panels/ai/default_config.yml``).
 3. Run this script: ``python examples/panels/ai/chat_custom_tool.py``
+
+The app is served through a factory so every browser session gets its own
+instance (multi-user isolation). A module-level ``app`` shares one instance
+across all browsers and is kept here only for Pyodide/portfolio builds.
 """
 
 from typing import Literal
@@ -129,16 +133,20 @@ class LocalStorageTool(BaseTool):
 
 # -- App setup ----------------------------------------------------------------
 
-local_storage_tool = LocalStorageTool()
 
-chat = AiChat(
-    system_message="You are a helpful assistant with access to a local storage tool.",
-    tools=[local_storage_tool],
-)
+def create_app() -> Panelini:
+    """Create a fresh app instance (one per browser session)."""
+    chat = AiChat(
+        system_message="You are a helpful assistant with access to a local storage tool.",
+        tools=[LocalStorageTool()],
+    )
+    app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
+    app.main_set(objects=[pn.Row(*chat.main_objects)])
+    app.sidebar_set(objects=chat.sidebar_objects)
+    return app
 
-app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
-app.main_set(objects=[pn.Row(*chat.main_objects)])
-app.sidebar_set(objects=chat.sidebar_objects)
+
+app = create_app()  # module-level instance for Pyodide/portfolio builds
 
 if __name__ == "__main__":
-    pn.serve(app.servable(), title="AI Chat with Custom Tool", port=5007)
+    pn.serve(create_app, title="AI Chat with Custom Tool", port=5007)

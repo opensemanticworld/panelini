@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import logging
 import time
 from collections.abc import Awaitable
 from pathlib import Path
@@ -12,6 +13,8 @@ import param  # type: ignore[import-untyped]
 from panel.custom import AnyWidgetComponent
 
 pn.extension()
+
+logger = logging.getLogger(__name__)
 
 bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
 
@@ -135,7 +138,7 @@ class Wunderbaum(AnyWidgetComponent):
             event_name: Name of the event (activate, click, dblclick, etc.).
             event_params: Event parameters containing node key, title, data, etc.
         """
-        print(f"Tree event: {event_name}")
+        logger.debug("Tree event: %s", event_name)
 
         # Handle file drop separately
         if event_name == "fileDrop":

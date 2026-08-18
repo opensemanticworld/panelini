@@ -32,7 +32,7 @@ def _record_exchange(page, port, mock_langchain, module_name, ready_selector):
     )
     with config_patch, model_patch:
         module = importlib.reload(importlib.import_module(module_name))
-        server = pn.serve(module.app.servable(), port=port, threaded=True, show=False)
+        server = pn.serve(module.create_app, port=port, threaded=True, show=False)
         time.sleep(0.5)
         page.goto(f"http://localhost:{port}")
         page.locator(ready_selector).first.wait_for(timeout=20000)

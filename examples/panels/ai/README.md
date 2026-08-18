@@ -1,5 +1,12 @@
 # AI panel examples
 
+All chat examples build their app through a `create_app()` factory and serve
+it with `pn.serve(create_app, ...)`, so every browser session gets its own
+`Panelini`/`AiChat` instance (multi-user isolation). The module-level
+`app = create_app()` shares one instance across all browsers; it exists only
+for Pyodide/portfolio builds, so do not serve it directly in multi-user
+deployments.
+
 - `chat_min.py` - minimal AI chat inside Panelini.
 - `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
