@@ -6,6 +6,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from .history.store import ChatHistoryStore
 from .utils.ai_interface import AiInterface, create_interface
 from .utils.config import ModelConfig, ProviderConfig, load_config
 
@@ -25,15 +26,22 @@ class AiBackend:
         self,
         system_message: str = "You are a helpful assistant.",
         config_path: Path | None = None,
+        history_store: ChatHistoryStore | None = None,
+        user_id: str | None = None,
     ) -> None:
         """Initialize the AI backend.
 
         Args:
             system_message: System message for the AI assistant.
             config_path: Optional path to a custom config.yml file.
+            history_store: Optional store persisting exchanges per user.
+            user_id: History owner; required for persistence.
         """
         self._system_message = system_message
         self._config = load_config(config_path)
+        self.history_store = history_store
+        self.user_id = user_id
+        self.conversation_id: str | None = None
 
         # Build provider_models dict: {ProviderConfig: {display_name: ModelConfig}}
         self.provider_models: dict[ProviderConfig, dict[str, ModelConfig]] = {}
@@ -118,8 +126,10 @@ class AiBackend:
         # Update model to first available for new provider
         self.current_model = provider.models[0]
 
-        # Recreate interface (clear history when changing providers)
+        # Recreate interface (clear history when changing providers); the
+        # stored conversation stays intact, new messages open a fresh one
         self._create_ai_interface(preserve_history=False)
+        self.conversation_id = None
 
         return (
             provider.display_name,
@@ -160,6 +170,58 @@ class AiBackend:
         self.current_tools = tools
         self._create_ai_interface(preserve_history=True)
         return len(tools)
+
+    @property
+    def history_enabled(self) -> bool:
+        """Whether exchanges are persisted to a history store."""
+        return self.history_store is not None and self.user_id is not None
+
+    def persist_exchange(self, user_text: str, ai_text: str) -> None:
+        """Persist one user/assistant exchange; no-op without a store.
+
+        The conversation row is created lazily on the first exchange, so
+        empty chats never hit the store.
+        """
+        if self.history_store is None or self.user_id is None:
+            return
+        if self.conversation_id is None:
+            self.conversation_id = self.history_store.create_conversation(self.user_id).id
+        self.history_store.append_message(self.user_id, self.conversation_id, "human", user_text)
+        self.history_store.append_message(self.user_id, self.conversation_id, "ai", ai_text)
+
+    def load_conversation(self, conversation_id: str) -> list[tuple[str, str]]:
+        """Load a stored conversation into the model context.
+
+        Returns:
+            ``(role, content)`` pairs (human/ai only) for UI replay.
+        """
+        if self.history_store is None or self.user_id is None:
+            return []
+        records = self.history_store.load_messages(self.user_id, conversation_id)
+        pairs = [(r.role, r.content) for r in records if r.role in ("human", "ai")]
+        if self.ai_interface:
+            self.ai_interface.conversation_history = [
+                HumanMessage(content=content) if role == "human" else AIMessage(content=content)
+                for role, content in pairs
+            ]
+        self.conversation_id = conversation_id
+        return pairs
+
+    def start_new_conversation(self) -> None:
+        """Reset to a fresh conversation; stored conversations stay intact."""
+        self.conversation_id = None
+        self.clear_history()
+
+    def persist_imported_history(self, title: str) -> None:
+        """Persist the current in-memory history as a new conversation."""
+        if self.history_store is None or self.user_id is None or self.ai_interface is None:
+            return
+        conversation = self.history_store.create_conversation(self.user_id, title=title)
+        self.conversation_id = conversation.id
+        for message in self.ai_interface.conversation_history:
+            role = "human" if isinstance(message, HumanMessage) else "ai"
+            content = message.content if isinstance(message.content, str) else str(message.content)
+            self.history_store.append_message(self.user_id, conversation.id, role, content)
 
     def clear_history(self) -> None:
         """Clear the conversation history."""
