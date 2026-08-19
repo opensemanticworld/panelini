@@ -6,8 +6,10 @@ import asyncio
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+import panel as pn
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -66,7 +68,7 @@ class TestBackendPersistence:
         assert len(conversations) == 1
         assert len(store.load_messages(USER, conversations[0].id)) == 4
 
-    def test_load_conversation_restores_context(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
+    def test_load_conversation_returns_replay_pairs(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER)
         store.append_message(USER, conv.id, "human", "question")
         store.append_message(USER, conv.id, "ai", "answer")
@@ -76,8 +78,7 @@ class TestBackendPersistence:
 
         assert pairs == [("human", "question"), ("ai", "answer")]
         assert backend.conversation_id == conv.id
-        assert backend.ai_interface is not None
-        history = backend.ai_interface.conversation_history
+        history = backend.history_from_pairs(pairs)
         assert isinstance(history[0], HumanMessage)
         assert isinstance(history[1], AIMessage)
         assert len(history) == 2
@@ -106,6 +107,17 @@ class TestBackendPersistence:
         backend.persist_exchange("q2", "a2")
         assert backend.conversation_id != old_id
         assert len(store.list_conversations(USER)) == 2
+
+    def test_persist_exchange_pinned_to_send_time_conversation(
+        self, backend: AiBackend, store: InMemoryHistoryStore
+    ) -> None:
+        target_id = backend.create_conversation_id()
+        assert target_id is not None
+        other = store.create_conversation(USER, title="other")
+        backend.load_conversation(other.id)  # user switched mid-response
+        backend.persist_exchange("q", "a", conversation_id=target_id)
+        assert [m.content for m in store.load_messages(USER, target_id)] == ["q", "a"]
+        assert store.load_messages(USER, other.id) == []
 
     def test_persist_imported_history(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
         assert backend.ai_interface is not None
@@ -153,14 +165,18 @@ class TestChatHistoryWiring:
         assert chat.backend.user_id == USER
         assert chat.backend.history_enabled
 
-    def test_button_is_new_chat_with_history(self, chat: AiChat) -> None:
-        assert chat.clear_chat_button.name == "New Chat"
-        assert chat.clear_chat_button.button_type == "primary"
+    def test_clear_button_hidden_with_history(self, chat: AiChat) -> None:
+        # new-chat lives in the Conversations card; no duplicate in Chat Management
+        sidebar_buttons = [b for obj in chat.sidebar_objects for b in obj.select(pn.widgets.Button)]
+        assert chat.clear_chat_button not in sidebar_buttons
+        assert chat._history_panel.new_chat_button in sidebar_buttons
 
-    def test_button_stays_destructive_without_history(self, _mock_backend_env: None) -> None:
+    def test_clear_button_present_without_history(self, _mock_backend_env: None) -> None:
         bare = AiChat(show_tools=False)
         assert bare.clear_chat_button.name == "Clear Chat & History"
         assert bare.clear_chat_button.button_type == "danger"
+        sidebar_buttons = [b for obj in bare.sidebar_objects for b in obj.select(pn.widgets.Button)]
+        assert bare.clear_chat_button in sidebar_buttons
 
     def test_default_resolver_falls_back_to_local(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         chat = AiChat(history_store=store, show_tools=False)  # no session context in unit tests
@@ -184,11 +200,109 @@ class TestChatHistoryWiring:
         contents = [str(m.object) for m in chat.chat_interface.objects]
         assert contents == ["question", "answer"]
 
+    def test_generation_routes_to_origin_conversation(
+        self, chat: AiChat, store: InMemoryHistoryStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Switching chats mid-generation must not reroute the exchange."""
+        origin_feed = chat.chat_interface
+
+        busy_during_stream: list[set[str]] = []
+
+        async def fake_stream(message: str, history: list | None = None) -> AsyncGenerator[str, None]:
+            _ = (message, history)
+            busy_during_stream.append(set(chat._generating_ids))
+            chat.start_new_chat()  # user switches away mid-response
+            yield "answer"
+
+        chat.batch_update_tools(set())
+        monkeypatch.setattr(chat.backend, "stream_message", fake_stream)
+
+        async def consume() -> list[str]:
+            return [c async for c in chat._handle_message("q", "user", origin_feed)]
+
+        _run_async(consume)
+
+        origin_session = chat._sessions[origin_feed]
+        assert chat._active_session is not origin_session  # switch took effect
+        assert origin_session.conversation_id is not None
+        stored = store.load_messages(USER, origin_session.conversation_id)
+        assert [(m.role, m.content) for m in stored] == [("human", "q"), ("ai", "answer")]
+        # busy indicator was set during the stream and cleared afterwards
+        assert busy_during_stream == [{origin_session.conversation_id}]
+        assert chat._generating_ids == set()
+        # finished while another chat was active: flagged ready until opened
+        assert chat._ready_ids == {origin_session.conversation_id}
+        chat.open_conversation(origin_session.conversation_id)
+        assert chat._ready_ids == set()
+
+    def test_open_conversation_reuses_session_feed(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        store.append_message(USER, conv.id, "human", "question")
+        chat.open_conversation(conv.id)
+        first_feed = chat.chat_interface
+        chat.start_new_chat()
+        chat.open_conversation(conv.id)
+        assert chat.chat_interface is first_feed  # same feed, no re-replay
+
+    def test_upload_creates_history_entry(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        import json
+        from types import SimpleNamespace
+
+        chat_data = {
+            "messages": [{"user": "🧑 User", "content": "old question"}],
+            "conversation_history": [
+                {"type": "HumanMessage", "content": "old question"},
+                {"type": "AIMessage", "content": "old answer"},
+            ],
+        }
+        chat.upload_chat_input.filename = "old_chat.json"
+        chat._on_upload_chat(SimpleNamespace(new=json.dumps(chat_data).encode()))
+
+        conversations = store.list_conversations(USER)
+        assert [c.title for c in conversations] == ["Imported: old_chat.json"]
+        assert chat.backend.conversation_id == conversations[0].id
+        # the imported conversation shows up as a history row
+        history_rows = [o for o in chat._history_panel._list.objects if "history-row" in o.css_classes]
+        assert len(history_rows) == 1
+
+    def test_user_resolved_once_for_badge_and_history(
+        self, _mock_backend_env: None, store: InMemoryHistoryStore
+    ) -> None:
+        calls: list[int] = []
+
+        def resolver() -> str:
+            calls.append(1)
+            return USER
+
+        from panelini import Panelini
+
+        app = Panelini(use_ai=True, use_ai_history=True, ai_history_store=store, show_user=True, user_resolver=resolver)
+        assert app._ai_frontend.backend.user_id == USER
+        badges = [o for col in app._navbar for o in col if "user-chip-pane" in getattr(o, "css_classes", [])]
+        assert len(badges) == 1
+        assert len(calls) == 1  # header badge and history share one resolution
+
+    def test_panelini_history_params(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
+        from panelini import Panelini
+
+        app = Panelini(use_ai=True, use_ai_history=True, ai_history_store=store, user_resolver=lambda: USER)
+        sidebar = app._ai_frontend.sidebar_objects
+        tabs: Any = sidebar[0]
+        assert isinstance(tabs, pn.Tabs)
+        assert tabs.active == 1  # conversations tab active, setup leftmost
+        setup_tab: Any = tabs.objects[0]
+        chat_tab: Any = tabs.objects[1]
+        # no "General Setup" wrapper: the setting cards sit directly in the tab
+        assert [card.title for card in setup_tab] == ["Provider Settings", "Model Settings", "Basic Tools"]
+        assert chat_tab[0].title == "Conversations"
+        assert chat_tab[1].title == "Chat Management"
+        assert app._ai_frontend.backend.user_id == USER
+
     def test_streamed_exchange_is_persisted(
         self, chat: AiChat, store: InMemoryHistoryStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def fake_stream(message: str) -> AsyncGenerator[str, None]:
-            _ = message
+        async def fake_stream(message: str, history: list | None = None) -> AsyncGenerator[str, None]:
+            _ = (message, history)
             yield "streamed "
             yield "reply"
 
@@ -207,4 +321,5 @@ class TestChatHistoryWiring:
         assert len(conversations) == 1
         roles = [(m.role, m.content) for m in store.load_messages(USER, conversations[0].id)]
         assert roles == [("human", "question"), ("ai", "streamed reply")]
-        assert notified == [True]
+        # once when the row is created at send time, once after persisting
+        assert notified == [True, True]
