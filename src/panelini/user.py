@@ -1,9 +1,10 @@
-"""User identity resolution for per-user chat history.
+"""Application-wide user identity resolution.
 
-``resolve_user()`` returns the stable string id chat history is keyed under.
-Default chain: ``pn.state.user`` (Panel auth) > ``panelini_uid`` cookie >
-generated anonymous id (persisted client-side via :class:`CookieSetterPane`)
-> ``"local"`` without a browser session (Pyodide, scripts, tests).
+``resolve_user()`` returns the stable string id a session's user is known
+under (header display, chat history ownership). Default chain:
+``pn.state.user`` (Panel auth) > ``panelini_uid`` cookie > generated
+anonymous id (persisted client-side via :class:`CookieSetterPane`) >
+``"local"`` without a browser session (Pyodide, scripts, tests).
 Custom resolver example::
 
     resolve_user(lambda: pn.state.headers.get("X-Forwarded-User", "anonymous"))
@@ -31,9 +32,12 @@ UserResolver = Callable[[], str]
 COOKIE_NAME = "panelini_uid"
 COOKIE_MAX_AGE_SECONDS = 31536000  # one year
 LOCAL_USER_ID = "local"
+GUEST_LABEL = "Guest"
 
 # Cookie values are browser input; accept nothing looser than uuid-like ids.
 _ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{8,64}")
+# Anonymous ids generated here are uuid4().hex
+_GENERATED_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
 
 # Keeps repeated resolution within one session stable.
 _generated_ids: weakref.WeakKeyDictionary[Document, str] = weakref.WeakKeyDictionary()
@@ -108,12 +112,27 @@ def ensure_anonymous_cookie() -> tuple[str, CookieSetterPane | None]:
     user_id = uuid.uuid4().hex
     _generated_ids[doc] = user_id
     cookie = f"{COOKIE_NAME}={user_id}; path=/; max-age={COOKIE_MAX_AGE_SECONDS}; SameSite=Lax"
-    return user_id, CookieSetterPane(cookie=cookie, height=0, width=0, margin=0)
+    pane = CookieSetterPane(
+        cookie=cookie,
+        height=0,
+        width=0,
+        margin=0,
+        # zero layout footprint: must not add scroll height to the main area
+        stylesheets=[":host { position: absolute; width: 0; height: 0; overflow: hidden; }"],
+    )
+    return user_id, pane
 
 
 def default_user_resolver() -> str:
     """Resolve via the default chain: auth user, cookie, generated, local."""
     return ensure_anonymous_cookie()[0]
+
+
+def display_name(user_id: str) -> str:
+    """Human label for a user id: generated/local ids read as "Guest"."""
+    if user_id == LOCAL_USER_ID or _GENERATED_ID_PATTERN.fullmatch(user_id):
+        return GUEST_LABEL
+    return user_id
 
 
 def resolve_user(resolver: UserResolver | None = None) -> str:

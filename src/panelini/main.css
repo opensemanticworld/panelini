@@ -20,6 +20,9 @@
   box-shadow: none;
   outline: none;
   overflow-y: auto;
+  /* reserve the scrollbar gutter so content width stays stable when the
+     scrollbar appears/disappears (tab switches, card collapse) */
+  scrollbar-gutter: stable;
   background-color: transparent;
   padding-top: var(--content-spacing);
 }
@@ -74,6 +77,18 @@ div.bk-btn-group button.bk-btn.bk-btn-default {
 /* Hide all elments including class hidden */
 .hidden {
   display: none;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: color-mix(in srgb, var(--background-color) 60%, transparent);
+  font-size: 0.9em;
+  white-space: nowrap;
 }
 
 /* Hide dotted outline of buttons */

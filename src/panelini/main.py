@@ -179,6 +179,39 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         doc="Optional path to a custom config.yml for the AI component.",
     )
 
+    ai_show_preview = param.Boolean(
+        default=True,
+        doc="Show the preview pane next to the AI chat.",
+    )
+
+    use_ai_history = param.Boolean(
+        default=False,
+        doc="Enable per-user persistent chat history for the AI component.",
+    )
+
+    ai_history_store = param.Parameter(
+        default=None,
+        doc=(
+            "ChatHistoryStore for the AI chat history. When None and "
+            "use_ai_history is True, a SQLite store at PANELINI_HISTORY_DB "
+            "(default ./panelini_history.sqlite3) is shared by all sessions."
+        ),
+    )
+
+    show_user = param.Boolean(
+        default=False,
+        doc="Show the resolved user as a chip in the header (top right).",
+    )
+
+    user_resolver = param.Callable(
+        default=None,
+        doc=(
+            "Callable resolving the application user id (header chip, AI chat "
+            "history owner); defaults to Panel auth user or an anonymous "
+            "browser cookie."
+        ),
+    )
+
     # $$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN UTILS $$$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -208,6 +241,9 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN INIT $$$$$$$$$$$$$$$$$$$$$$$$$$$$
     def __init__(self, **params: Any) -> None:
         super().__init__(**params)
+        # Session user, resolved at most once (see _resolved_user)
+        self._user_id: str | None = None
+        self._user_cookie_pane: panel.viewable.Viewable | None = None
         # Empty Column to trigger panel rendering when clearing
         self._main_empty_column = panel.Column(visible=False)
 
@@ -281,10 +317,26 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
             raise ImportError(msg) from exc
 
         config_path = Path(self.ai_config_path) if isinstance(self.ai_config_path, str) else self.ai_config_path
+        history_store = self.ai_history_store
+        if history_store is None and self.use_ai_history:
+            from panelini.panels.ai.history import default_history_store
+
+            history_store = default_history_store()
+        # Single resolution point: the header badge and the AI panel share
+        # one resolved identity; the cookie pane is embedded exactly once
+        user_id = cookie_pane = None
+        if history_store is not None:
+            user_id, cookie_pane = self._resolved_user()
+            if self.show_user:
+                cookie_pane = None  # already embedded next to the header badge
         self._ai_frontend = AiChat(
             system_message=self.ai_system_message,
             welcome_message=self.ai_welcome_message,
             config_path=config_path,
+            show_preview=self.ai_show_preview,
+            history_store=history_store,
+            user_id=user_id,
+            cookie_pane=cookie_pane,
         )
 
         # Ensure the sidebar is enabled so AI controls are accessible
@@ -414,6 +466,17 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
             objects=self._navbar,
         )
 
+    def _resolved_user(self) -> tuple[str, panel.viewable.Viewable | None]:
+        """Resolve the session user once; header and AI panel share it."""
+        if self._user_id is None:
+            from panelini.user import ensure_anonymous_cookie, resolve_user
+
+            if self.user_resolver is not None:
+                self._user_id = resolve_user(self.user_resolver)
+            else:
+                self._user_id, self._user_cookie_pane = ensure_anonymous_cookie()
+        return self._user_id, self._user_cookie_pane
+
     def _navbar_set(self) -> None:
         """Set the navbar objects, only type Column is allowed in tests."""
         self._navbar = []
@@ -461,6 +524,16 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
                 ],
             )
         )
+
+        # Current user badge (top right)
+        if self.show_user:
+            from panelini.components.user_badge import user_badge
+
+            user_id, cookie_pane = self._resolved_user()
+            badge_objects: list[panel.viewable.Viewable] = [user_badge(user_id)]
+            if cookie_pane is not None:
+                badge_objects.append(cookie_pane)
+            self._navbar.append(panel.Column(align="center", objects=badge_objects))
 
         # Sidebar right toggle button
         if self.sidebar_right_enabled:

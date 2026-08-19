@@ -1,4 +1,4 @@
-"""Tests for panelini.panels.ai.history.user."""
+"""Tests for panelini.user."""
 
 from __future__ import annotations
 
@@ -6,22 +6,22 @@ import re
 import sys
 from collections.abc import Mapping
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import panel as pn
 import pytest
 
-from panelini.panels.ai.history import user as user_mod
-from panelini.panels.ai.history.user import (
+from panelini import user as user_mod
+from panelini.user import (
     COOKIE_NAME,
+    GUEST_LABEL,
     LOCAL_USER_ID,
     CookieSetterPane,
     default_user_resolver,
+    display_name,
     ensure_anonymous_cookie,
     resolve_user,
 )
-
-pytestmark = pytest.mark.ai
 
 VALID_COOKIE_ID = "abcdef1234567890"
 
@@ -139,3 +139,45 @@ class TestResolveUser:
         bad_resolver = cast("user_mod.UserResolver", lambda: bad)
         with pytest.raises(ValueError, match="non-empty string"):
             resolve_user(bad_resolver)
+
+
+# ── display_name ──────────────────────────────────────────────────────────
+
+
+class TestDisplayName:
+    def test_auth_or_custom_names_shown_as_is(self) -> None:
+        assert display_name("alice") == "alice"
+        assert display_name("proxy-user") == "proxy-user"
+
+    def test_generated_and_local_ids_show_as_guest(self) -> None:
+        assert display_name(LOCAL_USER_ID) == GUEST_LABEL
+        assert display_name("a" * 32) == GUEST_LABEL
+
+
+# ── Panelini header chip ──────────────────────────────────────────────────
+
+
+class TestHeaderUserChip:
+    def test_chip_shows_resolved_user(self) -> None:
+        from panelini import Panelini
+
+        app = Panelini(show_user=True, user_resolver=lambda: "alice")
+        chips = [o for col in app._navbar for o in col if "user-chip-pane" in o.css_classes]
+        assert len(chips) == 1
+        assert "alice" in cast("Any", chips[0]).object
+
+    def test_anonymous_chip_shows_guest(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from panelini import Panelini
+
+        _patch_state(monkeypatch, curdoc=_FakeDoc())
+        app = Panelini(show_user=True)
+        chips = [o for col in app._navbar for o in col if "user-chip-pane" in o.css_classes]
+        assert len(chips) == 1
+        assert GUEST_LABEL in cast("Any", chips[0]).object
+
+    def test_no_chip_by_default(self) -> None:
+        from panelini import Panelini
+
+        app = Panelini()
+        chips = [o for col in app._navbar for o in col if "user-chip-pane" in getattr(o, "css_classes", [])]
+        assert chips == []
