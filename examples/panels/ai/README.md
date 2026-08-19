@@ -8,6 +8,7 @@ for Pyodide/portfolio builds, so do not serve it directly in multi-user
 deployments.
 
 - `chat_min.py` - minimal AI chat inside Panelini.
+- `chat_history.py` - AI chat with per-user persistent conversation history (`use_ai_history=True`): icon-tabbed sidebar (conversations/setup), date-grouped list, new chat, rename, delete; SQLite-backed (`PANELINI_HISTORY_DB`), in-memory in Pyodide; preview disabled via `ai_show_preview=False`.
 - `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
 - `plot_by_code.py` - AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).

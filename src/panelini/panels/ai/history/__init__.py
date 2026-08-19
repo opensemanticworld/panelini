@@ -1,7 +1,7 @@
 """Per-user chat history for the Panelini AI chat panel.
 
-User identity resolution and conversation persistence. No LangChain
-dependency: works without the ``[ai]`` extras and under the
+Conversation persistence plus re-exports of :mod:`panelini.user`. No
+LangChain dependency: works without the ``[ai]`` extras and under the
 :mod:`panelini.ai_testing` stubs.
 """
 
@@ -13,15 +13,29 @@ __all__ = [
     "ConversationRecord",
     "CookieSetterPane",
     "FolderRecord",
+    "HistoryPanel",
     "InMemoryHistoryStore",
     "MessageRecord",
     "SqliteHistoryStore",
     "UserResolver",
+    "default_history_store",
     "default_user_resolver",
     "ensure_anonymous_cookie",
     "resolve_user",
 ]
 
+from panelini.user import (
+    COOKIE_NAME,
+    LOCAL_USER_ID,
+    CookieSetterPane,
+    UserResolver,
+    default_user_resolver,
+    ensure_anonymous_cookie,
+    resolve_user,
+)
+
+from .default import default_history_store
+from .panel import HistoryPanel
 from .sqlite_store import SqliteHistoryStore
 from .store import (
     DEFAULT_TITLE,
@@ -30,13 +44,4 @@ from .store import (
     FolderRecord,
     InMemoryHistoryStore,
     MessageRecord,
-)
-from .user import (
-    COOKIE_NAME,
-    LOCAL_USER_ID,
-    CookieSetterPane,
-    UserResolver,
-    default_user_resolver,
-    ensure_anonymous_cookie,
-    resolve_user,
 )

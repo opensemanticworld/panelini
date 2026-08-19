@@ -176,21 +176,30 @@ class AiBackend:
         """Whether exchanges are persisted to a history store."""
         return self.history_store is not None and self.user_id is not None
 
-    def persist_exchange(self, user_text: str, ai_text: str) -> None:
+    def create_conversation_id(self) -> str | None:
+        """Create a new stored conversation and return its id."""
+        if self.history_store is None or self.user_id is None:
+            return None
+        return self.history_store.create_conversation(self.user_id).id
+
+    def persist_exchange(self, user_text: str, ai_text: str, conversation_id: str | None = None) -> None:
         """Persist one user/assistant exchange; no-op without a store.
 
-        The conversation row is created lazily on the first exchange, so
-        empty chats never hit the store.
+        ``conversation_id`` pins the exchange to the conversation active at
+        send time, so switching chats mid-response cannot reroute it.
         """
         if self.history_store is None or self.user_id is None:
             return
-        if self.conversation_id is None:
-            self.conversation_id = self.history_store.create_conversation(self.user_id).id
-        self.history_store.append_message(self.user_id, self.conversation_id, "human", user_text)
-        self.history_store.append_message(self.user_id, self.conversation_id, "ai", ai_text)
+        target_id = conversation_id or self.conversation_id or self.create_conversation_id()
+        if target_id is None:
+            return
+        if conversation_id is None:
+            self.conversation_id = target_id
+        self.history_store.append_message(self.user_id, target_id, "human", user_text)
+        self.history_store.append_message(self.user_id, target_id, "ai", ai_text)
 
     def load_conversation(self, conversation_id: str) -> list[tuple[str, str]]:
-        """Load a stored conversation into the model context.
+        """Mark a stored conversation active and return its messages.
 
         Returns:
             ``(role, content)`` pairs (human/ai only) for UI replay.
@@ -199,13 +208,15 @@ class AiBackend:
             return []
         records = self.history_store.load_messages(self.user_id, conversation_id)
         pairs = [(r.role, r.content) for r in records if r.role in ("human", "ai")]
-        if self.ai_interface:
-            self.ai_interface.conversation_history = [
-                HumanMessage(content=content) if role == "human" else AIMessage(content=content)
-                for role, content in pairs
-            ]
         self.conversation_id = conversation_id
         return pairs
+
+    @staticmethod
+    def history_from_pairs(pairs: list[tuple[str, str]]) -> list[Any]:
+        """Rebuild a LangChain message list from ``(role, content)`` pairs."""
+        return [
+            HumanMessage(content=content) if role == "human" else AIMessage(content=content) for role, content in pairs
+        ]
 
     def start_new_conversation(self) -> None:
         """Reset to a fresh conversation; stored conversations stay intact."""
@@ -247,12 +258,16 @@ class AiBackend:
         if self.ai_interface:
             self.ai_interface.conversation_history = history
 
-    async def process_message(self, message: str, use_tools: bool = False) -> dict[str, Any]:
+    async def process_message(
+        self, message: str, use_tools: bool = False, history: list[Any] | None = None
+    ) -> dict[str, Any]:
         """Process a user message and return AI response with preview updates.
 
         Args:
             message: User's message
             use_tools: Whether to enable tool execution
+            history: Conversation context to read and append to; defaults to
+                the interface's own history.
 
         Returns:
             Dictionary with 'response' (AI text) and 'preview_updates' (list of preview update dicts)
@@ -264,19 +279,21 @@ class AiBackend:
 
         if not use_tools:
             # No tools enabled, use simple response
-            response = await self.ai_interface.get_response(message, stream=False)
+            response = await self.ai_interface.get_response(message, stream=False, history=history)
             response_text = response if isinstance(response, str) else str(response)
             return {"response": response_text, "preview_updates": []}
         else:
             # Tools are enabled, use tool-aware response with execution loop
-            response_text = await self._handle_message_with_tools(message)
+            response_text = await self._handle_message_with_tools(message, history=history)
             return {"response": response_text, "preview_updates": self.preview_updates}
 
-    async def stream_message(self, message: str) -> AsyncGenerator[str, None]:
+    async def stream_message(self, message: str, history: list[Any] | None = None) -> AsyncGenerator[str, None]:
         """Yield response token chunks for a non-tool message.
 
         Args:
             message: The user's message
+            history: Conversation context to read and append to; defaults to
+                the interface's own history.
 
         Yields:
             String chunks of the AI response
@@ -284,7 +301,7 @@ class AiBackend:
         if not self.ai_interface:
             yield "Error: AI interface not initialized"
             return
-        result = await self.ai_interface.get_response(message, stream=True)
+        result = await self.ai_interface.get_response(message, stream=True, history=history)
         # stream=True always returns an AsyncGenerator; guard for type safety
         if isinstance(result, str):
             yield result
@@ -292,17 +309,20 @@ class AiBackend:
         async for chunk in result:
             yield chunk
 
-    async def _handle_message_with_tools(self, user_message: str) -> str:
+    async def _handle_message_with_tools(self, user_message: str, history: list[Any] | None = None) -> str:
         """Handle messages with tool execution support.
 
         Args:
             user_message: The user's message
+            history: Conversation context to read and append to.
 
         Returns:
             Final AI response after tool execution
         """
         if not self.ai_interface:
             return "Error: AI interface not initialized"
+        if history is None:
+            history = self.ai_interface.conversation_history
 
         max_iterations = 10  # Prevent infinite loops
         iteration = 0
@@ -311,15 +331,15 @@ class AiBackend:
             # Get response with potential tool calls
             if iteration == 0:
                 # First iteration: send user message
-                response_data = await self.ai_interface.get_response_with_tools(user_message)
+                response_data = await self.ai_interface.get_response_with_tools(user_message, history=history)
             else:
                 # Subsequent iterations: invoke model with existing conversation history
-                response = await self.ai_interface.model.ainvoke(self.ai_interface.conversation_history)
+                response = await self.ai_interface.model.ainvoke(history)
                 response_text = response.content if isinstance(response.content, str) else str(response.content)
                 tool_calls = getattr(response, "tool_calls", [])
 
                 # Add AI response to history
-                self.ai_interface.conversation_history.append(AIMessage(content=response_text, tool_calls=tool_calls))
+                history.append(AIMessage(content=response_text, tool_calls=tool_calls))
 
                 response_data = {"text": response_text, "tool_calls": tool_calls}
 
@@ -336,7 +356,7 @@ class AiBackend:
             tool_results = await self._execute_tool_calls(tool_calls)
 
             # Add tool results to conversation history
-            self.ai_interface.conversation_history.extend(tool_results)
+            history.extend(tool_results)
 
             iteration += 1
 

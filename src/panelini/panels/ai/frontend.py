@@ -6,9 +6,10 @@ from typing import Any
 
 import panel as pn
 
+from panelini.user import UserResolver, ensure_anonymous_cookie, resolve_user
+
 from .backend import AiBackend
 from .history.store import ChatHistoryStore
-from .history.user import UserResolver, ensure_anonymous_cookie, resolve_user
 from .tools.basic_tools import AVAILABLE_TOOLS
 
 _DEFAULT_WELCOME = """Hello! 👋
@@ -22,6 +23,32 @@ I'm your AI Assistant, here to help you with tasks such as:
 Feel free to ask me anything!
 
 What would you like to work on?"""
+
+# No focus outline on the sidebar icon tabs (browsers draw a dotted frame)
+_TABS_CSS = """
+.bk-tab:focus, .bk-tab:focus-visible { outline: none; box-shadow: none; }
+"""
+
+
+class _ChatSession:
+    """One conversation's feed and model context."""
+
+    def __init__(self, feed: pn.chat.ChatInterface, conversation_id: str | None = None) -> None:
+        self.feed = feed
+        self.conversation_id = conversation_id
+        self.history: list[Any] = []
+
+
+def _resolve_history_user(
+    history_store: ChatHistoryStore | None,
+    user_resolver: UserResolver | None,
+) -> tuple[str | None, pn.viewable.Viewable | None]:
+    """Resolve the history owner id and an optional cookie-persisting pane."""
+    if history_store is None:
+        return None, None
+    if user_resolver is not None:
+        return resolve_user(user_resolver), None
+    return ensure_anonymous_cookie()
 
 
 class AiChat:
@@ -41,6 +68,8 @@ class AiChat:
         show_preview: bool = True,
         history_store: ChatHistoryStore | None = None,
         user_resolver: UserResolver | None = None,
+        user_id: str | None = None,
+        cookie_pane: pn.viewable.Viewable | None = None,
     ) -> None:
         """Initialize the AI chat frontend.
 
@@ -59,6 +88,11 @@ class AiChat:
                 persistence and turns the Clear button into "New Chat".
             user_resolver: Optional callable resolving the history owner id;
                 defaults to Panel auth user or an anonymous browser cookie.
+                Only used standalone, i.e. when ``user_id`` is not given.
+            user_id: Pre-resolved history owner (e.g. by Panelini); skips
+                the panel's own resolution.
+            cookie_pane: Cookie-persisting pane accompanying a pre-resolved
+                anonymous ``user_id``, embedded in the main area.
         """
         self._show_tools = show_tools
         self._show_preview = show_preview
@@ -67,14 +101,11 @@ class AiChat:
         # Called after each persisted exchange (used by history UIs).
         self.on_history_changed: Any = None
 
-        # Resolve the history owner once per session
-        self._cookie_pane: pn.viewable.Viewable | None = None
-        user_id: str | None = None
-        if history_store is not None:
-            if user_resolver is not None:
-                user_id = resolve_user(user_resolver)
-            else:
-                user_id, self._cookie_pane = ensure_anonymous_cookie()
+        # Resolve the history owner only when used standalone; embedded in
+        # Panelini the pre-resolved identity is passed in
+        if history_store is not None and user_id is None:
+            user_id, cookie_pane = _resolve_history_user(history_store, user_resolver)
+        self._cookie_pane = cookie_pane
 
         # Initialize backend
         self.backend = AiBackend(
@@ -158,11 +189,10 @@ class AiChat:
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
-        # Create chat management buttons; with history the button starts a
-        # new chat (kept in history), without it the clear is destructive
+        # Create chat management buttons
         self.clear_chat_button = pn.widgets.Button(
-            name="New Chat" if self.backend.history_enabled else "Clear Chat & History",
-            button_type="primary" if self.backend.history_enabled else "danger",
+            name="Clear Chat & History",
+            button_type="danger",
             sizing_mode="stretch_width",
             margin=(5, 5, 5, 5),
         )
@@ -195,24 +225,12 @@ class AiChat:
         self.model_selector.param.watch(self._on_model_change, "value")
         self.temperature_slider.param.watch(self._on_temperature_change, "value")
 
-        # Create chat interface
-        self.chat_interface = pn.chat.ChatInterface(
-            callback=self._handle_message,
-            callback_user="🤖 Assistant",
-            placeholder_text="💭 Thinking...",
-            placeholder_threshold=0.2,
-            user="🧑 User",
-            min_width=330,
-            show_send=True,
-            show_rerun=False,
-            show_undo=False,
-            show_timestamp=False,
-            show_button_name=False,
-            show_reaction_icons=False,
-            callback_exception="verbose",
-            css_classes=["chat-interface"],
-            sizing_mode="stretch_both",
-        )
+        # One feed and model context per conversation; generations stay
+        # bound to their session, so switching chats mid-response is safe
+        self._sessions: dict[pn.chat.ChatInterface, _ChatSession] = {}
+        self._generating_ids: set[str] = set()
+        self._ready_ids: set[str] = set()  # finished while not being viewed
+        self._active_session = self._new_session(welcome=True)
 
         # Add custom CSS to handle preview content overflow
         pn.config.raw_css.append("""
@@ -245,6 +263,7 @@ class AiChat:
         _general_setup_items: list[pn.viewable.Viewable] = [
             pn.Card(
                 title="Provider Settings",
+                sizing_mode="stretch_width",
                 collapsible=True,
                 collapsed=False,
                 objects=[
@@ -260,6 +279,7 @@ class AiChat:
             ),
             pn.Card(
                 title="Model Settings",
+                sizing_mode="stretch_width",
                 collapsible=True,
                 collapsed=False,
                 objects=[
@@ -278,6 +298,7 @@ class AiChat:
             _general_setup_items.append(
                 pn.Card(
                     title="Basic Tools",
+                    sizing_mode="stretch_width",
                     collapsible=True,
                     collapsed=False,
                     objects=[
@@ -292,47 +313,95 @@ class AiChat:
                     },
                 )
             )
-        _general_setup_items.append(
-            pn.Card(
-                title="Chat Management",
-                collapsible=True,
-                collapsed=False,
-                objects=[
-                    pn.Column(
-                        pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
-                        self.clear_chat_button,
-                        pn.pane.Markdown("**Export/Import:**", margin=(10, 0, 5, 0)),
-                        self.download_chat_button,
-                        pn.pane.Markdown("**Restore from JSON:**", margin=(10, 0, 5, 0)),
-                        self.upload_chat_input,
-                        self.uploaded_filename_display,
-                    )
-                ],
-                styles={
-                    "margin-bottom": "10px",
-                    "padding": "12px",
-                },
-            )
-        )
-        self._sidebar_objects = [
-            pn.Card(
-                title="General Setup",
-                collapsible=True,
-                collapsed=False,
-                objects=_general_setup_items,
-                styles={"padding": "8px"},
-            ),
+        # With history the new-chat action lives in the Conversations card,
+        # so the destructive clear button is omitted here
+        _chat_management_items: list[pn.viewable.Viewable] = []
+        if not self.backend.history_enabled:
+            _chat_management_items += [
+                pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
+                self.clear_chat_button,
+            ]
+        _chat_management_items += [
+            pn.pane.Markdown("**Export/Import:**", margin=(10, 0, 5, 0)),
+            self.download_chat_button,
+            pn.pane.Markdown("**Restore from JSON:**", margin=(10, 0, 5, 0)),
+            self.upload_chat_input,
+            self.uploaded_filename_display,
         ]
+        _chat_management_card = pn.Card(
+            title="Chat Management",
+            sizing_mode="stretch_width",
+            collapsible=True,
+            collapsed=False,
+            objects=[pn.Column(*_chat_management_items)],
+            styles={
+                "margin-bottom": "10px",
+                "padding": "12px",
+            },
+        )
+        # Import/export belongs to chats: with history it moves into the
+        # conversations tab, otherwise it stays under General Setup
+        if not self.backend.history_enabled:
+            _general_setup_items.append(_chat_management_card)
+        self._history_panel: Any = None
+        if history_store is not None and self.backend.user_id is not None:
+            from .history.panel import HistoryPanel
 
-        # Build the chat card
-        chat_card = pn.Card(
+            self._history_panel = HistoryPanel(
+                store=history_store,
+                user_id=self.backend.user_id,
+                on_open=self.open_conversation,
+                on_new_chat=self.start_new_chat,
+                get_active_id=lambda: self.backend.conversation_id,
+                get_busy_ids=lambda: self._generating_ids,
+                get_ready_ids=lambda: self._ready_ids,
+            )
+            # Icon tabs: setup leftmost, conversations active by default.
+            # dynamic=True must not be used: it re-renders panes on switch
+            # and breaks Card expand/collapse bindings (Panel bug, verified)
+            _chat_tab = pn.Column(
+                self._history_panel.card,
+                _chat_management_card,
+                sizing_mode="stretch_width",
+                margin=0,
+            )
+            # The settings tab replaces the "General Setup" wrapper card;
+            # the setting cards sit directly in the pane
+            _setup_tab = pn.Column(*_general_setup_items, sizing_mode="stretch_width", margin=0)
+            # No sizing_mode on the Tabs: Panelini assigns a fixed width to
+            # sidebar objects, and stretch_width would override it and let
+            # the tabs hug each pane's content (width jumps between tabs)
+            self._sidebar_objects = [
+                pn.Tabs(
+                    ("⚙️", _setup_tab),
+                    ("\U0001f4ac", _chat_tab),
+                    active=1,
+                    css_classes=["ai-sidebar-tabs"],
+                    stylesheets=[_TABS_CSS],
+                )
+            ]
+        else:
+            self._sidebar_objects = [
+                pn.Card(
+                    title="General Setup",
+                    sizing_mode="stretch_width",
+                    collapsible=True,
+                    collapsed=False,
+                    objects=_general_setup_items,
+                    styles={"padding": "8px"},
+                )
+            ]
+
+        # Build the chat card; its content swaps to the active session's feed
+        self._chat_card = pn.Card(
             title="Chat",
             collapsible=False,
-            objects=[self.chat_interface],
+            objects=[self._active_session.feed],
             sizing_mode="stretch_both",
-            min_height=600,
+            min_height=350,
             styles={"padding": "15px", "margin-right": "10px"},
         )
+        chat_card = self._chat_card
 
         # Build the preview card
         preview_card = pn.Card(
@@ -340,7 +409,7 @@ class AiChat:
             collapsible=False,
             objects=[self.preview_content],
             sizing_mode="stretch_both",
-            min_height=600,
+            min_height=350,
             styles={
                 "padding": "15px",
                 "margin-left": "10px",
@@ -354,27 +423,25 @@ class AiChat:
                 chat_card,
                 preview_card,
                 sizing_mode="stretch_both",
-                min_height=600,
+                min_height=350,
             )
         else:
             main_layout = pn.Row(
                 chat_card,
                 sizing_mode="stretch_both",
-                min_height=600,
+                min_height=350,
             )
 
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]
         if self._cookie_pane is not None:
             self._main_objects.append(self._cookie_pane)
 
-        # Send welcome message from assistant
-        self.chat_interface.send(
-            value=self._welcome_message,
-            user="🤖 Assistant",
-            respond=False,
-        )
-
     # ── Public properties ────────────────────────────────────────────────
+
+    @property
+    def chat_interface(self) -> pn.chat.ChatInterface:
+        """The active conversation's chat feed."""
+        return self._active_session.feed
 
     @property
     def sidebar_objects(self) -> list[pn.viewable.Viewable]:
@@ -385,6 +452,52 @@ class AiChat:
     def main_objects(self) -> list[pn.viewable.Viewable]:
         """Main area content (chat + preview two-column layout)."""
         return list(self._main_objects)
+
+    # ── Session management ───────────────────────────────────────────────
+
+    def _new_session(self, welcome: bool = False, conversation_id: str | None = None) -> "_ChatSession":
+        feed = pn.chat.ChatInterface(
+            callback=self._handle_message,
+            callback_user="🤖 Assistant",
+            placeholder_text="💭 Thinking...",
+            placeholder_threshold=0.2,
+            user="🧑 User",
+            min_width=330,
+            show_send=True,
+            show_rerun=False,
+            show_undo=False,
+            show_timestamp=False,
+            show_button_name=False,
+            show_reaction_icons=False,
+            callback_exception="verbose",
+            css_classes=["chat-interface"],
+            sizing_mode="stretch_both",
+        )
+        if welcome:
+            feed.send(value=self._welcome_message, user="🤖 Assistant", respond=False)
+        session = _ChatSession(feed=feed, conversation_id=conversation_id)
+        self._sessions[feed] = session
+        return session
+
+    def _activate_session(self, session: "_ChatSession") -> None:
+        self._active_session = session
+        self.backend.conversation_id = session.conversation_id
+        if session.conversation_id is not None:
+            self._ready_ids.discard(session.conversation_id)  # viewed
+        if hasattr(self, "_chat_card"):
+            # Feeds stay mounted and only toggle visibility: re-attaching an
+            # already-registered component triggers Bokeh "reference already
+            # known" warnings and re-renders on every switch
+            if session.feed not in self._chat_card.objects:
+                self._chat_card.append(session.feed)
+            for feed in self._chat_card.objects:
+                feed.visible = feed is session.feed
+
+    def _session_for_conversation(self, conversation_id: str) -> "_ChatSession | None":
+        for session in self._sessions.values():
+            if session.conversation_id == conversation_id:
+                return session
+        return None
 
     # ── Private helpers ──────────────────────────────────────────────────
 
@@ -424,6 +537,11 @@ class AiChat:
         self.model_selector.value = next(iter(new_models.values()))
 
         provider_display_name, model_name = self.backend.update_provider(event.new)
+
+        # Provider switch clears the active session's model context; the
+        # stored conversation stays intact, new messages open a fresh one
+        self._active_session.history.clear()
+        self._active_session.conversation_id = None
 
         self.chat_interface.send(
             f"Switched to **{provider_display_name}** provider with model `{model_name}`. Conversation history cleared.",
@@ -492,24 +610,25 @@ class AiChat:
         return tool_count
 
     def start_new_chat(self) -> None:
-        """Start a fresh conversation; stored conversations stay intact."""
+        """Switch to a fresh conversation; stored conversations stay intact."""
         self.backend.start_new_conversation()
-        self.chat_interface.clear()
-        self.chat_interface.send(
-            value=self._welcome_message,
-            user="🤖 Assistant",
-            respond=False,
-        )
+        self._activate_session(self._new_session(welcome=True))
 
     def open_conversation(self, conversation_id: str) -> None:
-        """Replace the chat feed with a stored conversation."""
-        pairs = self.backend.load_conversation(conversation_id)
-        self.chat_interface.clear()
-        for role, content in pairs:
-            user = "🧑 User" if role == "human" else "🤖 Assistant"
-            self.chat_interface.send(content, user=user, respond=False)
+        """Show a stored conversation in its own feed (created on first open)."""
+        session = self._session_for_conversation(conversation_id)
+        if session is None:
+            pairs = self.backend.load_conversation(conversation_id)
+            session = self._new_session(conversation_id=conversation_id)
+            session.history = self.backend.history_from_pairs(pairs)
+            for role, content in pairs:
+                user = "🧑 User" if role == "human" else "🤖 Assistant"
+                session.feed.send(content, user=user, respond=False)
+        self._activate_session(session)
 
     def _notify_history_changed(self) -> None:
+        if self._history_panel is not None:
+            self._history_panel.refresh()
         if self.on_history_changed is not None:
             self.on_history_changed()
 
@@ -523,6 +642,7 @@ class AiChat:
             return
 
         self.backend.clear_history()
+        self._active_session.history.clear()
         self.chat_interface.clear()
 
         self.chat_interface.send(
@@ -585,6 +705,8 @@ class AiChat:
 
             self.backend.restore_chat_data(chat_data)
             self.backend.persist_imported_history(title=f"Imported: {filename}")
+            self._active_session.history = list(self.backend.get_conversation_history())
+            self._active_session.conversation_id = self.backend.conversation_id
             self._notify_history_changed()
 
             self.uploaded_filename_display.object = (
@@ -624,21 +746,40 @@ class AiChat:
             user: The user identifier (unused but required by Panel)
             instance: The ChatInterface instance (unused but required by Panel)
         """
-        _ = (user, instance)
+        _ = user
 
         use_tools = len(self._get_selected_tools()) > 0
 
-        if not use_tools and self.backend.ai_interface:
-            full = ""
-            async for chunk in self.backend.stream_message(contents):
-                full += chunk
-                yield (f"<details>\n<summary>Generating response...</summary>\n\n{full}\n\n</details>")
-            yield full
-            self.backend.persist_exchange(contents, full)
-        else:
-            result = await self.backend.process_message(contents, use_tools=use_tools)
-            for preview_update in result.get("preview_updates", []):
-                self._update_preview_content(preview_update["title"], preview_update["content"])
-            yield result["response"]
-            self.backend.persist_exchange(contents, result["response"])
+        # The exchange is bound to the session whose feed fired it: its own
+        # model context and its own stored conversation. Switching chats
+        # mid-response therefore cannot reroute messages.
+        session = self._sessions.get(instance, self._active_session)
+        if self.backend.history_enabled and session.conversation_id is None:
+            session.conversation_id = self.backend.create_conversation_id()
+            if session is self._active_session:
+                self.backend.conversation_id = session.conversation_id
+
+        if session.conversation_id is not None:
+            self._generating_ids.add(session.conversation_id)
+            self._notify_history_changed()  # row appears with its busy indicator
+        try:
+            if not use_tools and self.backend.ai_interface:
+                full = ""
+                async for chunk in self.backend.stream_message(contents, history=session.history):
+                    full += chunk
+                    yield (f"<details>\n<summary>Generating response...</summary>\n\n{full}\n\n</details>")
+                yield full
+                self.backend.persist_exchange(contents, full, conversation_id=session.conversation_id)
+            else:
+                result = await self.backend.process_message(contents, use_tools=use_tools, history=session.history)
+                for preview_update in result.get("preview_updates", []):
+                    self._update_preview_content(preview_update["title"], preview_update["content"])
+                yield result["response"]
+                self.backend.persist_exchange(contents, result["response"], conversation_id=session.conversation_id)
+        finally:
+            if session.conversation_id is not None:
+                self._generating_ids.discard(session.conversation_id)
+                if session is not self._active_session:
+                    # done while the user was in another chat: flag as ready
+                    self._ready_ids.add(session.conversation_id)
         self._notify_history_changed()
