@@ -280,6 +280,23 @@ class SqliteHistoryStore(ChatHistoryStore):
                 (name, folder_id, user_id),
             )
 
+    def move_folder(self, user_id: str, folder_id: str, parent_id: str | None) -> None:
+        with self._connect() as conn:
+            self._require_folder(conn, user_id, parent_id)
+            current = parent_id
+            while current is not None:
+                if current == folder_id:
+                    msg = "Cannot move a folder into its own subtree."
+                    raise ValueError(msg)
+                row = conn.execute(
+                    "SELECT parent_id FROM folders WHERE id = ? AND user_id = ?", (current, user_id)
+                ).fetchone()
+                current = row["parent_id"] if row is not None else None
+            conn.execute(
+                "UPDATE folders SET parent_id = ? WHERE id = ? AND user_id = ?",
+                (parent_id, folder_id, user_id),
+            )
+
     def delete_folder(self, user_id: str, folder_id: str) -> None:
         # ON DELETE SET NULL moves the folder's conversations and subfolders
         # to the root as part of the same transaction.

@@ -12,7 +12,7 @@ Prerequisites
 1. ``pip install panelini[ai]``
 2. Set the required environment variables for your chosen provider
    (see ``src/panelini/panels/ai/default_config.yml``).
-3. Run this script: ``python examples/panels/ai/chat_history.py``
+3. Run this script: ``python examples/panels/ai/chat_history_list.py``
 
 The app is served through a factory so every browser session gets its own
 instance (multi-user isolation). A module-level ``app`` shares one instance

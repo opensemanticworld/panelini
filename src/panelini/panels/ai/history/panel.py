@@ -177,7 +177,12 @@ class HistoryPanel:
         was_active = self._get_active_id() == conversation_id
         self._store.delete_conversation(self._user_id, conversation_id)
         if was_active:
-            self._on_new_chat()
+            # switch to the most recent remaining chat; fresh one only if none
+            remaining = self._store.list_conversations(self._user_id)
+            if remaining:
+                self._on_open(remaining[0].id)
+            else:
+                self._on_new_chat()
         self.refresh()
 
     # -- rendering ------------------------------------------------------------

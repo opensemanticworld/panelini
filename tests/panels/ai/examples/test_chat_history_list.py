@@ -1,12 +1,14 @@
-"""Playwright UI tests for examples/panels/ai/chat_history.py."""
+"""Playwright UI tests for examples/panels/ai/chat_history_list.py."""
 
 import importlib
 import os
 import time
+import warnings
 from unittest.mock import patch
 
 import panel as pn
 import pytest
+from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
@@ -26,8 +28,10 @@ def panel_server(mock_langchain, tmp_path_factory):
         return_value=StubChatModel(),
     )
     try:
-        with config_patch, model_patch:
-            module = importlib.reload(importlib.import_module("examples.panels.ai.chat_history"))
+        with warnings.catch_warnings(), config_patch, model_patch:
+            # tripwire: any double-attached component fails the suite
+            warnings.simplefilter("error", BokehUserWarning)
+            module = importlib.reload(importlib.import_module("examples.panels.ai.chat_history_list"))
             server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
             time.sleep(0.5)
             yield server, _PORT
@@ -84,8 +88,11 @@ def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     # the previous conversation's feed stays mounted but hidden
     page.locator("text=Hello history").first.wait_for(state="hidden")
     assert not page.locator("text=Hello history").first.is_visible()
+    # the new chat is materialized immediately: two rows now
+    assert page.locator(".history-title").count() == 2
 
-    page.locator(".history-title").first.click()
+    # the newest (empty) chat sorts first; reopen the original below it
+    page.locator(".history-title").nth(1).click()
     page.locator("text=Hello history").first.wait_for()
     # messages replay sequentially; wait for the assistant reply too
     reply = page.get_by_text("simulated reply", exact=False).first
@@ -110,12 +117,15 @@ def test_rename_conversation(ready_page: Page):
 def test_delete_requires_confirmation(ready_page: Page):
     page = ready_page
 
+    # delete the first row (the renamed, non-active chat)
+    rows_before = page.locator(".history-title").count()
     page.locator(".history-delete").first.click()  # arm
     time.sleep(0.3)
-    assert page.locator(".history-title").count() >= 1
+    assert page.locator(".history-title").count() == rows_before
 
     page.locator(".history-delete").first.click()  # confirm
-    page.locator("text=No conversations yet").first.wait_for()
+    page.locator(".history-title", has_text="Renamed chat").first.wait_for(state="detached")
+    assert page.locator(".history-title").count() == rows_before - 1
 
 
 def test_card_collapse_survives_tab_switch(ready_page: Page):
