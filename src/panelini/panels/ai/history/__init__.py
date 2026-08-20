@@ -21,6 +21,7 @@ __all__ = [
     "UserResolver",
     "default_history_store",
     "default_user_resolver",
+    "derive_title",
     "ensure_anonymous_cookie",
     "resolve_user",
 ]
@@ -45,5 +46,6 @@ from .store import (
     FolderRecord,
     InMemoryHistoryStore,
     MessageRecord,
+    derive_title,
 )
 from .tree import HistoryTree

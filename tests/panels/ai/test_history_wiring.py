@@ -119,6 +119,24 @@ class TestBackendPersistence:
         assert [m.content for m in store.load_messages(USER, target_id)] == ["q", "a"]
         assert store.load_messages(USER, other.id) == []
 
+    def test_first_exchange_titles_the_conversation(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
+        backend.persist_exchange("How do I deploy to staging?", "Like this.")
+        conversations = store.list_conversations(USER)
+        assert [c.title for c in conversations] == ["How do I deploy to staging?"]
+
+    def test_later_exchanges_keep_the_first_title(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
+        backend.persist_exchange("first question", "answer")
+        backend.persist_exchange("second question", "answer")
+        assert [c.title for c in store.list_conversations(USER)] == ["first question"]
+
+    def test_manual_title_is_never_overwritten(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        backend.load_conversation(conv.id)
+        store.rename_conversation(USER, conv.id, "My own name")
+        backend.persist_exchange("a question", "answer")
+        renamed = store.get_conversation(USER, conv.id)
+        assert renamed is not None and renamed.title == "My own name"
+
     def test_persist_imported_history(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
         assert backend.ai_interface is not None
         backend.ai_interface.conversation_history = [HumanMessage(content="q"), AIMessage(content="a")]

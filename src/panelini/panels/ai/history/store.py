@@ -19,6 +19,18 @@ from typing import Any
 
 VALID_ROLES = frozenset({"human", "ai", "tool", "system"})
 DEFAULT_TITLE = "New Chat"
+TITLE_MAX_LENGTH = 48
+
+
+def derive_title(text: str, max_length: int = TITLE_MAX_LENGTH) -> str:
+    """Return a conversation title derived from a message, cut at a word."""
+    collapsed = " ".join(text.split())
+    if not collapsed:
+        return DEFAULT_TITLE
+    if len(collapsed) <= max_length:
+        return collapsed
+    head = collapsed[:max_length].rsplit(" ", 1)[0] or collapsed[:max_length]
+    return f"{head}…"
 
 
 def utcnow() -> datetime:
@@ -80,6 +92,16 @@ class ChatHistoryStore(ABC):
     @abstractmethod
     def list_conversations(self, user_id: str, include_archived: bool = False) -> list[ConversationRecord]:
         """Return the user's conversations, most recently updated first."""
+
+    @abstractmethod
+    def search_conversations(
+        self, user_id: str, query: str, include_archived: bool = False
+    ) -> list[ConversationRecord]:
+        """Return conversations whose title or messages contain ``query``.
+
+        Case-insensitive substring match (ASCII case folding), most recently
+        updated first. A blank query behaves like :meth:`list_conversations`.
+        """
 
     @abstractmethod
     def get_conversation(self, user_id: str, conversation_id: str) -> ConversationRecord | None:
@@ -224,6 +246,25 @@ class InMemoryHistoryStore(ChatHistoryStore):
                 r for r in self._conversations.values() if r.user_id == user_id and (include_archived or not r.archived)
             ]
         return sorted(records, key=lambda r: r.updated_at, reverse=True)
+
+    def search_conversations(
+        self, user_id: str, query: str, include_archived: bool = False
+    ) -> list[ConversationRecord]:
+        needle = query.strip().lower()
+        if not needle:
+            return self.list_conversations(user_id, include_archived)
+        with self._lock:
+            matches = [
+                record
+                for record in self._conversations.values()
+                if record.user_id == user_id
+                and (include_archived or not record.archived)
+                and (
+                    needle in record.title.lower()
+                    or any(needle in message.content.lower() for message in self._messages.get(record.id, ()))
+                )
+            ]
+        return sorted(matches, key=lambda r: r.updated_at, reverse=True)
 
     def get_conversation(self, user_id: str, conversation_id: str) -> ConversationRecord | None:
         with self._lock:

@@ -8,7 +8,7 @@ for Pyodide/portfolio builds, so do not serve it directly in multi-user
 deployments.
 
 - `chat_min.py` - minimal AI chat inside Panelini.
-- `chat_history_list.py` - AI chat with per-user persistent conversation history (`use_ai_history=True`): icon-tabbed sidebar (conversations/setup), date-grouped list, new chat, rename, delete; SQLite-backed (`PANELINI_HISTORY_DB`), in-memory in Pyodide; preview disabled via `ai_show_preview=False`.
+- `chat_history_list.py` - AI chat with per-user persistent conversation history (`use_ai_history=True`): icon-tabbed sidebar (conversations/setup), date-grouped list, new chat, search over titles and messages, rename, delete; chats are named after their first message; SQLite-backed (`PANELINI_HISTORY_DB`), in-memory in Pyodide; preview disabled via `ai_show_preview=False`.
 - `chat_history_tree.py` - same as `chat_history_list.py` but with `ai_history_view="tree"`: conversations in a drag-and-drop Wunderbaum folder tree (folders via context menu, inline rename, drop to move).
 - `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.

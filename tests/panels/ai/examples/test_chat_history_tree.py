@@ -58,9 +58,9 @@ def ready_page(browser, panel_server):
     context.close()
 
 
-def _chat_rows(page: Page) -> int:
+def _chat_rows(page: Page, title: str = "New Chat") -> int:
     # an empty tree renders one blank placeholder .wb-row; count real chats
-    return page.locator(".wb-row", has_text="New Chat").count()
+    return page.locator(".wb-row", has_text=title).count()
 
 
 def test_new_chat_button_creates_and_selects_node(ready_page: Page):
@@ -83,19 +83,20 @@ def test_message_goes_into_selected_chat(ready_page: Page):
     box.fill("Hello tree")
     box.press("Enter")
     page.locator("text=simulated reply >> visible=true").first.wait_for(timeout=20000)
-    # persisted into the already-selected chat: still a single node
-    assert _chat_rows(page) == 1
+    # persisted into the already-selected chat, which the message renamed
+    wait_until(lambda: _chat_rows(page, "Hello tree") == 1)
+    assert _chat_rows(page) == 0
 
 
 def test_context_delete_removes_nonactive_chat(ready_page: Page):
     page = ready_page
     page.locator(".history-new-chat").first.click()  # second chat, becomes active
-    wait_until(lambda: _chat_rows(page) == 2)
+    wait_until(lambda: _chat_rows(page) == 1)
 
-    target = page.locator(".wb-row:not(.wb-active)", has_text="New Chat").first
+    target = page.locator(".wb-row:not(.wb-active)", has_text="Hello tree").first
     target.click(button="right")
     menu = page.locator(".wb-context-menu")
     menu.wait_for(state="visible", timeout=5000)
     page.locator(".wb-context-menu-item", has_text="Delete").first.click()
 
-    wait_until(lambda: _chat_rows(page) == 1)
+    wait_until(lambda: _chat_rows(page, "Hello tree") == 0)
