@@ -67,6 +67,11 @@ def _send_message(page: Page, text: str) -> None:
     page.locator("text=simulated reply >> visible=true").first.wait_for(timeout=20000)
 
 
+def _chat_message(page: Page, text: str):
+    """Message inside a feed; sidebar titles repeat the first message text."""
+    return page.locator(".chat-interface").locator(f"text={text}").first
+
+
 def test_conversation_appears_after_first_exchange(ready_page: Page):
     page = ready_page
     # header shows the current (anonymous) user
@@ -75,9 +80,10 @@ def test_conversation_appears_after_first_exchange(ready_page: Page):
 
     _send_message(page, "Hello history")
 
+    # the first user message names the conversation
     row = page.locator(".history-title button").first
     row.wait_for()
-    assert "New Chat" in row.inner_text()
+    assert "Hello history" in row.inner_text()
 
 
 def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
@@ -86,14 +92,14 @@ def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     page.locator(".history-new-chat").first.click()
     page.locator("text=Hello! 👋").first.wait_for()
     # the previous conversation's feed stays mounted but hidden
-    page.locator("text=Hello history").first.wait_for(state="hidden")
-    assert not page.locator("text=Hello history").first.is_visible()
+    _chat_message(page, "Hello history").wait_for(state="hidden")
+    assert not _chat_message(page, "Hello history").is_visible()
     # the new chat is materialized immediately: two rows now
     assert page.locator(".history-title").count() == 2
 
     # the newest (empty) chat sorts first; reopen the original below it
     page.locator(".history-title").nth(1).click()
-    page.locator("text=Hello history").first.wait_for()
+    _chat_message(page, "Hello history").wait_for()
     # messages replay sequentially; wait for the assistant reply too
     reply = page.get_by_text("simulated reply", exact=False).first
     reply.wait_for()

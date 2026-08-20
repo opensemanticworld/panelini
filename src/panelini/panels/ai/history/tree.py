@@ -48,6 +48,13 @@ _TREE_CSS = """
 .history-ready i.bi-check-circle-fill { color: #22a06b; }
 """
 
+_SEARCH_CSS = """
+:host { width: 100%; margin: 0 2px 6px 2px; }
+.bk-input {
+    font-size: 0.82em; padding: 4px 8px; border-radius: 6px;
+}
+"""
+
 
 class HistoryTree:
     """Sidebar card with folders and conversations as a drag-and-drop tree.
@@ -76,6 +83,7 @@ class HistoryTree:
         self._get_active_id = get_active_id
         self._get_busy_ids = get_busy_ids or (lambda: set())
         self._get_ready_ids = get_ready_ids or (lambda: set())
+        self._query = ""
 
         self.new_chat_button = pn.widgets.Button(
             name="New Chat",
@@ -99,6 +107,16 @@ class HistoryTree:
         )
         self.new_folder_button.on_click(self._handle_new_folder)
 
+        self.search_input = pn.widgets.TextInput(
+            placeholder="Search chats",
+            sizing_mode="stretch_width",
+            margin=0,
+            stylesheets=[_SEARCH_CSS],
+            css_classes=["history-search"],
+        )
+        # value_input fires per keystroke, so results follow typing
+        self.search_input.param.watch(self._handle_search, "value_input")
+
         self.tree = Wunderbaum(
             source=self._build_source(),
             options={"dnd": True, "edit": {"trigger": ["clickActive", "F2"]}},
@@ -116,6 +134,7 @@ class HistoryTree:
             objects=[
                 pn.Column(
                     pn.Row(self.new_chat_button, self.new_folder_button, sizing_mode="stretch_width", margin=0),
+                    self.search_input,
                     self.tree,
                     sizing_mode="stretch_width",
                 )
@@ -144,17 +163,23 @@ class HistoryTree:
         return node
 
     def _build_source(self) -> list[dict[str, Any]]:
+        conversations = self._store.search_conversations(self._user_id, self._query)
         convs_by_folder: dict[str | None, list[dict[str, Any]]] = {}
-        for conversation in self._store.list_conversations(self._user_id):
+        for conversation in conversations:
             convs_by_folder.setdefault(conversation.folder_id, []).append(self._conv_node(conversation))
 
         folders_by_parent: dict[str | None, list[Any]] = {}
         for folder in self._store.list_folders(self._user_id):
             folders_by_parent.setdefault(folder.parent_id, []).append(folder)
 
-        def folder_node(folder: Any) -> dict[str, Any]:
-            children = [folder_node(sub) for sub in folders_by_parent.get(folder.id, [])]
+        # while searching, folders without a match would be empty noise
+        filtering = bool(self._query.strip())
+
+        def folder_node(folder: Any) -> dict[str, Any] | None:
+            children = [node for node in map(folder_node, folders_by_parent.get(folder.id, [])) if node is not None]
             children += convs_by_folder.get(folder.id, [])
+            if filtering and not children:
+                return None
             return {
                 "title": folder.name,
                 "key": f"{_FOLDER}{folder.id}",
@@ -163,7 +188,7 @@ class HistoryTree:
                 "children": children,
             }
 
-        source = [folder_node(folder) for folder in folders_by_parent.get(None, [])]
+        source = [node for node in map(folder_node, folders_by_parent.get(None, [])) if node is not None]
         source.extend(convs_by_folder.get(None, []))
         return source
 
@@ -184,6 +209,10 @@ class HistoryTree:
     def _handle_new_folder(self, event: object = None) -> None:
         _ = event
         self._store.create_folder(self._user_id, "New Folder")
+        self.refresh()
+
+    def _handle_search(self, event: Any) -> None:
+        self._query = event.new or ""
         self.refresh()
 
     def _on_tree_event(self, event_name: str, params: dict[str, Any]) -> None:

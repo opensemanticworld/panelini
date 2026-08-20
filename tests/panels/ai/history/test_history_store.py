@@ -19,6 +19,7 @@ from panelini.panels.ai.history import (
     ChatHistoryStore,
     InMemoryHistoryStore,
     SqliteHistoryStore,
+    derive_title,
 )
 
 pytestmark = pytest.mark.ai
@@ -270,6 +271,76 @@ class TestUserIsolation:
             store.move_folder(USER, mine.id, other_parent.id)
         store.move_folder(OTHER, mine.id, None)  # foreign folder id: no-op
         assert {f.id: f.parent_id for f in store.list_folders(USER)}[mine.id] is None
+
+
+# ── search ────────────────────────────────────────────────────────────────
+
+
+class TestSearch:
+    def test_matches_title_case_insensitively(self, store: ChatHistoryStore) -> None:
+        wanted = store.create_conversation(USER, title="Budget planning")
+        store.create_conversation(USER, title="Holiday photos")
+        assert [c.id for c in store.search_conversations(USER, "BUDGET")] == [wanted.id]
+
+    def test_matches_message_content(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="Untitled")
+        store.append_message(USER, conv.id, "human", "How do I deploy to staging?")
+        store.create_conversation(USER, title="Unrelated")
+        assert [c.id for c in store.search_conversations(USER, "staging")] == [conv.id]
+
+    def test_blank_query_lists_everything(self, store: ChatHistoryStore) -> None:
+        store.create_conversation(USER, title="one")
+        store.create_conversation(USER, title="two")
+        assert len(store.search_conversations(USER, "   ")) == 2
+
+    def test_wildcards_are_literal(self, store: ChatHistoryStore) -> None:
+        literal = store.create_conversation(USER, title="100% coverage")
+        store.create_conversation(USER, title="no percent here")
+        assert [c.id for c in store.search_conversations(USER, "100%")] == [literal.id]
+        assert store.search_conversations(USER, "%") == [literal]
+
+    def test_archived_excluded_unless_requested(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="Budget planning")
+        store.set_archived(USER, conv.id, True)
+        assert store.search_conversations(USER, "budget") == []
+        assert [c.id for c in store.search_conversations(USER, "budget", include_archived=True)] == [conv.id]
+
+    def test_scoped_to_the_owner(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(OTHER, title="their budget")
+        store.append_message(OTHER, conv.id, "human", "their secret")
+        assert store.search_conversations(USER, "budget") == []
+        assert store.search_conversations(USER, "secret") == []
+
+    def test_most_recently_updated_first(self, store: ChatHistoryStore) -> None:
+        older = store.create_conversation(USER, title="budget older")
+        time.sleep(0.01)
+        newer = store.create_conversation(USER, title="budget newer")
+        store.append_message(USER, older.id, "human", "bump")
+        assert [c.id for c in store.search_conversations(USER, "budget")] == [older.id, newer.id]
+
+
+# ── derived titles ────────────────────────────────────────────────────────
+
+
+class TestDeriveTitle:
+    def test_short_message_is_used_verbatim(self) -> None:
+        assert derive_title("Plot the sales data") == "Plot the sales data"
+
+    def test_whitespace_is_collapsed(self) -> None:
+        assert derive_title("  two\n\nlines  ") == "two lines"
+
+    def test_long_message_is_cut_at_a_word(self) -> None:
+        title = derive_title("Summarize the quarterly revenue report for the northern region")
+        assert title.endswith("…")
+        assert len(title) <= 49
+        assert not title.rstrip("…").endswith(" ")
+        assert title.startswith("Summarize the quarterly revenue report")
+
+    def test_unbroken_message_is_cut_hard(self) -> None:
+        assert derive_title("x" * 100) == "x" * 48 + "…"
+
+    def test_blank_message_keeps_the_default(self) -> None:
+        assert derive_title("   ") == DEFAULT_TITLE
 
 
 # ── sqlite specifics ──────────────────────────────────────────────────────

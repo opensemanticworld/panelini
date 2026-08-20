@@ -36,6 +36,12 @@ def _iso(moment: datetime) -> str:
     return moment.isoformat()
 
 
+def _like_pattern(query: str) -> str:
+    """Wrap ``query`` for a LIKE containment match with wildcards escaped."""
+    escaped = query.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
+    return f"%{escaped}%"
+
+
 def _conversation_from_row(row: sqlite3.Row) -> ConversationRecord:
     return ConversationRecord(
         id=row["id"],
@@ -120,6 +126,26 @@ class SqliteHistoryStore(ChatHistoryStore):
         query += " ORDER BY updated_at DESC, rowid DESC"
         with self._connect() as conn:
             rows = conn.execute(query, (user_id,)).fetchall()
+        return [_conversation_from_row(row) for row in rows]
+
+    def search_conversations(
+        self, user_id: str, query: str, include_archived: bool = False
+    ) -> list[ConversationRecord]:
+        if not query.strip():
+            return self.list_conversations(user_id, include_archived)
+        # LIKE is case-insensitive for ASCII in SQLite, matching the
+        # in-memory backend closely enough for sidebar search
+        sql = "SELECT c.* FROM conversations c WHERE c.user_id = ?"
+        if not include_archived:
+            sql += " AND c.archived = 0"
+        sql += (
+            r" AND (c.title LIKE ? ESCAPE '\' OR EXISTS ("
+            r"SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ? ESCAPE '\'))"
+            " ORDER BY c.updated_at DESC, c.rowid DESC"
+        )
+        pattern = _like_pattern(query.strip())
+        with self._connect() as conn:
+            rows = conn.execute(sql, (user_id, pattern, pattern)).fetchall()
         return [_conversation_from_row(row) for row in rows]
 
     def get_conversation(self, user_id: str, conversation_id: str) -> ConversationRecord | None:

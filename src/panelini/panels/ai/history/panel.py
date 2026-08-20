@@ -1,15 +1,17 @@
 """Date-grouped conversation history sidebar for the AI chat panel.
 
 Pure Panel widgets styled for the narrow (~264px) Panelini sidebar: a
-"New Chat" button, conversations grouped by last activity (Pinned, Today,
-Yesterday, Last 7 days, Last 30 days, Older), inline rename, and two-click
-delete. Rebuilt from the store on every ``refresh()``.
+"New Chat" button, search over titles and message content, conversations
+grouped by last activity (Pinned, Today, Yesterday, Last 7 days, Last 30
+days, Older), inline rename, and two-click delete. Rebuilt from the store
+on every ``refresh()``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 import panel as pn
 
@@ -67,14 +69,21 @@ _READY_CSS = """
 .bk-btn svg { color: #22a06b; }
 """
 
+_SEARCH_CSS = """
+:host { width: 100%; margin: 0 2px 6px 2px; }
+.bk-input {
+    font-size: 0.82em; padding: 4px 8px; border-radius: 6px;
+}
+"""
+
 _GROUP_HEADER_TEMPLATE = (
     '<div style="font-size: 0.68em; font-weight: 600; letter-spacing: 0.08em;'
     ' text-transform: uppercase; opacity: 0.55; margin: 10px 2px 2px 2px;">{label}</div>'
 )
 
-_EMPTY_STATE_HTML = (
+_EMPTY_STATE_TEMPLATE = (
     '<div style="font-size: 0.8em; font-style: italic; opacity: 0.5;'
-    ' text-align: center; margin: 12px 0 6px 0;">No conversations yet</div>'
+    ' text-align: center; margin: 12px 0 6px 0;">{message}</div>'
 )
 
 
@@ -115,6 +124,7 @@ class HistoryPanel:
         self._get_ready_ids = get_ready_ids or (lambda: set())
         self._renaming_id: str | None = None
         self._pending_delete_id: str | None = None
+        self._query = ""
 
         self.new_chat_button = pn.widgets.Button(
             name="New Chat",
@@ -127,13 +137,23 @@ class HistoryPanel:
         )
         self.new_chat_button.on_click(self._handle_new_chat)
 
+        self.search_input = pn.widgets.TextInput(
+            placeholder="Search chats",
+            sizing_mode="stretch_width",
+            margin=0,
+            stylesheets=[_SEARCH_CSS],
+            css_classes=["history-search"],
+        )
+        # value_input fires per keystroke, so results follow typing
+        self.search_input.param.watch(self._handle_search, "value_input")
+
         self._list = pn.Column(sizing_mode="stretch_width", margin=0)
         self.card = pn.Card(
             title="Conversations",
             collapsible=True,
             collapsed=False,
             sizing_mode="stretch_width",
-            objects=[pn.Column(self.new_chat_button, self._list, sizing_mode="stretch_width")],
+            objects=[pn.Column(self.new_chat_button, self.search_input, self._list, sizing_mode="stretch_width")],
             # "card" is Panel's default class carrying the card chrome; a
             # css_classes override must keep it or the surface disappears
             css_classes=["card", "history-card"],
@@ -183,6 +203,11 @@ class HistoryPanel:
                 self._on_open(remaining[0].id)
             else:
                 self._on_new_chat()
+        self.refresh()
+
+    def _handle_search(self, event: Any) -> None:
+        self._query = event.new or ""
+        self._pending_delete_id = None
         self.refresh()
 
     # -- rendering ------------------------------------------------------------
@@ -260,10 +285,13 @@ class HistoryPanel:
         )
 
     def refresh(self) -> None:
-        """Rebuild the list from the store."""
-        conversations = self._store.list_conversations(self._user_id)
+        """Rebuild the list from the store, honouring the current search."""
+        conversations = self._store.search_conversations(self._user_id, self._query)
         if not conversations:
-            self._list.objects = [pn.pane.HTML(_EMPTY_STATE_HTML, sizing_mode="stretch_width", margin=0)]
+            message = "No matches" if self._query.strip() else "No conversations yet"
+            self._list.objects = [
+                pn.pane.HTML(_EMPTY_STATE_TEMPLATE.format(message=message), sizing_mode="stretch_width", margin=0)
+            ]
             return
 
         groups: dict[str, list[ConversationRecord]] = {}

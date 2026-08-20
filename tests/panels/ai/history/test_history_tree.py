@@ -225,6 +225,32 @@ class TestContextMenu:
         assert [f.name for f in store.list_folders(USER)] == ["New Folder"]
 
 
+class TestSearch:
+    def test_query_filters_conversations(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        wanted = store.create_conversation(USER, title="Budget planning")
+        store.create_conversation(USER, title="Holiday photos")
+        tree_under_test.search_input.value_input = "budget"
+        assert [n["key"] for n in tree_under_test.tree.get_source()] == [f"conv:{wanted.id}"]
+
+    def test_folders_without_matches_are_pruned(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        keeper = store.create_folder(USER, "Work")
+        store.create_folder(USER, "Empty")
+        conv = store.create_conversation(USER, title="Budget planning", folder_id=keeper.id)
+        tree_under_test.search_input.value_input = "budget"
+        source = tree_under_test.tree.get_source()
+        assert [n["key"] for n in source] == [f"folder:{keeper.id}"]
+        assert [c["key"] for c in source[0]["children"]] == [f"conv:{conv.id}"]
+
+    def test_empty_folders_stay_visible_without_a_query(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Empty")
+        tree_under_test.refresh()
+        assert [n["key"] for n in tree_under_test.tree.get_source()] == [f"folder:{folder.id}"]
+
+
 class TestIndicators:
     def test_busy_and_ready_icons(self, store: InMemoryHistoryStore, callbacks: _Callbacks) -> None:
         busy = store.create_conversation(USER, title="busy")

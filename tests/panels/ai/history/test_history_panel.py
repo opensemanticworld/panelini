@@ -247,3 +247,35 @@ class TestHistoryPanel:
         ready_ids.clear()
         panel.refresh()
         assert _widget(_rows(panel)[0], 0).icon is None
+
+
+def _titles(panel: HistoryPanel) -> list[str]:
+    return [_widget(row, 0).name for row in _rows(panel)]
+
+
+class TestSearch:
+    def test_matches_title(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
+        store.create_conversation(USER, title="Budget planning")
+        store.create_conversation(USER, title="Holiday photos")
+        panel_under_test.search_input.value_input = "budget"
+        assert _titles(panel_under_test) == ["Budget planning"]
+
+    def test_matches_message_content(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="Untitled")
+        store.append_message(USER, conv.id, "human", "how do I deploy to staging?")
+        store.create_conversation(USER, title="Other")
+        panel_under_test.search_input.value_input = "staging"
+        assert _titles(panel_under_test) == ["Untitled"]
+
+    def test_no_matches_shows_hint(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
+        store.create_conversation(USER, title="Budget planning")
+        panel_under_test.search_input.value_input = "nothing here"
+        assert _rows(panel_under_test) == []
+        assert "No matches" in str(panel_under_test._list.objects[0].object)
+
+    def test_clearing_restores_all(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
+        store.create_conversation(USER, title="Budget planning")
+        store.create_conversation(USER, title="Holiday photos")
+        panel_under_test.search_input.value_input = "budget"
+        panel_under_test.search_input.value_input = ""
+        assert len(_rows(panel_under_test)) == 2

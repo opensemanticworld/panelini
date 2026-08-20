@@ -6,7 +6,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from .history.store import ChatHistoryStore
+from .history.store import DEFAULT_TITLE, ChatHistoryStore, derive_title
 from .utils.ai_interface import AiInterface, create_interface
 from .utils.config import ModelConfig, ProviderConfig, load_config
 
@@ -197,6 +197,15 @@ class AiBackend:
             self.conversation_id = target_id
         self.history_store.append_message(self.user_id, target_id, "human", user_text)
         self.history_store.append_message(self.user_id, target_id, "ai", ai_text)
+        self._autotitle(target_id, user_text)
+
+    def _autotitle(self, conversation_id: str, user_text: str) -> None:
+        """Name an untitled conversation after its first user message."""
+        if self.history_store is None or self.user_id is None:
+            return
+        conversation = self.history_store.get_conversation(self.user_id, conversation_id)
+        if conversation is not None and conversation.title == DEFAULT_TITLE:
+            self.history_store.rename_conversation(self.user_id, conversation_id, derive_title(user_text))
 
     def load_conversation(self, conversation_id: str) -> list[tuple[str, str]]:
         """Mark a stored conversation active and return its messages.
