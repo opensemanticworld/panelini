@@ -184,11 +184,21 @@ class TestChatHistoryWiring:
 
     def test_new_chat_keeps_stored_conversation(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         chat.backend.persist_exchange("q", "a")
+        old_id = chat.backend.conversation_id
         chat._on_clear_chat(event=None)
-        assert chat.backend.conversation_id is None
-        assert len(store.list_conversations(USER)) == 1
+        # the new chat is materialized immediately and selected
+        assert chat.backend.conversation_id is not None
+        assert chat.backend.conversation_id != old_id
+        assert len(store.list_conversations(USER)) == 2
         # feed reset to the welcome message only
         assert len(chat.chat_interface.objects) == 1
+
+    def test_start_new_chat_materializes_and_selects(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        chat.start_new_chat()
+        conversations = store.list_conversations(USER)
+        assert len(conversations) == 1
+        assert chat.backend.conversation_id == conversations[0].id
+        assert chat._active_session.conversation_id == conversations[0].id
 
     def test_open_conversation_replays_messages(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER)
@@ -281,6 +291,21 @@ class TestChatHistoryWiring:
         badges = [o for col in app._navbar for o in col if "user-chip-pane" in getattr(o, "css_classes", [])]
         assert len(badges) == 1
         assert len(calls) == 1  # header badge and history share one resolution
+
+    def test_tree_view_selected_via_param(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
+        from panelini import Panelini
+        from panelini.panels.ai.history import HistoryTree
+
+        app = Panelini(
+            use_ai=True,
+            use_ai_history=True,
+            ai_history_store=store,
+            ai_history_view="tree",
+            user_resolver=lambda: USER,
+        )
+        assert isinstance(app._ai_frontend._history_panel, HistoryTree)
+        tabs: Any = app._ai_frontend.sidebar_objects[0]
+        assert tabs.objects[1][0].title == "Conversations"  # tree card leads the chat tab
 
     def test_panelini_history_params(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         from panelini import Panelini

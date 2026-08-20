@@ -171,7 +171,19 @@ class TestHistoryPanel:
         assert store.get_conversation(USER, conv.id) is None
         assert _rows(panel_under_test) == []
 
-    def test_deleting_active_conversation_starts_new_chat(
+    def test_deleting_active_conversation_opens_most_recent_remaining(
+        self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        remaining = store.create_conversation(USER, title="remaining")
+        active = store.create_conversation(USER, title="active")
+        callbacks.active_id = active.id
+        panel_under_test.refresh()
+        _click(_widget(_rows(panel_under_test)[0], 2))  # newest (= active) first
+        _click(_widget(_rows(panel_under_test)[0], 2))
+        assert callbacks.opened == [remaining.id]
+        assert callbacks.new_chats == 0
+
+    def test_deleting_last_active_conversation_starts_new_chat(
         self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore, callbacks: _Callbacks
     ) -> None:
         conv = store.create_conversation(USER, title="active")

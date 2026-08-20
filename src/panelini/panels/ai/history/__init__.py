@@ -14,6 +14,7 @@ __all__ = [
     "CookieSetterPane",
     "FolderRecord",
     "HistoryPanel",
+    "HistoryTree",
     "InMemoryHistoryStore",
     "MessageRecord",
     "SqliteHistoryStore",
@@ -45,3 +46,4 @@ from .store import (
     InMemoryHistoryStore,
     MessageRecord,
 )
+from .tree import HistoryTree

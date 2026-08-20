@@ -194,6 +194,28 @@ class TestFolders:
         with pytest.raises(ValueError, match="folder"):
             store.create_conversation(USER, folder_id="missing")
 
+    def test_move_folder_nests_and_returns_to_root(self, store: ChatHistoryStore) -> None:
+        parent = store.create_folder(USER, "Parent")
+        child = store.create_folder(USER, "Child")
+        store.move_folder(USER, child.id, parent.id)
+        assert {f.id: f.parent_id for f in store.list_folders(USER)}[child.id] == parent.id
+        store.move_folder(USER, child.id, None)
+        assert {f.id: f.parent_id for f in store.list_folders(USER)}[child.id] is None
+
+    def test_move_folder_into_own_subtree_raises(self, store: ChatHistoryStore) -> None:
+        top = store.create_folder(USER, "Top")
+        mid = store.create_folder(USER, "Mid", parent_id=top.id)
+        deep = store.create_folder(USER, "Deep", parent_id=mid.id)
+        with pytest.raises(ValueError, match="subtree"):
+            store.move_folder(USER, top.id, deep.id)
+        with pytest.raises(ValueError, match="subtree"):
+            store.move_folder(USER, top.id, top.id)
+
+    def test_move_folder_to_unknown_parent_raises(self, store: ChatHistoryStore) -> None:
+        folder = store.create_folder(USER, "Projects")
+        with pytest.raises(ValueError, match="folder"):
+            store.move_folder(USER, folder.id, "missing")
+
 
 # ── tenant safety ─────────────────────────────────────────────────────────
 
@@ -240,6 +262,14 @@ class TestUserIsolation:
         store.delete_folder(OTHER, folder.id)
         folders = store.list_folders(USER)
         assert [f.name for f in folders] == ["Projects"]
+
+    def test_move_folder_is_scoped(self, store: ChatHistoryStore) -> None:
+        mine = store.create_folder(USER, "Mine")
+        other_parent = store.create_folder(OTHER, "Theirs")
+        with pytest.raises(ValueError, match="folder"):
+            store.move_folder(USER, mine.id, other_parent.id)
+        store.move_folder(OTHER, mine.id, None)  # foreign folder id: no-op
+        assert {f.id: f.parent_id for f in store.list_folders(USER)}[mine.id] is None
 
 
 # ── sqlite specifics ──────────────────────────────────────────────────────

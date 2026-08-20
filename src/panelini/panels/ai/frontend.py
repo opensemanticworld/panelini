@@ -67,6 +67,7 @@ class AiChat:
         show_tools: bool = True,
         show_preview: bool = True,
         history_store: ChatHistoryStore | None = None,
+        history_view: str = "list",
         user_resolver: UserResolver | None = None,
         user_id: str | None = None,
         cookie_pane: pn.viewable.Viewable | None = None,
@@ -86,6 +87,8 @@ class AiChat:
                 and the chat fills the full main area.
             history_store: Optional per-user chat history store; enables
                 persistence and turns the Clear button into "New Chat".
+            history_view: History sidebar style: "list" (date-grouped) or
+                "tree" (drag-and-drop folders).
             user_resolver: Optional callable resolving the history owner id;
                 defaults to Panel auth user or an anonymous browser cookie.
                 Only used standalone, i.e. when ``user_id`` is not given.
@@ -345,17 +348,7 @@ class AiChat:
             _general_setup_items.append(_chat_management_card)
         self._history_panel: Any = None
         if history_store is not None and self.backend.user_id is not None:
-            from .history.panel import HistoryPanel
-
-            self._history_panel = HistoryPanel(
-                store=history_store,
-                user_id=self.backend.user_id,
-                on_open=self.open_conversation,
-                on_new_chat=self.start_new_chat,
-                get_active_id=lambda: self.backend.conversation_id,
-                get_busy_ids=lambda: self._generating_ids,
-                get_ready_ids=lambda: self._ready_ids,
-            )
+            self._history_panel = self._build_history_panel(history_store, history_view)
             # Icon tabs: setup leftmost, conversations active by default.
             # dynamic=True must not be used: it re-renders panes on switch
             # and breaks Card expand/collapse bindings (Panel bug, verified)
@@ -452,6 +445,29 @@ class AiChat:
     def main_objects(self) -> list[pn.viewable.Viewable]:
         """Main area content (chat + preview two-column layout)."""
         return list(self._main_objects)
+
+    def _build_history_panel(self, history_store: ChatHistoryStore, history_view: str) -> Any:
+        """Build the history sidebar component: date-grouped list or folder tree."""
+        user_id = self.backend.user_id
+        if user_id is None:  # guarded by the caller
+            msg = "History panel requires a resolved user."
+            raise ValueError(msg)
+        common = {
+            "store": history_store,
+            "user_id": user_id,
+            "on_open": self.open_conversation,
+            "on_new_chat": self.start_new_chat,
+            "get_active_id": lambda: self.backend.conversation_id,
+            "get_busy_ids": lambda: self._generating_ids,
+            "get_ready_ids": lambda: self._ready_ids,
+        }
+        if history_view == "tree":
+            from .history.tree import HistoryTree
+
+            return HistoryTree(**common)
+        from .history.panel import HistoryPanel
+
+        return HistoryPanel(**common)
 
     # ── Session management ───────────────────────────────────────────────
 
@@ -610,9 +626,16 @@ class AiChat:
         return tool_count
 
     def start_new_chat(self) -> None:
-        """Switch to a fresh conversation; stored conversations stay intact."""
+        """Switch to a fresh conversation; stored conversations stay intact.
+
+        With history enabled the conversation row is created immediately so
+        it appears (and is selected) in the sidebar right away.
+        """
         self.backend.start_new_conversation()
-        self._activate_session(self._new_session(welcome=True))
+        session = self._new_session(welcome=True)
+        if self.backend.history_enabled:
+            session.conversation_id = self.backend.create_conversation_id()
+        self._activate_session(session)
 
     def open_conversation(self, conversation_id: str) -> None:
         """Show a stored conversation in its own feed (created on first open)."""

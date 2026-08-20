@@ -162,6 +162,15 @@ class ChatHistoryStore(ABC):
         """Set a folder's name."""
 
     @abstractmethod
+    def move_folder(self, user_id: str, folder_id: str, parent_id: str | None) -> None:
+        """Move a folder under another folder (``None`` moves it to the root).
+
+        Raises:
+            ValueError: On a parent the user does not own, or a move into
+                the folder's own subtree.
+        """
+
+    @abstractmethod
     def delete_folder(self, user_id: str, folder_id: str) -> None:
         """Delete a folder; its conversations and subfolders move to the root."""
 
@@ -338,6 +347,21 @@ class InMemoryHistoryStore(ChatHistoryStore):
             record = self._own_folder(user_id, folder_id)
             if record is not None:
                 self._folders[folder_id] = replace(record, name=name)
+
+    def move_folder(self, user_id: str, folder_id: str, parent_id: str | None) -> None:
+        with self._lock:
+            self._require_folder(user_id, parent_id)
+            record = self._own_folder(user_id, folder_id)
+            if record is None:
+                return
+            current = parent_id
+            while current is not None:
+                if current == folder_id:
+                    msg = "Cannot move a folder into its own subtree."
+                    raise ValueError(msg)
+                parent = self._folders.get(current)
+                current = parent.parent_id if parent is not None else None
+            self._folders[folder_id] = replace(record, parent_id=parent_id)
 
     def delete_folder(self, user_id: str, folder_id: str) -> None:
         with self._lock:

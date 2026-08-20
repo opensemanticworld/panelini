@@ -198,6 +198,12 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         ),
     )
 
+    ai_history_view = param.Selector(
+        default="list",
+        objects=["list", "tree"],
+        doc="History sidebar style: date-grouped list or drag-and-drop folder tree.",
+    )
+
     show_user = param.Boolean(
         default=False,
         doc="Show the resolved user as a chip in the header (top right).",
@@ -335,6 +341,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
             config_path=config_path,
             show_preview=self.ai_show_preview,
             history_store=history_store,
+            history_view=self.ai_history_view,
             user_id=user_id,
             cookie_pane=cookie_pane,
         )
