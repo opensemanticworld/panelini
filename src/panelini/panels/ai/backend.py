@@ -171,11 +171,6 @@ class AiBackend:
         self._create_ai_interface(preserve_history=True)
         return len(tools)
 
-    @property
-    def history_enabled(self) -> bool:
-        """Whether exchanges are persisted to a history store."""
-        return self.history_store is not None and self.user_id is not None
-
     def create_conversation_id(self) -> str | None:
         """Create a new stored conversation and return its id."""
         if self.history_store is None or self.user_id is None:

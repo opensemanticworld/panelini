@@ -32,30 +32,30 @@ def _open_page(browser, port):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    page.locator("text=Hello! 👋").first.wait_for()
+    page.locator(".chat-interface textarea").first.wait_for()
     return context, page
 
 
 def test_sessions_are_isolated(browser, panel_server):
-    """Clearing the chat in one browser context must not affect another."""
+    """A chat started in one browser context must not show up in another."""
     _, port = panel_server
     context_a, page_a = _open_page(browser, port)
     context_b, page_b = _open_page(browser, port)
     try:
-        # User A clears their chat (the button lives in the collapsed sidebar).
+        # User A starts a chat (the sidebar starts collapsed).
         page_a.locator(".left-navbar-button").first.click()
-        clear_button = page_a.locator("button:has-text('Clear Chat')")
-        clear_button.wait_for()
-        clear_button.click()
-        page_a.locator("text=Chat and conversation history cleared").first.wait_for()
+        page_a.locator("text=Conversations").first.wait_for()
+        page_a.locator(".history-new-chat").first.click()
+        page_a.locator(".history-title").first.wait_for()
 
         # Give any hypothetical cross-session sync a moment before the
         # negative assertion; with per-session instances nothing propagates.
         time.sleep(0.5)
 
-        # User B's session is untouched: welcome intact, no cleared notice.
-        assert page_b.locator("text=Hello! 👋").first.is_visible()
-        assert page_b.locator("text=Chat and conversation history cleared").count() == 0
+        # User B's session is untouched: no conversations of its own.
+        page_b.locator(".left-navbar-button").first.click()
+        page_b.locator("text=No conversations yet").first.wait_for()
+        assert page_b.locator(".history-title").count() == 0
     finally:
         context_a.close()
         context_b.close()

@@ -44,9 +44,9 @@ def backend(config_yml_path: Path, store: InMemoryHistoryStore) -> AiBackend:
 
 
 class TestBackendPersistence:
-    def test_disabled_without_store(self, config_yml_path: Path) -> None:
+    def test_no_op_without_store(self, config_yml_path: Path) -> None:
         bare = AiBackend(config_path=config_yml_path)
-        assert not bare.history_enabled
+        assert bare.history_store is None
         bare.persist_exchange("hi", "hello")  # no-op, must not raise
         assert bare.load_conversation("anything") == []
 
@@ -181,20 +181,21 @@ def chat(_mock_backend_env: None, store: InMemoryHistoryStore) -> AiChat:
 class TestChatHistoryWiring:
     def test_user_resolved_via_custom_resolver(self, chat: AiChat) -> None:
         assert chat.backend.user_id == USER
-        assert chat.backend.history_enabled
+        assert chat.backend.history_store is not None
 
-    def test_clear_button_hidden_with_history(self, chat: AiChat) -> None:
-        # new-chat lives in the Conversations card; no duplicate in Chat Management
-        sidebar_buttons = [b for obj in chat.sidebar_objects for b in obj.select(pn.widgets.Button)]
-        assert chat.clear_chat_button not in sidebar_buttons
-        assert chat._history_panel.new_chat_button in sidebar_buttons
+    def test_import_export_share_the_new_chat_row(self, chat: AiChat) -> None:
+        # card body is a Column whose first object is the action row
+        row: Any = chat._history_panel.card[0][0]
+        assert list(row) == [
+            chat._history_panel.new_chat_button,
+            chat.upload_chat_input,
+            chat.download_chat_button,
+        ]
 
-    def test_clear_button_present_without_history(self, _mock_backend_env: None) -> None:
+    def test_history_store_defaults_when_omitted(self, _mock_backend_env: None) -> None:
+        # every chat gets history; without a store argument it is the shared default
         bare = AiChat(show_tools=False)
-        assert bare.clear_chat_button.name == "Clear Chat & History"
-        assert bare.clear_chat_button.button_type == "danger"
-        sidebar_buttons = [b for obj in bare.sidebar_objects for b in obj.select(pn.widgets.Button)]
-        assert bare.clear_chat_button in sidebar_buttons
+        assert bare.backend.history_store is not None
 
     def test_default_resolver_falls_back_to_local(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         chat = AiChat(history_store=store, show_tools=False)  # no session context in unit tests
@@ -203,13 +204,13 @@ class TestChatHistoryWiring:
     def test_new_chat_keeps_stored_conversation(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         chat.backend.persist_exchange("q", "a")
         old_id = chat.backend.conversation_id
-        chat._on_clear_chat(event=None)
+        chat.start_new_chat()
         # the new chat is materialized immediately and selected
         assert chat.backend.conversation_id is not None
         assert chat.backend.conversation_id != old_id
         assert len(store.list_conversations(USER)) == 2
-        # feed reset to the welcome message only
-        assert len(chat.chat_interface.objects) == 1
+        # the new chat starts on an empty feed
+        assert chat.chat_interface.objects == []
 
     def test_start_new_chat_materializes_and_selects(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         chat.start_new_chat()
@@ -304,7 +305,7 @@ class TestChatHistoryWiring:
 
         from panelini import Panelini
 
-        app = Panelini(use_ai=True, use_ai_history=True, ai_history_store=store, show_user=True, user_resolver=resolver)
+        app = Panelini(use_ai=True, ai_history_store=store, show_user=True, user_resolver=resolver)
         assert app._ai_frontend.backend.user_id == USER
         badges = [o for col in app._navbar for o in col if "user-chip-pane" in getattr(o, "css_classes", [])]
         assert len(badges) == 1
@@ -316,7 +317,6 @@ class TestChatHistoryWiring:
 
         app = Panelini(
             use_ai=True,
-            use_ai_history=True,
             ai_history_store=store,
             ai_history_view="tree",
             user_resolver=lambda: USER,
@@ -328,7 +328,7 @@ class TestChatHistoryWiring:
     def test_panelini_history_params(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         from panelini import Panelini
 
-        app = Panelini(use_ai=True, use_ai_history=True, ai_history_store=store, user_resolver=lambda: USER)
+        app = Panelini(use_ai=True, ai_history_store=store, user_resolver=lambda: USER)
         sidebar = app._ai_frontend.sidebar_objects
         tabs: Any = sidebar[0]
         assert isinstance(tabs, pn.Tabs)
@@ -337,8 +337,9 @@ class TestChatHistoryWiring:
         chat_tab: Any = tabs.objects[1]
         # no "General Setup" wrapper: the setting cards sit directly in the tab
         assert [card.title for card in setup_tab] == ["Provider Settings", "Model Settings", "Basic Tools"]
+        assert len(chat_tab) == 1  # the conversations card is the whole tab
         assert chat_tab[0].title == "Conversations"
-        assert chat_tab[1].title == "Chat Management"
+        assert not chat_tab[0].collapsible  # the tab has nothing else to show
         assert app._ai_frontend.backend.user_id == USER
 
     def test_streamed_exchange_is_persisted(

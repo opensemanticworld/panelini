@@ -139,6 +139,7 @@ def create_app() -> Panelini:
     chat = AiChat(
         system_message="You are a helpful assistant with access to a local storage tool.",
         tools=[LocalStorageTool()],
+        show_preview=True,  # opt in: the preview pane is off by default
     )
     app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
     app.main_set(objects=[pn.Row(*chat.main_objects)])

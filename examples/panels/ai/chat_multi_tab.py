@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 
 from panelini import Panelini
 from panelini.panels.ai import AiChat
+from panelini.panels.ai.history import InMemoryHistoryStore
 
 load_dotenv()  # load .env if present
 
@@ -34,16 +35,20 @@ config_path = Path("config.yml") if Path("config.yml").is_file() else None
 
 def create_app() -> Panelini:
     """Create a fresh app instance (one per browser session)."""
+    # A store each: both assistants would otherwise list one another's
+    # conversations, since the default store is shared per process
     ingest_ai = AiChat(
         system_message="You are an assistant specialized in data ingestion tasks.",
         welcome_message="Hi! I'm **Ingest AI**. I can help you with data ingestion tasks.",
         config_path=config_path,
+        history_store=InMemoryHistoryStore(),
     )
 
     digest_ai = AiChat(
         system_message="You are an assistant specialized in data analysis and summarization.",
         welcome_message="Hi! I'm **Digest AI**. I can help you analyze and summarize data.",
         config_path=config_path,
+        history_store=InMemoryHistoryStore(),
     )
 
     # -- Tabbed layout inside Panelini ----------------------------------------
