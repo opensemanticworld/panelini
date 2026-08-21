@@ -1,15 +1,12 @@
-"""Minimal example: launch the AI chat panel inside Panelini.
+"""Minimal example: the AI chat panel inside Panelini.
 
-Prerequisites
--------------
-1. ``pip install panelini[ai]``
-2. Set the required environment variables for your chosen provider
-   (see ``src/panelini/panels/ai/default_config.yml``).
-3. Run this script: ``python examples/panels/ai/ai_chat_panelini_min.py``
+Two sidebar icon tabs: conversations (per-user history, grouped by date,
+with search, rename and delete) and setup. History is in-memory unless
+``PANELINI_HISTORY_DB`` points at a SQLite file.
 
-The app is served through a factory so every browser session gets its own
-instance (multi-user isolation). A module-level ``app`` shares one instance
-across all browsers and is kept here only for Pyodide/portfolio builds.
+Needs ``pip install panelini[ai]`` and the provider environment variables
+listed in ``src/panelini/panels/ai/default_config.yml``. Run with
+``python examples/panels/ai/chat_min.py``.
 """
 
 from dotenv import load_dotenv
@@ -22,7 +19,7 @@ load_dotenv()  # load .env if present
 
 def create_app() -> Panelini:
     """Create a fresh app instance (one per browser session)."""
-    return Panelini(title="Panelini AI Chat", use_ai=True)
+    return Panelini(title="Panelini AI Chat", use_ai=True, show_user=True)
 
 
 app = create_app()  # module-level instance for Pyodide/portfolio builds

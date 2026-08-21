@@ -126,7 +126,10 @@ app = Panelini(
   - System message for the AI backend (default: `"You are a helpful assistant."`).
 * - `ai_welcome_message`
   - `String`
-  - Initial greeting shown in the chat. Uses a built-in default if `None`.
+  - Optional greeting posted into a new chat. `None` (the default) starts it empty.
+* - `ai_show_preview`
+  - `Boolean`
+  - Show the markdown preview pane next to the chat (default: `False`).
 * - `ai_config_path`
   - `str | Path`
   - Path to a custom `config.yml`. Auto-discovered if `None`.
@@ -195,19 +198,36 @@ When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
 
 ### Sidebar Controls
 
-The left sidebar receives a **General Setup** card containing:
+The left sidebar receives two icon tabs. The conversations tab (💬, active by
+default) holds a single card:
+
+- **Conversations** -- New chat, import/export chat as JSON, search over
+  titles and messages, and the user's conversations grouped by date with
+  inline rename and delete
+
+The setup tab (⚙️) holds the model controls:
 
 - **Provider Settings** -- Select the LLM provider
 - **Model Settings** -- Select the model and adjust temperature
 - **Basic Tools** -- Toggle available tools on/off
-- **Chat Management** -- Clear history, export/import chat as JSON
 
 ### Main Content
 
-The main area receives a two-column layout:
+The main area receives the chat interface with streaming responses. With
+`ai_show_preview=True` (`show_preview=True` on `AiChat`) it turns into a
+two-column layout:
 
 - **Chat** (left) -- The chat interface with streaming responses
 - **Preview** (right) -- A markdown preview pane updated by the `update_preview` tool
+
+### Conversation History
+
+Every chat keeps its conversations per user. Without configuration they live
+in memory for the lifetime of the process; set `PANELINI_HISTORY_DB` to a file
+path to persist them in SQLite, or pass your own store as `ai_history_store`.
+Use `ai_history_view="tree"` for a drag-and-drop folder tree instead of the
+date-grouped list. Conversations are owned by the resolved user id (see
+`user_resolver`); anonymous visitors get a cookie-backed id.
 
 ## Tools
 

@@ -58,12 +58,12 @@ def _record_exchange(page, port, mock_langchain, module_name, ready_selector):
 
 @pytest.mark.media(role="overview", capture="gif", name="chat_min", viewport=_VIEWPORT)
 def test_chat_min_media(page: Page, port, mock_langchain):
-    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_min", "text=Hello! 👋")
+    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_min", ".chat-interface textarea")
 
 
 @pytest.mark.media(role="feature", capture="gif", name="chat_custom_tool", viewport=_VIEWPORT)
 def test_chat_custom_tool_media(page: Page, port, mock_langchain):
-    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_custom_tool", "text=Hello! 👋")
+    _record_exchange(page, port, mock_langchain, "examples.panels.ai.chat_custom_tool", ".chat-interface textarea")
 
 
 @pytest.mark.media(role="feature", capture="gif", name="chat_multi_tab", viewport=_VIEWPORT)
@@ -76,4 +76,4 @@ def test_chat_multi_tab_media(page: Page, port, mock_langchain):
 @pytest.mark.media(role="feature", capture="gif", name="chat_no_preview_no_tools", viewport=_VIEWPORT)
 def test_chat_no_preview_media(page: Page, port, mock_langchain):
     module = "examples.panels.ai.chat_no_preview_no_tools"
-    _record_exchange(page, port, mock_langchain, module, "text=Hello! 👋")
+    _record_exchange(page, port, mock_langchain, module, ".chat-interface textarea")

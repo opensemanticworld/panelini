@@ -24,11 +24,18 @@ from panelini import Panelini
 
 load_dotenv()
 
-app = Panelini(title="Panelini AI Chat", use_ai=True)
+
+def create_app() -> Panelini:
+    """Create a fresh app instance (one per browser session)."""
+    return Panelini(title="Panelini AI Chat", use_ai=True, show_user=True)
+
 
 if __name__ == "__main__":
-    serve(app.servable(), title="Panelini AI Chat", port=5006)
+    serve(create_app, title="Panelini AI Chat", port=5006)
 ```
+
+Serving the factory (not a single instance) gives every browser session its
+own app, so conversations stay per user.
 
 ## What you get
 
@@ -37,25 +44,24 @@ graph LR
     subgraph dashboard [" Panelini ( use_ai=True ) "]
         direction LR
         subgraph sidebar [" Left sidebar "]
-            gen(["General Setup"])
+            conv(["Conversations"])
             prov(["Provider Settings"])
             model(["Model Settings"])
             tools(["Basic Tools"])
         end
         subgraph main [" Main area "]
             chat(["Chat"])
-            preview(["Preview"])
         end
     end
 
     classDef side fill:#6366f1,stroke:#4f46e5,color:#ffffff
     classDef main fill:#0d7377,stroke:#095c5f,color:#ffffff
-    class gen,prov,model,tools side
-    class chat,preview main
+    class conv,prov,model,tools side
+    class chat main
 ```
 
-- **Left sidebar** - provider/model pickers, temperature slider, tool toggles, chat export/clear.
-- **Main area** - a chat window on the left, a live markdown preview pane on the right that the `update_preview` tool can write to.
+- **Left sidebar** - two icon tabs: conversations (per-user history with new chat, import/export, search, rename, delete) and setup (provider/model pickers, temperature slider, tool toggles).
+- **Main area** - the chat window, filling the width. Add `ai_show_preview=True` for a markdown preview pane next to it that the `update_preview` tool can write to.
 
 ## Configuration
 
@@ -72,11 +78,11 @@ The bundled [`default_config.yml`](https://github.com/opensemanticworld/panelini
 
 ```python
 @pytest.fixture(scope="module")
-def panel_server(mock_langchain):
-    p1, p2 = mock_langchain
-    with p1, p2:
+def panel_server(mock_langchain, tmp_path_factory):
+    os.environ["PANELINI_HISTORY_DB"] = str(tmp_path_factory.mktemp("history") / "history.sqlite3")
+    with warnings.catch_warnings(), config_patch, model_patch:
         module = importlib.reload(importlib.import_module("examples.panels.ai.chat_min"))
-        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
+        server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
         ...
 ```
 

@@ -1,4 +1,4 @@
-"""Playwright smoke test for examples/panels/ai/chat_history_tree.py."""
+"""Playwright smoke test for examples/panels/ai/chat_tree_view.py."""
 
 import importlib
 import os
@@ -32,7 +32,7 @@ def panel_server(mock_langchain, tmp_path_factory):
         with warnings.catch_warnings(), config_patch, model_patch:
             # tripwire: any double-attached component fails the suite
             warnings.simplefilter("error", BokehUserWarning)
-            module = importlib.reload(importlib.import_module("examples.panels.ai.chat_history_tree"))
+            module = importlib.reload(importlib.import_module("examples.panels.ai.chat_tree_view"))
             server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
             time.sleep(0.5)
             yield server, _PORT
@@ -50,7 +50,7 @@ def ready_page(browser, panel_server):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    page.locator("text=Hello! 👋").first.wait_for()
+    page.locator(".chat-interface textarea").first.wait_for()
     page.locator(".left-navbar-button").first.click()
     page.locator("text=Conversations").first.wait_for()
     yield page

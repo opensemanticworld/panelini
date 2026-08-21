@@ -7,7 +7,7 @@ which stays the source of truth; every change rebuilds the tree from it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import panel as pn
@@ -75,6 +75,7 @@ class HistoryTree:
         get_active_id: Callable[[], str | None],
         get_busy_ids: Callable[[], set[str]] | None = None,
         get_ready_ids: Callable[[], set[str]] | None = None,
+        actions: Sequence[pn.viewable.Viewable] = (),
     ) -> None:
         self._store = store
         self._user_id = user_id
@@ -128,12 +129,17 @@ class HistoryTree:
         )
         self.card = pn.Card(
             title="Conversations",
-            collapsible=True,
-            collapsed=False,
+            collapsible=False,  # it is the whole content of its sidebar tab
             sizing_mode="stretch_width",
             objects=[
                 pn.Column(
-                    pn.Row(self.new_chat_button, self.new_folder_button, sizing_mode="stretch_width", margin=0),
+                    pn.Row(
+                        self.new_chat_button,
+                        self.new_folder_button,
+                        *actions,
+                        sizing_mode="stretch_width",
+                        margin=0,
+                    ),
                     self.search_input,
                     self.tree,
                     sizing_mode="stretch_width",

@@ -9,7 +9,7 @@ on every ``refresh()``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -114,6 +114,7 @@ class HistoryPanel:
         get_active_id: Callable[[], str | None],
         get_busy_ids: Callable[[], set[str]] | None = None,
         get_ready_ids: Callable[[], set[str]] | None = None,
+        actions: Sequence[pn.viewable.Viewable] = (),
     ) -> None:
         self._store = store
         self._user_id = user_id
@@ -150,10 +151,16 @@ class HistoryPanel:
         self._list = pn.Column(sizing_mode="stretch_width", margin=0)
         self.card = pn.Card(
             title="Conversations",
-            collapsible=True,
-            collapsed=False,
+            collapsible=False,  # it is the whole content of its sidebar tab
             sizing_mode="stretch_width",
-            objects=[pn.Column(self.new_chat_button, self.search_input, self._list, sizing_mode="stretch_width")],
+            objects=[
+                pn.Column(
+                    pn.Row(self.new_chat_button, *actions, sizing_mode="stretch_width", margin=0),
+                    self.search_input,
+                    self._list,
+                    sizing_mode="stretch_width",
+                )
+            ],
             # "card" is Panel's default class carrying the card chrome; a
             # css_classes override must keep it or the surface disappears
             css_classes=["card", "history-card"],

@@ -169,7 +169,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     ai_welcome_message = param.String(
         default=None,
         allow_None=True,
-        doc="Initial greeting shown in the AI chat. Uses a default if None.",
+        doc="Optional greeting posted into a new AI chat. None starts it empty.",
     )
 
     ai_config_path = param.ClassSelector(
@@ -180,21 +180,16 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     )
 
     ai_show_preview = param.Boolean(
-        default=True,
-        doc="Show the preview pane next to the AI chat.",
-    )
-
-    use_ai_history = param.Boolean(
         default=False,
-        doc="Enable per-user persistent chat history for the AI component.",
+        doc="Show the preview pane next to the AI chat (off by default).",
     )
 
     ai_history_store = param.Parameter(
         default=None,
         doc=(
-            "ChatHistoryStore for the AI chat history. When None and "
-            "use_ai_history is True, a SQLite store at PANELINI_HISTORY_DB "
-            "(default ./panelini_history.sqlite3) is shared by all sessions."
+            "ChatHistoryStore for the AI chat history. When None, all "
+            "sessions share a SQLite store at PANELINI_HISTORY_DB, or an "
+            "in-memory store when that variable is unset."
         ),
     )
 
@@ -324,17 +319,15 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
 
         config_path = Path(self.ai_config_path) if isinstance(self.ai_config_path, str) else self.ai_config_path
         history_store = self.ai_history_store
-        if history_store is None and self.use_ai_history:
+        if history_store is None:
             from panelini.panels.ai.history import default_history_store
 
             history_store = default_history_store()
         # Single resolution point: the header badge and the AI panel share
         # one resolved identity; the cookie pane is embedded exactly once
-        user_id = cookie_pane = None
-        if history_store is not None:
-            user_id, cookie_pane = self._resolved_user()
-            if self.show_user:
-                cookie_pane = None  # already embedded next to the header badge
+        user_id, cookie_pane = self._resolved_user()
+        if self.show_user:
+            cookie_pane = None  # already embedded next to the header badge
         self._ai_frontend = AiChat(
             system_message=self.ai_system_message,
             welcome_message=self.ai_welcome_message,

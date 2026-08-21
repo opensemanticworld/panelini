@@ -29,7 +29,8 @@ def ready_page(browser, panel_server):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    page.locator("text=Hello! 👋").first.wait_for()
+    # no welcome message any more: the prompt box is the ready signal
+    page.locator(".chat-interface textarea").first.wait_for()
     yield page
     page.goto("about:blank")
     context.close()
@@ -40,8 +41,7 @@ def test_chat_renders_without_preview(ready_page: Page):
     page = ready_page
 
     assert page.locator("text=Chat").first.is_visible()
-    assert page.locator("text=Hello! 👋").first.is_visible()
-    # exact=True avoids matching "previews" in the welcome message body
+    assert page.locator(".chat-interface textarea").first.is_visible()
     assert page.get_by_text("Preview", exact=True).count() == 0
 
 

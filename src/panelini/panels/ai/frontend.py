@@ -9,24 +9,68 @@ import panel as pn
 from panelini.user import UserResolver, ensure_anonymous_cookie, resolve_user
 
 from .backend import AiBackend
+from .history.default import default_history_store
 from .history.store import ChatHistoryStore
 from .tools.basic_tools import AVAILABLE_TOOLS
-
-_DEFAULT_WELCOME = """Hello! 👋
-
-I'm your AI Assistant, here to help you with tasks such as:
-
-🕐 Timestamping data and records
-📝 Summarizing or formatting notes
-📊 Generating reports and previews
-
-Feel free to ask me anything!
-
-What would you like to work on?"""
 
 # No focus outline on the sidebar icon tabs (browsers draw a dotted frame)
 _TABS_CSS = """
 .bk-tab:focus, .bk-tab:focus-visible { outline: none; box-shadow: none; }
+"""
+
+# Tabler upload/download glyphs, inlined from one template so the pair is
+# symmetric and needs no webfont round trip. Both are used as masks, which
+# read alpha only, so the stroke colour below is arbitrary.
+_ARROW_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000'"
+    " stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
+    "<path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2'/>"
+    "<path d='{head}'/><path d='M12 4v12'/></svg>"
+)
+_DOWNLOAD_MASK = "data:image/svg+xml;utf8," + _ARROW_SVG.format(head="M7 11l5 5l5 -5")
+_UPLOAD_MASK = "data:image/svg+xml;utf8," + _ARROW_SVG.format(head="M7 9l5 -5l5 5")
+
+# Import/export icons in the New Chat row. min-height 0 is needed because
+# bokeh gives inputs and buttons a text-sized minimum that would otherwise
+# win over the height.
+_ICON_GLYPH_PX = 18
+_ICON_BOX = "width: 28px; height: 24px; min-height: 0; padding: 0; margin: 0; border: none; border-radius: 6px;"
+
+
+def _glyph_css(mask: str) -> str:
+    """Paint a box as a flat glyph in the surrounding text colour.
+
+    Both icons go through this, so a button and a file input end up with the
+    same glyph size and position instead of each widget sizing its own icon.
+    """
+    return f"""
+    {_ICON_BOX}
+    /* !important: bokeh's own button fill is more specific than any selector
+       a stylesheet can reach the widget with */
+    background: currentColor !important; box-shadow: none;
+    color: inherit; cursor: pointer; opacity: 0.55; transition: opacity 0.15s ease;
+    -webkit-mask: url("{mask}") center / {_ICON_GLYPH_PX}px no-repeat;
+    mask: url("{mask}") center / {_ICON_GLYPH_PX}px no-repeat;
+    """
+
+
+_ICON_ACTION_CSS = f"""
+:host {{ margin: 0; }}
+.bk-btn, .bk-btn:focus {{ {_glyph_css(_DOWNLOAD_MASK)} }}
+.bk-btn:hover {{ opacity: 1; }}
+"""
+
+# Icon-only file picker: the input loses its own chrome, font-size 0
+# collapses the native "no file chosen" label, and the file-selector
+# button is left as a bare upload glyph
+_FILE_ICON_CSS = f"""
+:host {{ width: 28px; margin: 0; }}
+input[type="file"] {{
+    {_ICON_BOX}
+    font-size: 0; overflow: hidden; background: transparent; box-shadow: none; color: inherit;
+}}
+input[type="file"]::file-selector-button {{ {_glyph_css(_UPLOAD_MASK)} }}
+input[type="file"]::file-selector-button:hover {{ opacity: 1; }}
 """
 
 
@@ -39,13 +83,8 @@ class _ChatSession:
         self.history: list[Any] = []
 
 
-def _resolve_history_user(
-    history_store: ChatHistoryStore | None,
-    user_resolver: UserResolver | None,
-) -> tuple[str | None, pn.viewable.Viewable | None]:
+def _resolve_history_user(user_resolver: UserResolver | None) -> tuple[str, pn.viewable.Viewable | None]:
     """Resolve the history owner id and an optional cookie-persisting pane."""
-    if history_store is None:
-        return None, None
     if user_resolver is not None:
         return resolve_user(user_resolver), None
     return ensure_anonymous_cookie()
@@ -65,7 +104,7 @@ class AiChat:
         config_path: Path | None = None,
         tools: list | None = None,
         show_tools: bool = True,
-        show_preview: bool = True,
+        show_preview: bool = False,
         history_store: ChatHistoryStore | None = None,
         history_view: str = "list",
         user_resolver: UserResolver | None = None,
@@ -76,17 +115,18 @@ class AiChat:
 
         Args:
             system_message: System message passed to the AI backend.
-            welcome_message: Initial greeting shown in the chat. Uses a
-                default if *None*.
+            welcome_message: Optional greeting posted into a new chat.
+                *None* starts the chat empty.
             config_path: Optional path to a custom config.yml file.
             tools: Optional list of custom ``BaseTool`` instances to make
                 available alongside the built-in tools.
             show_tools: When *False*, the "Basic Tools" sidebar card is
                 hidden and tool toggles are not rendered.
-            show_preview: When *False*, the preview split-pane is omitted
-                and the chat fills the full main area.
-            history_store: Optional per-user chat history store; enables
-                persistence and turns the Clear button into "New Chat".
+            show_preview: When *True*, the preview split-pane is shown next
+                to the chat; by default the chat fills the full main area.
+            history_store: Per-user chat history store. Defaults to the
+                shared store: SQLite at ``PANELINI_HISTORY_DB`` when set,
+                otherwise in-memory for the lifetime of the process.
             history_view: History sidebar style: "list" (date-grouped) or
                 "tree" (drag-and-drop folders).
             user_resolver: Optional callable resolving the history owner id;
@@ -99,15 +139,17 @@ class AiChat:
         """
         self._show_tools = show_tools
         self._show_preview = show_preview
-        self._welcome_message = welcome_message or _DEFAULT_WELCOME
+        self._welcome_message = welcome_message
 
         # Called after each persisted exchange (used by history UIs).
         self.on_history_changed: Any = None
 
+        if history_store is None:
+            history_store = default_history_store()
         # Resolve the history owner only when used standalone; embedded in
         # Panelini the pre-resolved identity is passed in
-        if history_store is not None and user_id is None:
-            user_id, cookie_pane = _resolve_history_user(history_store, user_resolver)
+        if user_id is None:
+            user_id, cookie_pane = _resolve_history_user(user_resolver)
         self._cookie_pane = cookie_pane
 
         # Initialize backend
@@ -192,36 +234,29 @@ class AiChat:
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
-        # Create chat management buttons
-        self.clear_chat_button = pn.widgets.Button(
-            name="Clear Chat & History",
-            button_type="danger",
-            sizing_mode="stretch_width",
-            margin=(5, 5, 5, 5),
-        )
-        self.clear_chat_button.on_click(self._on_clear_chat)
-
+        # Import and export ride along the New Chat row as bare icons; both
+        # report their outcome into the chat feed
         self.download_chat_button = pn.widgets.Button(
-            name="Download Chat (JSON)",
-            button_type="primary",
-            sizing_mode="stretch_width",
-            margin=(5, 5, 5, 5),
+            width=28,
+            # bottom margin matches the New Chat button, so centering lands
+            # on its axis and not on the row's
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[_ICON_ACTION_CSS],
+            css_classes=["chat-download"],
+            description="Download chat (JSON)",
         )
         self.download_chat_button.on_click(self._on_download_chat)
 
         self.upload_chat_input = pn.widgets.FileInput(
             accept=".json",
-            sizing_mode="stretch_width",
-            margin=(5, 5, 5, 5),
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[_FILE_ICON_CSS],
+            css_classes=["chat-upload"],
         )
         self.upload_chat_input.param.watch(self._on_upload_chat, "value")
-
-        # Display for uploaded filename
-        self.uploaded_filename_display = pn.pane.HTML(
-            "",
-            sizing_mode="stretch_width",
-            margin=(0, 5, 5, 5),
-        )
 
         # Watch for changes
         self.provider_selector.param.watch(self._on_provider_change, "value")
@@ -316,74 +351,29 @@ class AiChat:
                     },
                 )
             )
-        # With history the new-chat action lives in the Conversations card,
-        # so the destructive clear button is omitted here
-        _chat_management_items: list[pn.viewable.Viewable] = []
-        if not self.backend.history_enabled:
-            _chat_management_items += [
-                pn.pane.Markdown("**Manage conversation:**", margin=(0, 0, 10, 0)),
-                self.clear_chat_button,
-            ]
-        _chat_management_items += [
-            pn.pane.Markdown("**Export/Import:**", margin=(10, 0, 5, 0)),
-            self.download_chat_button,
-            pn.pane.Markdown("**Restore from JSON:**", margin=(10, 0, 5, 0)),
-            self.upload_chat_input,
-            self.uploaded_filename_display,
-        ]
-        _chat_management_card = pn.Card(
-            title="Chat Management",
+        self._history_panel = self._build_history_panel(history_store, history_view)
+        # Icon tabs: setup leftmost, conversations active by default.
+        # dynamic=True must not be used: it re-renders panes on switch
+        # and breaks Card expand/collapse bindings (Panel bug, verified)
+        _chat_tab = pn.Column(
+            self._history_panel.card,
             sizing_mode="stretch_width",
-            collapsible=True,
-            collapsed=False,
-            objects=[pn.Column(*_chat_management_items)],
-            styles={
-                "margin-bottom": "10px",
-                "padding": "12px",
-            },
+            margin=0,
         )
-        # Import/export belongs to chats: with history it moves into the
-        # conversations tab, otherwise it stays under General Setup
-        if not self.backend.history_enabled:
-            _general_setup_items.append(_chat_management_card)
-        self._history_panel: Any = None
-        if history_store is not None and self.backend.user_id is not None:
-            self._history_panel = self._build_history_panel(history_store, history_view)
-            # Icon tabs: setup leftmost, conversations active by default.
-            # dynamic=True must not be used: it re-renders panes on switch
-            # and breaks Card expand/collapse bindings (Panel bug, verified)
-            _chat_tab = pn.Column(
-                self._history_panel.card,
-                _chat_management_card,
-                sizing_mode="stretch_width",
-                margin=0,
+        # The setting cards sit directly in their pane, without a wrapper card
+        _setup_tab = pn.Column(*_general_setup_items, sizing_mode="stretch_width", margin=0)
+        # No sizing_mode on the Tabs: Panelini assigns a fixed width to
+        # sidebar objects, and stretch_width would override it and let
+        # the tabs hug each pane's content (width jumps between tabs)
+        self._sidebar_objects = [
+            pn.Tabs(
+                ("⚙️", _setup_tab),
+                ("\U0001f4ac", _chat_tab),
+                active=1,
+                css_classes=["ai-sidebar-tabs"],
+                stylesheets=[_TABS_CSS],
             )
-            # The settings tab replaces the "General Setup" wrapper card;
-            # the setting cards sit directly in the pane
-            _setup_tab = pn.Column(*_general_setup_items, sizing_mode="stretch_width", margin=0)
-            # No sizing_mode on the Tabs: Panelini assigns a fixed width to
-            # sidebar objects, and stretch_width would override it and let
-            # the tabs hug each pane's content (width jumps between tabs)
-            self._sidebar_objects = [
-                pn.Tabs(
-                    ("⚙️", _setup_tab),
-                    ("\U0001f4ac", _chat_tab),
-                    active=1,
-                    css_classes=["ai-sidebar-tabs"],
-                    stylesheets=[_TABS_CSS],
-                )
-            ]
-        else:
-            self._sidebar_objects = [
-                pn.Card(
-                    title="General Setup",
-                    sizing_mode="stretch_width",
-                    collapsible=True,
-                    collapsed=False,
-                    objects=_general_setup_items,
-                    styles={"padding": "8px"},
-                )
-            ]
+        ]
 
         # Build the chat card; its content swaps to the active session's feed
         self._chat_card = pn.Card(
@@ -449,7 +439,7 @@ class AiChat:
     def _build_history_panel(self, history_store: ChatHistoryStore, history_view: str) -> Any:
         """Build the history sidebar component: date-grouped list or folder tree."""
         user_id = self.backend.user_id
-        if user_id is None:  # guarded by the caller
+        if user_id is None:  # resolved in __init__ before this runs
             msg = "History panel requires a resolved user."
             raise ValueError(msg)
         common = {
@@ -460,6 +450,7 @@ class AiChat:
             "get_active_id": lambda: self.backend.conversation_id,
             "get_busy_ids": lambda: self._generating_ids,
             "get_ready_ids": lambda: self._ready_ids,
+            "actions": [self.upload_chat_input, self.download_chat_button],
         }
         if history_view == "tree":
             from .history.tree import HistoryTree
@@ -489,7 +480,7 @@ class AiChat:
             css_classes=["chat-interface"],
             sizing_mode="stretch_both",
         )
-        if welcome:
+        if welcome and self._welcome_message:
             feed.send(value=self._welcome_message, user="🤖 Assistant", respond=False)
         session = _ChatSession(feed=feed, conversation_id=conversation_id)
         self._sessions[feed] = session
@@ -628,13 +619,12 @@ class AiChat:
     def start_new_chat(self) -> None:
         """Switch to a fresh conversation; stored conversations stay intact.
 
-        With history enabled the conversation row is created immediately so
-        it appears (and is selected) in the sidebar right away.
+        The conversation row is created immediately so it appears (and is
+        selected) in the sidebar right away.
         """
         self.backend.start_new_conversation()
         session = self._new_session(welcome=True)
-        if self.backend.history_enabled:
-            session.conversation_id = self.backend.create_conversation_id()
+        session.conversation_id = self.backend.create_conversation_id()
         self._activate_session(session)
 
     def open_conversation(self, conversation_id: str) -> None:
@@ -650,29 +640,9 @@ class AiChat:
         self._activate_session(session)
 
     def _notify_history_changed(self) -> None:
-        if self._history_panel is not None:
-            self._history_panel.refresh()
+        self._history_panel.refresh()
         if self.on_history_changed is not None:
             self.on_history_changed()
-
-    def _on_clear_chat(self, event: Any) -> None:
-        """Start a new chat (history kept) or clear destructively without a store."""
-        _ = event
-
-        if self.backend.history_enabled:
-            self.start_new_chat()
-            self._notify_history_changed()
-            return
-
-        self.backend.clear_history()
-        self._active_session.history.clear()
-        self.chat_interface.clear()
-
-        self.chat_interface.send(
-            "Chat and conversation history cleared.",
-            user="⚙️ System",
-            respond=False,
-        )
 
     def _on_download_chat(self, event: Any) -> None:
         """Handle download chat button click."""
@@ -732,10 +702,6 @@ class AiChat:
             self._active_session.conversation_id = self.backend.conversation_id
             self._notify_history_changed()
 
-            self.uploaded_filename_display.object = (
-                f'<span style="font-size: 0.85em; color: black;">Restored: <code>{filename}</code></span>'
-            )
-
             self.chat_interface.send(
                 f"Chat restored from JSON ({len(chat_data.get('messages', []))} messages).",
                 user="⚙️ System",
@@ -777,7 +743,7 @@ class AiChat:
         # model context and its own stored conversation. Switching chats
         # mid-response therefore cannot reroute messages.
         session = self._sessions.get(instance, self._active_session)
-        if self.backend.history_enabled and session.conversation_id is None:
+        if session.conversation_id is None:
             session.conversation_id = self.backend.create_conversation_id()
             if session is self._active_session:
                 self.backend.conversation_id = session.conversation_id
