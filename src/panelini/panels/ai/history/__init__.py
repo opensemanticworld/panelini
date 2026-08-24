@@ -17,6 +17,7 @@ __all__ = [
     "HistoryPanel",
     "HistoryTree",
     "InMemoryHistoryStore",
+    "LocalStorageHistoryStore",
     "MessageRecord",
     "SqliteHistoryStore",
     "UserResolver",
@@ -39,6 +40,7 @@ from panelini.user import (
 
 from .default import default_history_store
 from .document import DocumentHistoryStore, InMemoryHistoryStore
+from .local_storage_store import LocalStorageHistoryStore
 from .panel import HistoryPanel
 from .sqlite_store import SqliteHistoryStore
 from .store import (

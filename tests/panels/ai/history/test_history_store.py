@@ -1,7 +1,7 @@
 """Behavior suite for panelini.panels.ai.history stores.
 
-Runs identically against the in-memory and the SQLite backend; both must
-honor the same tenant-safety and lifecycle semantics.
+Runs identically against the in-memory, SQLite, and localStorage backends;
+all must honor the same tenant-safety and lifecycle semantics.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from panelini.panels.ai.history import (
     DEFAULT_TITLE,
     ChatHistoryStore,
     InMemoryHistoryStore,
+    LocalStorageHistoryStore,
     SqliteHistoryStore,
     derive_title,
 )
@@ -29,10 +30,13 @@ USER = "alice"
 OTHER = "bob"
 
 
-@pytest.fixture(params=["memory", "sqlite"])
+@pytest.fixture(params=["memory", "sqlite", "localstorage"])
 def store(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[ChatHistoryStore]:
     if request.param == "memory":
         backend: ChatHistoryStore = InMemoryHistoryStore()
+    elif request.param == "localstorage":
+        # headless (pane unrendered): pure in-memory semantics
+        backend = LocalStorageHistoryStore()
     else:
         backend = SqliteHistoryStore(tmp_path / "history.sqlite3")
     yield backend
@@ -389,3 +393,49 @@ class TestSqliteSpecifics:
         assert document["type"] == "Conversation"
         assert document["title"] == "doc shape"
         assert [m["content"] for m in document["messages"]] == ["hello"]
+
+
+# ── localStorage specifics ────────────────────────────────────────────────
+
+
+class TestLocalStorageSpecifics:
+    def test_writes_mirror_into_the_pane(self) -> None:
+        """Every mutation lands in pane.entries, one entry per document."""
+        backend = LocalStorageHistoryStore()
+        conv = backend.create_conversation(USER, title="mirrored")
+        backend.append_message(USER, conv.id, "human", "hello")
+        entry = backend.pane.entries[f"conversation:{conv.id}"]
+        assert entry["title"] == "mirrored"
+        assert [m["content"] for m in entry["messages"]] == ["hello"]
+
+        backend.delete_conversation(USER, conv.id)
+        assert backend.pane.entries == {}
+
+    def test_browser_hydration_merges_and_notifies(self) -> None:
+        """Entries arriving from the browser fill the mirror; mirror wins."""
+        # a donor store produces a valid stored document
+        donor = LocalStorageHistoryStore()
+        old = donor.create_conversation(USER, title="from the browser")
+        donor.append_message(USER, old.id, "human", "restored question")
+
+        backend = LocalStorageHistoryStore()
+        fresh = backend.create_conversation(USER, title="pre-hydration")
+        loaded: list[bool] = []
+        backend.on_loaded = lambda: loaded.append(True)
+
+        # simulate the pane's render script: data arrives, then loaded flips
+        backend.pane.entries = {
+            **donor.pane.entries,
+            f"conversation:{fresh.id}": {"stale": "must not overwrite the mirror"},
+        }
+        backend.pane.loaded = True
+
+        titles = {c.title for c in backend.list_conversations(USER)}
+        assert titles == {"from the browser", "pre-hydration"}
+        assert [m.content for m in backend.load_messages(USER, old.id)] == ["restored question"]
+        assert loaded == [True]
+
+        # a second loaded event must not re-merge
+        backend.pane.loaded = False
+        backend.pane.loaded = True
+        assert loaded == [True]

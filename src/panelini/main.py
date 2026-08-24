@@ -189,7 +189,9 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         doc=(
             "ChatHistoryStore for the AI chat history. When None, all "
             "sessions share a SQLite store at PANELINI_HISTORY_DB, or an "
-            "in-memory store when that variable is unset."
+            "in-memory store when that variable is unset. The string "
+            "'browser' keeps each user's history in their browser's "
+            "localStorage instead."
         ),
     )
 

@@ -224,7 +224,10 @@ two-column layout:
 
 Every chat keeps its conversations per user. Without configuration they live
 in memory for the lifetime of the process; set `PANELINI_HISTORY_DB` to a file
-path to persist them in SQLite, or pass your own store as `ai_history_store`.
+path to persist them in SQLite, pass your own store as `ai_history_store`, or
+pass `ai_history_store="browser"` to keep each user's history in their
+browser's localStorage (per-browser persistence across reloads and restarts,
+no server-side database, ~5MB quota).
 Use `ai_history_view="tree"` for a drag-and-drop folder tree instead of the
 date-grouped list. Conversations are owned by the resolved user id (see
 `user_resolver`); anonymous visitors get a cookie-backed id.
@@ -316,6 +319,7 @@ panelini/panels/ai/
 │   ├── store.py                      # Records + ChatHistoryStore interface
 │   ├── document.py                   # Document layer + in-memory backend
 │   ├── sqlite_store.py               # SQLite backend
+│   ├── local_storage_store.py        # Browser localStorage backend
 │   ├── default.py                    # Shared default store
 │   ├── panel.py                      # Date-grouped sidebar list
 │   ├── tree.py                       # Wunderbaum folder tree
