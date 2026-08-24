@@ -105,7 +105,7 @@ class AiChat:
         tools: list | None = None,
         show_tools: bool = True,
         show_preview: bool = False,
-        history_store: ChatHistoryStore | None = None,
+        history_store: ChatHistoryStore | str | None = None,
         history_view: str = "list",
         user_resolver: UserResolver | None = None,
         user_id: str | None = None,
@@ -126,7 +126,9 @@ class AiChat:
                 to the chat; by default the chat fills the full main area.
             history_store: Per-user chat history store. Defaults to the
                 shared store: SQLite at ``PANELINI_HISTORY_DB`` when set,
-                otherwise in-memory for the lifetime of the process.
+                otherwise in-memory for the lifetime of the process. The
+                string ``"browser"`` keeps this session's history in the
+                browser's localStorage instead (per-browser persistence).
             history_view: History sidebar style: "list" (date-grouped) or
                 "tree" (drag-and-drop folders).
             user_resolver: Optional callable resolving the history owner id;
@@ -144,8 +146,8 @@ class AiChat:
         # Called after each persisted exchange (used by history UIs).
         self.on_history_changed: Any = None
 
-        if history_store is None:
-            history_store = default_history_store()
+        self._storage_pane: pn.viewable.Viewable | None = None
+        history_store = self._resolve_history_store(history_store)
         # Resolve the history owner only when used standalone; embedded in
         # Panelini the pre-resolved identity is passed in
         if user_id is None:
@@ -418,6 +420,8 @@ class AiChat:
         self._main_objects: list[pn.viewable.Viewable] = [main_layout]
         if self._cookie_pane is not None:
             self._main_objects.append(self._cookie_pane)
+        if self._storage_pane is not None:
+            self._main_objects.append(self._storage_pane)
 
     # ── Public properties ────────────────────────────────────────────────
 
@@ -638,6 +642,25 @@ class AiChat:
                 user = "🧑 User" if role == "human" else "🤖 Assistant"
                 session.feed.send(content, user=user, respond=False)
         self._activate_session(session)
+
+    def _resolve_history_store(self, history_store: ChatHistoryStore | str | None) -> ChatHistoryStore:
+        """Resolve the store argument to an instance.
+
+        The string ``"browser"`` builds a per-session store persisting into
+        the page's localStorage; its pane rides along in the main area.
+        *None* falls back to the shared default store.
+        """
+        if isinstance(history_store, str):
+            if history_store != "browser":
+                msg = f"Unknown history_store {history_store!r}; expected 'browser' or a ChatHistoryStore."
+                raise ValueError(msg)
+            from .history.local_storage_store import LocalStorageHistoryStore
+
+            browser_store = LocalStorageHistoryStore()
+            browser_store.on_loaded = self._notify_history_changed
+            self._storage_pane = browser_store.pane
+            return browser_store
+        return history_store if history_store is not None else default_history_store()
 
     def _notify_history_changed(self) -> None:
         self._history_panel.refresh()
