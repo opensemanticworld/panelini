@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .document import InMemoryHistoryStore
 from .sqlite_store import SqliteHistoryStore
-from .store import ChatHistoryStore, InMemoryHistoryStore
+from .store import ChatHistoryStore
 
 ENV_VAR = "PANELINI_HISTORY_DB"
 

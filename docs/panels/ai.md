@@ -229,6 +229,22 @@ Use `ai_history_view="tree"` for a drag-and-drop folder tree instead of the
 date-grouped list. Conversations are owned by the resolved user id (see
 `user_resolver`); anonymous visitors get a cookie-backed id.
 
+#### Document model
+
+Each conversation is stored as one JSON document with embedded messages,
+defined by the bundled
+[`chat_history_schema_v2.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema_v2.json).
+The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: a
+plain JSON-Schema carrying a JSON-LD `@context` that maps properties to
+vocabulary terms (schema.org where a term exists). The same document is the
+import/export format of the sidebar icons, so a downloaded chat re-imports
+losslessly here or in any other store.
+
+All backends implement a shared document contract
+(`DocumentHistoryStore`): SQLite keeps one `documents` row per conversation
+or folder, the in-memory store keeps plain dicts, and the shape maps 1:1
+onto a Postgres JSONB column or a browser object store.
+
 ## Tools
 
 The panel includes a tool system based on LangChain's `BaseTool`. Tools are toggled via sidebar checkboxes.
@@ -289,12 +305,22 @@ See ``examples/panels/ai/ai_chat_custom_tool.py`` for a complete working example
 
 ## Module Structure
 
-```
+```text
 panelini/panels/ai/
 ├── __init__.py
 ├── frontend.py          # UI layer (AiChat class)
 ├── backend.py           # Business logic (AiBackend class)
 ├── default_config.yml   # Bundled default provider config
+├── history/
+│   ├── __init__.py
+│   ├── store.py                      # Records + ChatHistoryStore interface
+│   ├── document.py                   # Document layer + in-memory backend
+│   ├── sqlite_store.py               # SQLite backend
+│   ├── default.py                    # Shared default store
+│   ├── panel.py                      # Date-grouped sidebar list
+│   ├── tree.py                       # Wunderbaum folder tree
+│   ├── chat_history_schema_v2.json   # Conversation document schema (OO-LD)
+│   └── chat_history_schema_v2.sql    # SQLite document table DDL
 ├── tools/
 │   ├── __init__.py
 │   └── basic_tools.py   # Built-in tools
@@ -354,10 +380,10 @@ Business logic layer managing providers, models, tools, and message processing.
   - Async generator yielding response token chunks.
 * - `clear_history()`
   - Clear conversation history.
-* - `export_chat_data(...)`
-  - Export chat to a JSON-serializable dict.
+* - `export_chat_data(provider, model, temperature)`
+  - Export the active conversation as a v2 conversation document.
 * - `restore_chat_data(chat_data)`
-  - Restore conversation from exported JSON.
+  - Restore the model context from a v2 document (or legacy export).
 ```
 
 ### `AiInterface`

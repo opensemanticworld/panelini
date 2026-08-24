@@ -421,53 +421,98 @@ class AiBackend:
 
         return tool_results
 
-    def export_chat_data(self, provider: str, model: str, temperature: float, messages: list[Any]) -> dict[str, Any]:
-        """Export chat data for download.
+    def export_chat_data(self, provider: str, model: str, temperature: float) -> dict[str, Any]:
+        """Export the active conversation as a v2 conversation document.
+
+        The persisted conversation is exported when one is active; otherwise
+        the document is composed from the in-memory model context. The owner
+        id is stripped: on import the conversation belongs to the importer.
 
         Args:
-            provider: Current provider name
-            model: Current model name
-            temperature: Current temperature
-            messages: List of chat messages
+            provider: Current provider name (recorded under ``settings``).
+            model: Current model name.
+            temperature: Current temperature.
 
         Returns:
-            Dictionary with chat data ready for JSON export
+            A ``chat_history_schema_v2.json`` conversation document.
         """
-        from datetime import datetime
+        from .history.document import (
+            conversation_to_document,
+            document_context,
+            validate_conversation_document,
+        )
+        from .history.store import ConversationRecord, MessageRecord, new_id, utcnow
 
-        chat_data: dict[str, Any] = {
-            "timestamp": datetime.now().isoformat(),
-            "provider": provider,
-            "model": model,
-            "temperature": temperature,
-            "messages": messages,
-        }
-
-        # Include conversation history
-        if self.ai_interface:
-            chat_data["conversation_history"] = [
-                {
-                    "type": msg.__class__.__name__,
-                    "content": msg.content if hasattr(msg, "content") else str(msg),
-                }
-                for msg in self.ai_interface.conversation_history
+        record = None
+        messages: list[MessageRecord] = []
+        if self.history_store is not None and self.user_id is not None and self.conversation_id is not None:
+            record = self.history_store.get_conversation(self.user_id, self.conversation_id)
+            if record is not None:
+                messages = self.history_store.load_messages(self.user_id, self.conversation_id)
+        if record is None:
+            # standalone use without a persisted conversation: compose the
+            # document from the model context
+            now = utcnow()
+            record = ConversationRecord(
+                id=new_id(),
+                user_id="",
+                title=DEFAULT_TITLE,
+                pinned=False,
+                archived=False,
+                folder_id=None,
+                current_message_id=None,
+                created_at=now,
+                updated_at=now,
+            )
+            messages = [
+                MessageRecord(
+                    id=new_id(),
+                    conversation_id=record.id,
+                    user_id="",
+                    role="human" if isinstance(message, HumanMessage) else "ai",
+                    content=message.content if isinstance(message.content, str) else str(message.content),
+                    extra=None,
+                    parent_message_id=None,
+                    created_at=now,
+                )
+                for message in self.get_conversation_history()
+                if isinstance(message, (HumanMessage, AIMessage))
             ]
 
-        return chat_data
+        document = conversation_to_document(record, messages)
+        document.pop("user_id", None)
+        document["@context"] = document_context()
+        document["settings"] = {"provider": provider, "model": model, "temperature": temperature}
+        validate_conversation_document(document)
+        return document
 
-    def restore_chat_data(self, chat_data: dict[str, Any]) -> None:
-        """Restore conversation history from chat data.
+    def restore_chat_data(self, chat_data: dict[str, Any]) -> list[tuple[str, str]]:
+        """Restore the model context from an uploaded chat file.
 
-        Args:
-            chat_data: Dictionary with chat data from JSON import
+        Accepts a v2 conversation document (validated when jsonschema is
+        available) or the legacy ad-hoc export format.
+
+        Returns:
+            ``(role, content)`` pairs (human/ai only) for UI replay.
         """
-        # Clear existing history
+        from .history.document import validate_conversation_document
+
         self.clear_history()
 
-        # Restore conversation history if available
-        if "conversation_history" in chat_data and self.ai_interface:
-            for hist_msg in chat_data["conversation_history"]:
-                if hist_msg["type"] == "HumanMessage":
-                    self.ai_interface.conversation_history.append(HumanMessage(content=hist_msg["content"]))
-                elif hist_msg["type"] == "AIMessage":
-                    self.ai_interface.conversation_history.append(AIMessage(content=hist_msg["content"]))
+        if "conversation_history" in chat_data:  # legacy export format
+            pairs = [
+                ("human" if item["type"] == "HumanMessage" else "ai", item["content"])
+                for item in chat_data["conversation_history"]
+                if item["type"] in ("HumanMessage", "AIMessage")
+            ]
+        else:
+            validate_conversation_document(chat_data)
+            pairs = [
+                (message["role"], message["content"])
+                for message in chat_data.get("messages", [])
+                if message["role"] in ("human", "ai")
+            ]
+
+        if self.ai_interface:
+            self.ai_interface.conversation_history = self.history_from_pairs(pairs)
+        return pairs
