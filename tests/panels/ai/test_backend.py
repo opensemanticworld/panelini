@@ -82,24 +82,41 @@ class TestTools:
 
 
 class TestExportRestore:
-    def test_export_chat_data(self, backend: AiBackend) -> None:
-        data = backend.export_chat_data(
-            provider="Test",
-            model="test-model",
-            temperature=0.5,
-            messages=[{"user": "u", "content": "hi"}],
-        )
-        assert "timestamp" in data
-        assert data["provider"] == "Test"
-        assert data["model"] == "test-model"
+    def test_export_is_a_v2_conversation_document(self, backend: AiBackend) -> None:
+        data = backend.export_chat_data(provider="Test", model="test-model", temperature=0.5)
+        assert data["schema_version"] == 2
+        assert data["type"] == "Conversation"
+        assert "@context" in data
+        assert "user_id" not in data  # the importer becomes the owner
+        assert data["settings"] == {"provider": "Test", "model": "test-model", "temperature": 0.5}
+        assert data["messages"] == []
 
-    def test_restore_chat_data(self, backend: AiBackend) -> None:
+    def test_restore_v2_document(self, backend: AiBackend) -> None:
+        chat_data: dict[str, Any] = {
+            "schema_version": 2,
+            "type": "Conversation",
+            "id": "abc",
+            "title": "old chat",
+            "created_at": "2026-01-01T10:00:00+00:00",
+            "updated_at": "2026-01-01T10:00:00+00:00",
+            "messages": [
+                {"id": "m1", "role": "human", "content": "hello", "created_at": "2026-01-01T10:00:00+00:00"},
+                {"id": "m2", "role": "ai", "content": "hi there", "created_at": "2026-01-01T10:00:01+00:00"},
+            ],
+        }
+        pairs = backend.restore_chat_data(chat_data)
+        assert pairs == [("human", "hello"), ("ai", "hi there")]
+        assert backend.ai_interface is not None
+        assert len(backend.ai_interface.conversation_history) == 2
+
+    def test_restore_legacy_format(self, backend: AiBackend) -> None:
         chat_data: dict[str, Any] = {
             "conversation_history": [
                 {"type": "HumanMessage", "content": "hello"},
                 {"type": "AIMessage", "content": "hi there"},
             ]
         }
-        backend.restore_chat_data(chat_data)
+        pairs = backend.restore_chat_data(chat_data)
+        assert pairs == [("human", "hello"), ("ai", "hi there")]
         assert backend.ai_interface is not None
         assert len(backend.ai_interface.conversation_history) == 2

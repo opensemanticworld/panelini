@@ -1,106 +1,53 @@
 """SQLite backend for :class:`~.store.ChatHistoryStore`.
 
-One short-lived connection per call (thread-safe on the tornado loop), WAL
-journal mode, ``foreign_keys`` on. Single-machine storage: file locking
-covers ``--num-procs``, but not NFS or multi-host; use another
-``ChatHistoryStore`` implementation for those.
+One ``documents`` row per conversation or folder; the body column holds the
+JSON document from ``chat_history_schema_v2.json``. Short-lived connections
+per call (thread-safe on the tornado loop), WAL journal mode. Single-machine
+storage: file locking covers ``--num-procs``, but not NFS or multi-host; use
+another ``ChatHistoryStore`` implementation for those.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .store import (
-    DEFAULT_TITLE,
-    ChatHistoryStore,
-    ConversationRecord,
-    FolderRecord,
-    MessageRecord,
-    new_id,
-    utcnow,
-    validate_role,
-)
+from .document import SCHEMA_VERSION, DocumentHistoryStore
 
-_SCHEMA_VERSION = 1
-# File name carries the version and must match PRAGMA user_version.
-_SCHEMA_PATH = Path(__file__).parent / f"chat_history_schema_v{_SCHEMA_VERSION}.sql"
+_SCHEMA_PATH = Path(__file__).parent / f"chat_history_schema_v{SCHEMA_VERSION}.sql"
 
 
-def _iso(moment: datetime) -> str:
-    return moment.isoformat()
-
-
-def _like_pattern(query: str) -> str:
-    """Wrap ``query`` for a LIKE containment match with wildcards escaped."""
-    escaped = query.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
-    return f"%{escaped}%"
-
-
-def _conversation_from_row(row: sqlite3.Row) -> ConversationRecord:
-    return ConversationRecord(
-        id=row["id"],
-        user_id=row["user_id"],
-        title=row["title"],
-        pinned=bool(row["pinned"]),
-        archived=bool(row["archived"]),
-        folder_id=row["folder_id"],
-        current_message_id=row["current_message_id"],
-        created_at=datetime.fromisoformat(row["created_at"]),
-        updated_at=datetime.fromisoformat(row["updated_at"]),
-    )
-
-
-def _message_from_row(row: sqlite3.Row) -> MessageRecord:
-    extra = row["extra"]
-    return MessageRecord(
-        id=row["id"],
-        conversation_id=row["conversation_id"],
-        user_id=row["user_id"],
-        role=row["role"],
-        content=row["content"],
-        extra=json.loads(extra) if extra is not None else None,
-        parent_message_id=row["parent_message_id"],
-        created_at=datetime.fromisoformat(row["created_at"]),
-    )
-
-
-def _folder_from_row(row: sqlite3.Row) -> FolderRecord:
-    return FolderRecord(
-        id=row["id"],
-        user_id=row["user_id"],
-        name=row["name"],
-        parent_id=row["parent_id"],
-        created_at=datetime.fromisoformat(row["created_at"]),
-        updated_at=datetime.fromisoformat(row["updated_at"]),
-    )
-
-
-class SqliteHistoryStore(ChatHistoryStore):
+class SqliteHistoryStore(DocumentHistoryStore):
     """SQLite-backed chat history store (one file, zero configuration)."""
 
     def __init__(self, path: str | Path) -> None:
         """Create or open the store at ``path`` (parent dirs are created)."""
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._local = threading.local()
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
             if conn.execute("PRAGMA user_version").fetchone()[0] == 0:
-                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+                conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    # -- connections ----------------------------------------------------------
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        """Yield a short-lived connection wrapping one transaction."""
+        """Yield the ambient transaction connection or a short-lived one."""
+        ambient = getattr(self._local, "conn", None)
+        if ambient is not None:
+            yield ambient
+            return
         conn = sqlite3.connect(self._path, timeout=10)
         conn.row_factory = sqlite3.Row
         try:
-            conn.execute("PRAGMA foreign_keys=ON")
             yield conn
             conn.commit()
         except BaseException:
@@ -109,228 +56,59 @@ class SqliteHistoryStore(ChatHistoryStore):
         finally:
             conn.close()
 
-    def _require_folder(self, conn: sqlite3.Connection, user_id: str, folder_id: str | None) -> None:
-        if folder_id is None:
+    @contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """Run the enclosed calls on one connection under a write lock."""
+        if getattr(self._local, "conn", None) is not None:
+            yield
             return
-        row = conn.execute("SELECT id FROM folders WHERE id = ? AND user_id = ?", (folder_id, user_id)).fetchone()
-        if row is None:
-            msg = "Unknown folder for this user."
-            raise ValueError(msg)
+        conn = sqlite3.connect(self._path, timeout=10, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        self._local.conn = conn
+        try:
+            # take the write lock up front: the read-modify-write in
+            # append_message must not lose updates across processes
+            conn.execute("BEGIN IMMEDIATE")
+            yield
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            self._local.conn = None
+            conn.close()
 
-    # -- conversations ------------------------------------------------------
+    # -- document CRUD --------------------------------------------------------
 
-    def list_conversations(self, user_id: str, include_archived: bool = False) -> list[ConversationRecord]:
-        query = "SELECT * FROM conversations WHERE user_id = ?"
-        if not include_archived:
-            query += " AND archived = 0"
-        query += " ORDER BY updated_at DESC, rowid DESC"
-        with self._connect() as conn:
-            rows = conn.execute(query, (user_id,)).fetchall()
-        return [_conversation_from_row(row) for row in rows]
-
-    def search_conversations(
-        self, user_id: str, query: str, include_archived: bool = False
-    ) -> list[ConversationRecord]:
-        if not query.strip():
-            return self.list_conversations(user_id, include_archived)
-        # LIKE is case-insensitive for ASCII in SQLite, matching the
-        # in-memory backend closely enough for sidebar search
-        sql = "SELECT c.* FROM conversations c WHERE c.user_id = ?"
-        if not include_archived:
-            sql += " AND c.archived = 0"
-        sql += (
-            r" AND (c.title LIKE ? ESCAPE '\' OR EXISTS ("
-            r"SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ? ESCAPE '\'))"
-            " ORDER BY c.updated_at DESC, c.rowid DESC"
-        )
-        pattern = _like_pattern(query.strip())
-        with self._connect() as conn:
-            rows = conn.execute(sql, (user_id, pattern, pattern)).fetchall()
-        return [_conversation_from_row(row) for row in rows]
-
-    def get_conversation(self, user_id: str, conversation_id: str) -> ConversationRecord | None:
+    def _get(self, user_id: str, kind: str, doc_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM conversations WHERE id = ? AND user_id = ?", (conversation_id, user_id)
+                "SELECT body FROM documents WHERE id = ? AND user_id = ? AND kind = ?",
+                (doc_id, user_id, kind),
             ).fetchone()
-        return _conversation_from_row(row) if row is not None else None
+        return json.loads(row["body"]) if row is not None else None
 
-    def create_conversation(
-        self, user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None
-    ) -> ConversationRecord:
-        now = utcnow()
-        record = ConversationRecord(
-            id=new_id(),
-            user_id=user_id,
-            title=title,
-            pinned=False,
-            archived=False,
-            folder_id=folder_id,
-            current_message_id=None,
-            created_at=now,
-            updated_at=now,
-        )
-        with self._connect() as conn:
-            self._require_folder(conn, user_id, folder_id)
-            conn.execute(
-                "INSERT INTO conversations (id, user_id, title, pinned, archived, folder_id,"
-                " current_message_id, created_at, updated_at) VALUES (?, ?, ?, 0, 0, ?, NULL, ?, ?)",
-                (record.id, user_id, title, folder_id, _iso(now), _iso(now)),
-            )
-        return record
-
-    def rename_conversation(self, user_id: str, conversation_id: str, title: str) -> None:
+    def _put(self, user_id: str, kind: str, document: dict[str, Any]) -> None:
         with self._connect() as conn:
             conn.execute(
-                "UPDATE conversations SET title = ? WHERE id = ? AND user_id = ?",
-                (title, conversation_id, user_id),
+                "INSERT OR REPLACE INTO documents (id, user_id, kind, updated_at, body) VALUES (?, ?, ?, ?, ?)",
+                (document["id"], user_id, kind, document["updated_at"], json.dumps(document, ensure_ascii=False)),
             )
 
-    def delete_conversation(self, user_id: str, conversation_id: str) -> None:
+    def _delete(self, user_id: str, kind: str, doc_id: str) -> None:
         with self._connect() as conn:
             conn.execute(
-                "DELETE FROM conversations WHERE id = ? AND user_id = ?",
-                (conversation_id, user_id),
+                "DELETE FROM documents WHERE id = ? AND user_id = ? AND kind = ?",
+                (doc_id, user_id, kind),
             )
 
-    def move_conversation(self, user_id: str, conversation_id: str, folder_id: str | None) -> None:
-        with self._connect() as conn:
-            self._require_folder(conn, user_id, folder_id)
-            conn.execute(
-                "UPDATE conversations SET folder_id = ? WHERE id = ? AND user_id = ?",
-                (folder_id, conversation_id, user_id),
-            )
-
-    def set_pinned(self, user_id: str, conversation_id: str, pinned: bool) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "UPDATE conversations SET pinned = ? WHERE id = ? AND user_id = ?",
-                (int(pinned), conversation_id, user_id),
-            )
-
-    def set_archived(self, user_id: str, conversation_id: str, archived: bool) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "UPDATE conversations SET archived = ? WHERE id = ? AND user_id = ?",
-                (int(archived), conversation_id, user_id),
-            )
-
-    # -- messages -----------------------------------------------------------
-
-    def append_message(
-        self,
-        user_id: str,
-        conversation_id: str,
-        role: str,
-        content: str,
-        extra: dict[str, Any] | None = None,
-        parent_message_id: str | None = None,
-    ) -> MessageRecord:
-        validate_role(role)
-        now = utcnow()
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT current_message_id FROM conversations WHERE id = ? AND user_id = ?",
-                (conversation_id, user_id),
-            ).fetchone()
-            if row is None:
-                msg = "Unknown conversation for this user."
-                raise ValueError(msg)
-            record = MessageRecord(
-                id=new_id(),
-                conversation_id=conversation_id,
-                user_id=user_id,
-                role=role,
-                content=content,
-                extra=extra,
-                parent_message_id=(parent_message_id if parent_message_id is not None else row["current_message_id"]),
-                created_at=now,
-            )
-            conn.execute(
-                "INSERT INTO messages (id, conversation_id, user_id, role, content, extra,"
-                " parent_message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    record.id,
-                    conversation_id,
-                    user_id,
-                    role,
-                    content,
-                    json.dumps(extra) if extra is not None else None,
-                    record.parent_message_id,
-                    _iso(now),
-                ),
-            )
-            conn.execute(
-                "UPDATE conversations SET updated_at = ?, current_message_id = ? WHERE id = ? AND user_id = ?",
-                (_iso(now), record.id, conversation_id, user_id),
-            )
-        return record
-
-    def load_messages(self, user_id: str, conversation_id: str) -> list[MessageRecord]:
+    def _iter(self, user_id: str, kind: str) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM messages WHERE conversation_id = ? AND user_id = ? ORDER BY created_at, rowid",
-                (conversation_id, user_id),
+                "SELECT body FROM documents WHERE user_id = ? AND kind = ? ORDER BY rowid",
+                (user_id, kind),
             ).fetchall()
-        return [_message_from_row(row) for row in rows]
-
-    # -- folders ------------------------------------------------------------
-
-    def list_folders(self, user_id: str) -> list[FolderRecord]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM folders WHERE user_id = ? ORDER BY rowid", (user_id,)).fetchall()
-        return [_folder_from_row(row) for row in rows]
-
-    def create_folder(self, user_id: str, name: str, parent_id: str | None = None) -> FolderRecord:
-        now = utcnow()
-        record = FolderRecord(
-            id=new_id(),
-            user_id=user_id,
-            name=name,
-            parent_id=parent_id,
-            created_at=now,
-            updated_at=now,
-        )
-        with self._connect() as conn:
-            self._require_folder(conn, user_id, parent_id)
-            conn.execute(
-                "INSERT INTO folders (id, user_id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (record.id, user_id, name, parent_id, _iso(now), _iso(now)),
-            )
-        return record
-
-    def rename_folder(self, user_id: str, folder_id: str, name: str) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "UPDATE folders SET name = ? WHERE id = ? AND user_id = ?",
-                (name, folder_id, user_id),
-            )
-
-    def move_folder(self, user_id: str, folder_id: str, parent_id: str | None) -> None:
-        with self._connect() as conn:
-            self._require_folder(conn, user_id, parent_id)
-            current = parent_id
-            while current is not None:
-                if current == folder_id:
-                    msg = "Cannot move a folder into its own subtree."
-                    raise ValueError(msg)
-                row = conn.execute(
-                    "SELECT parent_id FROM folders WHERE id = ? AND user_id = ?", (current, user_id)
-                ).fetchone()
-                current = row["parent_id"] if row is not None else None
-            conn.execute(
-                "UPDATE folders SET parent_id = ? WHERE id = ? AND user_id = ?",
-                (parent_id, folder_id, user_id),
-            )
-
-    def delete_folder(self, user_id: str, folder_id: str) -> None:
-        # ON DELETE SET NULL moves the folder's conversations and subfolders
-        # to the root as part of the same transaction.
-        with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM folders WHERE id = ? AND user_id = ?",
-                (folder_id, user_id),
-            )
+        return [json.loads(row["body"]) for row in rows]
 
     # -- lifecycle ----------------------------------------------------------
 

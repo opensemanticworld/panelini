@@ -6,6 +6,7 @@ honor the same tenant-safety and lifecycle semantics.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from collections.abc import Iterator
@@ -347,15 +348,15 @@ class TestDeriveTitle:
 
 
 class TestSqliteSpecifics:
-    def test_delete_cascades_message_rows(self, tmp_path: Path) -> None:
-        """The messages table itself must be emptied, not just the API view."""
+    def test_delete_removes_the_document_row(self, tmp_path: Path) -> None:
+        """The documents table itself must be emptied, not just the API view."""
         db_path = tmp_path / "history.sqlite3"
         backend = SqliteHistoryStore(db_path)
         conv = backend.create_conversation(USER)
         backend.append_message(USER, conv.id, "human", "hello")
         backend.delete_conversation(USER, conv.id)
         with sqlite3.connect(db_path) as conn:
-            count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         assert count == 0
 
     def test_reopen_persists_data(self, tmp_path: Path) -> None:
@@ -373,4 +374,18 @@ class TestSqliteSpecifics:
         SqliteHistoryStore(db_path)
         with sqlite3.connect(db_path) as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 1
+        assert version == 2
+
+    def test_body_is_the_schema_document(self, tmp_path: Path) -> None:
+        """The stored body is the v2 conversation document, verbatim."""
+        db_path = tmp_path / "history.sqlite3"
+        backend = SqliteHistoryStore(db_path)
+        conv = backend.create_conversation(USER, title="doc shape")
+        backend.append_message(USER, conv.id, "human", "hello")
+        with sqlite3.connect(db_path) as conn:
+            body = conn.execute("SELECT body FROM documents WHERE id = ?", (conv.id,)).fetchone()[0]
+        document = json.loads(body)
+        assert document["schema_version"] == 2
+        assert document["type"] == "Conversation"
+        assert document["title"] == "doc shape"
+        assert [m["content"] for m in document["messages"]] == ["hello"]

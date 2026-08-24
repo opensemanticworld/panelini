@@ -13,6 +13,7 @@ deployments.
   messages, rename, delete; chats are named after their first message.
   History is in-memory unless `PANELINI_HISTORY_DB` points at a SQLite file.
 - `chat_tree_view.py` - same as `chat_min.py` but with `ai_history_view="tree"`: conversations in a drag-and-drop Wunderbaum folder tree (folders via context menu, inline rename, drop to move); no preview pane.
+- `chat_sqlite_history.py` - same as `chat_min.py` but with persistent history: one module-level `SqliteHistoryStore` passed via `ai_history_store`, so conversations survive server restarts (`PANELINI_HISTORY_DB` overrides the database path, default `panelini_history.sqlite3`).
 - `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
 - `plot_by_code.py` - AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).

@@ -652,17 +652,11 @@ class AiChat:
 
         _ = event
 
-        messages = []
-        for msg in self.chat_interface.objects:
-            if hasattr(msg, "object") and hasattr(msg, "user"):
-                messages.append({"user": msg.user, "content": str(msg.object)})
-
         provider_name = self.backend.get_provider_display_name(self.backend.current_provider)
         chat_data = self.backend.export_chat_data(
             provider=provider_name,
             model=self.backend.current_model.value,
             temperature=self.backend.current_temperature,
-            messages=messages,
         )
 
         json_str = json.dumps(chat_data, indent=2, ensure_ascii=False)
@@ -679,7 +673,7 @@ class AiChat:
         )
 
     def _on_upload_chat(self, event: Any) -> None:
-        """Handle chat upload from JSON file."""
+        """Handle chat upload from JSON file (v2 document or legacy format)."""
         import json
 
         if not event.new:
@@ -688,22 +682,22 @@ class AiChat:
         try:
             filename = self.upload_chat_input.filename if hasattr(self.upload_chat_input, "filename") else "unknown"
 
-            content = event.new.decode("utf-8")
-            chat_data = json.loads(content)
+            chat_data = json.loads(event.new.decode("utf-8"))
+            pairs = self.backend.restore_chat_data(chat_data)
 
             self.chat_interface.clear()
+            for role, content in pairs:
+                user = "🧑 User" if role == "human" else "🤖 Assistant"
+                self.chat_interface.send(content, user=user, respond=False)
 
-            for msg in chat_data.get("messages", []):
-                self.chat_interface.send(msg["content"], user=msg["user"], respond=False)
-
-            self.backend.restore_chat_data(chat_data)
-            self.backend.persist_imported_history(title=f"Imported: {filename}")
+            title = chat_data.get("title") or f"Imported: {filename}"
+            self.backend.persist_imported_history(title=title)
             self._active_session.history = list(self.backend.get_conversation_history())
             self._active_session.conversation_id = self.backend.conversation_id
             self._notify_history_changed()
 
             self.chat_interface.send(
-                f"Chat restored from JSON ({len(chat_data.get('messages', []))} messages).",
+                f"Chat restored from JSON ({len(pairs)} messages).",
                 user="⚙️ System",
                 respond=False,
             )

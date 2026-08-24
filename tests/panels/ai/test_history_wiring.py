@@ -294,6 +294,28 @@ class TestChatHistoryWiring:
         history_rows = [o for o in chat._history_panel._list.objects if "history-row" in o.css_classes]
         assert len(history_rows) == 1
 
+    def test_export_import_roundtrip_via_document(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        """The exported v2 document re-imports as a new conversation."""
+        import json
+        from types import SimpleNamespace
+
+        chat.backend.persist_exchange("original question", "original answer")
+        document = chat.backend.export_chat_data(provider="Test", model="m", temperature=0.7)
+        assert document["schema_version"] == 2
+        assert document["title"] == "original question"
+        assert [m["role"] for m in document["messages"]] == ["human", "ai"]
+
+        chat._on_upload_chat(SimpleNamespace(new=json.dumps(document).encode()))
+
+        titles = [c.title for c in store.list_conversations(USER)]
+        # the import keeps the document title and creates a second conversation
+        assert titles.count("original question") == 2
+        imported = store.load_messages(USER, chat.backend.conversation_id or "")
+        assert [(m.role, m.content) for m in imported] == [
+            ("human", "original question"),
+            ("ai", "original answer"),
+        ]
+
     def test_user_resolved_once_for_badge_and_history(
         self, _mock_backend_env: None, store: InMemoryHistoryStore
     ) -> None:

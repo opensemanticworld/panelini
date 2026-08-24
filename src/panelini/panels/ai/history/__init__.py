@@ -12,6 +12,7 @@ __all__ = [
     "ChatHistoryStore",
     "ConversationRecord",
     "CookieSetterPane",
+    "DocumentHistoryStore",
     "FolderRecord",
     "HistoryPanel",
     "HistoryTree",
@@ -37,6 +38,7 @@ from panelini.user import (
 )
 
 from .default import default_history_store
+from .document import DocumentHistoryStore, InMemoryHistoryStore
 from .panel import HistoryPanel
 from .sqlite_store import SqliteHistoryStore
 from .store import (
@@ -44,7 +46,6 @@ from .store import (
     ChatHistoryStore,
     ConversationRecord,
     FolderRecord,
-    InMemoryHistoryStore,
     MessageRecord,
     derive_title,
 )
