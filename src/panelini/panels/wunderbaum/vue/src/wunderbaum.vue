@@ -16,6 +16,12 @@
 <script>
 import { Wunderbaum } from "wunderbaum";
 
+// dataTransfer MIME types for node drags. The key type is already set by
+// dragStart today; the tree type is what lets a receiving tree tell which
+// tree a cross-tree drag came from.
+const WB_KEY_MIME = 'application/x-wunderbaum-key';
+const WB_TREE_MIME = 'application/x-wunderbaum-tree';
+
 export default {
   name: 'wunderbaum-component',
 
@@ -47,6 +53,10 @@ export default {
     contextMenuItems: {
       type: Array,
       default: () => []  // [{id, label, icon?}] - empty = no context menu
+    },
+    treeId: {
+      type: String,
+      default: ''  // identifies this tree in cross-tree drop payloads
     }
   },
 
@@ -279,13 +289,25 @@ export default {
           dragStart: (e) => {
             // Save original parent - needed to undo auto-move on Ctrl+copy
             this._dragOrigParent = e.node.parent;
-            // Set dataTransfer so external drop targets can read the key
+            // Mark this tree as the drag origin so its own container-level
+            // listeners can tell a same-tree drag from a cross-tree one.
+            // dataTransfer is in protected mode during dragover, so the
+            // payload cannot be read there and origin must be tracked here.
+            this._dragActive = true;
+            const keys = this.getDragKeys(e.node);
+            // Set dataTransfer so external drop targets can read the keys
             if (e.event?.dataTransfer) {
-              e.event.dataTransfer.setData('text/plain', e.node.key);
-              e.event.dataTransfer.setData('application/x-wunderbaum-key', e.node.key);
+              e.event.dataTransfer.setData('text/plain', keys.join('\n'));
+              // A single node stays a bare key, as before. Multi-select sends
+              // a JSON array, which is what makes dragging a selection work.
+              e.event.dataTransfer.setData(
+                WB_KEY_MIME,
+                keys.length > 1 ? JSON.stringify(keys) : keys[0]
+              );
+              e.event.dataTransfer.setData(WB_TREE_MIME, this.treeId || '');
               e.event.dataTransfer.effectAllowed = 'copyMove';
             }
-            this.sendEvent('dragStart', { key: e.node.key });
+            this.sendEvent('dragStart', { key: e.node.key, keys: keys });
             return true;
           },
           dragEnter: (e) => {
@@ -475,9 +497,19 @@ export default {
     setupDragDrop() {
       const container = this.$refs.treeContainer;
 
+      // A node drag that did not start in this tree. The internal wunderbaum
+      // dnd callbacks never fire for it (there is no sourceNode), so these
+      // container-level listeners are the only place it can be handled.
+      const isExternalNodeDrag = (e) =>
+        !!e.dataTransfer && e.dataTransfer.types.includes(WB_KEY_MIME) && !this._dragActive;
+
+      const isAcceptable = (e) =>
+        !!e.dataTransfer && (e.dataTransfer.types.includes('Files') || isExternalNodeDrag(e));
+
       container.addEventListener('dragenter', (e) => {
-        // Only handle external file drops (not internal tree DnD)
-        if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        // Only handle external file drops and cross-tree node drops.
+        // A drag started in this tree is wunderbaum's own business.
+        if (isAcceptable(e)) {
           e.preventDefault();
           container.style.border = '2px solid #007bff';
         }
@@ -488,9 +520,22 @@ export default {
       });
 
       container.addEventListener('dragover', (e) => {
-        if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+        if (isAcceptable(e)) {
           e.preventDefault();
+          if (isExternalNodeDrag(e)) {
+            // Ctrl changes dropEffect to 'copy' on Windows, which cancels the
+            // drop. Force 'move', matching the internal dragOver handler.
+            e.dataTransfer.dropEffect = 'move';
+          }
         }
+      });
+
+      // Fires on the source element after any drag ends, successful or not,
+      // and bubbles to this container. Clearing the flag here means a
+      // cancelled drag does not leave the tree thinking it is still dragging.
+      container.addEventListener('dragend', () => {
+        this._dragActive = false;
+        container.style.border = '1px solid #ddd';
       });
 
       container.addEventListener('drop', (e) => {
@@ -499,7 +544,68 @@ export default {
           e.stopPropagation();
           container.style.border = '1px solid #ddd';
           this.handleFileDrop(e);
+          return;
         }
+        if (isExternalNodeDrag(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          container.style.border = '1px solid #ddd';
+          this.handleExternalDrop(e);
+        }
+      });
+    },
+
+    getDragKeys(node) {
+      const selectMode = this.tree?.options?.selectMode || this.options?.selectMode;
+      if (selectMode !== 'multi') return [node.key];
+      const selected = this.tree?.getSelectedNodes?.() || [];
+      // Dragging an unselected node drags only that node, the way every file
+      // manager behaves; dragging a selected one drags the whole selection.
+      if (!selected.some((n) => n.key === node.key)) return [node.key];
+      return selected.map((n) => n.key);
+    },
+
+    nodeFromEvent(e) {
+      // composedPath() rather than e.target: an event crossing the shadow
+      // boundary reports the shadow host as its target.
+      const path = e.composedPath ? e.composedPath() : [];
+      for (const el of path) {
+        if (el && el._wb_node) return el._wb_node;
+        if (el === this.$refs.treeContainer) break;
+      }
+      return Wunderbaum.getNode(e);
+    },
+
+    dropRegion(e, node) {
+      // Same split wunderbaum uses internally: the outer quarters of a row
+      // mean insert before/after, the middle half means drop onto.
+      const rect = node._rowElem?.getBoundingClientRect();
+      if (!rect || !rect.height) return 'over';
+      const rel = (e.clientY - rect.top) / rect.height;
+      if (rel < 0.25) return 'before';
+      if (rel > 0.75) return 'after';
+      return 'over';
+    },
+
+    handleExternalDrop(dropEvent) {
+      const dt = dropEvent.dataTransfer;
+      const raw = dt.getData(WB_KEY_MIME);
+      let sourceKeys = [];
+      if (raw) {
+        // Multi-select sends a JSON array, a single node a bare key.
+        try {
+          sourceKeys = raw.startsWith('[') ? JSON.parse(raw) : [raw];
+        } catch {
+          sourceKeys = [raw];
+        }
+      }
+      const node = this.nodeFromEvent(dropEvent);
+      this.sendEvent('externalDrop', {
+        external: true,
+        source_tree_id: dt.getData(WB_TREE_MIME) || null,
+        source_keys: sourceKeys,
+        target_key: node ? node.key : null,
+        region: node ? this.dropRegion(dropEvent, node) : null,
       });
     },
 

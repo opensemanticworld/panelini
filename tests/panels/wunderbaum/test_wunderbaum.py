@@ -110,3 +110,36 @@ def test_wunderbaum_table_mode():
         ],
     )
     assert len(tree.columns) == 2
+
+
+def test_wunderbaum_tree_id_default_is_empty():
+    """Test that tree_id defaults to an empty string."""
+    tree = Wunderbaum()
+    assert tree.tree_id == ""
+
+
+def test_wunderbaum_tree_id_set():
+    """Test that tree_id is settable via the constructor."""
+    tree = Wunderbaum(tree_id="compounds")
+    assert tree.tree_id == "compounds"
+
+
+def test_wunderbaum_external_drop_event():
+    """Test that externalDrop reaches the general tree event callback."""
+    events_received: list = []
+
+    def on_event(name: str, params: dict) -> None:
+        events_received.append((name, params))
+
+    tree = Wunderbaum(tree_id="compounds", tree_event_callback=on_event)
+    params = {
+        "external": True,
+        "source_tree_id": "features",
+        "source_keys": ["fg/1", "fg/2"],
+        "target_key": "c/7",
+        "region": "over",
+    }
+    tree.handle_tree_event("externalDrop", params)
+
+    assert len(events_received) == 1
+    assert events_received[0] == ("externalDrop", params)
