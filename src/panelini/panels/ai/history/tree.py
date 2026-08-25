@@ -7,6 +7,7 @@ which stays the source of truth; every change rebuilds the tree from it.
 
 from __future__ import annotations
 
+import html
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -14,6 +15,7 @@ import panel as pn
 
 from panelini.panels.wunderbaum import Wunderbaum
 
+from .document import DocumentHistoryStore, conversation_to_document
 from .store import ChatHistoryStore
 
 _CONV = "conv:"
@@ -55,15 +57,36 @@ _SEARCH_CSS = """
 }
 """
 
+# Same empty-state styling as the list view
+_EMPTY_STATE_TEMPLATE = (
+    '<div style="font-size: 0.8em; font-style: italic; opacity: 0.5;'
+    ' text-align: center; margin: 12px 0 6px 0;">{message}</div>'
+)
+
+_UNDO_LABEL_TEMPLATE = (
+    '<div style="font-size: 0.78em; font-style: italic; opacity: 0.7;'
+    " overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+    ' line-height: 24px;">Deleted "{title}"</div>'
+)
+
+_UNDO_BUTTON_CSS = """
+:host { margin: 0; }
+.bk-btn, .bk-btn:focus {
+    font-size: 0.78em; padding: 2px 8px; border-radius: 6px;
+}
+"""
+
 
 class HistoryTree:
     """Sidebar card with folders and conversations as a drag-and-drop tree.
 
     Rename: inline edit (click the active node or F2). New chat / new
-    folder: header buttons or context menu; delete: context menu. Drops
-    persist where the node landed: conversations into folders, folders
-    into folders (nested), anything to the root. Generating chats show a
-    spinner icon, finished ones a green check until opened.
+    folder: header buttons or context menu; delete: context menu, with an
+    Undo bar re-putting the deleted conversation document losslessly.
+    Drops persist where the node landed: conversations into folders,
+    folders into folders (nested), anything to the root. Generating chats
+    show a spinner icon, finished ones a green check until opened; an
+    empty tree shows a hint instead of a blank row.
     """
 
     def __init__(
@@ -118,8 +141,9 @@ class HistoryTree:
         # value_input fires per keystroke, so results follow typing
         self.search_input.param.watch(self._handle_search, "value_input")
 
+        source = self._build_source()
         self.tree = Wunderbaum(
-            source=self._build_source(),
+            source=source,
             options={"dnd": True, "edit": {"trigger": ["clickActive", "F2"]}},
             context_menu_items=_CONTEXT_MENU,
             tree_event_callback=self._on_tree_event,
@@ -127,6 +151,34 @@ class HistoryTree:
             css_classes=["history-tree"],
             stylesheets=[_TREE_CSS],
         )
+        # a fresh tree would only show a blank placeholder row; hint instead
+        self._empty_hint = pn.pane.HTML(
+            "", sizing_mode="stretch_width", margin=0, visible=False, css_classes=["history-empty"]
+        )
+
+        # Delete-undo: the deleted conversation document is kept and can be
+        # re-put losslessly (context-menu delete has no confirmation step)
+        self._undo_document: dict[str, Any] | None = None
+        self._undo_label = pn.pane.HTML("", sizing_mode="stretch_width", margin=0)
+        self._undo_button = pn.widgets.Button(
+            name="Undo",
+            button_type="primary",
+            button_style="outline",
+            width=60,
+            margin=0,
+            stylesheets=[_UNDO_BUTTON_CSS],
+            css_classes=["history-undo-button"],
+        )
+        self._undo_button.on_click(self._handle_undo)
+        self.undo_bar = pn.Row(
+            self._undo_label,
+            self._undo_button,
+            sizing_mode="stretch_width",
+            margin=(4, 2, 0, 2),
+            visible=False,
+            css_classes=["history-undo"],
+        )
+
         self.card = pn.Card(
             title="Conversations",
             collapsible=False,  # it is the whole content of its sidebar tab
@@ -141,13 +193,16 @@ class HistoryTree:
                         margin=0,
                     ),
                     self.search_input,
+                    self._empty_hint,
                     self.tree,
+                    self.undo_bar,
                     sizing_mode="stretch_width",
                 )
             ],
             css_classes=["card", "history-card"],
             styles={"margin-top": "10px", "margin-bottom": "12px", "padding": "12px"},
         )
+        self._sync_empty_state(source)
 
     # -- rendering ------------------------------------------------------------
 
@@ -198,9 +253,19 @@ class HistoryTree:
         source.extend(convs_by_folder.get(None, []))
         return source
 
+    def _sync_empty_state(self, source: list[dict[str, Any]]) -> None:
+        """Show the hint instead of an empty tree (and vice versa)."""
+        empty = not source
+        message = "No matches" if self._query.strip() else "No conversations yet"
+        self._empty_hint.object = _EMPTY_STATE_TEMPLATE.format(message=message)
+        self._empty_hint.visible = empty
+        self.tree.visible = not empty
+
     def refresh(self) -> None:
         """Rebuild the tree from the store and restore the active node."""
-        self.tree.set_source(self._build_source())
+        source = self._build_source()
+        self.tree.set_source(source)
+        self._sync_empty_state(source)
         active_id = self._get_active_id()
         if active_id is not None:
             self.tree.set_active_node(f"{_CONV}{active_id}")
@@ -209,6 +274,7 @@ class HistoryTree:
 
     def _handle_new_chat(self, event: object = None) -> None:
         _ = event
+        self._hide_undo()
         self._on_new_chat()
         self.refresh()
 
@@ -222,6 +288,9 @@ class HistoryTree:
         self.refresh()
 
     def _on_tree_event(self, event_name: str, params: dict[str, Any]) -> None:
+        # NOTE: "activate" must not dismiss a pending undo: set_active_node
+        # after the post-delete refresh echoes an activate event from the
+        # client, indistinguishable from a user click.
         key = params.get("key", "")
         if event_name == "activate" and key.startswith(_CONV):
             self._on_open(key[len(_CONV) :])
@@ -236,11 +305,44 @@ class HistoryTree:
         if key.startswith(_CONV):
             conversation_id = key[len(_CONV) :]
             was_active = self._get_active_id() == conversation_id
+            document = self._capture_document(conversation_id)
             self._store.delete_conversation(self._user_id, conversation_id)
+            if document is not None:
+                self._offer_undo(document)
             if was_active:
                 self._open_fallback()
         elif key.startswith(_FOLDER):
+            # folder contents move to the root, so nothing is lost
             self._store.delete_folder(self._user_id, key[len(_FOLDER) :])
+
+    # -- delete undo ------------------------------------------------------------
+
+    def _capture_document(self, conversation_id: str) -> dict[str, Any] | None:
+        """Snapshot the conversation for undo; None when unsupported."""
+        if not isinstance(self._store, DocumentHistoryStore):
+            return None
+        record = self._store.get_conversation(self._user_id, conversation_id)
+        if record is None:
+            return None
+        messages = self._store.load_messages(self._user_id, conversation_id)
+        return conversation_to_document(record, messages)
+
+    def _offer_undo(self, document: dict[str, Any]) -> None:
+        self._undo_document = document
+        self._undo_label.object = _UNDO_LABEL_TEMPLATE.format(title=html.escape(str(document.get("title", ""))))
+        self.undo_bar.visible = True
+
+    def _hide_undo(self) -> None:
+        self._undo_document = None
+        self.undo_bar.visible = False
+
+    def _handle_undo(self, event: object = None) -> None:
+        _ = event
+        document = self._undo_document
+        self._hide_undo()
+        if document is not None and isinstance(self._store, DocumentHistoryStore):
+            self._store.restore_conversation(self._user_id, document)
+        self.refresh()
 
     def _handle_drop(self, params: dict[str, Any]) -> None:
         # newParentNodeId is where the node actually landed client-side

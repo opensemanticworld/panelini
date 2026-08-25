@@ -1,7 +1,9 @@
 """Minimal example: the AI chat panel inside Panelini.
 
-Two sidebar icon tabs: conversations (per-user history, grouped by date,
-with search, rename and delete) and setup. History is in-memory unless
+Two sidebar icon tabs: conversations and setup. Per-user history opens as
+a drag-and-drop folder tree (folders via context menu, inline rename,
+delete with undo); an icon in the New Chat row switches to the
+date-grouped list view at runtime. History is in-memory unless
 ``PANELINI_HISTORY_DB`` points at a SQLite file.
 
 Needs ``pip install panelini[ai]`` and the provider environment variables

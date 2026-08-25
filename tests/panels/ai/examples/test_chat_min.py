@@ -1,4 +1,8 @@
-"""Playwright UI tests for examples/panels/ai/chat_min.py."""
+"""Playwright UI tests for examples/panels/ai/chat_min.py.
+
+The standard chat opens with the folder tree; the same suite covers the
+tree flows, the runtime toggle, and the list flows behind it.
+"""
 
 import importlib
 import os
@@ -12,6 +16,7 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
+from panelini.testing import wait_until
 
 _PORT = 6310
 
@@ -50,7 +55,7 @@ def ready_page(browser, panel_server):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    # no welcome message any more: the prompt box is the ready signal
+    # no welcome message: the prompt box is the ready signal
     page.locator(".chat-interface textarea").first.wait_for()
     page.locator(".left-navbar-button").first.click()
     page.locator("text=Conversations").first.wait_for()
@@ -68,13 +73,13 @@ def _send_message(page: Page, text: str) -> None:
     page.locator("text=simulated reply >> visible=true").first.wait_for(timeout=20000)
 
 
-def _chat_message(page: Page, text: str):
-    """Message inside a feed; sidebar titles repeat the first message text."""
-    return page.locator(".chat-interface").locator(f"text={text}").first
+def _chat_rows(page: Page, title: str = "New Chat") -> int:
+    # an empty tree renders one blank placeholder .wb-row; count real chats
+    return page.locator(".wb-row", has_text=title).count()
 
 
 def test_chat_min_renders(ready_page: Page):
-    """Main cards, an empty chat feed and both sidebar tabs are present."""
+    """Chat card, empty feed, the empty-tree hint, and both sidebar tabs."""
     page = ready_page
 
     # Exact heading match: a plain text=Chat locator also matches unrelated
@@ -83,85 +88,86 @@ def test_chat_min_renders(ready_page: Page):
     # the chat fills the main area: no preview pane unless asked for
     assert page.get_by_role("heading", name="Preview", exact=True).count() == 0
     # the chat starts empty: no greeting is posted
-    assert page.locator(".chat-interface textarea").first.is_visible()
     assert page.locator(".chat-interface .chat-message").count() == 0
 
+    # a fresh tree shows the hint, not a blank placeholder row
+    page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+    assert page.locator(".wunderbaum-wrapper:visible").count() == 0
+
     # Sidebar: conversations tab is the one shown, setup sits next to it
-    assert page.locator("text=Conversations").first.is_visible()
     page.locator(".bk-tab", has_text="⚙️").first.click()
     page.locator("text=Provider Settings").first.wait_for()
     page.locator(".bk-tab", has_text="💬").first.click()
     page.locator("text=Conversations").first.wait_for()
 
 
-def test_conversation_appears_after_first_exchange(ready_page: Page):
+def test_new_chat_button_creates_and_selects_node(ready_page: Page):
+    page = ready_page
+    assert _chat_rows(page) == 0
+
+    page.locator(".history-new-chat:visible").first.click()
+
+    # the chat is materialized immediately and selected; the hint yields
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+    page.locator(".wb-row.wb-active", has_text="New Chat").first.wait_for(timeout=10000)
+    assert page.locator(".history-empty:visible").count() == 0
+
+
+def test_message_goes_into_selected_chat(ready_page: Page):
     page = ready_page
     # header shows the current (anonymous) user
     assert page.locator(".user-chip", has_text="Guest").first.is_visible()
-    assert page.locator("text=No conversations yet").first.is_visible()
 
     _send_message(page, "Hello history")
 
-    # the first user message names the conversation
-    row = page.locator(".history-title button").first
-    row.wait_for()
-    assert "Hello history" in row.inner_text()
+    # persisted into the already-selected chat, which the message renamed
+    wait_until(lambda: _chat_rows(page, "Hello history") == 1)
+    assert _chat_rows(page) == 0
 
 
 def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     page = ready_page
 
-    page.locator(".history-new-chat").first.click()
+    page.locator(".history-new-chat:visible").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
     # the previous conversation's feed stays mounted but hidden
-    _chat_message(page, "Hello history").wait_for(state="hidden")
-    assert not _chat_message(page, "Hello history").is_visible()
-    # the new chat is materialized immediately: two rows now
-    assert page.locator(".history-title").count() == 2
+    hidden = page.locator(".chat-interface").locator("text=Hello history").first
+    hidden.wait_for(state="hidden")
 
-    # the newest (empty) chat sorts first; reopen the original below it
-    page.locator(".history-title").nth(1).click()
-    _chat_message(page, "Hello history").wait_for()
-    # messages replay sequentially; wait for the assistant reply too
+    # reopen the original by activating its node; messages replay
+    page.locator(".wb-row", has_text="Hello history").first.click()
+    page.locator(".chat-interface").locator("text=Hello history >> visible=true").first.wait_for()
     reply = page.get_by_text("simulated reply", exact=False).first
     reply.wait_for()
     assert reply.is_visible()
 
 
-def test_rename_conversation(ready_page: Page):
+def test_context_delete_offers_undo(ready_page: Page):
+    """Context-menu delete removes the node; Undo re-puts it losslessly."""
     page = ready_page
 
-    page.locator(".history-rename").first.click()
-    rename_input = page.locator(".history-rename-input input").first
-    rename_input.wait_for()
-    rename_input.fill("Renamed chat")
-    rename_input.press("Enter")
+    target = page.locator(".wb-row", has_text="New Chat").first
+    target.click(button="right")
+    menu = page.locator(".wb-context-menu")
+    menu.wait_for(state="visible", timeout=5000)
+    page.locator(".wb-context-menu-item", has_text="Delete").first.click()
 
-    renamed = page.locator(".history-title", has_text="Renamed chat").first
-    renamed.wait_for()
-    assert renamed.is_visible()
+    wait_until(lambda: _chat_rows(page) == 0)
+    # has_text pierces the shadow DOM; inner_text() would come back empty
+    page.locator(".history-undo:visible", has_text="New Chat").first.wait_for()
 
-
-def test_delete_requires_confirmation(ready_page: Page):
-    page = ready_page
-
-    # delete the first row (the renamed, non-active chat)
-    rows_before = page.locator(".history-title").count()
-    page.locator(".history-delete").first.click()  # arm
-    time.sleep(0.3)
-    assert page.locator(".history-title").count() == rows_before
-
-    page.locator(".history-delete").first.click()  # confirm
-    page.locator(".history-title", has_text="Renamed chat").first.wait_for(state="detached")
-    assert page.locator(".history-title").count() == rows_before - 1
+    page.locator(".history-undo-button button").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+    assert page.locator(".history-undo:visible").count() == 0
 
 
 def test_import_export_icons_sit_in_the_new_chat_row(ready_page: Page):
     """Both icons share the Conversations card's first row, same size."""
     page = ready_page
 
-    new_chat = page.locator(".history-new-chat button").first.bounding_box()
-    upload = page.locator(".chat-upload input").first.bounding_box()
-    download = page.locator(".chat-download button").first.bounding_box()
+    new_chat = page.locator(".history-new-chat button:visible").first.bounding_box()
+    upload = page.locator(".chat-upload input:visible").first.bounding_box()
+    download = page.locator(".chat-download button:visible").first.bounding_box()
     assert new_chat and upload and download
 
     # same row: the icons overlap the New Chat button vertically
@@ -170,6 +176,36 @@ def test_import_export_icons_sit_in_the_new_chat_row(ready_page: Page):
     # matched icon boxes, download to the right of upload
     assert (upload["width"], upload["height"]) == (download["width"], download["height"])
     assert download["x"] > upload["x"]
+
+
+def test_toggle_to_list_for_rename_and_delete(ready_page: Page):
+    """The list view behind the toggle keeps its rename/delete flows."""
+    page = ready_page
+
+    page.locator(".history-view-toggle button:visible").first.click()
+    page.locator(".history-title:visible").first.wait_for()
+    assert page.locator("text=Today").first.is_visible()
+    assert page.locator(".history-title:visible").count() == 2
+
+    page.locator(".history-rename").first.click()
+    rename_input = page.locator(".history-rename-input input").first
+    rename_input.wait_for()
+    rename_input.fill("Renamed chat")
+    rename_input.press("Enter")
+    page.locator(".history-title", has_text="Renamed chat").first.wait_for()
+
+    # two-click delete: first click arms, second deletes
+    page.locator(".history-delete").first.click()
+    time.sleep(0.3)
+    assert page.locator(".history-title:visible").count() == 2
+    page.locator(".history-delete").first.click()
+    page.locator(".history-title", has_text="Renamed chat").first.wait_for(state="detached")
+    assert page.locator(".history-title:visible").count() == 1
+
+    # back to the tree; the surviving conversation is there
+    page.locator(".history-view-toggle button:visible").first.click()
+    page.locator(".wb-row", has_text="Hello history").first.wait_for()
+    assert page.locator(".history-title:visible").count() == 0
 
 
 def test_card_collapse_survives_tab_switch(ready_page: Page):
@@ -188,7 +224,8 @@ def test_card_collapse_survives_tab_switch(ready_page: Page):
     provider_label.wait_for(state="hidden")
 
     page.locator(".bk-tab", has_text="💬").first.click()
-    page.locator("text=Conversations").first.wait_for()
+    # both view cards carry this title; wait for the visible one
+    page.locator("text=Conversations >> visible=true").first.wait_for()
     page.locator(".bk-tab", has_text="⚙️").first.click()
 
     page.locator("text=Provider Settings").first.click()  # expand again
@@ -201,7 +238,7 @@ def test_history_is_per_user(browser, panel_server, ready_page: Page):
     _, port = panel_server
 
     _send_message(ready_page, "Private note of user A")
-    ready_page.locator(".history-title").first.wait_for()
+    ready_page.locator(".wb-row", has_text="Hello history").first.wait_for()
 
     context_b = browser.new_context()
     try:
@@ -210,29 +247,8 @@ def test_history_is_per_user(browser, panel_server, ready_page: Page):
         page_b.locator(".chat-interface textarea").first.wait_for()
         page_b.locator(".left-navbar-button").first.click()
         page_b.locator("text=Conversations").first.wait_for()
-        page_b.locator("text=No conversations yet").first.wait_for()
-        assert page_b.locator(".history-title").count() == 0
+        page_b.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+        assert page_b.locator(".wunderbaum-wrapper:visible").count() == 0
         assert page_b.locator("text=Private note of user A").count() == 0
     finally:
         context_b.close()
-
-
-def test_view_toggle_switches_between_list_and_tree(ready_page: Page):
-    """The New Chat row toggle mounts the tree lazily and flips back.
-
-    Runs last: it changes which view is showing for the shared page.
-    """
-    page = ready_page
-
-    page.locator(".history-view-toggle button:visible").first.click()
-    # the tree mounts on first switch and shows the surviving conversation
-    # ("Hello history": titles stick to the first message, so the later
-    # "Private note..." message did not rename it)
-    page.locator(".wunderbaum-wrapper").first.wait_for()
-    page.locator(".wb-row", has_text="Hello history").first.wait_for()
-    assert page.locator(".history-title:visible").count() == 0
-
-    page.locator(".history-view-toggle button:visible").first.click()
-    # back to the list: rows visible again, the tree card hidden
-    page.locator(".history-title:visible", has_text="Hello history").first.wait_for()
-    assert page.locator(".wunderbaum-wrapper:visible").count() == 0

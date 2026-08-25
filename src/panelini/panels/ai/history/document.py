@@ -318,6 +318,17 @@ class DocumentHistoryStore(ChatHistoryStore):
         doc = self._get(user_id, KIND_CONVERSATION, conversation_id)
         return messages_from_document(doc) if doc is not None else []
 
+    def restore_conversation(self, user_id: str, document: dict[str, Any]) -> None:
+        """Re-put a conversation document as-is (lossless delete-undo).
+
+        The restoring user becomes the owner regardless of the document's
+        ``user_id``.
+        """
+        doc = copy.deepcopy(document)
+        doc["user_id"] = user_id
+        with self._transaction():
+            self._put(user_id, KIND_CONVERSATION, doc)
+
     # -- folders ----------------------------------------------------------------
 
     def list_folders(self, user_id: str) -> list[FolderRecord]:

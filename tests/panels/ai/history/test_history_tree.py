@@ -272,3 +272,69 @@ class TestIndicators:
         assert nodes[f"conv:{ready.id}"]["icon"] == "bi bi-check-circle-fill"
         assert "history-ready" in nodes[f"conv:{ready.id}"]["classes"]
         assert "icon" not in nodes[f"conv:{plain.id}"]
+
+
+class TestDeleteUndo:
+    def test_delete_offers_undo_and_restores(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="precious")
+        store.append_message(USER, conv.id, "human", "keep me")
+
+        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+
+        assert store.get_conversation(USER, conv.id) is None
+        assert tree_under_test.undo_bar.visible
+        assert "precious" in str(tree_under_test._undo_label.object)
+
+        tree_under_test._handle_undo()
+
+        restored = store.get_conversation(USER, conv.id)
+        assert restored is not None and restored.title == "precious"
+        assert [m.content for m in store.load_messages(USER, conv.id)] == ["keep me"]
+        assert not tree_under_test.undo_bar.visible
+
+    def test_activate_keeps_pending_undo(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        """set_active_node echoes an activate event, so activate must not dismiss."""
+        conv = store.create_conversation(USER, title="gone")
+        other = store.create_conversation(USER, title="other")
+
+        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+        assert tree_under_test.undo_bar.visible
+
+        tree_under_test._on_tree_event("activate", {"key": f"conv:{other.id}"})
+        assert tree_under_test.undo_bar.visible  # still undoable
+
+    def test_new_chat_dismisses_pending_undo(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="gone")
+
+        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+        assert tree_under_test.undo_bar.visible
+
+        tree_under_test._handle_new_chat()
+        assert not tree_under_test.undo_bar.visible
+
+        tree_under_test._handle_undo()  # nothing pending: must be a no-op
+        assert store.get_conversation(USER, conv.id) is None
+
+
+class TestEmptyState:
+    def test_hint_shows_until_the_first_conversation(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        tree_under_test.refresh()
+        assert tree_under_test._empty_hint.visible
+        assert not tree_under_test.tree.visible
+
+        store.create_conversation(USER, title="first")
+        tree_under_test.refresh()
+        assert not tree_under_test._empty_hint.visible
+        assert tree_under_test.tree.visible
+
+    def test_hint_says_no_matches_while_searching(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        from types import SimpleNamespace
+
+        store.create_conversation(USER, title="alpha")
+        tree_under_test._handle_search(SimpleNamespace(new="zzz"))
+        assert tree_under_test._empty_hint.visible
+        assert "No matches" in str(tree_under_test._empty_hint.object)

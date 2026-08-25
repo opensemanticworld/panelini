@@ -60,7 +60,7 @@ graph LR
     class chat main
 ```
 
-- **Left sidebar** - two icon tabs: conversations (per-user history with new chat, import/export, search, rename, delete) and setup (provider/model pickers, temperature slider, tool toggles).
+- **Left sidebar** - two icon tabs: conversations (per-user history as a drag-and-drop folder tree with new chat, folders, import/export, search, inline rename, delete with undo, and a toggle to a date-grouped list view) and setup (provider/model pickers, temperature slider, tool toggles).
 - **Main area** - the chat window, filling the width. Add `ai_show_preview=True` for a markdown preview pane next to it that the `update_preview` tool can write to.
 
 ## Configuration
