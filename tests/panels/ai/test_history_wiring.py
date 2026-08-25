@@ -189,16 +189,98 @@ class TestChatHistoryWiring:
         assert isinstance(chat._history_panel, HistoryTree)
         assert chat._history_view == "tree"
 
-    def test_import_export_share_the_new_chat_row(self, chat: AiChat) -> None:
-        # card body is a Column whose first object is the action row
-        row: Any = chat._history_panel.card[0][0]
-        assert list(row) == [
+    def test_action_row_order_and_alignment(self, chat: AiChat) -> None:
+        # card body is a Column whose first object is the action row: new
+        # chat + folder on the left, everything else right-aligned behind
+        # a spacer, the view toggle at the very right
+        row = list(chat._history_panel.card[0][0])
+        assert row[:2] == [
             chat._history_panel.new_chat_button,
             chat._history_panel.new_folder_button,
+        ]
+        assert row[2:] == [
             chat.upload_chat_input,
             chat.download_chat_button,
+            chat.undo_button,
+            chat.redo_button,
             chat.view_toggle_button,
         ]
+        assert chat.undo_button.disabled  # nothing to undo yet
+        assert chat.redo_button.disabled
+
+    def test_deleting_the_last_chat_leaves_no_row(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        chat.backend.persist_exchange("only chat", "reply")
+        conv_id = chat.backend.conversation_id
+        assert conv_id is not None
+
+        chat._history_panel._on_tree_event("click", {"key": f"conv:{conv_id}", "action": "delete"})
+
+        # nothing rematerializes: no rows, fresh lazy feed, hint shown
+        assert store.list_conversations(USER) == []
+        assert chat.backend.conversation_id is None
+        assert chat._history_panel._empty_hint.visible
+        assert not chat.undo_button.disabled  # undo still offered
+
+    def test_undo_redo_stack_is_view_independent(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        """Delete in the tree, undo from the list: one session-level stack."""
+        chat.backend.persist_exchange("cross view", "reply")
+        conv_id = chat.backend.conversation_id
+        assert conv_id is not None
+
+        chat.delete_conversation(conv_id)
+        chat._toggle_history_view()  # now on the list view
+
+        # both views' button pairs mirror the same stack state
+        assert len(chat._undo_buttons) == 2
+        assert all(not b.disabled for b in chat._undo_buttons)
+        assert all(b.disabled for b in chat._redo_buttons)
+
+        chat._undo_delete()
+        assert [c.title for c in store.list_conversations(USER)] == ["cross view"]
+        assert all(b.disabled for b in chat._undo_buttons)
+        assert all(not b.disabled for b in chat._redo_buttons)
+
+        chat._redo_delete()
+        assert store.list_conversations(USER) == []
+        assert all(not b.disabled for b in chat._undo_buttons)
+        assert all(b.disabled for b in chat._redo_buttons)
+
+    def test_list_view_delete_feeds_the_same_stack(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        chat.backend.persist_exchange("from the list", "reply")
+        conv_id = chat.backend.conversation_id
+        assert conv_id is not None
+        chat._toggle_history_view()  # list view
+        list_panel = chat._history_panel
+
+        list_panel._handle_delete(conv_id)  # arm
+        list_panel._handle_delete(conv_id)  # delete -> shared stack
+
+        assert store.list_conversations(USER) == []
+        assert not chat.undo_button.disabled
+        chat._undo_delete()
+        assert [c.title for c in store.list_conversations(USER)] == ["from the list"]
+
+    def test_undo_restores_in_lifo_order_and_new_delete_clears_redo(
+        self, chat: AiChat, store: InMemoryHistoryStore
+    ) -> None:
+        first = store.create_conversation(USER, title="first")
+        second = store.create_conversation(USER, title="second")
+        chat.delete_conversation(first.id)
+        chat.delete_conversation(second.id)
+
+        chat._undo_delete()
+        assert store.get_conversation(USER, second.id) is not None
+        assert store.get_conversation(USER, first.id) is None
+        assert not chat.redo_button.disabled
+
+        other = store.create_conversation(USER, title="other")
+        chat.delete_conversation(other.id)
+        assert chat.redo_button.disabled  # new delete invalidates redo
+
+        chat._undo_delete()  # restores "other"
+        chat._undo_delete()  # restores "first"
+        titles = {c.title for c in store.list_conversations(USER)}
+        assert titles == {"first", "second", "other"}
 
     def test_view_toggle_switches_and_carries_the_search(self, chat: AiChat) -> None:
         """The toggle lazily mounts the list, flips visibility, keeps the filter."""

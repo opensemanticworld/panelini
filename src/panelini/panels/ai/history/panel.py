@@ -15,6 +15,7 @@ from typing import Any
 
 import panel as pn
 
+from .icons import NEW_CHAT_MASK, icon_button_css
 from .store import ChatHistoryStore, ConversationRecord, utcnow
 
 _GROUPS = ("Today", "Yesterday", "Last 7 days", "Last 30 days", "Older")
@@ -115,11 +116,18 @@ class HistoryPanel:
         get_busy_ids: Callable[[], set[str]] | None = None,
         get_ready_ids: Callable[[], set[str]] | None = None,
         actions: Sequence[pn.viewable.Viewable] = (),
+        on_reset: Callable[[], None] | None = None,
+        trailing: Sequence[pn.viewable.Viewable] = (),
+        on_delete: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._user_id = user_id
         self._on_open = on_open
         self._on_new_chat = on_new_chat
+        # after deleting the last chat: fresh feed WITHOUT materializing a row
+        self._on_reset = on_reset or on_new_chat
+        # deletes route here when provided (shared undo/redo)
+        self._on_delete = on_delete
         self._get_active_id = get_active_id
         self._get_busy_ids = get_busy_ids or (lambda: set())
         self._get_ready_ids = get_ready_ids or (lambda: set())
@@ -127,14 +135,14 @@ class HistoryPanel:
         self._pending_delete_id: str | None = None
         self._query = ""
 
+        # frameless icon button, consistent with the tree view's action row
         self.new_chat_button = pn.widgets.Button(
-            name="New Chat",
-            icon="plus",
-            button_type="primary",
-            button_style="outline",
-            sizing_mode="stretch_width",
-            margin=(0, 2, 4, 2),
+            width=28,
+            margin=(0, 0, 4, 2),
+            align="center",
+            stylesheets=[icon_button_css(NEW_CHAT_MASK)],
             css_classes=["history-new-chat"],
+            description="New Chat",
         )
         self.new_chat_button.on_click(self._handle_new_chat)
 
@@ -155,7 +163,16 @@ class HistoryPanel:
             sizing_mode="stretch_width",
             objects=[
                 pn.Column(
-                    pn.Row(self.new_chat_button, *actions, sizing_mode="stretch_width", margin=0),
+                    pn.Row(
+                        self.new_chat_button,
+                        # the first action right-aligns itself and everything
+                        # after via margin-left auto (no spacer: a stretching
+                        # element keeps the row unstable for clicks)
+                        *actions,
+                        *trailing,
+                        sizing_mode="stretch_width",
+                        margin=0,
+                    ),
                     self.search_input,
                     self._list,
                     sizing_mode="stretch_width",
@@ -201,15 +218,20 @@ class HistoryPanel:
             self.refresh()
             return
         self._pending_delete_id = None
+        if self._on_delete is not None:
+            self._on_delete(conversation_id)  # shared undo/redo path
+            self.refresh()
+            return
         was_active = self._get_active_id() == conversation_id
         self._store.delete_conversation(self._user_id, conversation_id)
         if was_active:
-            # switch to the most recent remaining chat; fresh one only if none
+            # switch to the most recent remaining chat; a fresh feed without
+            # a materialized row when none remain
             remaining = self._store.list_conversations(self._user_id)
             if remaining:
                 self._on_open(remaining[0].id)
             else:
-                self._on_new_chat()
+                self._on_reset()
         self.refresh()
 
     def _handle_search(self, event: Any) -> None:

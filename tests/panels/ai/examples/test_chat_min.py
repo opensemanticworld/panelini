@@ -142,23 +142,33 @@ def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     assert reply.is_visible()
 
 
-def test_context_delete_offers_undo(ready_page: Page):
-    """Context-menu delete removes the node; Undo re-puts it losslessly."""
+def test_trash_delete_offers_undo(ready_page: Page):
+    """The hover trash deletes without switching chats; Undo re-puts it."""
     page = ready_page
 
+    # right-click must NOT open a menu (the context menu is disabled)
+    page.locator(".wb-row", has_text="New Chat").first.click(button="right")
+    time.sleep(0.3)
+    assert page.locator(".wb-context-menu:visible").count() == 0
+
     target = page.locator(".wb-row", has_text="New Chat").first
-    target.click(button="right")
-    menu = page.locator(".wb-context-menu")
-    menu.wait_for(state="visible", timeout=5000)
-    page.locator(".wb-context-menu-item", has_text="Delete").first.click()
+    target.hover()
+    target.locator("[data-action=delete]").click()
 
     wait_until(lambda: _chat_rows(page) == 0)
-    # has_text pierces the shadow DOM; inner_text() would come back empty
-    page.locator(".history-undo:visible", has_text="New Chat").first.wait_for()
-
-    page.locator(".history-undo-button button").first.click()
+    # the trash click did not activate the row: the open chat is unchanged
+    assert page.locator(".wb-row.wb-active", has_text="Hello history").first.is_visible()
+    # the undo icon in the New Chat row becomes clickable
+    undo = page.locator(".history-undo button:not([disabled])").first
+    undo.wait_for()
+    undo.click()
     page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
-    assert page.locator(".history-undo:visible").count() == 0
+    # undo drained, redo armed: redo re-deletes, undo brings it back
+    page.locator(".history-undo button[disabled]").first.wait_for()
+    page.locator(".history-redo button:not([disabled])").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(state="detached")
+    page.locator(".history-undo button:not([disabled])").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
 
 
 def test_import_export_icons_sit_in_the_new_chat_row(ready_page: Page):
@@ -252,3 +262,35 @@ def test_history_is_per_user(browser, panel_server, ready_page: Page):
         assert page_b.locator("text=Private note of user A").count() == 0
     finally:
         context_b.close()
+
+
+def test_row_actions_rename_delete_and_empty_end_state(ready_page: Page):
+    """Pencil renames inline; deleting the last chat leaves NO ghost row.
+
+    Runs last: it renames and finally deletes the surviving conversation.
+    """
+    page = ready_page
+
+    row = page.locator(".wb-row", has_text="Hello history").first
+    row.hover()
+    row.locator("[data-action=rename]").click()
+    edit = page.locator("input.wb-input-edit").first
+    edit.wait_for()
+    edit.fill("Renamed via icon")
+    edit.press("Enter")
+    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(timeout=10000)
+
+    # delete the last (active) conversation: no "New Chat" row respawns,
+    # the empty hint returns, and undo is still offered
+    row = page.locator(".wb-row", has_text="Renamed via icon").first
+    row.hover()
+    row.locator("[data-action=delete]").click()
+    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(state="detached")
+    page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+    assert _chat_rows(page) == 0  # no ghost "New Chat" node
+
+    undo = page.locator(".history-undo button:not([disabled])").first
+    undo.wait_for()
+    undo.click()
+    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(timeout=10000)
+    assert page.locator(".history-empty:visible").count() == 0

@@ -7,7 +7,6 @@ which stays the source of truth; every change rebuilds the tree from it.
 
 from __future__ import annotations
 
-import html
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -15,39 +14,83 @@ import panel as pn
 
 from panelini.panels.wunderbaum import Wunderbaum
 
-from .document import DocumentHistoryStore, conversation_to_document
+from .icons import (
+    CHAT_MASK,
+    FOLDER_PLUS_MASK,
+    NEW_CHAT_MASK,
+    PENCIL_MASK,
+    TRASH_MASK,
+    icon_button_css,
+)
 from .store import ChatHistoryStore
 
 _CONV = "conv:"
 _FOLDER = "folder:"
 
-_CONTEXT_MENU = [
-    {"id": "new_chat", "label": "New Chat"},
-    {"id": "new_folder", "label": "New Folder"},
-    {"id": "delete", "label": "Delete"},
+# Hover icons on every row (rendered by the Wunderbaum wrapper from node
+# data; clicks come back as click events with an `action` param). The
+# classes are styled as tabler masks in _TREE_CSS, matching the list view.
+_ROW_ACTIONS = [
+    {"action": "rename", "icon": "history-action-rename", "tooltip": "Rename"},
+    {"action": "delete", "icon": "history-action-delete", "tooltip": "Delete"},
 ]
 
 # The component inlines fixed 800x500 defaults on the container; override so
 # the tree hugs the sidebar width and grows with content, with a vertical
 # scrollbar only when needed and never a horizontal one. Below that: the
 # busy/ready node icon states.
-_TREE_CSS = """
-.wunderbaum-wrapper, .tree-container, div.wunderbaum {
+_TREE_CSS = f"""
+.wunderbaum-wrapper, .tree-container, div.wunderbaum {{
     overflow-y: auto !important;
     overflow-x: hidden !important;
-}
-.tree-container {
+}}
+.tree-container {{
     width: 100% !important;
     height: auto !important;
     min-height: 120px;
     max-height: 420px;
-}
-.history-busy i.bi-arrow-repeat {
+}}
+/* Rotate the glyph box itself, not the <i>: the icon font's baseline
+   offset would make the whole element orbit instead of spin in place */
+.history-busy i.bi-arrow-repeat::before {{
     display: inline-block;
     animation: history-spin 1s linear infinite;
-}
-@keyframes history-spin { to { transform: rotate(360deg); } }
-.history-ready i.bi-check-circle-fill { color: #22a06b; }
+}}
+@keyframes history-spin {{ to {{ transform: rotate(360deg); }} }}
+.history-ready i.bi-check-circle-fill {{ color: #22a06b; }}
+
+/* Tabler glyphs (masks over currentColor), matching the list view. The
+   chat glyph keeps the standard wb-icon box so the icon-to-title spacing
+   matches the folder rows, and draws smaller inside it. */
+i.history-icon-chat {{
+    background-color: currentColor;
+    opacity: 0.8;
+    -webkit-mask: url("{CHAT_MASK}") center / 13px no-repeat;
+    mask: url("{CHAT_MASK}") center / 13px no-repeat;
+}}
+i.history-action-rename, i.history-action-delete {{
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    background-color: currentColor;
+    opacity: 0.8;
+}}
+i.history-action-rename {{
+    -webkit-mask: url("{PENCIL_MASK}") center / contain no-repeat;
+    mask: url("{PENCIL_MASK}") center / contain no-repeat;
+}}
+i.history-action-delete, i.history-action-delete-armed {{
+    -webkit-mask: url("{TRASH_MASK}") center / contain no-repeat;
+    mask: url("{TRASH_MASK}") center / contain no-repeat;
+}}
+/* armed folder delete: the second click wipes the folder and its chats */
+i.history-action-delete-armed {{
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    background-color: #d1242f;
+    opacity: 1;
+}}
 """
 
 _SEARCH_CSS = """
@@ -63,30 +106,20 @@ _EMPTY_STATE_TEMPLATE = (
     ' text-align: center; margin: 12px 0 6px 0;">{message}</div>'
 )
 
-_UNDO_LABEL_TEMPLATE = (
-    '<div style="font-size: 0.78em; font-style: italic; opacity: 0.7;'
-    " overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-    ' line-height: 24px;">Deleted "{title}"</div>'
-)
-
-_UNDO_BUTTON_CSS = """
-:host { margin: 0; }
-.bk-btn, .bk-btn:focus {
-    font-size: 0.78em; padding: 2px 8px; border-radius: 6px;
-}
-"""
-
 
 class HistoryTree:
     """Sidebar card with folders and conversations as a drag-and-drop tree.
 
-    Rename: inline edit (click the active node or F2). New chat / new
-    folder: header buttons or context menu; delete: context menu, with an
-    Undo bar re-putting the deleted conversation document losslessly.
-    Drops persist where the node landed: conversations into folders,
-    folders into folders (nested), anything to the root. Generating chats
-    show a spinner icon, finished ones a green check until opened; an
-    empty tree shows a hint instead of a blank row.
+    Rename: hover pencil icon, inline edit (click the active node) or F2.
+    New chat / new folder: header buttons; delete: hover trash icon (no
+    context menu), routed through the chat's shared undo/redo stack when
+    ``on_delete`` is wired. Deleting a non-empty folder arms a red trash
+    and the second click removes the folder, its subfolders, and every
+    chat inside (chats move to the root first, so undo restores them
+    there). Drops persist where the node landed. Generating chats show a
+    spinner icon, finished ones a green check until opened; an empty tree
+    shows a hint instead of a blank row, also after the last conversation
+    is deleted.
     """
 
     def __init__(
@@ -99,33 +132,41 @@ class HistoryTree:
         get_busy_ids: Callable[[], set[str]] | None = None,
         get_ready_ids: Callable[[], set[str]] | None = None,
         actions: Sequence[pn.viewable.Viewable] = (),
+        on_reset: Callable[[], None] | None = None,
+        trailing: Sequence[pn.viewable.Viewable] = (),
+        on_delete: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._user_id = user_id
         self._on_open = on_open
         self._on_new_chat = on_new_chat
+        # after deleting the last chat: fresh feed WITHOUT materializing a row
+        self._on_reset = on_reset or on_new_chat
+        # conversation deletes route here when provided (shared undo/redo)
+        self._on_delete = on_delete
+        # non-empty folder deletes arm and ask for a second click
+        self._pending_folder_delete: str | None = None
         self._get_active_id = get_active_id
         self._get_busy_ids = get_busy_ids or (lambda: set())
         self._get_ready_ids = get_ready_ids or (lambda: set())
         self._query = ""
 
+        # The whole action row is frameless icon buttons for consistency
         self.new_chat_button = pn.widgets.Button(
-            name="New Chat",
-            icon="plus",
-            button_type="primary",
-            button_style="outline",
-            sizing_mode="stretch_width",
-            margin=(0, 2, 4, 2),
+            width=28,
+            margin=(0, 0, 4, 2),
+            align="center",
+            stylesheets=[icon_button_css(NEW_CHAT_MASK)],
             css_classes=["history-new-chat"],
+            description="New Chat",
         )
         self.new_chat_button.on_click(self._handle_new_chat)
 
         self.new_folder_button = pn.widgets.Button(
-            icon="folder-plus",
-            button_type="primary",
-            button_style="outline",
-            width=38,
-            margin=(0, 2, 4, 2),
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[icon_button_css(FOLDER_PLUS_MASK)],
             css_classes=["history-new-folder"],
             description="New Folder",
         )
@@ -145,7 +186,6 @@ class HistoryTree:
         self.tree = Wunderbaum(
             source=source,
             options={"dnd": True, "edit": {"trigger": ["clickActive", "F2"]}},
-            context_menu_items=_CONTEXT_MENU,
             tree_event_callback=self._on_tree_event,
             sizing_mode="stretch_width",
             css_classes=["history-tree"],
@@ -154,29 +194,6 @@ class HistoryTree:
         # a fresh tree would only show a blank placeholder row; hint instead
         self._empty_hint = pn.pane.HTML(
             "", sizing_mode="stretch_width", margin=0, visible=False, css_classes=["history-empty"]
-        )
-
-        # Delete-undo: the deleted conversation document is kept and can be
-        # re-put losslessly (context-menu delete has no confirmation step)
-        self._undo_document: dict[str, Any] | None = None
-        self._undo_label = pn.pane.HTML("", sizing_mode="stretch_width", margin=0)
-        self._undo_button = pn.widgets.Button(
-            name="Undo",
-            button_type="primary",
-            button_style="outline",
-            width=60,
-            margin=0,
-            stylesheets=[_UNDO_BUTTON_CSS],
-            css_classes=["history-undo-button"],
-        )
-        self._undo_button.on_click(self._handle_undo)
-        self.undo_bar = pn.Row(
-            self._undo_label,
-            self._undo_button,
-            sizing_mode="stretch_width",
-            margin=(4, 2, 0, 2),
-            visible=False,
-            css_classes=["history-undo"],
         )
 
         self.card = pn.Card(
@@ -188,14 +205,17 @@ class HistoryTree:
                     pn.Row(
                         self.new_chat_button,
                         self.new_folder_button,
+                        # the first action right-aligns itself and everything
+                        # after via margin-left auto (no spacer: a stretching
+                        # element keeps the row unstable for clicks)
                         *actions,
+                        *trailing,
                         sizing_mode="stretch_width",
                         margin=0,
                     ),
                     self.search_input,
                     self._empty_hint,
                     self.tree,
-                    self.undo_bar,
                     sizing_mode="stretch_width",
                 )
             ],
@@ -211,6 +231,7 @@ class HistoryTree:
             "title": conversation.title,
             "key": f"{_CONV}{conversation.id}",
             "type": "conv",
+            "actions": _ROW_ACTIONS,
         }
         classes = []
         if conversation.id in self._get_busy_ids():
@@ -219,6 +240,9 @@ class HistoryTree:
         elif conversation.id in self._get_ready_ids():
             node["icon"] = "bi bi-check-circle-fill"
             classes.append("history-ready")
+        else:
+            # the New Chat button's glyph without the plus
+            node["icon"] = "history-icon-chat"
         if classes:
             node["classes"] = " ".join(classes)
         return node
@@ -241,13 +265,29 @@ class HistoryTree:
             children += convs_by_folder.get(folder.id, [])
             if filtering and not children:
                 return None
-            return {
+            armed = folder.id == self._pending_folder_delete
+            actions = _ROW_ACTIONS
+            if armed:
+                count = len(self._folder_conversations(folder.id))
+                actions = [
+                    _ROW_ACTIONS[0],
+                    {
+                        "action": "delete",
+                        "icon": "history-action-delete-armed",
+                        "tooltip": f"Click again to delete this folder and {count} chats",
+                    },
+                ]
+            node = {
                 "title": folder.name,
                 "key": f"{_FOLDER}{folder.id}",
                 "type": "folder",
                 "expanded": True,
                 "children": children,
+                "actions": actions,
             }
+            if armed:
+                node["classes"] = "history-delete-armed"
+            return node
 
         source = [node for node in map(folder_node, folders_by_parent.get(None, [])) if node is not None]
         source.extend(convs_by_folder.get(None, []))
@@ -274,7 +314,7 @@ class HistoryTree:
 
     def _handle_new_chat(self, event: object = None) -> None:
         _ = event
-        self._hide_undo()
+        self._pending_folder_delete = None
         self._on_new_chat()
         self.refresh()
 
@@ -285,6 +325,7 @@ class HistoryTree:
 
     def _handle_search(self, event: Any) -> None:
         self._query = event.new or ""
+        self._pending_folder_delete = None
         self.refresh()
 
     def _on_tree_event(self, event_name: str, params: dict[str, Any]) -> None:
@@ -293,56 +334,88 @@ class HistoryTree:
         # client, indistinguishable from a user click.
         key = params.get("key", "")
         if event_name == "activate" and key.startswith(_CONV):
-            self._on_open(key[len(_CONV) :])
+            conversation_id = key[len(_CONV) :]
+            was_ready = conversation_id in self._get_ready_ids()
+            self._on_open(conversation_id)
+            if was_ready:
+                # drop the green check right away (opening clears the flag);
+                # guarded, or the echoed activate after refresh would loop
+                self.refresh()
+        elif event_name == "click" and params.get("action"):
+            self._handle_row_action(str(params["action"]), key)
         elif event_name == "drop":
             self._handle_drop(params)
         elif event_name == "edit.apply":
             self._handle_rename(key, str(params.get("newValue", "")))
-        elif event_name == "contextmenu":
-            self._handle_context_action(str(params.get("action", "")), key)
+
+    def _handle_row_action(self, action: str, key: str) -> None:
+        """Dispatch a hover icon click (the row's rename or delete)."""
+        if action != "delete" or key != f"{_FOLDER}{self._pending_folder_delete}":
+            self._pending_folder_delete = None  # any other action disarms
+        if action == "delete":
+            self._delete_by_key(key)
+            self.refresh()
+        elif action == "rename":
+            self.tree.start_edit_title(key)
 
     def _delete_by_key(self, key: str) -> None:
         if key.startswith(_CONV):
             conversation_id = key[len(_CONV) :]
+            if self._on_delete is not None:
+                self._on_delete(conversation_id)  # shared undo/redo path
+                return
             was_active = self._get_active_id() == conversation_id
-            document = self._capture_document(conversation_id)
             self._store.delete_conversation(self._user_id, conversation_id)
-            if document is not None:
-                self._offer_undo(document)
             if was_active:
                 self._open_fallback()
         elif key.startswith(_FOLDER):
-            # folder contents move to the root, so nothing is lost
-            self._store.delete_folder(self._user_id, key[len(_FOLDER) :])
+            folder_id = key[len(_FOLDER) :]
+            contained = self._folder_conversations(folder_id)
+            if contained and self._pending_folder_delete != folder_id:
+                # non-empty folder: arm and ask for a second click
+                self._pending_folder_delete = folder_id
+                self.refresh()
+                return
+            self._pending_folder_delete = None
+            self._delete_folder_subtree(folder_id)
 
-    # -- delete undo ------------------------------------------------------------
+    def _folder_conversations(self, folder_id: str) -> list[str]:
+        """Conversation ids inside the folder, subfolders included."""
+        folder_ids = {folder_id} | set(self._subfolder_ids(folder_id))
+        return [c.id for c in self._store.list_conversations(self._user_id) if c.folder_id in folder_ids]
 
-    def _capture_document(self, conversation_id: str) -> dict[str, Any] | None:
-        """Snapshot the conversation for undo; None when unsupported."""
-        if not isinstance(self._store, DocumentHistoryStore):
-            return None
-        record = self._store.get_conversation(self._user_id, conversation_id)
-        if record is None:
-            return None
-        messages = self._store.load_messages(self._user_id, conversation_id)
-        return conversation_to_document(record, messages)
+    def _subfolder_ids(self, folder_id: str) -> list[str]:
+        children: dict[str | None, list[str]] = {}
+        for folder in self._store.list_folders(self._user_id):
+            children.setdefault(folder.parent_id, []).append(folder.id)
+        collected: list[str] = []
+        queue = list(children.get(folder_id, []))
+        while queue:
+            current = queue.pop()
+            collected.append(current)
+            queue.extend(children.get(current, []))
+        return collected
 
-    def _offer_undo(self, document: dict[str, Any]) -> None:
-        self._undo_document = document
-        self._undo_label.object = _UNDO_LABEL_TEMPLATE.format(title=html.escape(str(document.get("title", ""))))
-        self.undo_bar.visible = True
+    def _delete_folder_subtree(self, folder_id: str) -> None:
+        """Delete the folder, its subfolders, and every chat inside.
 
-    def _hide_undo(self) -> None:
-        self._undo_document = None
-        self.undo_bar.visible = False
-
-    def _handle_undo(self, event: object = None) -> None:
-        _ = event
-        document = self._undo_document
-        self._hide_undo()
-        if document is not None and isinstance(self._store, DocumentHistoryStore):
-            self._store.restore_conversation(self._user_id, document)
-        self.refresh()
+        Chats are moved to the root first so an undo restores them there
+        (the folder structure itself is not restorable); the active chat
+        goes last so the open-fallback runs once, at the end.
+        """
+        active_id = self._get_active_id()
+        conversation_ids = sorted(self._folder_conversations(folder_id), key=lambda cid: cid == active_id)
+        for conversation_id in conversation_ids:
+            self._store.move_conversation(self._user_id, conversation_id, None)
+            if self._on_delete is not None:
+                self._on_delete(conversation_id)
+            else:
+                was_active = self._get_active_id() == conversation_id
+                self._store.delete_conversation(self._user_id, conversation_id)
+                if was_active:
+                    self._open_fallback()
+        for fid in [*self._subfolder_ids(folder_id), folder_id]:
+            self._store.delete_folder(self._user_id, fid)
 
     def _handle_drop(self, params: dict[str, Any]) -> None:
         # newParentNodeId is where the node actually landed client-side
@@ -376,20 +449,11 @@ class HistoryTree:
                 self._store.rename_folder(self._user_id, key[len(_FOLDER) :], title)
         self.refresh()
 
-    def _handle_context_action(self, action: str, key: str) -> None:
-        if action == "new_chat":
-            self._handle_new_chat()
-            return
-        if action == "new_folder":
-            self._store.create_folder(self._user_id, "New Folder")
-        elif action == "delete":
-            self._delete_by_key(key)
-        self.refresh()
-
     def _open_fallback(self) -> None:
-        """After deleting the active chat: most recent remaining, else new."""
+        """After deleting the active chat: open the most recent remaining
+        conversation, else reset to a fresh feed without creating a row."""
         remaining = self._store.list_conversations(self._user_id)
         if remaining:
             self._on_open(remaining[0].id)
         else:
-            self._on_new_chat()
+            self._on_reset()

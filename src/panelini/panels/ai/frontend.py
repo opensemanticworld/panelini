@@ -33,20 +33,13 @@ def _tabler_mask(paths: str) -> str:
 _ARROW_BASE = "<path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2'/><path d='M12 4v12'/>"
 _DOWNLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 11l5 5l5 -5'/>")
 _UPLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 9l5 -5l5 5'/>")
-# tabler "folders" and "list": the view toggle shows the view it switches to
-_TREE_MASK = _tabler_mask(
-    "<path d='M9 4h3l2 2h5a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2'/>"
-    "<path d='M17 17v2a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2h2'/>"
-)
-_LIST_MASK = _tabler_mask(
-    "<path d='M9 6l11 0'/><path d='M9 12l11 0'/><path d='M9 18l11 0'/>"
-    "<path d='M5 6l0 .01'/><path d='M5 12l0 .01'/><path d='M5 18l0 .01'/>"
-)
 
 # Import/export icons in the New Chat row. min-height 0 is needed because
 # bokeh gives inputs and buttons a text-sized minimum that would otherwise
 # win over the height.
 _ICON_GLYPH_PX = 18
+# Undo/redo stack depth for deleted conversations
+_UNDO_LIMIT = 20
 _ICON_BOX = "width: 28px; height: 24px; min-height: 0; padding: 0; margin: 0; border: none; border-radius: 6px;"
 
 
@@ -79,8 +72,10 @@ def _icon_action_css(mask: str) -> str:
 # Icon-only file picker: the input loses its own chrome, font-size 0
 # collapses the native "no file chosen" label, and the file-selector
 # button is left as a bare upload glyph
+# margin-left auto right-aligns the icon group inside the flex row
+# (!important: Panel's margin param is applied as an inline style)
 _FILE_ICON_CSS = f"""
-:host {{ width: 28px; margin: 0; }}
+:host {{ width: 28px; margin: 0; margin-left: auto !important; }}
 input[type="file"] {{
     {_ICON_BOX}
     font-size: 0; overflow: hidden; background: transparent; box-shadow: none; color: inherit;
@@ -253,11 +248,21 @@ class AiChat:
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
-        # Import/export and the view toggle ride along the New Chat row as
-        # bare icons; each mounted view card needs its own instances, so the
-        # primary set doubles as the public attributes
+        # Import/export, undo/redo, and the view toggle ride along the New
+        # Chat row as bare icons; each mounted view card needs its own
+        # instances, so the primary set doubles as the public attributes
+        self._undo_stack: list[dict[str, Any]] = []
+        self._redo_stack: list[dict[str, Any]] = []
+        self._undo_buttons: list[Any] = []
+        self._redo_buttons: list[Any] = []
         primary_icons = self._make_action_icons(history_view)
-        self.upload_chat_input, self.download_chat_button, self.view_toggle_button = primary_icons
+        (
+            self.upload_chat_input,
+            self.download_chat_button,
+            self.undo_button,
+            self.redo_button,
+            self.view_toggle_button,
+        ) = primary_icons
 
         # Watch for changes
         self.provider_selector.param.watch(self._on_provider_change, "value")
@@ -273,6 +278,13 @@ class AiChat:
 
         # Add custom CSS to handle preview content overflow
         pn.config.raw_css.append("""
+        /* Hover tooltips (widget descriptions) must never swallow clicks
+           meant for the UI below: a lingering popover otherwise blocks the
+           action row after an icon was clicked */
+        .bk-Tooltip {
+            pointer-events: none;
+        }
+
         /* Ensure preview content elements don't overflow */
         .markdown-body pre {
             overflow-x: auto !important;
@@ -444,11 +456,15 @@ class AiChat:
         return list(self._main_objects)
 
     def _make_action_icons(self, current_view: str) -> list[Any]:
-        """Create one view's New Chat row icons: upload, download, view toggle.
+        """Create one view's action row icons.
 
-        Every mounted view card needs its own widget instances (a widget
-        cannot sit in two containers); all sets share the same handlers.
+        Order: upload, download, undo, redo, view toggle. Every mounted
+        view card needs its own widget instances (a widget cannot sit in
+        two containers); all sets share the same handlers, and the
+        undo/redo pairs are registered for cross-view state sync.
         """
+        from .history.icons import EYE_LIST_MASK, EYE_TREE_MASK, REDO_MASK, UNDO_MASK
+
         upload = pn.widgets.FileInput(
             accept=".json",
             width=28,
@@ -469,18 +485,119 @@ class AiChat:
             description="Download chat (JSON)",
         )
         download.on_click(self._on_download_chat)
-        # the toggle shows the view it switches to
+        undo = pn.widgets.Button(
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            disabled=True,
+            stylesheets=[_icon_action_css(UNDO_MASK)],
+            css_classes=["history-undo"],
+            description="Undo delete",
+        )
+        undo.on_click(self._undo_delete)
+        self._undo_buttons.append(undo)
+        redo = pn.widgets.Button(
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            disabled=True,
+            stylesheets=[_icon_action_css(REDO_MASK)],
+            css_classes=["history-redo"],
+            description="Redo delete",
+        )
+        redo.on_click(self._redo_delete)
+        self._redo_buttons.append(redo)
+        # eye glyph with a mini sub-icon of the view the toggle switches to
         to_tree = current_view == "list"
         toggle = pn.widgets.Button(
             width=28,
             margin=(0, 0, 4, 4),
             align="center",
-            stylesheets=[_icon_action_css(_TREE_MASK if to_tree else _LIST_MASK)],
+            stylesheets=[_icon_action_css(EYE_TREE_MASK if to_tree else EYE_LIST_MASK)],
             css_classes=["history-view-toggle"],
             description="Switch to folder tree" if to_tree else "Switch to list",
         )
         toggle.on_click(self._toggle_history_view)
-        return [upload, download, toggle]
+        # a lazily-built second view must reflect the current stack state
+        self._sync_undo_buttons()
+        return [upload, download, undo, redo, toggle]
+
+    # ── Delete undo/redo (view-independent, one stack per session) ────────
+
+    def _capture_document(self, conversation_id: str) -> dict[str, Any] | None:
+        """Snapshot a conversation for undo; None when unsupported."""
+        from .history.document import DocumentHistoryStore, conversation_to_document
+
+        store = self.backend.history_store
+        user = self.backend.user_id
+        if not isinstance(store, DocumentHistoryStore) or user is None:
+            return None
+        record = store.get_conversation(user, conversation_id)
+        if record is None:
+            return None
+        return conversation_to_document(record, store.load_messages(user, conversation_id))
+
+    def _sync_undo_buttons(self) -> None:
+        """Mirror stack state onto every view's undo/redo button pair."""
+        undo_desc = f'Undo delete of "{self._undo_stack[-1].get("title", "")}"' if self._undo_stack else "Undo delete"
+        redo_desc = f'Redo delete of "{self._redo_stack[-1].get("title", "")}"' if self._redo_stack else "Redo delete"
+        for button in self._undo_buttons:
+            button.disabled = not self._undo_stack
+            button.description = undo_desc
+        for button in self._redo_buttons:
+            button.disabled = not self._redo_stack
+            button.description = redo_desc
+
+    def delete_conversation(self, conversation_id: str, clear_redo: bool = True) -> None:
+        """Delete a stored conversation with undo support (any view)."""
+        store = self.backend.history_store
+        user = self.backend.user_id
+        if store is None or user is None:
+            return
+        was_active = self.backend.conversation_id == conversation_id
+        document = self._capture_document(conversation_id)
+        store.delete_conversation(user, conversation_id)
+        if document is not None:
+            self._undo_stack.append(document)
+            del self._undo_stack[:-_UNDO_LIMIT]
+            if clear_redo:  # a new delete invalidates the redo chain
+                self._redo_stack.clear()
+            self._sync_undo_buttons()
+        if was_active:
+            # open the most recent remaining chat; a fresh lazy feed if none
+            remaining = store.list_conversations(user)
+            if remaining:
+                self.open_conversation(remaining[0].id)
+            else:
+                self.start_new_chat(materialize=False)
+        self._notify_history_changed()
+
+    def _undo_delete(self, event: Any = None) -> None:
+        """Restore the most recently deleted conversation."""
+        from .history.document import DocumentHistoryStore
+
+        _ = event
+        store = self.backend.history_store
+        user = self.backend.user_id
+        if not self._undo_stack or not isinstance(store, DocumentHistoryStore) or user is None:
+            return
+        document = self._undo_stack.pop()
+        store.restore_conversation(user, document)
+        self._redo_stack.append(document)
+        del self._redo_stack[:-_UNDO_LIMIT]
+        self._sync_undo_buttons()
+        self._notify_history_changed()
+
+    def _redo_delete(self, event: Any = None) -> None:
+        """Delete the most recently restored conversation again."""
+        _ = event
+        if not self._redo_stack:
+            return
+        document = self._redo_stack.pop()
+        # normal delete path (captures the CURRENT state), keeping the
+        # remaining redo chain intact
+        self.delete_conversation(str(document.get("id", "")), clear_redo=False)
+        self._sync_undo_buttons()
 
     def _toggle_history_view(self, event: Any = None) -> None:
         """Flip between the list and tree view (session state only).
@@ -521,7 +638,13 @@ class AiChat:
             "get_active_id": lambda: self.backend.conversation_id,
             "get_busy_ids": lambda: self._generating_ids,
             "get_ready_ids": lambda: self._ready_ids,
-            "actions": actions,
+            # the view toggle sits at the very right, after a spacer
+            "actions": actions[:-1],
+            "trailing": actions[-1:],
+            # deleting the last chat resets the feed without a ghost row
+            "on_reset": lambda: self.start_new_chat(materialize=False),
+            # deletes route through the shared undo/redo stack
+            "on_delete": self.delete_conversation,
         }
         if history_view == "tree":
             from .history.tree import HistoryTree
@@ -687,15 +810,18 @@ class AiChat:
         )
         return tool_count
 
-    def start_new_chat(self) -> None:
+    def start_new_chat(self, materialize: bool = True) -> None:
         """Switch to a fresh conversation; stored conversations stay intact.
 
-        The conversation row is created immediately so it appears (and is
-        selected) in the sidebar right away.
+        With ``materialize`` the conversation row is created immediately so
+        it appears (and is selected) in the sidebar right away. Without it
+        the row is created lazily on the first message, so deleting the
+        last conversation does not respawn a ghost row.
         """
         self.backend.start_new_conversation()
         session = self._new_session(welcome=True)
-        session.conversation_id = self.backend.create_conversation_id()
+        if materialize:
+            session.conversation_id = self.backend.create_conversation_id()
         self._activate_session(session)
 
     def open_conversation(self, conversation_id: str) -> None:
