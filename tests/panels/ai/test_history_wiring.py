@@ -190,7 +190,36 @@ class TestChatHistoryWiring:
             chat._history_panel.new_chat_button,
             chat.upload_chat_input,
             chat.download_chat_button,
+            chat.view_toggle_button,
         ]
+
+    def test_view_toggle_switches_and_carries_the_search(self, chat: AiChat) -> None:
+        """The toggle lazily mounts the tree, flips visibility, keeps the filter."""
+        list_panel = chat._history_panel
+        list_panel.search_input.value_input = "deploy"
+
+        chat._toggle_history_view()
+
+        tree_panel = chat._history_panel
+        assert tree_panel is not list_panel
+        assert chat._history_view == "tree"
+        # both cards stay mounted; only visibility flips
+        assert list(chat._chat_tab) == [list_panel.card, tree_panel.card]
+        assert not list_panel.card.visible
+        assert tree_panel.card.visible
+        # the typed filter carried over
+        assert tree_panel.search_input.value == "deploy"
+        # each view has its own action icons; the tree card carries a toggle too
+        tree_row: Any = tree_panel.card[0][0]
+        assert tree_row[0] is tree_panel.new_chat_button
+        assert chat.upload_chat_input not in list(tree_row)
+
+        chat._toggle_history_view()
+
+        # back to the same list instance, no rebuild
+        assert chat._history_panel is list_panel
+        assert list_panel.card.visible
+        assert not tree_panel.card.visible
 
     def test_history_store_defaults_when_omitted(self, _mock_backend_env: None) -> None:
         # every chat gets history; without a store argument it is the shared default
@@ -285,7 +314,7 @@ class TestChatHistoryWiring:
             ],
         }
         chat.upload_chat_input.filename = "old_chat.json"
-        chat._on_upload_chat(SimpleNamespace(new=json.dumps(chat_data).encode()))
+        chat._on_upload_chat(SimpleNamespace(new=json.dumps(chat_data).encode(), obj=chat.upload_chat_input))
 
         conversations = store.list_conversations(USER)
         assert [c.title for c in conversations] == ["Imported: old_chat.json"]
@@ -305,7 +334,7 @@ class TestChatHistoryWiring:
         assert document["title"] == "original question"
         assert [m["role"] for m in document["messages"]] == ["human", "ai"]
 
-        chat._on_upload_chat(SimpleNamespace(new=json.dumps(document).encode()))
+        chat._on_upload_chat(SimpleNamespace(new=json.dumps(document).encode(), obj=chat.upload_chat_input))
 
         titles = [c.title for c in store.list_conversations(USER)]
         # the import keeps the document title and creates a second conversation
