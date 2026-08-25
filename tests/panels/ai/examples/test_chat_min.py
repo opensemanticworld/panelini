@@ -215,3 +215,24 @@ def test_history_is_per_user(browser, panel_server, ready_page: Page):
         assert page_b.locator("text=Private note of user A").count() == 0
     finally:
         context_b.close()
+
+
+def test_view_toggle_switches_between_list_and_tree(ready_page: Page):
+    """The New Chat row toggle mounts the tree lazily and flips back.
+
+    Runs last: it changes which view is showing for the shared page.
+    """
+    page = ready_page
+
+    page.locator(".history-view-toggle button:visible").first.click()
+    # the tree mounts on first switch and shows the surviving conversation
+    # ("Hello history": titles stick to the first message, so the later
+    # "Private note..." message did not rename it)
+    page.locator(".wunderbaum-wrapper").first.wait_for()
+    page.locator(".wb-row", has_text="Hello history").first.wait_for()
+    assert page.locator(".history-title:visible").count() == 0
+
+    page.locator(".history-view-toggle button:visible").first.click()
+    # back to the list: rows visible again, the tree card hidden
+    page.locator(".history-title:visible", has_text="Hello history").first.wait_for()
+    assert page.locator(".wunderbaum-wrapper:visible").count() == 0

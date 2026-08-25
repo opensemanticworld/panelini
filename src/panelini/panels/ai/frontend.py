@@ -18,17 +18,30 @@ _TABS_CSS = """
 .bk-tab:focus, .bk-tab:focus-visible { outline: none; box-shadow: none; }
 """
 
-# Tabler upload/download glyphs, inlined from one template so the pair is
-# symmetric and needs no webfont round trip. Both are used as masks, which
-# read alpha only, so the stroke colour below is arbitrary.
-_ARROW_SVG = (
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000'"
-    " stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"
-    "<path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2'/>"
-    "<path d='{head}'/><path d='M12 4v12'/></svg>"
+
+# Tabler glyphs inlined as CSS masks: no webfont round trip, and a mask
+# reads alpha only, so the stroke colour below is arbitrary.
+def _tabler_mask(paths: str) -> str:
+    """Data URI of an inline tabler-style glyph for use as a CSS mask."""
+    return (
+        "data:image/svg+xml;utf8,"
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000'"
+        " stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" + paths + "</svg>"
+    )
+
+
+_ARROW_BASE = "<path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2'/><path d='M12 4v12'/>"
+_DOWNLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 11l5 5l5 -5'/>")
+_UPLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 9l5 -5l5 5'/>")
+# tabler "folders" and "list": the view toggle shows the view it switches to
+_TREE_MASK = _tabler_mask(
+    "<path d='M9 4h3l2 2h5a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2'/>"
+    "<path d='M17 17v2a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2h2'/>"
 )
-_DOWNLOAD_MASK = "data:image/svg+xml;utf8," + _ARROW_SVG.format(head="M7 11l5 5l5 -5")
-_UPLOAD_MASK = "data:image/svg+xml;utf8," + _ARROW_SVG.format(head="M7 9l5 -5l5 5")
+_LIST_MASK = _tabler_mask(
+    "<path d='M9 6l11 0'/><path d='M9 12l11 0'/><path d='M9 18l11 0'/>"
+    "<path d='M5 6l0 .01'/><path d='M5 12l0 .01'/><path d='M5 18l0 .01'/>"
+)
 
 # Import/export icons in the New Chat row. min-height 0 is needed because
 # bokeh gives inputs and buttons a text-sized minimum that would otherwise
@@ -54,11 +67,14 @@ def _glyph_css(mask: str) -> str:
     """
 
 
-_ICON_ACTION_CSS = f"""
+def _icon_action_css(mask: str) -> str:
+    """Stylesheet turning a bare Button into a flat icon of ``mask``."""
+    return f"""
 :host {{ margin: 0; }}
-.bk-btn, .bk-btn:focus {{ {_glyph_css(_DOWNLOAD_MASK)} }}
+.bk-btn, .bk-btn:focus {{ {_glyph_css(mask)} }}
 .bk-btn:hover {{ opacity: 1; }}
 """
+
 
 # Icon-only file picker: the input loses its own chrome, font-size 0
 # collapses the native "no file chosen" label, and the file-selector
@@ -236,29 +252,11 @@ class AiChat:
         # Flag to prevent duplicate notifications during provider changes
         self._provider_changing = False
 
-        # Import and export ride along the New Chat row as bare icons; both
-        # report their outcome into the chat feed
-        self.download_chat_button = pn.widgets.Button(
-            width=28,
-            # bottom margin matches the New Chat button, so centering lands
-            # on its axis and not on the row's
-            margin=(0, 0, 4, 4),
-            align="center",
-            stylesheets=[_ICON_ACTION_CSS],
-            css_classes=["chat-download"],
-            description="Download chat (JSON)",
-        )
-        self.download_chat_button.on_click(self._on_download_chat)
-
-        self.upload_chat_input = pn.widgets.FileInput(
-            accept=".json",
-            width=28,
-            margin=(0, 0, 4, 4),
-            align="center",
-            stylesheets=[_FILE_ICON_CSS],
-            css_classes=["chat-upload"],
-        )
-        self.upload_chat_input.param.watch(self._on_upload_chat, "value")
+        # Import/export and the view toggle ride along the New Chat row as
+        # bare icons; each mounted view card needs its own instances, so the
+        # primary set doubles as the public attributes
+        primary_icons = self._make_action_icons(history_view)
+        self.upload_chat_input, self.download_chat_button, self.view_toggle_button = primary_icons
 
         # Watch for changes
         self.provider_selector.param.watch(self._on_provider_change, "value")
@@ -353,15 +351,19 @@ class AiChat:
                     },
                 )
             )
-        self._history_panel = self._build_history_panel(history_store, history_view)
+        self._history_store = history_store
+        self._history_view = history_view
+        self._history_panel = self._build_history_panel(history_store, history_view, primary_icons)
+        self._history_panels: dict[str, Any] = {history_view: self._history_panel}
         # Icon tabs: setup leftmost, conversations active by default.
         # dynamic=True must not be used: it re-renders panes on switch
         # and breaks Card expand/collapse bindings (Panel bug, verified)
-        _chat_tab = pn.Column(
+        self._chat_tab = pn.Column(
             self._history_panel.card,
             sizing_mode="stretch_width",
             margin=0,
         )
+        _chat_tab = self._chat_tab
         # The setting cards sit directly in their pane, without a wrapper card
         _setup_tab = pn.Column(*_general_setup_items, sizing_mode="stretch_width", margin=0)
         # No sizing_mode on the Tabs: Panelini assigns a fixed width to
@@ -440,7 +442,71 @@ class AiChat:
         """Main area content (chat + preview two-column layout)."""
         return list(self._main_objects)
 
-    def _build_history_panel(self, history_store: ChatHistoryStore, history_view: str) -> Any:
+    def _make_action_icons(self, current_view: str) -> list[Any]:
+        """Create one view's New Chat row icons: upload, download, view toggle.
+
+        Every mounted view card needs its own widget instances (a widget
+        cannot sit in two containers); all sets share the same handlers.
+        """
+        upload = pn.widgets.FileInput(
+            accept=".json",
+            width=28,
+            # bottom margin matches the New Chat button, so centering lands
+            # on its axis and not on the row's
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[_FILE_ICON_CSS],
+            css_classes=["chat-upload"],
+        )
+        upload.param.watch(self._on_upload_chat, "value")
+        download = pn.widgets.Button(
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[_icon_action_css(_DOWNLOAD_MASK)],
+            css_classes=["chat-download"],
+            description="Download chat (JSON)",
+        )
+        download.on_click(self._on_download_chat)
+        # the toggle shows the view it switches to
+        to_tree = current_view == "list"
+        toggle = pn.widgets.Button(
+            width=28,
+            margin=(0, 0, 4, 4),
+            align="center",
+            stylesheets=[_icon_action_css(_TREE_MASK if to_tree else _LIST_MASK)],
+            css_classes=["history-view-toggle"],
+            description="Switch to folder tree" if to_tree else "Switch to list",
+        )
+        toggle.on_click(self._toggle_history_view)
+        return [upload, download, toggle]
+
+    def _toggle_history_view(self, event: Any = None) -> None:
+        """Flip between the list and tree view (session state only).
+
+        The other view is built lazily on first switch, then both cards stay
+        mounted and only ``visible`` flips (re-attaching would double-mount).
+        The typed search query carries over so switching keeps the filter.
+        """
+        _ = event
+        target = "tree" if self._history_view == "list" else "list"
+        current = self._history_panel
+        panel = self._history_panels.get(target)
+        if panel is None:
+            panel = self._build_history_panel(self._history_store, target, self._make_action_icons(target))
+            panel.card.visible = False
+            self._history_panels[target] = panel
+            self._chat_tab.append(panel.card)
+        query = current.search_input.value_input or current.search_input.value
+        panel.search_input.value = query
+        panel.search_input.value_input = query
+        panel.refresh()
+        current.card.visible = False
+        panel.card.visible = True
+        self._history_panel = panel
+        self._history_view = target
+
+    def _build_history_panel(self, history_store: ChatHistoryStore, history_view: str, actions: list[Any]) -> Any:
         """Build the history sidebar component: date-grouped list or folder tree."""
         user_id = self.backend.user_id
         if user_id is None:  # resolved in __init__ before this runs
@@ -454,7 +520,7 @@ class AiChat:
             "get_active_id": lambda: self.backend.conversation_id,
             "get_busy_ids": lambda: self._generating_ids,
             "get_ready_ids": lambda: self._ready_ids,
-            "actions": [self.upload_chat_input, self.download_chat_button],
+            "actions": actions,
         }
         if history_view == "tree":
             from .history.tree import HistoryTree
@@ -702,8 +768,9 @@ class AiChat:
         if not event.new:
             return
 
+        source = event.obj  # either view's upload icon
         try:
-            filename = self.upload_chat_input.filename if hasattr(self.upload_chat_input, "filename") else "unknown"
+            filename = source.filename if getattr(source, "filename", None) else "unknown"
 
             chat_data = json.loads(event.new.decode("utf-8"))
             pairs = self.backend.restore_chat_data(chat_data)
@@ -725,7 +792,7 @@ class AiChat:
                 respond=False,
             )
 
-            pn.state.execute(lambda: setattr(self.upload_chat_input, "value", b""))
+            pn.state.execute(lambda: setattr(source, "value", b""))
 
         except Exception as e:
             self.chat_interface.send(
@@ -733,7 +800,7 @@ class AiChat:
                 user="⚙️ System",
                 respond=False,
             )
-            pn.state.execute(lambda: setattr(self.upload_chat_input, "value", b""))
+            pn.state.execute(lambda: setattr(source, "value", b""))
 
     async def _handle_message(
         self, contents: str, user: str, instance: pn.chat.ChatInterface
