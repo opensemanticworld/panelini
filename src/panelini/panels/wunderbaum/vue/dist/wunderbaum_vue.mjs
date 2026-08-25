@@ -8797,6 +8797,14 @@ const rf = (t, e) => {
     setTypes(t) {
       this.tree && this.tree.setOption("types", t);
     },
+    filterNodes(t, e) {
+      if (!this.tree) return;
+      const n = this.tree.filterNodes(t, e || {});
+      this.sendEvent("filter", { filter: t, matches: n });
+    },
+    clearFilter() {
+      this.tree && (this.tree.clearFilter(), this.sendEvent("filter", { filter: null, matches: null }));
+    },
     handleLazyResponse(t) {
       const { key: e, children: n } = t, i = this._pendingLazyResolvers[e];
       i && (i.timer && clearTimeout(i.timer), i.resolve(n), delete this._pendingLazyResolvers[e]);
@@ -8834,6 +8842,12 @@ const rf = (t, e) => {
           break;
         case "setActiveNode":
           this.setActiveNode(n.key);
+          break;
+        case "filterNodes":
+          this.filterNodes(n.filter, n.options);
+          break;
+        case "clearFilter":
+          this.clearFilter();
           break;
         case "batch":
           this.executeBatch(n);

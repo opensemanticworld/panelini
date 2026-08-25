@@ -143,3 +143,26 @@ def test_wunderbaum_external_drop_event():
 
     assert len(events_received) == 1
     assert events_received[0] == ("externalDrop", params)
+
+
+def test_wunderbaum_filter_nodes_action():
+    """Test that filter_nodes() sends a filterNodes action."""
+    tree = Wunderbaum()
+    tree.filter_nodes("foo", {"mode": "hide"})
+    assert tree._tree_action["action"] == "filterNodes"
+    assert tree._tree_action["payload"] == {"filter": "foo", "options": {"mode": "hide"}}
+
+
+def test_wunderbaum_filter_nodes_without_options():
+    """Test that filter_nodes() defaults options to an empty dict."""
+    tree = Wunderbaum()
+    tree.filter_nodes("foo")
+    assert tree._tree_action["payload"] == {"filter": "foo", "options": {}}
+
+
+def test_wunderbaum_clear_filter_action():
+    """Test that clear_filter() sends a clearFilter action."""
+    tree = Wunderbaum()
+    tree.clear_filter()
+    assert tree._tree_action["action"] == "clearFilter"
+    assert tree._tree_action["payload"] is None

@@ -766,6 +766,20 @@ export default {
       }
     },
 
+    filterNodes(filter, options) {
+      if (!this.tree) return;
+      // Returns the number of matches, which is the only thing Python can
+      // learn about the result, so send it straight back as an event.
+      const matches = this.tree.filterNodes(filter, options || {});
+      this.sendEvent('filter', { filter: filter, matches: matches });
+    },
+
+    clearFilter() {
+      if (!this.tree) return;
+      this.tree.clearFilter();
+      this.sendEvent('filter', { filter: null, matches: null });
+    },
+
     handleLazyResponse(responseData) {
       const { key, children } = responseData;
       const resolver = this._pendingLazyResolvers[key];
@@ -812,6 +826,12 @@ export default {
           break;
         case 'setActiveNode':
           this.setActiveNode(payload.key);
+          break;
+        case 'filterNodes':
+          this.filterNodes(payload.filter, payload.options);
+          break;
+        case 'clearFilter':
+          this.clearFilter();
           break;
         case 'batch':
           this.executeBatch(payload);

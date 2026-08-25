@@ -303,6 +303,27 @@ class Wunderbaum(AnyWidgetComponent):
             "timestamp": time.time(),
         }
 
+    def filter_nodes(self, match: str, options: Optional[dict[str, Any]] = None) -> None:
+        """Filter the tree, dimming or hiding nodes that do not match.
+
+        The match count comes back asynchronously as a ``filter`` tree event
+        with ``{"filter": match, "matches": n}``, since actions are one-way.
+
+        Args:
+            match: Substring searched for in node titles.
+            options: Wunderbaum filter options. Useful ones: ``mode`` ('dim' or
+                'hide'), ``fuzzy``, ``autoExpand``, ``matchBranch``,
+                ``leavesOnly``, ``highlight``.
+
+        Example:
+            tree.filter_nodes("report", {"mode": "hide", "autoExpand": True})
+        """
+        self._send_tree_action("filterNodes", {"filter": match, "options": options or {}})
+
+    def clear_filter(self) -> None:
+        """Remove an active filter and show every node again."""
+        self._send_tree_action("clearFilter", None)
+
     def batch_update(self, actions: list[dict[str, Any]]) -> None:
         """Execute multiple tree actions atomically.
 
