@@ -120,16 +120,23 @@ class Wunderbaum(AnyWidgetComponent):
         self.param.watch(self._on_lazy_request_change, ["_lazy_request"])
 
     def _on_event_data_change(self, event: Any) -> None:
-        """Handle event data changes from JavaScript."""
+        """Handle event data changes from JavaScript.
+
+        Events arrive as a per-tick batch ``{seq, events: [...]}`` so that
+        same-gesture events (e.g. click + activate) are all delivered in
+        order instead of coalescing to the last one.
+        """
         event_data = event.new
         if not event_data:
             return
 
-        event_name = event_data.get("event_name")
-        event_params = event_data.get("event_params", {})
-
-        if event_name:
-            self.handle_tree_event(event_name, event_params)
+        events = event_data.get("events")
+        if not isinstance(events, list):  # legacy single-event shape
+            events = [event_data]
+        for item in events:
+            event_name = item.get("event_name")
+            if event_name:
+                self.handle_tree_event(event_name, item.get("event_params", {}))
 
     def handle_tree_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a tree event.
@@ -279,6 +286,14 @@ class Wunderbaum(AnyWidgetComponent):
             key: Key of the node to activate.
         """
         self._send_tree_action("setActiveNode", {"key": key})
+
+    def start_edit_title(self, key: str) -> None:
+        """Activate a node and open its inline title editor.
+
+        Args:
+            key: Key of the node to edit.
+        """
+        self._send_tree_action("startEditTitle", {"key": key})
 
     def respond_lazy_load(self, key: str, children: list[dict[str, Any]]) -> None:
         """Respond to a lazy load request with children data.
