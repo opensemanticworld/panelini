@@ -174,18 +174,15 @@ class TestEvents:
         assert kept is not None and kept.title == "kept"
 
 
-class TestContextMenu:
-    def test_new_folder(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
-        tree_under_test._on_tree_event("contextmenu", {"action": "new_folder", "key": ""})
-        assert [f.name for f in store.list_folders(USER)] == ["New Folder"]
+class TestDeletion:
+    """Deletes go through the hover trash icon (there is no context menu)."""
 
-    def test_new_chat(self, tree_under_test: HistoryTree, callbacks: _Callbacks) -> None:
-        tree_under_test._on_tree_event("contextmenu", {"action": "new_chat", "key": ""})
-        assert callbacks.new_chats == 1
+    def _delete(self, tree: HistoryTree, key: str) -> None:
+        tree._on_tree_event("click", {"key": key, "action": "delete"})
 
     def test_delete_conversation(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER)
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+        self._delete(tree_under_test, f"conv:{conv.id}")
         assert store.get_conversation(USER, conv.id) is None
 
     def test_delete_active_conversation_opens_most_recent_remaining(
@@ -194,28 +191,41 @@ class TestContextMenu:
         remaining = store.create_conversation(USER, title="remaining")
         active = store.create_conversation(USER, title="active")
         callbacks.active_id = active.id
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{active.id}"})
+        self._delete(tree_under_test, f"conv:{active.id}")
         assert callbacks.opened == [remaining.id]
         assert callbacks.new_chats == 0
 
-    def test_delete_last_active_conversation_starts_new_chat(
+    def test_delete_last_active_conversation_resets_without_a_row(
+        self, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        resets: list[bool] = []
+        tree = HistoryTree(
+            store=store,
+            user_id=USER,
+            on_open=callbacks.on_open,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            on_reset=lambda: resets.append(True),
+        )
+        conv = store.create_conversation(USER)
+        callbacks.active_id = conv.id
+        tree._on_tree_event("click", {"key": f"conv:{conv.id}", "action": "delete"})
+        # the reset callback runs instead of materializing a new chat
+        assert resets == [True]
+        assert callbacks.new_chats == 0
+        assert store.list_conversations(USER) == []
+        assert tree._empty_hint.visible
+
+    def test_reset_falls_back_to_new_chat_when_not_provided(
         self, tree_under_test: HistoryTree, store: InMemoryHistoryStore, callbacks: _Callbacks
     ) -> None:
         conv = store.create_conversation(USER)
         callbacks.active_id = conv.id
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+        self._delete(tree_under_test, f"conv:{conv.id}")
         assert callbacks.new_chats == 1
 
-    def test_delete_folder_moves_contents_to_root(
-        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
-    ) -> None:
-        folder = store.create_folder(USER, "Projects")
-        conv = store.create_conversation(USER, folder_id=folder.id)
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"folder:{folder.id}"})
-        assert store.list_folders(USER) == []
-        remaining = store.get_conversation(USER, conv.id)
-        assert remaining is not None and remaining.folder_id is None
 
+class TestHeaderButtons:
     def test_new_chat_button(self, tree_under_test: HistoryTree, callbacks: _Callbacks) -> None:
         tree_under_test.new_chat_button.clicks += 1
         assert callbacks.new_chats == 1
@@ -271,49 +281,105 @@ class TestIndicators:
         assert "history-busy" in nodes[f"conv:{busy.id}"]["classes"]
         assert nodes[f"conv:{ready.id}"]["icon"] == "bi bi-check-circle-fill"
         assert "history-ready" in nodes[f"conv:{ready.id}"]["classes"]
-        assert "icon" not in nodes[f"conv:{plain.id}"]
+        assert nodes[f"conv:{plain.id}"]["icon"] == "history-icon-chat"
 
 
-class TestDeleteUndo:
-    def test_delete_offers_undo_and_restores(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
-        conv = store.create_conversation(USER, title="precious")
-        store.append_message(USER, conv.id, "human", "keep me")
+class TestDeleteDelegation:
+    def test_conversation_delete_routes_through_on_delete(
+        self, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        deleted: list[str] = []
+        tree = HistoryTree(
+            store=store,
+            user_id=USER,
+            on_open=callbacks.on_open,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            on_delete=deleted.append,
+        )
+        conv = store.create_conversation(USER, title="delegated")
 
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
+        tree._on_tree_event("click", {"key": f"conv:{conv.id}", "action": "delete"})
 
-        assert store.get_conversation(USER, conv.id) is None
-        assert tree_under_test.undo_bar.visible
-        assert "precious" in str(tree_under_test._undo_label.object)
+        # the tree does not touch the store itself; the owner deletes
+        assert deleted == [conv.id]
+        assert store.get_conversation(USER, conv.id) is not None
 
-        tree_under_test._handle_undo()
 
-        restored = store.get_conversation(USER, conv.id)
-        assert restored is not None and restored.title == "precious"
-        assert [m.content for m in store.load_messages(USER, conv.id)] == ["keep me"]
-        assert not tree_under_test.undo_bar.visible
+class TestFolderDeletion:
+    def test_empty_folder_deletes_without_confirmation(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Empty")
+        tree_under_test._on_tree_event("click", {"key": f"folder:{folder.id}", "action": "delete"})
+        assert store.list_folders(USER) == []
 
-    def test_activate_keeps_pending_undo(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
-        """set_active_node echoes an activate event, so activate must not dismiss."""
-        conv = store.create_conversation(USER, title="gone")
+    def test_non_empty_folder_arms_then_deletes_subtree(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        child = store.create_folder(USER, "Sub", parent_id=folder.id)
+        inside = store.create_conversation(USER, title="inside", folder_id=folder.id)
+        nested = store.create_conversation(USER, title="nested", folder_id=child.id)
+        outside = store.create_conversation(USER, title="outside")
+
+        key = f"folder:{folder.id}"
+        tree_under_test._on_tree_event("click", {"key": key, "action": "delete"})
+
+        # first click arms: nothing deleted yet, node marked, tooltip counts
+        assert store.get_conversation(USER, inside.id) is not None
+        armed = next(n for n in tree_under_test.tree.get_source() if n["key"] == key)
+        assert armed["classes"] == "history-delete-armed"
+        assert "2 chats" in armed["actions"][1]["tooltip"]
+
+        tree_under_test._on_tree_event("click", {"key": key, "action": "delete"})
+
+        # second click deletes the folder, its subfolder, and the chats in it
+        assert store.list_folders(USER) == []
+        assert store.get_conversation(USER, inside.id) is None
+        assert store.get_conversation(USER, nested.id) is None
+        assert store.get_conversation(USER, outside.id) is not None
+
+    def test_other_action_disarms_the_pending_folder_delete(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        store.create_conversation(USER, folder_id=folder.id)
         other = store.create_conversation(USER, title="other")
 
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
-        assert tree_under_test.undo_bar.visible
+        tree_under_test._on_tree_event("click", {"key": f"folder:{folder.id}", "action": "delete"})
+        assert tree_under_test._pending_folder_delete == folder.id
 
-        tree_under_test._on_tree_event("activate", {"key": f"conv:{other.id}"})
-        assert tree_under_test.undo_bar.visible  # still undoable
+        tree_under_test._on_tree_event("click", {"key": f"conv:{other.id}", "action": "rename"})
+        assert tree_under_test._pending_folder_delete is None
 
-    def test_new_chat_dismisses_pending_undo(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
-        conv = store.create_conversation(USER, title="gone")
+    def test_subtree_chats_route_through_on_delete_at_root(
+        self, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        deleted: list[str] = []
 
-        tree_under_test._on_tree_event("contextmenu", {"action": "delete", "key": f"conv:{conv.id}"})
-        assert tree_under_test.undo_bar.visible
+        def owner_delete(conversation_id: str) -> None:
+            deleted.append(conversation_id)
+            store.delete_conversation(USER, conversation_id)
 
-        tree_under_test._handle_new_chat()
-        assert not tree_under_test.undo_bar.visible
+        tree = HistoryTree(
+            store=store,
+            user_id=USER,
+            on_open=callbacks.on_open,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            on_delete=owner_delete,
+        )
+        folder = store.create_folder(USER, "Projects")
+        inside = store.create_conversation(USER, title="inside", folder_id=folder.id)
 
-        tree_under_test._handle_undo()  # nothing pending: must be a no-op
-        assert store.get_conversation(USER, conv.id) is None
+        key = f"folder:{folder.id}"
+        tree._on_tree_event("click", {"key": key, "action": "delete"})
+        tree._on_tree_event("click", {"key": key, "action": "delete"})
+
+        assert deleted == [inside.id]
+        # moved to the root before deletion, so an undo restores it there
+        assert store.list_folders(USER) == []
 
 
 class TestEmptyState:
@@ -338,3 +404,68 @@ class TestEmptyState:
         tree_under_test._handle_search(SimpleNamespace(new="zzz"))
         assert tree_under_test._empty_hint.visible
         assert "No matches" in str(tree_under_test._empty_hint.object)
+
+
+class TestRowActions:
+    def test_nodes_carry_the_hover_actions(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, title="chat")
+
+        source = _source(tree_under_test)
+
+        conv_node = next(n for n in source if n["key"] == f"conv:{conv.id}")
+        folder_node = next(n for n in source if n["key"] == f"folder:{folder.id}")
+        for node in (conv_node, folder_node):
+            assert [a["action"] for a in node["actions"]] == ["rename", "delete"]
+
+    def test_trash_click_deletes(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="via icon")
+
+        tree_under_test._on_tree_event("click", {"key": f"conv:{conv.id}", "action": "delete"})
+
+        assert store.get_conversation(USER, conv.id) is None
+
+    def test_pencil_click_starts_inline_edit(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="rename me")
+
+        tree_under_test._on_tree_event("click", {"key": f"conv:{conv.id}", "action": "rename"})
+
+        action = tree_under_test.tree._tree_action
+        assert action["action"] == "startEditTitle"
+        assert action["payload"] == {"key": f"conv:{conv.id}"}
+
+    def test_plain_click_is_not_an_action(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="stay")
+        tree_under_test._on_tree_event("click", {"key": f"conv:{conv.id}", "region": "title"})
+        assert store.get_conversation(USER, conv.id) is not None
+
+
+class TestReadyIndicator:
+    def test_ready_check_clears_when_the_node_is_opened(
+        self, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        """Opening a ready chat refreshes the tree so the green check drops."""
+        ready: set[str] = set()
+
+        def open_and_clear(cid: str) -> None:
+            ready.discard(cid)  # AiChat clears the flag when opening
+            callbacks.on_open(cid)
+
+        tree = HistoryTree(
+            store=store,
+            user_id=USER,
+            on_open=open_and_clear,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            get_ready_ids=lambda: ready,
+        )
+        conv = store.create_conversation(USER, title="finished")
+        ready.add(conv.id)
+        tree.refresh()
+        node = next(n for n in tree.tree.get_source() if n["key"] == f"conv:{conv.id}")
+        assert node["icon"] == "bi bi-check-circle-fill"
+
+        tree._on_tree_event("activate", {"key": f"conv:{conv.id}"})
+
+        node = next(n for n in tree.tree.get_source() if n["key"] == f"conv:{conv.id}")
+        assert node["icon"] == "history-icon-chat"  # check gone immediately
