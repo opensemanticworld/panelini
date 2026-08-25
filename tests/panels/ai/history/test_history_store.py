@@ -439,3 +439,40 @@ class TestLocalStorageSpecifics:
         backend.pane.loaded = False
         backend.pane.loaded = True
         assert loaded == [True]
+
+
+# ── restore (delete undo) ─────────────────────────────────────────────────
+
+
+class TestRestoreConversation:
+    def test_restore_reinstates_a_deleted_conversation(self, store: ChatHistoryStore) -> None:
+        from panelini.panels.ai.history.document import DocumentHistoryStore, conversation_to_document
+
+        assert isinstance(store, DocumentHistoryStore)
+        conv = store.create_conversation(USER, title="come back")
+        store.append_message(USER, conv.id, "human", "hi")
+        record = store.get_conversation(USER, conv.id)
+        assert record is not None
+        document = conversation_to_document(record, store.load_messages(USER, conv.id))
+
+        store.delete_conversation(USER, conv.id)
+        store.restore_conversation(USER, document)
+
+        assert store.get_conversation(USER, conv.id) == record
+        assert [m.content for m in store.load_messages(USER, conv.id)] == ["hi"]
+
+    def test_restore_assigns_the_restoring_owner(self, store: ChatHistoryStore) -> None:
+        from panelini.panels.ai.history.document import DocumentHistoryStore, conversation_to_document
+
+        assert isinstance(store, DocumentHistoryStore)
+        conv = store.create_conversation(USER, title="mine")
+        record = store.get_conversation(USER, conv.id)
+        assert record is not None
+        document = conversation_to_document(record, [])
+        store.delete_conversation(USER, conv.id)
+
+        store.restore_conversation(OTHER, document)
+
+        assert store.get_conversation(USER, conv.id) is None
+        adopted = store.get_conversation(OTHER, conv.id)
+        assert adopted is not None and adopted.user_id == OTHER

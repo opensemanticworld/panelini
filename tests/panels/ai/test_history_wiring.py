@@ -183,43 +183,50 @@ class TestChatHistoryWiring:
         assert chat.backend.user_id == USER
         assert chat.backend.history_store is not None
 
+    def test_default_view_is_the_tree(self, chat: AiChat) -> None:
+        from panelini.panels.ai.history import HistoryTree
+
+        assert isinstance(chat._history_panel, HistoryTree)
+        assert chat._history_view == "tree"
+
     def test_import_export_share_the_new_chat_row(self, chat: AiChat) -> None:
         # card body is a Column whose first object is the action row
         row: Any = chat._history_panel.card[0][0]
         assert list(row) == [
             chat._history_panel.new_chat_button,
+            chat._history_panel.new_folder_button,
             chat.upload_chat_input,
             chat.download_chat_button,
             chat.view_toggle_button,
         ]
 
     def test_view_toggle_switches_and_carries_the_search(self, chat: AiChat) -> None:
-        """The toggle lazily mounts the tree, flips visibility, keeps the filter."""
-        list_panel = chat._history_panel
-        list_panel.search_input.value_input = "deploy"
-
-        chat._toggle_history_view()
-
+        """The toggle lazily mounts the list, flips visibility, keeps the filter."""
         tree_panel = chat._history_panel
-        assert tree_panel is not list_panel
-        assert chat._history_view == "tree"
-        # both cards stay mounted; only visibility flips
-        assert list(chat._chat_tab) == [list_panel.card, tree_panel.card]
-        assert not list_panel.card.visible
-        assert tree_panel.card.visible
-        # the typed filter carried over
-        assert tree_panel.search_input.value == "deploy"
-        # each view has its own action icons; the tree card carries a toggle too
-        tree_row: Any = tree_panel.card[0][0]
-        assert tree_row[0] is tree_panel.new_chat_button
-        assert chat.upload_chat_input not in list(tree_row)
+        tree_panel.search_input.value_input = "deploy"
 
         chat._toggle_history_view()
 
-        # back to the same list instance, no rebuild
-        assert chat._history_panel is list_panel
-        assert list_panel.card.visible
+        list_panel = chat._history_panel
+        assert list_panel is not tree_panel
+        assert chat._history_view == "list"
+        # both cards stay mounted; only visibility flips
+        assert list(chat._chat_tab) == [tree_panel.card, list_panel.card]
         assert not tree_panel.card.visible
+        assert list_panel.card.visible
+        # the typed filter carried over
+        assert list_panel.search_input.value == "deploy"
+        # each view has its own action icons; the list card carries a toggle too
+        list_row: Any = list_panel.card[0][0]
+        assert list_row[0] is list_panel.new_chat_button
+        assert chat.upload_chat_input not in list(list_row)
+
+        chat._toggle_history_view()
+
+        # back to the same tree instance, no rebuild
+        assert chat._history_panel is tree_panel
+        assert tree_panel.card.visible
+        assert not list_panel.card.visible
 
     def test_history_store_defaults_when_omitted(self, _mock_backend_env: None) -> None:
         # every chat gets history; without a store argument it is the shared default
@@ -320,8 +327,8 @@ class TestChatHistoryWiring:
         assert [c.title for c in conversations] == ["Imported: old_chat.json"]
         assert chat.backend.conversation_id == conversations[0].id
         # the imported conversation shows up as a history row
-        history_rows = [o for o in chat._history_panel._list.objects if "history-row" in o.css_classes]
-        assert len(history_rows) == 1
+        titles = [node["title"] for node in chat._history_panel.tree.source]
+        assert titles == ["Imported: old_chat.json"]
 
     def test_export_import_roundtrip_via_document(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         """The exported v2 document re-imports as a new conversation."""
@@ -362,19 +369,19 @@ class TestChatHistoryWiring:
         assert len(badges) == 1
         assert len(calls) == 1  # header badge and history share one resolution
 
-    def test_tree_view_selected_via_param(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
+    def test_list_view_selected_via_param(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         from panelini import Panelini
-        from panelini.panels.ai.history import HistoryTree
+        from panelini.panels.ai.history import HistoryPanel
 
         app = Panelini(
             use_ai=True,
             ai_history_store=store,
-            ai_history_view="tree",
+            ai_history_view="list",
             user_resolver=lambda: USER,
         )
-        assert isinstance(app._ai_frontend._history_panel, HistoryTree)
+        assert isinstance(app._ai_frontend._history_panel, HistoryPanel)
         tabs: Any = app._ai_frontend.sidebar_objects[0]
-        assert tabs.objects[1][0].title == "Conversations"  # tree card leads the chat tab
+        assert tabs.objects[1][0].title == "Conversations"  # list card leads the chat tab
 
     def test_panelini_history_params(self, _mock_backend_env: None, store: InMemoryHistoryStore) -> None:
         from panelini import Panelini

@@ -78,7 +78,7 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
             try:
                 _open_sidebar(page, _PORTS[0])
                 _send_message(page, "Persist me across restarts")
-                page.locator(".history-title", has_text="Persist me").first.wait_for()
+                page.locator(".wb-row", has_text="Persist me").first.wait_for()
             finally:
                 server.stop()
 
@@ -91,7 +91,7 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
             _, server = _serve(_PORTS[1])
             try:
                 _open_sidebar(page, _PORTS[1])
-                row = page.locator(".history-title", has_text="Persist me").first
+                row = page.locator(".wb-row", has_text="Persist me").first
                 row.wait_for()
                 row.click()
                 replayed = page.locator(".chat-interface").locator("text=Persist me across restarts").first

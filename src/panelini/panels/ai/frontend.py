@@ -122,7 +122,7 @@ class AiChat:
         show_tools: bool = True,
         show_preview: bool = False,
         history_store: ChatHistoryStore | str | None = None,
-        history_view: str = "list",
+        history_view: str = "tree",
         user_resolver: UserResolver | None = None,
         user_id: str | None = None,
         cookie_pane: pn.viewable.Viewable | None = None,
@@ -145,8 +145,9 @@ class AiChat:
                 otherwise in-memory for the lifetime of the process. The
                 string ``"browser"`` keeps this session's history in the
                 browser's localStorage instead (per-browser persistence).
-            history_view: History sidebar style: "list" (date-grouped) or
-                "tree" (drag-and-drop folders).
+            history_view: Initial history sidebar style: "tree"
+                (drag-and-drop folders, the default) or "list"
+                (date-grouped); a toggle switches at runtime.
             user_resolver: Optional callable resolving the history owner id;
                 defaults to Panel auth user or an anonymous browser cookie.
                 Only used standalone, i.e. when ``user_id`` is not given.

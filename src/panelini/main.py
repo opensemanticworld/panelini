@@ -196,9 +196,9 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     )
 
     ai_history_view = param.Selector(
-        default="list",
-        objects=["list", "tree"],
-        doc="History sidebar style: date-grouped list or drag-and-drop folder tree.",
+        default="tree",
+        objects=["tree", "list"],
+        doc="Initial history sidebar style: drag-and-drop folder tree (default) or date-grouped list.",
     )
 
     show_user = param.Boolean(

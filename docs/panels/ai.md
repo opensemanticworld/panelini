@@ -201,9 +201,10 @@ When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
 The left sidebar receives two icon tabs. The conversations tab (💬, active by
 default) holds a single card:
 
-- **Conversations** -- New chat, import/export chat as JSON, a list/tree
-  view toggle, search over titles and messages, and the user's
-  conversations grouped by date with inline rename and delete
+- **Conversations** -- New chat, new folder, import/export chat as JSON,
+  a tree/list view toggle, search over titles and messages, and the
+  user's conversations in a drag-and-drop folder tree (inline rename,
+  delete with undo); the list view groups them by date instead
 
 The setup tab (⚙️) holds the model controls:
 
@@ -228,12 +229,13 @@ path to persist them in SQLite, pass your own store as `ai_history_store`, or
 pass `ai_history_store="browser"` to keep each user's history in their
 browser's localStorage (per-browser persistence across reloads and restarts,
 no server-side database, ~5MB quota).
-`ai_history_view` picks the initial sidebar style: `"list"` (date-grouped,
-the default) or `"tree"` (a drag-and-drop folder tree); an icon in the New
-Chat row switches between the two at runtime (per session; a reload starts
-from `ai_history_view` again, and a typed search filter carries over the
-switch). Conversations are owned by the resolved user id (see
-`user_resolver`); anonymous visitors get a cookie-backed id.
+`ai_history_view` picks the initial sidebar style: `"tree"` (a
+drag-and-drop folder tree, the default: organize chats like a filesystem)
+or `"list"` (date-grouped); an icon in the New Chat row switches between
+the two at runtime (per session; a reload starts from `ai_history_view`
+again, and a typed search filter carries over the switch). Conversations
+are owned by the resolved user id (see `user_resolver`); anonymous
+visitors get a cookie-backed id.
 
 #### Document model
 

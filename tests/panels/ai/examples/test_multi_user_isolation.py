@@ -46,7 +46,7 @@ def test_sessions_are_isolated(browser, panel_server):
         page_a.locator(".left-navbar-button").first.click()
         page_a.locator("text=Conversations").first.wait_for()
         page_a.locator(".history-new-chat").first.click()
-        page_a.locator(".history-title").first.wait_for()
+        page_a.locator(".wb-row", has_text="New Chat").first.wait_for()
 
         # Give any hypothetical cross-session sync a moment before the
         # negative assertion; with per-session instances nothing propagates.
@@ -54,8 +54,8 @@ def test_sessions_are_isolated(browser, panel_server):
 
         # User B's session is untouched: no conversations of its own.
         page_b.locator(".left-navbar-button").first.click()
-        page_b.locator("text=No conversations yet").first.wait_for()
-        assert page_b.locator(".history-title").count() == 0
+        page_b.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+        assert page_b.locator(".wunderbaum-wrapper:visible").count() == 0
     finally:
         context_a.close()
         context_b.close()
