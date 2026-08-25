@@ -144,3 +144,4 @@ cython_debug/
 # Local environment
 _ign/
 data/
+.ign/
