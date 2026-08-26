@@ -13,6 +13,12 @@
 :titlesonly:
 :maxdepth: 3
 
+panelini.panels.accelerometer
+panelini.panels.audio_spectrum
+panelini.panels.camera
+panelini.panels.compass
+panelini.panels.gps
 panelini.panels.jsoneditor
 panelini.panels.visnetwork
+panelini.panels.wunderbaum
 ```

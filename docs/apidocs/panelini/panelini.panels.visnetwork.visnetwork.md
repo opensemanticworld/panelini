@@ -45,7 +45,7 @@
 
 ````
 
-`````{py:class} VisNetwork(nodes: typing.Optional[list[dict[str, typing.Any]]] = None, edges: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, network_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
+`````{py:class} VisNetwork(nodes: typing.Optional[list[dict[str, typing.Any]]] = None, edges: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, network_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, context_menu_callback: typing.Optional[typing.Callable[[str, str, str], None]] = None, nodes_duplicated_callback: typing.Optional[typing.Callable[[list[dict[str, typing.Any]]], None]] = None, node_created_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, edge_created_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
 :canonical: panelini.panels.visnetwork.visnetwork.VisNetwork
 
 Bases: {py:obj}`panel.custom.AnyWidgetComponent`
@@ -223,6 +223,14 @@ Bases: {py:obj}`panel.custom.AnyWidgetComponent`
 :canonical: panelini.panels.visnetwork.visnetwork.VisNetwork.update_nodes
 
 ```{autodoc2-docstring} panelini.panels.visnetwork.visnetwork.VisNetwork.update_nodes
+```
+
+````
+
+````{py:method} remove_nodes(node_ids: list[typing.Any]) -> None
+:canonical: panelini.panels.visnetwork.visnetwork.VisNetwork.remove_nodes
+
+```{autodoc2-docstring} panelini.panels.visnetwork.visnetwork.VisNetwork.remove_nodes
 ```
 
 ````
