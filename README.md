@@ -22,7 +22,6 @@
 - [💥 Usage](#-usage)
 - [🛞 Commands](#-commands)
 - [📌 Releases](#-releases)
-- [🦥 Authors](#-authors)
 - [📜 Content Attribution](#-content-attribution)
 
 ## 📄 Features
@@ -97,13 +96,6 @@ panel serve examples/panelini_min.py --dev --port 5006 --static-dirs assets="src
 ## 📌 Releases
 
 Versions are cut automatically from [Conventional Commits](https://www.conventionalcommits.org/) on every merge to `main`. See [CHANGELOG.md](CHANGELOG.md) for release notes and [Releases](https://github.com/opensemanticworld/panelini/releases) for published tags.
-
-## 🦥 Authors
-
-- [Andreas Räder](https://github.com/raederan)
-- [Linus Schenk](https://github.com/cptnsloww)
-- [Matthias A. Popp](https://github.com/MatPoppFHG)
-- [Simon Stier](https://github.com/simontaurus)
 
 ## 📜 Content Attribution
 
