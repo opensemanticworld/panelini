@@ -657,12 +657,22 @@ class AiChat:
     # ── Session management ───────────────────────────────────────────────
 
     def _new_session(self, welcome: bool = False, conversation_id: str | None = None) -> "_ChatSession":
+        _chat_input_css = (
+            "textarea {"
+            " field-sizing: content !important;"
+            " min-height: 38px !important;"
+            " max-height: 200px !important;"
+            " overflow-y: auto !important;"
+            " resize: none !important;"
+            "}"
+        )
         feed = pn.chat.ChatInterface(
             callback=self._handle_message,
             callback_user="🤖 Assistant",
             placeholder_text="💭 Thinking...",
             placeholder_threshold=0.2,
             user="🧑 User",
+            widgets=pn.chat.ChatAreaInput(resizable=False, stylesheets=[_chat_input_css]),
             min_width=330,
             show_send=True,
             show_rerun=False,
