@@ -94,10 +94,24 @@ i.history-action-delete-armed {{
 """
 
 _SEARCH_CSS = """
-:host { width: 100%; margin: 0 2px 6px 2px; }
+:host { width: 100%; margin: 0; }
 .bk-input {
-    font-size: 0.82em; padding: 4px 8px; border-radius: 6px;
+    font-size: 0.82em; padding: 4px 26px 4px 8px; border-radius: 6px;
 }
+"""
+
+_SEARCH_CLEAR_CSS = """
+:host {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    margin: 0; z-index: 1;
+}
+.bk-btn, .bk-btn:focus {
+    width: 20px; height: 20px; min-height: 0; padding: 0;
+    background: transparent; border: none; border-radius: 4px;
+    opacity: 0.5; cursor: pointer; transition: opacity 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+}
+.bk-btn:hover { opacity: 1; background: rgba(120, 120, 120, 0.12); }
 """
 
 # Same empty-state styling as the list view
@@ -182,6 +196,26 @@ class HistoryTree:
         # value_input fires per keystroke, so results follow typing
         self.search_input.param.watch(self._handle_search, "value_input")
 
+        self._search_clear_button = pn.widgets.Button(
+            icon="x",
+            width=24,
+            align="center",
+            margin=0,
+            visible=False,
+            stylesheets=[_SEARCH_CLEAR_CSS],
+            css_classes=["history-search-clear"],
+            description="Clear search",
+        )
+        self._search_clear_button.on_click(self._handle_search_clear)
+
+        self._search_row = pn.Row(
+            self.search_input,
+            self._search_clear_button,
+            sizing_mode="stretch_width",
+            margin=(6, 2, 6, 2),
+            styles={"position": "relative"},
+        )
+
         source = self._build_source()
         self.tree = Wunderbaum(
             source=source,
@@ -213,7 +247,7 @@ class HistoryTree:
                         sizing_mode="stretch_width",
                         margin=0,
                     ),
-                    self.search_input,
+                    self._search_row,
                     self._empty_hint,
                     self.tree,
                     sizing_mode="stretch_width",
@@ -325,6 +359,16 @@ class HistoryTree:
 
     def _handle_search(self, event: Any) -> None:
         self._query = event.new or ""
+        self._search_clear_button.visible = bool(self._query)
+        self._pending_folder_delete = None
+        self.refresh()
+
+    def _handle_search_clear(self, event: object = None) -> None:
+        _ = event
+        self.search_input.value = ""
+        self.search_input.value_input = ""
+        self._query = ""
+        self._search_clear_button.visible = False
         self._pending_folder_delete = None
         self.refresh()
 
