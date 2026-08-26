@@ -189,3 +189,81 @@ section > section > section#api > h3 {
     padding-bottom: 0.4em;
     margin-top: 2em;
 }
+
+/* ── Sphinx-design grid cards ─────────────────────────────────────── */
+
+.sd-card {
+    border: 1px solid var(--color-background-border);
+    border-radius: 6px;
+    background: var(--color-background-primary);
+    transition: transform 0.15s ease, box-shadow 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.sd-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-brand-primary);
+    box-shadow: 0 4px 14px rgba(13, 115, 119, 0.08);
+}
+
+.sd-card .sd-card-header,
+.sd-card .sd-card-title {
+    font-weight: 600;
+    color: var(--color-foreground-primary);
+    background: transparent;
+    border-bottom: none;
+}
+
+.sd-card .sd-card-body {
+    padding-top: 0.6em;
+}
+
+.sd-card a.stretched-link,
+.sd-card a.sd-stretched-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Dark-mode card surface */
+body[data-theme="dark"] .sd-card {
+    background: var(--color-background-secondary);
+}
+
+/* ── Landing-page polish ──────────────────────────────────────────── */
+
+/* Tighten the hero badges row */
+p:has(> a > img[alt^="PyPI"]),
+p:has(> a > img[alt^="Release"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35em;
+    margin-top: 0.4em;
+    margin-bottom: 1em;
+}
+
+/* Softer horizontal rules */
+hr {
+    border: none;
+    border-top: 1px solid var(--color-background-border);
+    margin: 2.2em 0;
+}
+
+/* Tip / note admonitions feel slightly warmer */
+.admonition.tip,
+div.admonition-tip {
+    border-left-color: var(--color-brand-primary);
+}
+
+/* Mermaid diagrams — centred, responsive */
+div.mermaid {
+    text-align: center;
+    margin: 1.5em 0;
+}
+
+/* Inline code in body text — softer background */
+:not(pre) > code {
+    background: var(--color-background-secondary);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    font-size: 0.88em;
+}

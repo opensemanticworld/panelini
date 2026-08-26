@@ -83,13 +83,15 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     header_background_image = param.ClassSelector(
         class_=(str, Path),
         default=_HEADER_BACKGROUND_IMAGE,
-        doc="Background image for the header section.",
+        allow_None=True,
+        doc="Background image for the header section. Set to None to disable.",
     )
 
     content_background_image = param.ClassSelector(
         class_=(str, Path),
         default=_CONTENT_BACKGROUND_IMAGE,
-        doc="Background image for the content section.",
+        allow_None=True,
+        doc="Background image for the content section. Set to None to disable.",
     )
 
     static_dir = param.ClassSelector(
@@ -151,6 +153,29 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
     footer_enabled = param.Boolean(
         default=False,
         doc="Enable or disable the footer.",
+    )
+
+    use_ai = param.Boolean(
+        default=False,
+        doc="Enable the AI chat component.",
+    )
+
+    ai_system_message = param.String(
+        default="You are a helpful assistant.",
+        doc="System message for the AI backend.",
+    )
+
+    ai_welcome_message = param.String(
+        default=None,
+        allow_None=True,
+        doc="Initial greeting shown in the AI chat. Uses a default if None.",
+    )
+
+    ai_config_path = param.ClassSelector(
+        class_=(str, Path),
+        default=None,
+        allow_None=True,
+        doc="Optional path to a custom config.yml for the AI component.",
     )
 
     # $$$$$$$$$$$$$$$$$$$$$$$$$$ ENDOF CLASSVARS $$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -239,6 +264,43 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         )
         self._panel_set()
 
+        if self.use_ai:
+            self._init_ai()
+
+    def _init_ai(self) -> None:
+        """Lazily initialize the AI chat component.
+
+        Raises:
+            ImportError: If the AI dependencies are not installed.
+        """
+        try:
+            from panelini.panels.ai import AiChat
+        except ImportError as exc:
+            msg = "AI dependencies are not installed. Install with: pip install panelini[ai]"
+            raise ImportError(msg) from exc
+
+        config_path = Path(self.ai_config_path) if isinstance(self.ai_config_path, str) else self.ai_config_path
+        self._ai_frontend = AiChat(
+            system_message=self.ai_system_message,
+            welcome_message=self.ai_welcome_message,
+            config_path=config_path,
+        )
+
+        # Ensure the sidebar is enabled so AI controls are accessible
+        if not self.sidebar_enabled:
+            self.sidebar_enabled = True
+            self._sidebar_left = panel.Column(
+                css_classes=["sidebar", "left-sidebar"],
+                visible=self.sidebar_visible,
+                max_width=self._sidebar_max_width,
+                sizing_mode="stretch_both",
+                objects=self.sidebar_get(),
+            )
+            self._sidebar_left_set()
+
+        self.sidebar_set(objects=self._ai_frontend.sidebar_objects)
+        self.main_set(objects=self._ai_frontend.main_objects)
+
     def __panel__(self) -> panel.viewable.Viewable:
         """Return the main panel for the application."""
         return self._panel
@@ -253,12 +315,14 @@ class Panelini(param.Parameterized):  # type: ignore[no-any-unimported]
         panel.config.raw_css.append(_MAIN_CSS.read_text())
 
         # Set navbar background image
-        header_img_base64 = image_to_base64(str(self.header_background_image))
-        panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
+        if self.header_background_image is not None:
+            header_img_base64 = image_to_base64(str(self.header_background_image))
+            panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
 
         # Set content background image
-        content_img_base64 = image_to_base64(str(self.content_background_image))
-        panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
+        if self.content_background_image is not None:
+            content_img_base64 = image_to_base64(str(self.content_background_image))
+            panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
 
     def _sidebar_config_set(self) -> None:
         """Set the configuration for the sidebars."""

@@ -1,16 +1,20 @@
-# API Reference
+# API reference
 
-This page provides an overview of all public modules, classes, and functions in the `panelini` package.
+A handwritten overview of the public API, organised by what you're most likely to import. For exhaustive signatures and docstrings jump straight to the [auto-generated reference](apidocs/index).
 
-## Quick Imports
+## Quick imports
 
 ```python
 # Core framework
 from panelini import Panelini
 
-# Panels (standalone, no Panelini dependency)
+# Core with the AI chat enabled
+app = Panelini(title="My app", use_ai=True)
+
+# Panels — standalone, no panelini dependency
 from panelini.panels.jsoneditor import JsonEditor
 from panelini.panels.visnetwork import VisNetwork, GraphDetailTool
+from panelini.panels.ai import AiChat
 
 # Utilities
 from panelini.panels.visnetwork.utils import data_url_to_bytes
@@ -20,55 +24,41 @@ from panelini.panels.visnetwork.utils import data_url_to_bytes
 
 ## Core
 
-The core module provides the main application framework class for building dashboards with pre-designed responsive layouts.
+### `panelini.main.Panelini`
 
-```{list-table}
-:header-rows: 1
-:widths: 30 70
+The dashboard shell. Built on `param.Parameterized`, so every constructor argument below is also a reactive attribute you can set at runtime.
 
-* - Class
-  - Description
-* - {py:class}`panelini.main.Panelini`
-  - Main application class providing a responsive dashboard layout with header, sidebars, main content area, and footer. Built on `param.Parameterized` for reactive parameter-driven updates.
-* - {py:class}`panelini.main.ImageFileNotFoundError`
-  - Exception raised when a referenced image file cannot be found.
-```
-
-### `Panelini` -- Layout Management
-
-The {py:class}`~panelini.main.Panelini` class provides methods for managing layout regions:
+#### Layout methods
 
 ```{list-table}
 :header-rows: 1
 :widths: 35 65
 
 * - Method
-  - Description
+  - What it does
 * - `main_set(objects)`
-  - Replace the main content area with the given list of Panel objects.
+  - Replace the main-area content.
 * - `main_add(objects)`
-  - Append Panel objects to the existing main content.
+  - Append to the main area.
 * - `main_get()`
-  - Retrieve the current list of main content objects.
+  - Return the current main-area objects.
 * - `main_remove_index(index)`
-  - Remove a main content object by index.
+  - Remove one object by index.
 * - `main_clear()`
-  - Remove all objects from the main content area.
-* - `sidebar_set(objects)`
-  - Replace the left sidebar content.
-* - `sidebar_get()`
-  - Retrieve the current left sidebar objects.
-* - `sidebar_right_set(objects)`
-  - Replace the right sidebar content.
-* - `sidebar_right_get()`
-  - Retrieve the current right sidebar objects.
+  - Remove everything from the main area.
+* - `sidebar_set / sidebar_add / sidebar_get`
+  - Same as above for the left sidebar.
+* - `sidebar_right_set / sidebar_right_add / sidebar_right_get`
+  - Same as above for the right sidebar.
+* - `footer_set / footer_add / footer_get`
+  - Same as above for the footer.
 * - `servable(**kwargs)`
-  - Make the application servable for `panel serve`.
+  - Make the app servable via `panel serve`.
 * - `__panel__()`
-  - Panel integration hook returning the viewable layout.
+  - Return the composed Panel layout.
 ```
 
-### `Panelini` -- Configuration Parameters
+#### Parameters
 
 ```{list-table}
 :header-rows: 1
@@ -76,111 +66,86 @@ The {py:class}`~panelini.main.Panelini` class provides methods for managing layo
 
 * - Parameter
   - Type
-  - Description
+  - Default / notes
 * - `title`
   - `String`
-  - Dashboard title displayed in the header.
+  - Dashboard title shown in the header.
 * - `logo`
   - `str | Path`
-  - Path to the logo image displayed in the header.
+  - Header logo. Defaults to the bundled Panelini mark.
 * - `logo_link_url`
   - `String`
   - URL the logo links to (default: `"/"`).
 * - `header_background_image`
-  - `str | Path`
-  - Background image for the header area.
+  - `str | Path | None`
+  - Header background. `None` disables it (skips ~530 KB of base64 CSS).
 * - `content_background_image`
-  - `str | Path`
-  - Background image for the content area.
+  - `str | Path | None`
+  - Content background. Same `None` trick applies.
 * - `static_dir`
   - `str | Path`
-  - Directory for static assets.
+  - Directory served as static assets.
 * - `main`
   - `List`
-  - List of Panel objects for the main content area.
-* - `sidebar`
+  - Initial main-area objects.
+* - `sidebar` / `sidebar_right` / `footer`
   - `List`
-  - List of Panel objects for the left sidebar.
-* - `sidebar_right`
-  - `List`
-  - List of Panel objects for the right sidebar.
-* - `footer`
-  - `List`
-  - List of Panel objects for the footer.
+  - Initial objects for each region.
 * - `sidebar_enabled`
   - `Boolean`
-  - Enable or disable the left sidebar (default: `True`).
+  - Show the left sidebar (default: `True`).
 * - `sidebar_visible`
   - `Boolean`
-  - Show or hide the left sidebar (default: `True`).
+  - Expand state of the left sidebar (default: `True`).
 * - `sidebar_right_enabled`
   - `Boolean`
-  - Enable or disable the right sidebar (default: `False`).
+  - Show the right sidebar (default: `False`).
 * - `sidebar_right_visible`
   - `Boolean`
-  - Show or hide the right sidebar (default: `False`).
+  - Expand state of the right sidebar (default: `False`).
 * - `footer_enabled`
   - `Boolean`
-  - Enable or disable the footer (default: `False`).
+  - Show the footer (default: `False`).
 * - `sidebars_max_width`
   - `Integer`
-  - Maximum width of sidebars in pixels (default: `300`, bounds: 100--500).
+  - Max sidebar width in px (default: `300`, bounds: 100–500).
+* - `use_ai`
+  - `Boolean`
+  - Inject the AI chat panel (default: `False`). Requires `panelini[ai]`.
+* - `ai_system_message`
+  - `String`
+  - System prompt for the AI backend.
+* - `ai_welcome_message`
+  - `String`
+  - Greeting shown in the chat pane.
+* - `ai_config_path`
+  - `str | Path`
+  - Custom `config.yml`. Auto-discovered when `None`.
 ```
 
-### Utility Functions
+#### Helpers
 
 ```{list-table}
 :header-rows: 1
 :widths: 35 65
 
-* - Function
+* - Symbol
   - Description
-* - `panelini.main.image_to_base64(image_path)`
-  - Convert an image file to a base64-encoded data URL string.
+* - `panelini.main.image_to_base64(path)`
+  - Read an image from disk and return a `data:image/...;base64,...` URL.
+* - `panelini.main.ImageFileNotFoundError`
+  - Raised when a referenced image path doesn't exist.
 ```
 
 ---
 
 ## Panels
 
-Independent standalone components usable in any Panel application -- with or without the Panelini framework. Each panel wraps a JavaScript library via the `AnyWidgetComponent` base class and Vue.js.
+### `panelini.panels.jsoneditor.JsonEditor`
 
-See the {doc}`Panels section <panels/index>` for usage guides and examples.
+JSON-Schema form editor wrapping [json-editor](https://github.com/json-editor/json-editor).
 
-### `panelini.panels.jsoneditor` -- JSON Schema Form Editor
-
-```{list-table}
-:header-rows: 1
-:widths: 30 70
-
-* - Class
-  - Description
-* - {py:class}`panelini.panels.jsoneditor.jsoneditor.JsonEditor`
-  - JSON Schema-based form editor component. Wraps the [json-editor](https://github.com/json-editor/json-editor) JavaScript library, providing dynamic form generation from JSON Schema definitions with bi-directional Python/JS synchronization.
-```
-
-**Parameters:**
-
-```{list-table}
-:header-rows: 1
-:widths: 25 15 60
-
-* - Parameter
-  - Type
-  - Description
-* - `value`
-  - `Dict`
-  - Current form data as a dictionary.
-* - `options`
-  - `Dict`
-  - JSON Editor configuration (schema, theme, iconlib, etc.).
-* - `ready`
-  - `Boolean`
-  - Whether the editor is initialized and ready.
-* - `encoder`
-  - `ClassSelector`
-  - Custom JSON encoder class for serialization.
-```
+**Parameters:** `value` (dict), `options` (dict), `ready` (bool), `encoder` (JSON encoder class).
 
 **Methods:**
 
@@ -191,152 +156,112 @@ See the {doc}`Panels section <panels/index>` for usage guides and examples.
 * - Method
   - Description
 * - `get_value()`
-  - Return the current form data.
+  - Current form data.
 * - `set_value(value)`
-  - Set the form data.
+  - Set form data.
 * - `set_schema(schema, startval=None, keep_value=False)`
-  - Load a new JSON Schema, optionally preserving or replacing the current value.
+  - Swap schemas, optionally preserving or seeding values.
 ```
 
-### `panelini.panels.visnetwork` -- Interactive Network Visualization
+See {doc}`panels/jsoneditor` for usage, or the full API: {py:class}`panelini.panels.jsoneditor.jsoneditor.JsonEditor`.
 
-```{list-table}
-:header-rows: 1
-:widths: 30 70
+### `panelini.panels.visnetwork.VisNetwork`
 
-* - Class
-  - Description
-* - {py:class}`panelini.panels.visnetwork.visnetwork.VisNetwork`
-  - Interactive network/graph visualization component. Wraps [vis-network](https://visjs.github.io/vis-network/docs/network/) with full support for node/edge manipulation, edit modes, event handling, and batch operations.
-* - {py:class}`panelini.panels.visnetwork.graph_detail_tool.GraphDetailTool`
-  - High-level graph editing UI that composes VisNetwork with JsonEditor for node detail editing, visualization of node data (images, CSV, PDF), and tabular editing.
-```
+Interactive network graph wrapping [vis-network](https://visjs.github.io/vis-network/docs/network/). Full node/edge manipulation, edit modes, file-drop handling, and event callbacks.
 
-#### `VisNetwork` -- Node Operations
+#### Node operations
 
-```{list-table}
-:header-rows: 1
-:widths: 35 65
+| Method | Description |
+| --- | --- |
+| `add_node(node)` | Add a single node. |
+| `remove_node(node_id)` | Remove a node by ID. |
+| `get_node(node_id)` | Retrieve a node dict. |
+| `set_nodes(nodes)` | Replace all nodes. |
+| `get_nodes()` | All current nodes. |
+| `update_node(node)` | Partial update of one node. |
+| `update_nodes(nodes)` | Partial update of many nodes. |
+| `update_node_state(ids, state)` | Update visual state (e.g. highlighting). |
 
-* - Method
-  - Description
-* - `add_node(node)`
-  - Add a single node to the graph.
-* - `remove_node(node_id)`
-  - Remove a node by its ID.
-* - `get_node(node_id)`
-  - Retrieve a node dictionary by ID.
-* - `set_nodes(nodes)`
-  - Replace all nodes with the given list.
-* - `get_nodes()`
-  - Return all current nodes.
-* - `update_node(node)`
-  - Partially update a single node's properties.
-* - `update_nodes(nodes)`
-  - Batch partial update of multiple nodes.
-* - `update_node_state(node_ids, state)`
-  - Update the visual state of nodes (e.g., highlighting).
-```
+#### Edge operations
 
-#### `VisNetwork` -- Edge Operations
+| Method | Description |
+| --- | --- |
+| `add_edge(edge)` | Add a single edge. |
+| `remove_edge(from_id, to_id)` | Remove an edge between two nodes. |
+| `get_edge(edge_id=None, from_id=None, to_id=None)` | Retrieve an edge. |
+| `set_edges(edges)` | Replace all edges. |
+| `get_edges()` | All current edges. |
+| `update_edge(edge)` | Partial update. |
 
-```{list-table}
-:header-rows: 1
-:widths: 35 65
+#### Modes & actions
 
-* - Method
-  - Description
-* - `add_edge(edge)`
-  - Add a single edge to the graph.
-* - `remove_edge(from_id, to_id)`
-  - Remove an edge between two nodes.
-* - `get_edge(edge_id=None, from_id=None, to_id=None)`
-  - Retrieve an edge by ID or endpoint node IDs.
-* - `set_edges(edges)`
-  - Replace all edges with the given list.
-* - `get_edges()`
-  - Return all current edges.
-* - `update_edge(edge)`
-  - Partially update a single edge's properties.
-```
+| Method | Description |
+| --- | --- |
+| `disable_edit_mode()` | Exit edit mode. |
+| `add_node_mode()` | Click to place new nodes. |
+| `add_edge_mode()` | Drag to connect nodes. |
+| `clear()` | Remove all nodes and edges. |
+| `merge_nodes(source_id, target_id, merge_properties=True)` | Merge two nodes. |
+| `batch_update(actions)` | Execute a list of actions atomically. |
+| `execute_step(step)` | Run a single playbook step. |
+| `request_position_update()` | Ask the frontend for current positions. |
 
-#### `VisNetwork` -- Edit Modes & Actions
+### `panelini.panels.visnetwork.GraphDetailTool`
 
-```{list-table}
-:header-rows: 1
-:widths: 35 65
+High-level graph workspace composing `VisNetwork` and `JsonEditor`. See {doc}`panels/graph_detail_tool`.
 
-* - Method
-  - Description
-* - `disable_edit_mode()`
-  - Exit edit mode (selection only).
-* - `add_node_mode()`
-  - Enter add-node mode (click to place).
-* - `add_edge_mode()`
-  - Enter add-edge mode (drag to connect).
-* - `clear()`
-  - Remove all nodes and edges.
-* - `merge_nodes(source_id, target_id, merge_properties=True)`
-  - Merge two nodes, optionally combining their properties.
-* - `batch_update(actions)`
-  - Execute a list of graph actions atomically.
-* - `execute_step(step)`
-  - Execute a single playbook step.
-* - `request_position_update()`
-  - Request current node positions from the frontend.
-```
+### `panelini.panels.visnetwork.utils.data_url_to_bytes`
 
-#### `GraphDetailTool`
+Convert a `data:` URL to raw bytes. Useful when unpacking dropped files from the graph.
 
-```{list-table}
-:header-rows: 1
-:widths: 35 65
+### `panelini.panels.ai.AiChat`
 
-* - Method
-  - Description
-* - `build_panel()`
-  - Build the complete UI layout with graph, detail pane, and controls.
-* - `show_node_details(node_id)`
-  - Display the detail view for a specific node.
-* - `show_multi_node_editor(node_ids)`
-  - Display the multi-node batch editor.
-* - `network_event_callback(event_name, event_params_dict)`
-  - Handle network events (click, select, drag, etc.).
-* - `update_node(new_node_dict)`
-  - Update a node in the graph and refresh the detail view.
-* - `__panel__()`
-  - Return the Panel layout for embedding.
-```
+LangChain-backed chat panel with a markdown preview pane, tool toggles, and export/import. See {doc}`panels/ai`.
 
-### `panelini.panels.visnetwork.utils` -- Utilities
+**Required extra:** `panelini[ai]`.
 
-```{list-table}
-:header-rows: 1
-:widths: 35 65
+**Key attributes:**
 
-* - Function
-  - Description
-* - `data_url_to_bytes(data_url)`
-  - Convert a `data:` URL to raw bytes (useful for decoding embedded images, files).
-```
+| Attribute / method | Description |
+| --- | --- |
+| `AiChat(system_message=..., welcome_message=..., config_path=..., tools=...)` | Constructor. All args optional. |
+| `main_objects` | Panel objects for the main area. |
+| `sidebar_objects` | Panel objects for the sidebar. |
+
+Underlying machinery:
+
+| Class / function | Role |
+| --- | --- |
+| `panelini.panels.ai.backend.AiBackend` | Provider/model/tool management, tool-call loop, export/restore. |
+| `panelini.panels.ai.utils.ai_interface.AiInterface` | Provider-agnostic LangChain wrapper with streaming + tool binding. |
+| `panelini.panels.ai.utils.ai_interface.create_interface(...)` | Factory that builds an `AiInterface` for any configured provider. |
+| `panelini.panels.ai.utils.config.load_config(path=None)` | Load and validate a YAML config. Auto-discovery rules live here. |
+| `panelini.panels.ai.utils.config.AppConfig` / `ProviderConfig` / `ModelConfig` | Frozen dataclasses describing the loaded config. |
+| `panelini.panels.ai.tools.basic_tools.GetCurrentTimeTool` | Returns the current time, tz-aware. |
+| `panelini.panels.ai.tools.basic_tools.UpdatePreviewTool` | Renders markdown in the preview pane. |
 
 ---
 
-## Components
+## Full auto-generated reference
 
-Panelini-dependent building blocks that require the Panelini framework. See {doc}`Components <components>` for details.
+Every public module, class, and function — generated from source docstrings — lives in the auto-generated reference:
 
-```{admonition} Status
-:class: note
+::::{grid} 1 1 2 2
+:gutter: 3
 
-The components module is currently in planning stage. No implementations exist yet. Contributions welcome.
-```
+:::{grid-item-card} 📚 Browse the full API
+:link: apidocs/index
+:link-type: doc
+All modules, every signature, every docstring.
+:::
 
----
+:::{grid-item-card} 🧭 Back to architecture
+:link: architecture
+:link-type: doc
+High-level picture of how the pieces fit together.
+:::
 
-## Full Auto-Generated Reference
-
-For complete class signatures, method arguments, and docstrings, see the [auto-generated API documentation](apidocs/index).
+::::
 
 ```{toctree}
 :hidden:

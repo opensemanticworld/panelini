@@ -232,6 +232,46 @@ Bases: {py:obj}`param.Parameterized`
 
 ````
 
+````{py:attribute} use_ai
+:canonical: panelini.main.Panelini.use_ai
+:value: >
+   'Boolean(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.use_ai
+```
+
+````
+
+````{py:attribute} ai_system_message
+:canonical: panelini.main.Panelini.ai_system_message
+:value: >
+   'String(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_system_message
+```
+
+````
+
+````{py:attribute} ai_welcome_message
+:canonical: panelini.main.Panelini.ai_welcome_message
+:value: >
+   'String(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_welcome_message
+```
+
+````
+
+````{py:attribute} ai_config_path
+:canonical: panelini.main.Panelini.ai_config_path
+:value: >
+   'ClassSelector(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_config_path
+```
+
+````
+
 ````{py:method} sidebar_right_set(objects: list[panel.viewable.Viewable]) -> None
 :canonical: panelini.main.Panelini.sidebar_right_set
 

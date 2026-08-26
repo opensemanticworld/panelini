@@ -1,6 +1,6 @@
 [project]
 name = "panelini"
-version = "0.8.0"
+version = "0.9.1"
 description = "Panelini is a user-friendly Python package designed to provide an out-of-the-box panel with a beautiful and responsive layout. It simplifies the creation of interactive dashboards by handling dynamic content seamlessly using Python Panel components. Whether you're building complex data visualizations or simple interactive interfaces, panelini offers an easy-to-use solution that enhances productivity and aesthetics."
 authors = [{ name = "Andreas Räder", email = "andreas.raeder@isc.fraunhofer.de" }]
 readme = "README.md"
@@ -33,6 +33,28 @@ standard = [
     "pandas>=2.0.0",
     "plotly>=5.0.0",
 ]
+ai = [
+    "langchain>=0.3.27",
+    "langchain-anthropic>=0.3.0",
+    "langchain-community>=0.3.27",
+    "langchain-openai>=0.3.32",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+]
+ai-drawio = [
+    "anthropic>=0.39",
+    "pillow>=10.0",
+]
+ai-llm-sandbox = [
+    "llm-sandbox[docker]>=0.2",
+    "pillow>=10.0",
+]
+ai-osw = [
+    "osw>=1.0",
+    "SPARQLWrapper>=2.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
 
 [project.urls]
 Homepage = "https://opensemanticworld.github.io/panelini/"
@@ -40,12 +62,6 @@ Repository = "https://github.com/opensemanticworld/panelini"
 Documentation = "https://opensemanticworld.github.io/panelini/"
 
 [dependency-groups]
-ai = [
-    "langchain>=0.3.27",
-    "langchain-community>=0.3.27",
-    "langchain-openai>=0.3.32",
-    "osw>=0.33.0",
-]
 plotting = [
     "pandas>=2.0.0",
     "plotly>=5.0.0",
@@ -64,8 +80,11 @@ dev = [
     "myst-parser>=3.0.0",
     "sphinx-autodoc2>=0.5.0",
     "sphinx-autobuild>=2024.2.4",
+    "sphinx-design>=0.6.0",
     "sphinxcontrib-mermaid>=1.0.0",
     "pytest-playwright>=0.7.2",
+    "pytest-asyncio>=0.23",
+    "osw>=1.0.1",
 ]
 
 [build-system]
@@ -88,7 +107,10 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["ui: UI tests requiring Playwright (browser)"]
+markers = [
+    "ui: UI tests requiring Playwright (browser)",
+    "ai: AI tests requiring langchain and related packages",
+]
 
 [tool.ruff]
 target-version = "py39"
@@ -149,5 +171,10 @@ skip_empty = true
 branch = true
 source = ["src"]
 
+[tool.deptry]
+exclude = ["src/panelini/components/migration"]
+
 [tool.deptry.per_rule_ignores]
-DEP002 = ["watchfiles"]
+DEP002 = ["watchfiles", "langchain", "langchain-community", "python-dotenv", "anthropic", "pillow"]
+DEP003 = ["langchain-core", "langchain_core", "pydantic"]
+DEP004 = ["langchain", "langchain-anthropic", "langchain-community", "langchain-openai", "llm-sandbox", "python-dotenv", "pyyaml"]

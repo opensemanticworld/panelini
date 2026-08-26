@@ -14,6 +14,7 @@
 :maxdepth: 3
 
 panelini.panels.accelerometer
+panelini.panels.ai
 panelini.panels.audio_spectrum
 panelini.panels.camera
 panelini.panels.compass
