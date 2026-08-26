@@ -8542,10 +8542,7 @@ const rf = (t, e) => {
           this._dragOrigParent = r.node.parent, this._dragActive = !0;
           const l = this.getDragKeys(r.node);
           return (c = r.event) != null && c.dataTransfer && (r.event.dataTransfer.setData("text/plain", l.join(`
-`)), r.event.dataTransfer.setData(
-            Un,
-            l.length > 1 ? JSON.stringify(l) : l[0]
-          ), r.event.dataTransfer.setData(go, this.treeId || ""), r.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: r.node.key, keys: l }), !0;
+`)), r.event.dataTransfer.setData(Un, JSON.stringify(l)), r.event.dataTransfer.setData(go, this.treeId || ""), r.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: r.node.key, keys: l }), !0;
         },
         dragEnter: (r) => ["before", "after", "over"],
         dragOver: (r) => {

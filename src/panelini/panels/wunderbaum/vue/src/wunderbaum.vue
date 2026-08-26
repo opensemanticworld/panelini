@@ -297,13 +297,12 @@ export default {
             const keys = this.getDragKeys(e.node);
             // Set dataTransfer so external drop targets can read the keys
             if (e.event?.dataTransfer) {
+              // text/plain is only a human-readable fallback for foreign drop
+              // targets; WB_KEY_MIME is the actual protocol.
               e.event.dataTransfer.setData('text/plain', keys.join('\n'));
-              // A single node stays a bare key, as before. Multi-select sends
-              // a JSON array, which is what makes dragging a selection work.
-              e.event.dataTransfer.setData(
-                WB_KEY_MIME,
-                keys.length > 1 ? JSON.stringify(keys) : keys[0]
-              );
+              // Always a JSON array, even for a single node, so receivers do
+              // not need a separate code path for single vs. multi-select.
+              e.event.dataTransfer.setData(WB_KEY_MIME, JSON.stringify(keys));
               e.event.dataTransfer.setData(WB_TREE_MIME, this.treeId || '');
               e.event.dataTransfer.effectAllowed = 'copyMove';
             }
