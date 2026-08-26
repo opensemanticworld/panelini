@@ -83,6 +83,21 @@ compounds = Wunderbaum(source=compound_nodes, options={"dnd": True}, tree_id="co
 drags the whole selection. Dropping does not move anything by itself. What
 happens to either tree is the callback's decision.
 
+A drag that stays inside one tree emits `drop` instead, and moves the nodes
+itself. It carries the same selection under `sourceKeys`, next to the scalar
+`sourceKey` of the node actually grabbed:
+
+```python
+# ("drop", {"sourceKey": "a/1", "sourceKeys": ["a/1", "a/2"], "targetKey": "b",
+#           "region": "appendChild", "movedNodeId": "a/1",
+#           "movedNodeIds": ["a/1", "a/2"], "newParentNodeId": "b"})
+```
+
+Ctrl+drag sends `copy: True` with `copiedNodeId`/`copiedNodeIds` instead, and
+moves nothing - the copy is the callback's job. Nodes that cannot be moved are
+dropped from the set: a node whose ancestor is dragged with it, and any drop
+onto the selection itself. If that leaves nothing, no `drop` is emitted.
+
 ### Filtering
 
 ```python

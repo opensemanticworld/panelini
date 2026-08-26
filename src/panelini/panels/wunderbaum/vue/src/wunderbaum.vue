@@ -325,39 +325,59 @@ export default {
             const region = e.suggestedDropMode;
             const isCopy = this._ctrlPressed || !!window.__wbForceCopy;
 
-            if (sourceNode) {
-              if (isCopy) {
-                // Ctrl+drop: let Python handle the full copy to keep IDs consistent.
-                // suggestedDropMode is 'appendChild' (not 'over') for child drops
-                const isChild = region === 'over' || region === 'appendChild';
-                const dropParent = isChild ? targetNode : targetNode.parent;
-                this.sendEvent('drop', {
-                  sourceKey: sourceNode.key,
-                  targetKey: targetNode.key,
-                  region: region,
-                  copy: true,
-                  copiedNodeId: sourceNode.data?.node_id || sourceNode.key,
-                  newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
-                });
-                // Undo wunderbaum's auto-move: source must stay in original place
-                const origParent = this._dragOrigParent;
-                if (origParent && sourceNode.parent !== origParent) {
-                  sourceNode.moveTo(origParent, 'appendChild');
-                }
-                this.emitSource();
-              } else {
-                sourceNode.moveTo(targetNode, region);
-                // After moveTo, get the ACTUAL parent from the tree
-                const actualParent = sourceNode.parent;
-                this.sendEvent('drop', {
-                  sourceKey: sourceNode.key,
-                  targetKey: targetNode.key,
-                  region: region,
-                  movedNodeId: sourceNode.data?.node_id || sourceNode.key,
-                  newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
-                });
-                this.emitSource();
+            if (!sourceNode) return;
+
+            // A same-tree drag acts on the whole selection, the same set the
+            // cross-tree externalDrop payload reports.
+            const dragNodes = this.getDragNodes(sourceNode, targetNode);
+            if (!dragNodes.length) return;
+            const nodeId = (n) => n.data?.node_id || n.key;
+
+            if (isCopy) {
+              // Ctrl+drop: let Python handle the full copy to keep IDs consistent.
+              // suggestedDropMode is 'appendChild' (not 'over') for child drops
+              const isChild = region === 'over' || region === 'appendChild';
+              const dropParent = isChild ? targetNode : targetNode.parent;
+              this.sendEvent('drop', {
+                sourceKey: sourceNode.key,
+                sourceKeys: dragNodes.map((n) => n.key),
+                targetKey: targetNode.key,
+                region: region,
+                copy: true,
+                copiedNodeId: nodeId(sourceNode),
+                copiedNodeIds: dragNodes.map(nodeId),
+                newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
+              });
+              // Undo wunderbaum's auto-move: source must stay in original
+              // place. Only e.sourceNode is auto-moved, the rest of the
+              // selection was never touched.
+              const origParent = this._dragOrigParent;
+              if (origParent && sourceNode.parent !== origParent) {
+                sourceNode.moveTo(origParent, 'appendChild');
               }
+              this.emitSource();
+            } else {
+              // 'after' has to re-anchor on the node just moved, or a
+              // multi-node drop lands in reverse order. 'before' and
+              // 'appendChild' keep inserting at the same spot, which already
+              // preserves selection order.
+              let anchor = targetNode;
+              for (const node of dragNodes) {
+                node.moveTo(anchor, region);
+                if (region === 'after') anchor = node;
+              }
+              // After moveTo, get the ACTUAL parent from the tree
+              const actualParent = dragNodes[0].parent;
+              this.sendEvent('drop', {
+                sourceKey: sourceNode.key,
+                sourceKeys: dragNodes.map((n) => n.key),
+                targetKey: targetNode.key,
+                region: region,
+                movedNodeId: nodeId(sourceNode),
+                movedNodeIds: dragNodes.map(nodeId),
+                newParentNodeId: actualParent?.data?.node_id || actualParent?.key || null,
+              });
+              this.emitSource();
             }
           },
         };
@@ -562,6 +582,22 @@ export default {
       // manager behaves; dragging a selected one drags the whole selection.
       if (!selected.some((n) => n.key === node.key)) return [node.key];
       return selected.map((n) => n.key);
+    },
+
+    getDragNodes(sourceNode, targetNode) {
+      const nodes = this.getDragKeys(sourceNode)
+        .map((key) => this.tree?.findKey?.(key))
+        .filter((n) => !!n);
+      // A node whose ancestor is also being dragged travels with that ancestor,
+      // so moving it separately would drop it into its own new position. The
+      // target itself, and any node the target sits inside, are equally
+      // impossible to move.
+      return nodes.filter(
+        (n) =>
+          !nodes.some((other) => other !== n && n.isDescendantOf(other)) &&
+          n !== targetNode &&
+          !targetNode?.isDescendantOf(n)
+      );
     },
 
     nodeFromEvent(e) {
