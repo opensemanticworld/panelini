@@ -35,8 +35,11 @@ class MonacoEditor(AnyWidgetComponent):
     options = param.Dict(default={}, doc="Extra monaco.editor.create options, merged last.")
 
     def __init__(self, **params: Any) -> None:
-        # Monaco needs a concrete height to lay out.
+        # Monaco sizes itself to its container. Without a concrete height and a
+        # width the host collapses to a few pixels and no editor is usable.
         params.setdefault("height", 400)
+        if "width" not in params and "sizing_mode" not in params:
+            params["sizing_mode"] = "stretch_width"
         super().__init__(**params)
 
     def get_json(self) -> Any:
