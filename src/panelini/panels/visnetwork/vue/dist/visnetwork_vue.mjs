@@ -25507,8 +25507,16 @@ const JV = (t, e) => {
       this.$emit("network-event", { event_name: t, event_params: g });
     },
     emitNodesAndEdges() {
-      const t = this.nodesDataSet.get().map(({ title: e, ...g }) => g);
-      this.$emit("change:nodes", t), this.$emit("change:edges", this.edgesDataSet.get());
+      const t = this.network, e = this.nodesDataSet.get().map(({ title: g, ...A }) => {
+        if (t)
+          try {
+            const i = t.getPosition(A.id);
+            A.x = i.x, A.y = i.y;
+          } catch {
+          }
+        return A;
+      });
+      this.$emit("change:nodes", e), this.$emit("change:edges", this.edgesDataSet.get());
     },
     // Methods called from bridge layer
     setNodes(t) {

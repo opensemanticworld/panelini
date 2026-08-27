@@ -99,7 +99,11 @@ class TestEnvCredentialManager:
     def test_iri_in_file_true_when_credential_in_memory(self) -> None:
         from osw.auth import CredentialManager
 
-        mgr = EnvCredentialManager()
+        # osw.auth.CredentialManager declares cred_filepath/cert_filepath as bare
+        # Optional[...] fields (no explicit "= None"); ty synthesizes a pydantic
+        # constructor that treats them as required, but the base class's own
+        # __init__(self, **data) makes both genuinely optional at runtime.
+        mgr = EnvCredentialManager()  # ty: ignore[missing-argument]
         mgr.add_credential(
             CredentialManager.UserPwdCredential(iri="example.org", username="u", password="p")  # noqa: S106
         )
@@ -107,7 +111,7 @@ class TestEnvCredentialManager:
         assert mgr.iri_in_file("example.org") is True
 
     def test_iri_in_file_false_when_credential_not_in_memory(self) -> None:
-        mgr = EnvCredentialManager()
+        mgr = EnvCredentialManager()  # ty: ignore[missing-argument]
         assert mgr.iri_in_file("example.org") is False
 
     def test_is_subclass_of_credential_manager(self) -> None:

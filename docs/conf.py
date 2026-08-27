@@ -78,6 +78,13 @@ html_theme_options = {
     "light_css_variables": {
         "color-brand-primary": "#0d7377",
         "color-brand-content": "#0d7377",
+        # Warm off-white surfaces. Set here (not via a raw body selector) so Furo
+        # applies them only for the resolved light theme, incl. auto -> light. A
+        # raw ``body:not([data-theme="dark"])`` also matched auto -> dark, which
+        # left dark-OS visitors with a light background under dark-mode text.
+        "color-background-primary": "#faf7f2",
+        "color-background-secondary": "#f3ede4",
+        "color-background-border": "#e5dfd6",
     },
     "dark_css_variables": {
         "color-brand-primary": "#2fb4b0",
@@ -101,4 +108,4 @@ mermaid_init_js = (
 )
 
 root_doc = "index"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "portfolio"]

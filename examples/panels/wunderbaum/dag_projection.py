@@ -125,17 +125,18 @@ def dag_to_tree_source(
         node_key = f"{path}/{node_id}" if path else node_id
         icon_map = {"class": "bi bi-diagram-3", "part": "bi bi-puzzle"}
 
+        # Column values live at the node level; wunderbaum auto-moves non-reserved
+        # keys into node.data for the grid. "type" is a reserved wunderbaum key
+        # (node typing), so the Type column reads from "node_type" instead.
         tree_node: dict = {
             "title": props.get("label", node_id),
             "key": node_key,
             "icon": icon_map.get(props.get("type", ""), "bi bi-circle"),
             "expanded": True,
-            "data": {
-                "node_id": node_id,
-                "type": props.get("type", ""),
-                "relation": relation,
-                "description": props.get("description", ""),
-            },
+            "node_id": node_id,
+            "node_type": props.get("type", ""),
+            "relation": relation,
+            "description": props.get("description", ""),
         }
 
         child_edges = children_map.get(node_id, [])
@@ -152,7 +153,7 @@ source = dag_to_tree_source(GRAPH_NODES, GRAPH_EDGES)
 
 columns = [
     {"id": "*", "title": "Name", "width": "250px"},
-    {"id": "type", "title": "Type", "width": "80px"},
+    {"id": "node_type", "title": "Type", "width": "80px"},
     {"id": "relation", "title": "Relation", "width": "100px"},
     {"id": "description", "title": "Description", "width": "300px"},
 ]

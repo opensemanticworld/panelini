@@ -4,6 +4,7 @@ import json
 import math
 import uuid
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import matplotlib.colors as mcolors
@@ -18,6 +19,7 @@ from rdflib.term import Literal as RDFLiteral
 from rdflib.term import URIRef
 
 from panelini.panels.jsoneditor import JsonEditor
+from panelini.panels.monacoeditor import MonacoEditor
 from panelini.panels.oold_graph_tool.entity_adapter import (
     EntityAdapter,
     adapt_entity,
@@ -28,18 +30,25 @@ from panelini.panels.oold_graph_tool.entity_adapter import (
 from panelini.panels.oold_graph_tool.oold_schema import (
     MISSING,
     OOLDSchemaIntrospector,
+    build_context_from_schema,
 )
 from panelini.panels.visnetwork import GraphDetailTool, VisNetwork
 
 pn.extension("tabulator")  # For tables
 pn.extension("jsoneditor")  # For viewing/editing node details (parent class)
 
+# ── OO-LD meta-schema (for Monaco validation of class/schema nodes) ───────────
+_META_SCHEMA_PATH = Path(__file__).parent / "meta" / "oold-meta-schema.json"
+_OOLD_META_SCHEMA: dict = (
+    json.loads(_META_SCHEMA_PATH.read_text(encoding="utf-8")) if _META_SCHEMA_PATH.exists() else {}
+)
+
 # ── Class-graph colour palette (shared with _build_class_graph) ────────────────
-_CLS_NODE_COLOR = "#9B59B6"  # purple  — LinkedBaseModel subclass
-_FIELD_NODE_COLOR = "#BDC3C7"  # silver  — field descriptor
-_ATTR_VAL_NODE_COLOR = "#F39C12"  # orange  — default / description / constraint values
-_ISA_EDGE_COLOR = "#e74c3c"  # red     — IsA / HasRange
-_HAS_TYPE_EDGE_COLOR = "#888888"  # gray    — HasType
+_CLS_NODE_COLOR = "#9B59B6"  # purple  --LinkedBaseModel subclass
+_FIELD_NODE_COLOR = "#BDC3C7"  # silver  --field descriptor
+_ATTR_VAL_NODE_COLOR = "#F39C12"  # orange  --default / description / constraint values
+_ISA_EDGE_COLOR = "#e74c3c"  # red     --IsA / HasRange
+_HAS_TYPE_EDGE_COLOR = "#888888"  # gray    --HasType
 
 _PRIMITIVES_OOLD = (str, int, float, bool, type(None), dict, list, tuple, set)
 _MAX_LABEL = 80
@@ -354,6 +363,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             jsonld_doc = element.to_jsonld()
             self.rdf_graph.parse(data=json.dumps(jsonld_doc), format="json-ld")
 
+        self._build_iri_maps()
+
         ### transform python-classes/instances to visjs nodes/edges
         self.visjs_nodes = []
         self.visjs_edges = []
@@ -425,18 +436,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Compute visibility after _full_visjs_edges is built so policy BFS can
         # traverse any edge label (IsA, HasType, knows, …) generically.
-        self._visible_node_ids: Optional[set[str]] = self._compute_initial_visible_node_ids()
-        # None = show all edges between visible nodes; set = only edges in this set
-        self._visible_edge_keys: Optional[set[tuple]] = None
-
-        # Save initial state (after _visible_node_ids is set)
-        self._save_state()
+        # _visible_edge_keys restricts which edges are shown --only those
+        # traversed by the BFS, not all edges between visible nodes.
+        vis_nodes, vis_edges = self._compute_initial_visibility()
+        self._visible_node_ids: Optional[set[str]] = vis_nodes
+        self._visible_edge_keys: Optional[set[tuple]] = vis_edges
 
         # Apply visibility filter (no-op when _visible_node_ids is None)
         self._apply_visibility_filter_inplace()
 
         # Create OO-LD tab columns BEFORE super().__init__ (which calls build_panel)
         self.oold_detail_col = pn.Column()
+        self.text_col = pn.Column()
         self.viz_config_col = pn.Column()
 
         # Property mapping state
@@ -457,6 +468,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Re-append OO-LD tabs (parent build_panel recreates detail_tabs)
         self.detail_tabs.append(("OO-LD Details", self.oold_detail_col))
+        self.detail_tabs.append(("Text", self.text_col))
         self.detail_tabs.append(("Visualization Config", self.viz_config_col))
 
         # Add undo/redo buttons to edit row
@@ -638,14 +650,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     def undo(self) -> None:
         """Undo the last change."""
-        if len(self.undo_stack) <= 1:  # Keep at least initial state
+        if not self.undo_stack:
             print("Nothing to undo")
             return
 
         try:
             self.redo_stack.append(self._current_state_snapshot())
-            self.undo_stack.pop()
-            self._restore_state(self.undo_stack[-1])
+            self._restore_state(self.undo_stack.pop())
             print(f"Undo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}")
         except Exception as e:
             print(f"Error during undo: {e}")
@@ -723,6 +734,24 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         super().show_node_details(node_id)
 
+        # Check if this is a class/schema node
+        class_schema = self._get_class_for_node_id(node_id)
+        if class_schema is not None:
+            self.oold_detail_col.clear()
+            self.oold_detail_col.append(pn.pane.Markdown(f"### Node ID: {node_id} of type Class"))
+            self.current_node_oold_editor = pn.widgets.JSONEditor(
+                value=class_schema,
+                mode="view",
+                sizing_mode="stretch_width",
+                height=600,
+            )
+            self.oold_detail_col.append(self.current_node_oold_editor)
+            self._update_text_tab(
+                class_schema, json_schema=_OOLD_META_SCHEMA or None, node_id=node_id, node_kind="class"
+            )
+            self.detail_tabs.active = 2
+            return
+
         _node_entity = self.entity_dict.get(node_id)
         _node_type_label = _node_entity.type_name if _node_entity else "Unknown"
 
@@ -754,6 +783,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             self.oold_detail_col.append(self.current_node_oold_editor)
             self.oold_detail_col.append(self.single_node_apply_button)
+            self._update_text_tab(current_entity.data, json_schema=schema, node_id=resolved_id, node_kind="entity")
         else:
             self._new_entity_node_id = node_id
             if self.entity_types:
@@ -772,6 +802,120 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 self.oold_detail_col.append(pn.Row(self.new_entity_type_select, self.new_entity_confirm_button))
 
         self.detail_tabs.active = 2
+
+    def _update_text_tab(
+        self, data: dict, json_schema: dict | None = None, *, node_id: str | None = None, node_kind: str | None = None
+    ) -> None:
+        """Populate the Text tab with a Monaco editor showing *data* as JSON."""
+        self._text_tab_node_id = node_id
+        self._text_tab_node_kind = node_kind
+        self.text_col.clear()
+        self.current_text_editor = MonacoEditor(
+            value=json.dumps(data, indent=2, default=str),
+            language="json",
+            json_schema=json_schema,
+            height=600,
+        )
+        self.text_apply_button = pn.widgets.Button(
+            name="Apply Changes",
+            button_type="primary",
+            width=150,
+        )
+        self.text_apply_button.on_click(self._on_text_apply)
+        self.text_col.append(self.current_text_editor)
+        self.text_col.append(self.text_apply_button)
+
+    def _on_text_apply(self, event: Any) -> None:
+        """Apply changes from the Text tab Monaco editor."""
+        try:
+            new_data = json.loads(self.current_text_editor.value)
+        except json.JSONDecodeError as e:
+            print(f"Invalid JSON: {e}")
+            return
+
+        node_id = getattr(self, "_text_tab_node_id", None)
+        node_kind = getattr(self, "_text_tab_node_kind", None)
+        if node_id is None:
+            return
+
+        self._save_state()
+
+        if node_kind == "class":
+            self._apply_schema_text_changes(node_id, new_data)
+        else:
+            self._apply_entity_text_changes(node_id, new_data)
+
+    def _update_schema_in_registries(self, node_id: str, new_schema: dict) -> None:
+        """Replace all registry entries whose class node ID matches *node_id*."""
+        for key, schema in list(self.entity_types.items()):
+            if _cls_node_id(schema) == node_id:
+                self.entity_types[key] = new_schema
+        for key, schema in list(self.schema_registry.items()):
+            if _cls_node_id(schema) == node_id:
+                self.schema_registry[key] = new_schema
+        new_id = new_schema.get("$id") or new_schema.get("iri")
+        if new_id:
+            self.schema_registry[new_id] = new_schema
+        new_title = new_schema.get("title")
+        if new_title:
+            self.schema_registry[new_title] = new_schema
+            self.entity_types[new_title] = new_schema
+
+    def _apply_schema_text_changes(self, node_id: str, new_schema: dict) -> None:
+        """Apply edited schema from the Text tab back to the registry and rebuild the graph."""
+        self._update_schema_in_registries(node_id, new_schema)
+        self.introspector = OOLDSchemaIntrospector(self.schema_registry)
+
+        for entity in self.entity_list:
+            if _cls_node_id(entity.schema) == node_id:
+                entity._schema = new_schema
+
+        for n in self._full_visjs_nodes:
+            if n["id"] == node_id and n.get("node_kind") == "class":
+                n["label"] = self.introspector.get_type_name(new_schema)
+
+        self._rebuild_visjs_edges()
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+        self.show_node_details(node_id)
+
+    def _apply_entity_text_changes(self, node_id: str, new_data: dict) -> None:
+        """Apply edited entity data from the Text tab back to the entity and rebuild."""
+        entity = self.entity_dict.get(node_id)
+        if entity is None:
+            print(f"Entity {node_id} not found")
+            return
+
+        _internal = {"id", "__iris__"} | _SKIP_FIELDS
+        entity_props = self.introspector.get_properties(entity.schema)
+        self._set_entity_props_from_dict(entity, new_data, entity_props, _internal)
+        self._clear_removed_optional_props(entity, new_data, entity_props, _internal)
+        self._full_sync_after_edit(replace_nodes=True)
+
+    def _set_entity_props_from_dict(
+        self, entity: "EntityAdapter", new_data: dict, entity_props: dict, skip: set
+    ) -> None:
+        for prop_name, prop_value in new_data.items():
+            if prop_name in skip or prop_name not in entity_props:
+                continue
+            try:
+                deserialized = self._deserialize_property_value(entity, prop_name, prop_value)
+                entity.set(prop_name, deserialized)
+            except Exception as e:
+                print(f"Warning: Could not update property '{prop_name}': {e}")
+
+    def _clear_removed_optional_props(
+        self, entity: "EntityAdapter", new_data: dict, entity_props: dict, skip: set
+    ) -> None:
+        for prop_name, prop_info in entity_props.items():
+            if prop_name in skip or prop_name in new_data or prop_info.required:
+                continue
+            try:
+                _base_type, _is_list, is_optional = self.introspector.classify_property(prop_info)
+                if is_optional:
+                    entity.set(prop_name, None)
+            except Exception as e:
+                print(f"Warning: Could not clear property '{prop_name}': {e}")
 
     # ===== Multi-Node Comparison Functionality =====
 
@@ -1089,24 +1233,34 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Expansion policy =====
 
-    def _compute_initial_visible_node_ids(self) -> Optional[set[str]]:
-        """Return the initial set of visible node IDs based on expansion_policy.
+    def _compute_initial_visibility(self) -> tuple[set[str] | None, set[tuple] | None]:
+        """Return the initial visible node IDs and edge keys based on expansion_policy.
 
-        Returns None when no policy is set (means: show all nodes).
-        Returns a set[str] of node IDs when a policy restricts the initial view.
-        May include class node IDs (e.g. 'class:Entity') when the policy BFS visits them.
+        Returns (None, None) when no policy is set (means: show everything).
+        Otherwise returns (node_ids, edge_keys) where edge_keys contains only
+        edges actually traversed by the BFS --other edges between visible nodes
+        are hidden until the user explicitly expands them.
         """
         if self.expansion_policy is None:
-            return None
+            return None, None
         if isinstance(self.expansion_policy, MultiExpansionPolicy):
             ids: set[str] = set()
+            edges: set[tuple] = set()
             for p in self.expansion_policy.expansion_policies:
-                ids |= self._apply_single_policy(p)
-            return ids
+                p_ids, p_edges = self._apply_single_policy(p)
+                ids |= p_ids
+                edges |= p_edges
+            return ids, edges
         return self._apply_single_policy(self.expansion_policy)
 
-    def _apply_single_policy(self, policy: "SingleNodeExpansionPolicy") -> set[str]:  # noqa: C901
-        """BFS expansion from a root node along the configured relation steps."""
+    def _apply_single_policy(  # noqa: C901
+        self,
+        policy: "SingleNodeExpansionPolicy",
+    ) -> tuple[set[str], set[tuple]]:
+        """BFS expansion from a root node along the configured relation steps.
+
+        Returns (visible_node_ids, traversed_edge_keys).
+        """
         root = policy.root_node
         if isinstance(root, EntityAdapter):
             root_id = root.get_iri()
@@ -1119,13 +1273,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
         elif isinstance(root, type):
             root_id = _cls_node_id(root)
         else:
-            return set()
+            return set(), set()
 
         full_node_ids = {n["id"] for n in self._full_visjs_nodes}
         if root_id not in full_node_ids:
-            return set()
+            return set(), set()
 
         visible: set[str] = {root_id}
+        traversed_edges: set[tuple] = set()
         frontier: set[str] = {root_id}
 
         for step in policy.expansion_steps:
@@ -1136,25 +1291,43 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if step.iter_limit is not None and iterations >= step.iter_limit:
                     break
                 found: set[str] = set()
+                step_edges: set[tuple] = set()
                 for nid in current:
-                    found |= self._get_neighbors_via_relations(nid, step.relations)
+                    neighbors, edges = self._get_neighbors_via_relations(
+                        nid,
+                        step.relations,
+                        return_edges=True,
+                    )
+                    found |= neighbors
+                    step_edges |= edges
                 new_nodes = found - visible
                 visible |= new_nodes
+                traversed_edges |= step_edges
                 new_frontier = new_nodes
                 current = new_frontier
                 iterations += 1
             frontier = new_frontier
 
-        return visible
+        return visible, traversed_edges
 
-    def _get_neighbors_via_relations(self, node_id: str, relations: list[str]) -> set[str]:
+    def _get_neighbors_via_relations(
+        self,
+        node_id: str,
+        relations: list[str],
+        *,
+        return_edges: bool = False,
+    ) -> set[str] | tuple[set[str], set[tuple]]:
         """Return IDs of nodes reachable from node_id via any of the given relations.
 
         Relations prefixed with '-' are traversed in reverse (incoming edges).
         Works on _full_visjs_edges so it covers instance-level AND class-hierarchy edges
         without any label-specific special-casing.
+
+        When *return_edges* is True, returns ``(node_ids, edge_keys)`` instead
+        of just ``node_ids``.
         """
         result: set[str] = set()
+        edges: set[tuple] = set()
         full_node_ids = {n["id"] for n in self._full_visjs_nodes}
         for relation in relations:
             inverse = relation.startswith("-")
@@ -1162,14 +1335,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
             for edge in self._full_visjs_edges:
                 if edge.get("label") != label:
                     continue
-                if not inverse and edge.get("from") == node_id:
-                    target = str(edge.get("to", ""))
-                    if target in full_node_ids:
-                        result.add(target)
-                elif inverse and edge.get("to") == node_id:
-                    source = str(edge.get("from", ""))
-                    if source in full_node_ids:
-                        result.add(source)
+                frm = edge.get("from", "")
+                to = edge.get("to", "")
+                if not inverse and frm == node_id and str(to) in full_node_ids:
+                    result.add(str(to))
+                    if return_edges:
+                        edges.add((frm, to, label))
+                elif inverse and to == node_id and str(frm) in full_node_ids:
+                    result.add(str(frm))
+                    if return_edges:
+                        edges.add((frm, to, label))
+        if return_edges:
+            return result, edges
         return result
 
     # ===== RDF → visjs edge building =====
@@ -1183,6 +1360,53 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return f"{entity_iri}#{field_name}"
         return f"{entity_iri}#literal_{pred_label}"
 
+    @staticmethod
+    def _resolve_prefix_ns(ctx: dict | list | None, prefix: str) -> str | None:
+        """Look up a namespace prefix in a resolved JSON-LD context."""
+        ctx_dicts: list[dict] = []
+        if isinstance(ctx, dict):
+            ctx_dicts = [ctx]
+        elif isinstance(ctx, list):
+            ctx_dicts = [c for c in ctx if isinstance(c, dict)]
+        for cd in ctx_dicts:
+            val = cd.get(prefix)
+            if isinstance(val, str):
+                return val
+            if isinstance(val, dict) and "@id" in val:
+                return val["@id"]
+        return None
+
+    def _build_iri_maps(self) -> None:
+        """Build bidirectional maps between compact and expanded IRIs.
+
+        After JSON-LD parsing, compact IRIs like ``pers:Alice`` are expanded
+        to full URIs like ``https://example.com/people/Alice`` in the RDF
+        graph.  Entity nodes use compact IRIs as IDs, so we need these maps
+        to match RDF subjects/objects back to entity node IDs.
+        """
+        self._iri_compact_map: dict[str, str] = {}
+        self._iri_expand_map: dict[str, str] = {}
+        prefix_cache: dict[str, str | None] = {}
+        for entity in self.entity_list:
+            compact = entity.get_iri()
+            if not compact:
+                continue
+            if compact.startswith(("http://", "https://", "urn:")):
+                self._iri_compact_map[compact] = compact
+                self._iri_expand_map[compact] = compact
+                continue
+            if ":" not in compact:
+                continue
+            prefix, local = compact.split(":", 1)
+            if prefix not in prefix_cache:
+                ctx = build_context_from_schema(entity.schema, self.schema_registry)
+                prefix_cache[prefix] = self._resolve_prefix_ns(ctx, prefix)
+            ns = prefix_cache[prefix]
+            if ns:
+                expanded = ns + local
+                self._iri_expand_map[compact] = expanded
+                self._iri_compact_map[expanded] = compact
+
     def _build_rdf_edges(self, source_ids: set[str]) -> None:
         """Append RDF-derived edges (and literal nodes) to self.visjs_nodes / self.visjs_edges.
 
@@ -1194,14 +1418,23 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         existing_node_ids = {n["id"] for n in self.visjs_nodes}
         class_node_ids: set[str] = {_cls_node_id(cls) for cls in (self.entity_types or {}).values()}
+        compact_map = getattr(self, "_iri_compact_map", {})
+        expand_map = getattr(self, "_iri_expand_map", {})
+        expanded_source = set(source_ids)
+        for sid in source_ids:
+            exp = expand_map.get(sid)
+            if exp:
+                expanded_source.add(exp)
         for s, p, o in self.rdf_graph:
-            if str(s) not in source_ids:
+            s_str = str(s)
+            if s_str not in expanded_source:
                 continue
+            s_compact = compact_map.get(s_str, s_str)
             if p == RDF.type:
                 continue
             pred_label = str(p).split("/")[-1].split("#")[-1]
             if isinstance(o, RDFLiteral):
-                lit_id = self._literal_node_id(str(s), pred_label, str(s))
+                lit_id = self._literal_node_id(s_compact, pred_label, s_compact)
                 if lit_id not in existing_node_ids:
                     self.visjs_nodes.append({
                         "id": lit_id,
@@ -1212,19 +1445,27 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     })
                     existing_node_ids.add(lit_id)
                 self.visjs_edges.append({
-                    "from": str(s),
+                    "from": s_compact,
                     "to": lit_id,
                     "label": pred_label,
                     "arrows": "to",
                 })
-            elif str(o) in source_ids or str(o) in class_node_ids:
-                self.visjs_edges.append({
-                    "from": str(s),
-                    "to": str(o),
-                    "label": pred_label,
-                    "arrows": "to",
-                })
-            # else: external URI reference — skip
+            else:
+                o_str = str(o)
+                o_compact = compact_map.get(o_str, o_str)
+                if (
+                    o_compact in source_ids
+                    or o_str in source_ids
+                    or o_compact in class_node_ids
+                    or o_str in class_node_ids
+                ):
+                    self.visjs_edges.append({
+                        "from": s_compact,
+                        "to": o_compact,
+                        "label": pred_label,
+                        "arrows": "to",
+                    })
+            # else: external URI reference --skip
 
     # ===== Expansion context-menu helpers =====
 
@@ -1238,29 +1479,51 @@ class OOLDGraphDetailTool(GraphDetailTool):
         }
 
     def _get_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
-        """Return {edge_label: [target_node_id, ...]} for outgoing edges from node_id to hidden nodes."""
-        if self._visible_node_ids is None:
+        """Return {edge_label: [target_node_id, ...]} for expandable outgoing edges.
+
+        An edge is expandable when its target node is hidden, OR when the
+        edge itself is hidden by ``_visible_edge_keys`` even though both
+        endpoints are visible.
+        """
+        if self._visible_node_ids is None and self._visible_edge_keys is None:
             return {}
         full_node_ids = {n["id"] for n in self._full_visjs_nodes}
         result: dict[str, list[str]] = {}
         for edge in self._full_visjs_edges:
-            if edge.get("from") == node_id:
-                target = str(edge.get("to", ""))
-                if target and target not in self._visible_node_ids and target in full_node_ids:
-                    result.setdefault(edge.get("label", ""), []).append(target)
+            if edge.get("from") != node_id:
+                continue
+            target = str(edge.get("to", ""))
+            if not target or target not in full_node_ids:
+                continue
+            node_hidden = self._visible_node_ids is not None and target not in self._visible_node_ids
+            edge_key = (edge.get("from", ""), target, edge.get("label", ""))
+            edge_hidden = self._visible_edge_keys is not None and edge_key not in self._visible_edge_keys
+            if node_hidden or edge_hidden:
+                result.setdefault(edge.get("label", ""), []).append(target)
         return result
 
     def _get_inverse_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
-        """Return {edge_label: [source_node_id, ...]} for incoming edges into node_id from hidden nodes."""
-        if self._visible_node_ids is None:
+        """Return {edge_label: [source_node_id, ...]} for expandable incoming edges.
+
+        An edge is expandable when its source node is hidden, OR when the
+        edge itself is hidden by ``_visible_edge_keys`` even though both
+        endpoints are visible.
+        """
+        if self._visible_node_ids is None and self._visible_edge_keys is None:
             return {}
         full_node_ids = {n["id"] for n in self._full_visjs_nodes}
         result: dict[str, list[str]] = {}
         for edge in self._full_visjs_edges:
-            if edge.get("to") == node_id:
-                source = str(edge.get("from", ""))
-                if source and source not in self._visible_node_ids and source in full_node_ids:
-                    result.setdefault(edge.get("label", ""), []).append(source)
+            if edge.get("to") != node_id:
+                continue
+            source = str(edge.get("from", ""))
+            if not source or source not in full_node_ids:
+                continue
+            node_hidden = self._visible_node_ids is not None and source not in self._visible_node_ids
+            edge_key = (source, edge.get("to", ""), edge.get("label", ""))
+            edge_hidden = self._visible_edge_keys is not None and edge_key not in self._visible_edge_keys
+            if node_hidden or edge_hidden:
+                result.setdefault(edge.get("label", ""), []).append(source)
         return result
 
     def _is_iri_field(self, entity: "EntityAdapter", field_name: str) -> bool:
@@ -1372,6 +1635,19 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if (e.get("from", ""), e.get("to", ""), e.get("label", "")) in self._visible_edge_keys
             ]
 
+        for edge in self.visjs_edges:
+            frm, to, lbl = edge.get("from", ""), edge.get("to", ""), edge.get("label", "")
+            edge["id"] = f"{frm}|{lbl}|{to}"
+            edge_cb: dict[str, str] = {}
+            if self._visible_edge_keys is not None:
+                edge_cb["edge_expand_all"] = f"Expand All: {lbl}"
+                edge_cb["edge_hide"] = "Hide"
+                edge_cb["edge_hide_all"] = f"Hide All: {lbl}"
+            else:
+                edge_cb["edge_hide"] = "Hide"
+                edge_cb["edge_hide_all"] = f"Hide All: {lbl}"
+            edge["callback_name_dict"] = edge_cb
+
         for node in self.visjs_nodes:
             if node.get("node_kind") == "literal":
                 node["callback_name_dict"] = {"edit_value": "Edit Value", "hide": "Hide", "delete": "Delete"}
@@ -1385,7 +1661,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._apply_all_mappings()
 
     def _on_context_menu_item(self, element_type: str, element_id: Any, action_id: str) -> None:  # noqa: C901
-        """Handle a right-click context-menu selection on a node."""
+        """Handle a right-click context-menu selection on a node or edge."""
+        if element_type == "edge" and action_id.startswith("edge_"):
+            self._on_edge_context_menu(str(element_id), action_id)
+            return
+
         node_id = str(element_id)
 
         if action_id == "edit_value":
@@ -1454,26 +1734,144 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if self._visible_edge_keys is None:
                 # First specific expand: snapshot all currently visible edges
                 self._visible_edge_keys = self._snapshot_visible_edge_keys()
-            # Add only the edges matching the expand_label to/from the new nodes
+            # Add only the edges matching the expand_label between node_id and the new nodes
             for e in self._full_visjs_edges:
                 frm, to, lbl = e.get("from", ""), e.get("to", ""), e.get("label", "")
                 if lbl != expand_label:
                     continue
-                if (is_inverse and frm in added) or (not is_inverse and to in added):
+                if (not is_inverse and frm == node_id and to in added) or (
+                    is_inverse and to == node_id and frm in added
+                ):
                     self._visible_edge_keys.add((frm, to, lbl))
         else:
-            # expand_all: if already tracking edges, add all edges among all visible nodes
-            if self._visible_edge_keys is not None:
-                new_visible = self._visible_node_ids | added
-                for e in self._full_visjs_edges:
-                    if e.get("from") in new_visible and e.get("to") in new_visible:
-                        self._visible_edge_keys.add((e.get("from", ""), e.get("to", ""), e.get("label", "")))
+            # expand_all: only add edges directly connecting node_id to the new nodes
+            if self._visible_edge_keys is None:
+                self._visible_edge_keys = self._snapshot_visible_edge_keys()
+            for e in self._full_visjs_edges:
+                frm, to, lbl = e.get("from", ""), e.get("to", ""), e.get("label", "")
+                if (frm == node_id and to in added) or (to == node_id and frm in added):
+                    self._visible_edge_keys.add((frm, to, lbl))
 
         self._visible_node_ids.update(added)
         self._apply_visibility_filter_inplace()
 
+        # Position new nodes near the source, angled by edge label
+        if expand_label is not None:
+            label_map: dict[str, set[str]] = {expand_label: added}
+        else:
+            label_map = {}
+            for lbl, targets in outgoing.items():
+                s = added & set(targets)
+                if s:
+                    label_map[lbl] = s
+            for lbl, sources in incoming.items():
+                s = added & set(sources)
+                if s:
+                    label_map.setdefault(lbl, set()).update(s)
+        self._position_nodes_near(node_id, label_map)
+
         self.visnetwork_panel.nodes = list(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    # ===== Edge context-menu actions =====
+
+    def _on_edge_context_menu(self, edge_id: str, action_id: str) -> None:
+        """Handle a right-click context-menu action on an edge."""
+        parts = edge_id.split("|", 2)
+        if len(parts) != 3:
+            return
+        frm, lbl, to = parts
+
+        self._save_state()
+
+        if self._visible_edge_keys is None:
+            self._visible_edge_keys = self._snapshot_visible_edge_keys()
+
+        source_to_added: dict[str, set[str]] = {}
+        if action_id == "edge_hide":
+            self._visible_edge_keys.discard((frm, to, lbl))
+        elif action_id == "edge_hide_all":
+            self._visible_edge_keys = {k for k in self._visible_edge_keys if k[2] != lbl}
+        elif action_id == "edge_expand_all":
+            source_to_added = self._expand_edge_label_for_all(lbl)
+
+        self._apply_visibility_filter_inplace()
+
+        if source_to_added:
+            for src_id, added_ids in source_to_added.items():
+                self._position_nodes_near(src_id, {lbl: added_ids})
+
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    def _get_node_position(self, node_id: str) -> tuple[float, float] | None:
+        """Return (x, y) of *node_id* from the last JS-synced positions, or *None*."""
+        for n in self.visnetwork_panel.nodes:
+            if n.get("id") == node_id:
+                x, y = n.get("x"), n.get("y")
+                if x is not None and y is not None:
+                    return (float(x), float(y))
+                return None
+        return None
+
+    def _position_nodes_near(self, source_id: str, label_to_added: dict[str, set[str]]) -> None:
+        """Set x/y on newly added nodes so they appear near *source_id*.
+
+        Each node is placed at distance 100 from the source.  The angle is
+        determined by hashing the edge label so that the same property always
+        fans out in the same direction.  Multiple nodes sharing a label are
+        spread evenly around the base angle.
+        """
+        pos = self._get_node_position(source_id)
+        if pos is None:
+            return
+        src_x, src_y = pos
+        distance = 100
+        spread = 0.3  # radians between nodes sharing a label
+
+        targets: dict[str, tuple[float, float]] = {}
+        for lbl, node_ids in label_to_added.items():
+            base_angle = (hash(lbl) % 360) * math.pi / 180
+            nodes = sorted(node_ids)
+            for i, nid in enumerate(nodes):
+                if nid in targets:
+                    continue
+                angle = base_angle + (i - (len(nodes) - 1) / 2) * spread
+                targets[nid] = (
+                    src_x + distance * math.cos(angle),
+                    src_y + distance * math.sin(angle),
+                )
+
+        for n in self.visjs_nodes:
+            xy = targets.get(n.get("id"))
+            if xy is not None:
+                n["x"], n["y"] = xy
+
+    def _expand_edge_label_for_all(self, lbl: str) -> dict[str, set[str]]:
+        """Reveal edges with *lbl* expanding outward from currently visible nodes.
+
+        Adds edges where the FROM endpoint is already visible, revealing the TO
+        endpoint if needed.  Edges between two already-visible nodes are also
+        revealed.  Does NOT pull in hidden nodes that merely point TO a visible
+        node (which would flood the graph from the backend).
+
+        Returns a mapping ``{source_id: {added_node_ids}}`` for positioning.
+        """
+        visible = self._visible_node_ids or {n["id"] for n in self._full_visjs_nodes}
+        added_nodes: set[str] = set()
+        source_to_added: dict[str, set[str]] = {}
+        for e in self._full_visjs_edges:
+            if e.get("label") != lbl:
+                continue
+            e_from, e_to = e.get("from", ""), e.get("to", "")
+            if e_from in visible:
+                self._visible_edge_keys.add((e_from, e_to, lbl))
+                if e_to not in visible:
+                    added_nodes.add(e_to)
+                    source_to_added.setdefault(e_from, set()).add(e_to)
+        if self._visible_node_ids is not None:
+            self._visible_node_ids.update(added_nodes)
+        return source_to_added
 
     # ===== Sub-object list expansion =====
 
@@ -1510,7 +1908,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if not sub_iri:
                 continue
             if sub_iri not in self.entity_dict:
-                # Sub-object was embedded but never registered — register it now
+                # Sub-object was embedded but never registered --register it now
                 if isinstance(sub_obj, dict):
                     sub_adapter = adapt_entity(sub_obj, self.schema_registry)
                     self.entity_list.append(sub_adapter)
@@ -1914,7 +2312,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         known_ids = set(self.entity_dict.keys()) | {_cls_node_id(c) for c in (self.entity_types or {}).values()}
 
         if is_iri and raw in known_ids:
-            # URI-reference field pointing to a known node — store the IRI
+            # URI-reference field pointing to a known node --store the IRI
             prop_info = self.introspector.get_properties(entity.schema).get(field_name)
             if prop_info is not None:
                 _base_type, is_list, _is_optional = self.introspector.classify_property(prop_info)
@@ -1947,6 +2345,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.rdf_graph = RDFGraph()
         for entity in self.entity_list:
             self.rdf_graph.parse(data=json.dumps(entity.to_jsonld()), format="json-ld")
+        self._build_iri_maps()
 
     def _rebuild_visjs_edges(self) -> None:
         """Rebuild all edges (RDF + class hierarchy). Updates _full_visjs_* and applies filter.
@@ -1957,7 +2356,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         then applies the visibility filter to produce visjs_nodes/visjs_edges.
         """
         # Work on the full node set so _build_class_graph() idempotency checks are correct.
-        # Drop stale literal nodes — they are rebuilt fresh from the current RDF.
+        # Drop stale literal nodes --they are rebuilt fresh from the current RDF.
         self.visjs_nodes = [n for n in self._full_visjs_nodes if n.get("node_kind") != "literal"]
         self.visjs_edges = []
 
@@ -1980,8 +2379,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         Uses OO-LD schema introspection (allOf/$ref, properties, @context)
         instead of Python class introspection.
 
-        Always emits all nodes/edges — no visibility filtering.
-        Safe to call multiple times — every node/edge is only added if absent.
+        Always emits all nodes/edges --no visibility filtering.
+        Safe to call multiple times --every node/edge is only added if absent.
         """
         if not self.entity_types:
             return
@@ -2198,7 +2597,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if stale_literal_ids:
             self.visnetwork_panel.remove_nodes(stale_literal_ids)
 
-        # Update visnetwork — replace_nodes removes stale non-literal nodes; update_nodes preserves positions
+        # Update visnetwork --replace_nodes removes stale non-literal nodes; update_nodes preserves positions
         if replace_nodes:
             self.visnetwork_panel.nodes = list(self.visjs_nodes)
         else:
@@ -2257,13 +2656,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
             for prop_name, prop_info in entity_props.items():
                 if prop_name in _internal or prop_name in new_value_dict:
                     continue
-                # Mandatory field — cannot delete it
+                # Mandatory field --cannot delete it
                 if prop_info.required:
                     continue
                 try:
                     _base_type, _is_list, is_optional = self.introspector.classify_property(prop_info)
                     if not is_optional:
-                        continue  # cannot delete a non-nullable field — leave it unchanged
+                        continue  # cannot delete a non-nullable field --leave it unchanged
                     entity.set(prop_name, None)
                     print(f"  Cleared deleted property '{prop_name}'")
                 except Exception as e:
@@ -2453,7 +2852,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 base_name = dup_node.get("label", "Copy")
                 unique_name = self._generate_unique_name(base_name)
 
-                # dup_node.id is a JS-generated temp ID, not an IRI — find source by name
+                # dup_node.id is a JS-generated temp ID, not an IRI --find source by name
                 parent_entity: Optional[EntityAdapter] = None
                 for entity in self.entity_list:
                     if entity.type_name == entity_type_name and entity.name == base_name:

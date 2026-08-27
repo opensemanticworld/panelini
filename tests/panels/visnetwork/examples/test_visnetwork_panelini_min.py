@@ -5,11 +5,13 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_panelini_min import app, visnetwork_panel
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 
@@ -17,14 +19,17 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(3)  # wait for page to load
+    # GridStack sizes late in the shadow DOM; wait for the graph to draw and fit
+    # so the screenshot is not an empty card.
+    canvas = page.locator(".vis-network canvas").first
+    canvas.wait_for(state="visible", timeout=10000)
 
     # Verify the VisNetwork component has the expected nodes and edges
     assert len(visnetwork_panel.nodes) == 3
     assert len(visnetwork_panel.edges) == 2
 
     # Check that the vis-network canvas is rendered within the Panelini app
-    assert page.locator(".vis-network canvas").first.is_visible()
+    assert canvas.is_visible()
 
     # Check that the Panelini Card title is present
     assert page.locator("text=VisNetwork").is_visible()

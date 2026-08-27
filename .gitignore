@@ -20,6 +20,8 @@ develop-eggs/
 dist/
 # Include pre-built Vue assets for custom panels
 !src/panelini/panels/*/vue/dist/
+# Include pre-built plain-JS assets for custom panels
+!src/panelini/panels/*/js/dist/
 downloads/
 eggs/
 .eggs/
@@ -142,5 +144,20 @@ cython_debug/
 .idea/
 
 # Local environment
+.ign/
 _ign/
-data/
+
+
+# Data cherry picking
+data/*
+!data/bench/
+data/bench/*
+!data/bench/test-suite/
+
+
+# Raw Playwright recordings kept via `pytest --record-media --keep-video`
+docs/_static/media/_videos/
+
+# Generated docs portfolio (build artifacts)
+docs/portfolio/
+docs/_static/portfolio/

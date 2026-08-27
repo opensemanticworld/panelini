@@ -266,7 +266,12 @@ class AiBackend:
                 return str(response_data.get("text", ""))
 
             # Execute tool calls
-            tool_results = await self._execute_tool_calls(response_data["tool_calls"])
+            # response_data is typed loosely (dict[str, Any]) since it can come from either
+            # get_response_with_tools() or the locally-built dict above; narrow to a list
+            # here so we never pass a malformed (non-list) tool_calls value downstream.
+            tool_calls_raw = response_data["tool_calls"]
+            tool_calls = tool_calls_raw if isinstance(tool_calls_raw, list) else []
+            tool_results = await self._execute_tool_calls(tool_calls)
 
             # Add tool results to conversation history
             self.ai_interface.conversation_history.extend(tool_results)

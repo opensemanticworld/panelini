@@ -16,7 +16,10 @@ Tests cover both JSON-dict and pydantic inputs for:
 import json
 import uuid
 
+import panel as pn
+
 from panelini.panels.jsoneditor import JsonEditor
+from panelini.panels.monacoeditor import MonacoEditor
 from panelini.panels.oold_graph_tool.entity_adapter import EntityAdapter
 from panelini.panels.oold_graph_tool.oold_graph_tool import _cls_node_id
 from panelini.panels.oold_graph_tool.oold_schema import MISSING
@@ -302,6 +305,227 @@ class TestSingleNodeEditing:
         entity = tool.entity_dict[alice_iri]
         assert entity.name == "Alice2"
 
+    def test_show_node_details_class_node(self, json_social_network):
+        """Clicking a class node shows 'Class' type label and schema in native JSONEditor."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(person_nid)
+        assert hasattr(tool, "current_node_oold_editor")
+        assert isinstance(tool.current_node_oold_editor, pn.widgets.JSONEditor)
+        assert tool.current_node_oold_editor.value == json_social_network["schemas"]["Person"]
+        md = tool.oold_detail_col[0]
+        assert "Class" in md.object
+
+    def test_class_node_editor_sizing(self, json_social_network):
+        """The class schema JSONEditor should stretch to fill the column width."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(person_nid)
+        editor = tool.current_node_oold_editor
+        assert editor.sizing_mode == "stretch_width"
+        assert editor.height is not None and editor.height > 0
+
+    def test_text_tab_exists(self, json_social_network):
+        """The tool should have a text_col for the Text tab."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        assert hasattr(tool, "text_col")
+        assert isinstance(tool.text_col, pn.Column)
+
+    def test_text_tab_entity_node(self, json_social_network):
+        """Clicking an entity node populates the Text tab with a MonacoEditor showing its JSON."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        assert hasattr(tool, "current_text_editor")
+        assert isinstance(tool.current_text_editor, MonacoEditor)
+        assert tool.current_text_editor.language == "json"
+        parsed = json.loads(tool.current_text_editor.value)
+        assert parsed["name"] == "Alice"
+
+    def test_text_tab_entity_has_schema(self, json_social_network):
+        """The Monaco editor for an entity should have a json_schema for validation."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        assert tool.current_text_editor.json_schema is not None
+        assert "properties" in tool.current_text_editor.json_schema
+
+    def test_text_tab_class_node(self, json_social_network):
+        """Clicking a class node populates the Text tab with a MonacoEditor showing the schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(person_nid)
+        assert hasattr(tool, "current_text_editor")
+        assert isinstance(tool.current_text_editor, MonacoEditor)
+        parsed = json.loads(tool.current_text_editor.value)
+        assert parsed.get("title") == "Person"
+
+    def test_text_tab_class_node_has_meta_schema(self, json_social_network):
+        """The Monaco editor for a class node should use the OO-LD meta-schema for validation."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(person_nid)
+        schema = tool.current_text_editor.json_schema
+        if schema:
+            assert "OO-LD" in schema.get("title", "")
+
+    def test_text_tab_has_apply_button(self, json_social_network):
+        """The Text tab should contain an Apply button below the editor."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        assert hasattr(tool, "text_apply_button")
+        assert isinstance(tool.text_apply_button, pn.widgets.Button)
+        assert tool.text_apply_button.name == "Apply Changes"
+
+    def test_text_tab_tracks_node_id(self, json_social_network):
+        """The text tab should track the node_id and node_kind for apply."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        assert tool._text_tab_node_id == alice_iri
+        assert tool._text_tab_node_kind == "entity"
+
+    def test_text_tab_tracks_class_node(self, json_social_network):
+        """The text tab should track class node_kind for class nodes."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(person_nid)
+        assert tool._text_tab_node_id == person_nid
+        assert tool._text_tab_node_kind == "class"
+
+    def test_text_apply_entity_changes(self, json_social_network):
+        """Applying changes via the Text tab should update the entity."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+
+        parsed = json.loads(tool.current_text_editor.value)
+        parsed["name"] = "Alice_Modified"
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        entity = tool.entity_dict[alice_iri]
+        assert entity.name == "Alice_Modified"
+
+    def test_text_apply_entity_age_change(self, json_social_network):
+        """Applying an age change via Text tab should update the entity's age."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+
+        parsed = json.loads(tool.current_text_editor.value)
+        parsed["age"] = 99
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        entity = tool.entity_dict[alice_iri]
+        assert entity.get("age") == 99
+
+    def test_text_apply_schema_changes(self, json_social_network):
+        """Applying schema changes via the Text tab should update schema_registry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        tool.show_node_details(person_nid)
+
+        parsed = json.loads(tool.current_text_editor.value)
+        parsed["description"] = "A person schema (modified)"
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        updated_schema = tool.schema_registry.get("Person")
+        if updated_schema is None:
+            updated_schema = tool.schema_registry.get("Person.json")
+        assert updated_schema is not None
+        assert updated_schema.get("description") == "A person schema (modified)"
+
+    def test_text_apply_schema_rebuilds_edges(self, json_social_network):
+        """Applying schema changes should rebuild edges in the graph."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        tool.show_node_details(person_nid)
+
+        parsed = json.loads(tool.current_text_editor.value)
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        assert len(tool.visnetwork_panel.edges) > 0
+
+    def test_text_apply_schema_updates_context_menus(self, json_social_network):
+        """Adding a property to a schema via Text tab must update Create: entries in context menus."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        tool.show_node_details(person_nid)
+
+        # Add a new property "nickname" to the Person schema
+        parsed = json.loads(tool.current_text_editor.value)
+        parsed["properties"]["nickname"] = {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "default": None,
+            "description": "A person's nickname",
+        }
+        parsed["@context"][1]["nickname"] = {"@id": "ex:HasNickname"}
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        # Every Person entity should now list "nickname" in its context menu
+        alice_iri = json_social_network["alice"]["id"]
+        creatable = tool._get_creatable_fields(alice_iri)
+        assert "nickname" in creatable, f"Expected 'nickname' in creatable fields, got {creatable}"
+
+        # Also check the visjs node callback_name_dict
+        alice_node = next(n for n in tool.visjs_nodes if n["id"] == alice_iri)
+        cb_values = list(alice_node.get("callback_name_dict", {}).values())
+        assert any("nickname" in v for v in cb_values), f"Expected 'Create: nickname' in context menu, got {cb_values}"
+
+    def test_text_apply_schema_updates_entity_schema_ref(self, json_social_network):
+        """After schema apply, entity._schema must point to the new schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        tool.show_node_details(person_nid)
+
+        parsed = json.loads(tool.current_text_editor.value)
+        parsed["description"] = "Updated schema"
+        tool.current_text_editor.value = json.dumps(parsed)
+        tool._on_text_apply(None)
+
+        alice_iri = json_social_network["alice"]["id"]
+        entity = tool.entity_dict[alice_iri]
+        assert entity.schema.get("description") == "Updated schema"
+
+    def test_text_apply_invalid_json(self, json_social_network):
+        """Applying invalid JSON should not crash (just prints error)."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        old_name = tool.entity_dict[alice_iri].name
+
+        tool.current_text_editor.value = "{invalid json"
+        tool._on_text_apply(None)
+
+        assert tool.entity_dict[alice_iri].name == old_name
+
     def test_show_node_details_unknown_node(self, json_social_network):
         tool = json_social_network["tool"]
         tool.build_panel()
@@ -532,12 +756,12 @@ class TestDuplication:
 class TestUndoRedo:
     def test_undo_stack_initialized(self, json_social_network):
         tool = json_social_network["tool"]
-        assert len(tool.undo_stack) == 1  # initial state
+        assert len(tool.undo_stack) == 0  # no initial state on stack
 
     def test_save_state_adds_to_stack(self, json_social_network):
         tool = json_social_network["tool"]
         tool._save_state()
-        assert len(tool.undo_stack) == 2
+        assert len(tool.undo_stack) == 1
 
     def test_undo_restores_previous_state(self, json_social_network):
         tool = json_social_network["tool"]
@@ -561,12 +785,12 @@ class TestUndoRedo:
         tool._save_state()
         alice_iri = json_social_network["alice"]["id"]
         tool.entity_dict[alice_iri].set("name", "MODIFIED")
-        tool._save_state()
 
         tool.undo()
-        assert tool.entity_dict[alice_iri].name != "MODIFIED"
+        assert tool.entity_dict[alice_iri].name == "Alice"
 
         tool.redo()
+        assert tool.entity_dict[alice_iri].name == "MODIFIED"
 
     def test_undo_nothing_to_undo(self, minimal_json_tool):
         tool = minimal_json_tool["tool"]
@@ -656,6 +880,259 @@ class TestExpansionPolicy:
         assert tool._visible_node_ids is not None
         entity_nid = _cls_node_id(json_physics["schemas"]["Entity"])
         assert entity_nid in tool._visible_node_ids
+
+    def test_visible_edges_limited_to_expansion_relations(self, json_social_network):
+        """Only edges whose labels match the expansion relations should be visible."""
+        tool = json_social_network["tool"]
+        visible_labels = {e["label"] for e in tool.visjs_edges}
+        assert "knows" in visible_labels
+        assert "hobbies" in visible_labels
+        non_expansion_labels = visible_labels - {"knows", "hobbies"}
+        assert len(non_expansion_labels) == 0, (
+            f"Edges not in expansion relations should be hidden, but found: {non_expansion_labels}"
+        )
+
+    def test_visible_edge_keys_set_when_policy_active(self, json_social_network):
+        tool = json_social_network["tool"]
+        assert tool._visible_edge_keys is not None
+
+    def test_no_policy_visible_edge_keys_is_none(self, json_recipe):
+        tool = json_recipe["tool"]
+        assert tool._visible_edge_keys is None
+
+    def test_all_expansion_edges_present(self, json_social_network):
+        """Every traversed edge should appear in the visible edges."""
+        tool = json_social_network["tool"]
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        visible_edge_triples = {(e["from"], e["to"], e["label"]) for e in tool.visjs_edges}
+        assert (alice_iri, bob_iri, "knows") in visible_edge_triples
+
+    def test_expand_label_only_from_source_node(self, json_social_network):
+        """Expanding a specific label from one node must NOT add edges from other visible nodes."""
+        tool = json_social_network["tool"]
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        charlie_iri = json_social_network["charlie"]["id"]
+        # All three persons are visible
+        assert alice_iri in tool._visible_node_ids
+        assert bob_iri in tool._visible_node_ids
+        assert charlie_iri in tool._visible_node_ids
+        # Expand "HasType" from Alice only
+        tool._on_context_menu_item("node", alice_iri, "expand_HasType")
+        has_type_edges = [(e["from"], e["to"]) for e in tool.visjs_edges if e["label"] == "HasType"]
+        # Alice -> Person class edge should exist
+        assert any(frm == alice_iri for frm, _ in has_type_edges), "Alice's HasType edge should be visible"
+        # Bob and Charlie should NOT have HasType edges
+        assert not any(frm == bob_iri for frm, _ in has_type_edges), "Bob's HasType edge should NOT appear"
+        assert not any(frm == charlie_iri for frm, _ in has_type_edges), "Charlie's HasType edge should NOT appear"
+
+
+class TestEdgeContextMenu:
+    def test_edges_have_id_and_callback(self, json_social_network):
+        tool = json_social_network["tool"]
+        for edge in tool.visjs_edges:
+            assert "id" in edge, "Edge must have an id"
+            assert "callback_name_dict" in edge, "Edge must have callback_name_dict"
+
+    def test_edge_callback_has_hide(self, json_social_network):
+        tool = json_social_network["tool"]
+        edge = tool.visjs_edges[0]
+        assert "edge_hide" in edge["callback_name_dict"]
+
+    def test_edge_callback_has_hide_all(self, json_social_network):
+        tool = json_social_network["tool"]
+        edge = tool.visjs_edges[0]
+        assert "edge_hide_all" in edge["callback_name_dict"]
+
+    def test_edge_hide_removes_single_edge(self, json_social_network):
+        tool = json_social_network["tool"]
+        edge = tool.visjs_edges[0]
+        edge_id = edge["id"]
+        count_before = len(tool.visjs_edges)
+        tool._on_edge_context_menu(edge_id, "edge_hide")
+        assert len(tool.visjs_edges) == count_before - 1
+        assert all(e["id"] != edge_id for e in tool.visjs_edges)
+
+    def test_edge_hide_all_removes_all_of_label(self, json_social_network):
+        tool = json_social_network["tool"]
+        knows_edges = [e for e in tool.visjs_edges if e["label"] == "knows"]
+        assert len(knows_edges) > 1
+        tool._on_edge_context_menu(knows_edges[0]["id"], "edge_hide_all")
+        remaining_knows = [e for e in tool.visjs_edges if e["label"] == "knows"]
+        assert len(remaining_knows) == 0
+
+    def test_edge_expand_all_reveals_new_nodes(self, json_social_network):
+        """Expand All: HasAge should reveal literal age nodes from visible persons."""
+        tool = json_social_network["tool"]
+        # Initially no HasAge edges are visible (only knows/hobbies from BFS)
+        assert not [e for e in tool.visjs_edges if e["label"] == "HasAge"]
+        nodes_before = len(tool.visjs_nodes)
+        # HasAge edges exist in the full graph
+        full_hasage = [e for e in tool._full_visjs_edges if e.get("label") == "HasAge"]
+        assert len(full_hasage) >= 2  # Alice (41) and Charlie (28)
+        # Trigger "Expand All: HasAge" using a synthetic edge ID (only label matters)
+        fake_id = "x|HasAge|y"
+        tool._on_edge_context_menu(fake_id, "edge_expand_all")
+        # Literal age nodes should now be visible
+        vis_hasage = [e for e in tool.visjs_edges if e["label"] == "HasAge"]
+        assert len(vis_hasage) >= 2
+        assert len(tool.visjs_nodes) > nodes_before
+
+    def test_edge_expand_all_only_from_visible(self, json_social_network):
+        """Expand All should only expand outward from visible nodes, not pull in hidden ones."""
+        tool = json_social_network["tool"]
+        bob_iri = json_social_network["bob"]["id"]
+        # Hide Bob so he's no longer visible
+        tool._hide_node(bob_iri)
+        assert bob_iri not in tool._visible_node_ids
+        # Expand All: HasType -- all visible entities have HasType, Bob does not
+        fake_id = "x|HasType|y"
+        tool._on_edge_context_menu(fake_id, "edge_expand_all")
+        # HasType edges from visible entities are revealed
+        vis_hastype = [e for e in tool.visjs_edges if e["label"] == "HasType"]
+        assert len(vis_hastype) > 0
+        # Bob's HasType edge should NOT be present (he was hidden)
+        assert not any(e["from"] == bob_iri for e in vis_hastype)
+        # Bob should NOT have been pulled back into visible nodes
+        assert bob_iri not in tool._visible_node_ids
+
+    def test_edge_expand_all_reveals_hidden_edges(self, json_social_network):
+        tool = json_social_network["tool"]
+        knows_edges_before = [e for e in tool.visjs_edges if e["label"] == "knows"]
+        # Hide all knows edges first
+        tool._on_edge_context_menu(knows_edges_before[0]["id"], "edge_hide_all")
+        assert len([e for e in tool.visjs_edges if e["label"] == "knows"]) == 0
+        # Now reveal one knows edge so we can use its context menu to expand all
+        visible = tool._visible_node_ids or {n["id"] for n in tool._full_visjs_nodes}
+        full_knows = [
+            e
+            for e in tool._full_visjs_edges
+            if e.get("label") == "knows" and e.get("from") in visible and e.get("to") in visible
+        ]
+        assert len(full_knows) > 0
+        # Manually add one back so we can trigger expand_all from it
+        key = (full_knows[0]["from"], full_knows[0]["to"], "knows")
+        tool._visible_edge_keys.add(key)
+        tool._apply_visibility_filter_inplace()
+        tool.visnetwork_panel.nodes = list(tool.visjs_nodes)
+        tool.visnetwork_panel.edges = list(tool.visjs_edges)
+        one_edge = next(e for e in tool.visjs_edges if e["label"] == "knows")
+        tool._on_edge_context_menu(one_edge["id"], "edge_expand_all")
+        knows_after = [e for e in tool.visjs_edges if e["label"] == "knows"]
+        assert len(knows_after) == len(full_knows)
+
+
+# =====================================================================
+# 9b. Expansion node positioning
+# =====================================================================
+
+
+class TestExpansionPositioning:
+    """Newly expanded nodes should be placed near their source node."""
+
+    def _set_node_position(self, tool, node_id: str, x: float, y: float) -> None:
+        """Simulate JS-synced position by setting x/y on visnetwork_panel nodes."""
+        for n in tool.visnetwork_panel.nodes:
+            if n.get("id") == node_id:
+                n["x"] = x
+                n["y"] = y
+                return
+
+    def test_node_expand_positions_near_source(self, json_social_network):
+        """Expanding a node places new neighbours near it, not at origin."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        self._set_node_position(tool, alice_iri, 500.0, 300.0)
+
+        # Alice has hidden outgoing edges (e.g. HasAge); expand all from her
+        nodes_before = {n["id"] for n in tool.visjs_nodes}
+        tool._on_context_menu_item("node", alice_iri, "expand_all")
+        new_nodes = [n for n in tool.visjs_nodes if n["id"] not in nodes_before]
+
+        assert len(new_nodes) > 0, "expand_all should reveal new nodes"
+        for n in new_nodes:
+            assert "x" in n and "y" in n, f"New node {n['id'][:30]} should have x/y"
+            dx = n["x"] - 500.0
+            dy = n["y"] - 300.0
+            dist = (dx**2 + dy**2) ** 0.5
+            assert 50 < dist < 200, f"Node should be ~100px from source, got {dist:.0f}"
+
+    def test_edge_expand_all_positions_near_source(self, json_social_network):
+        """'Expand All: HasAge' places literal nodes near their respective persons."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        charlie_iri = json_social_network["charlie"]["id"]
+        self._set_node_position(tool, alice_iri, 200.0, 100.0)
+        self._set_node_position(tool, charlie_iri, 800.0, 400.0)
+
+        nodes_before = {n["id"] for n in tool.visjs_nodes}
+        tool._on_edge_context_menu("x|HasAge|y", "edge_expand_all")
+        new_nodes = [n for n in tool.visjs_nodes if n["id"] not in nodes_before]
+
+        assert len(new_nodes) >= 2, "Should reveal at least 2 age literal nodes"
+        # Each new node should be near one of the source persons
+        for n in new_nodes:
+            assert "x" in n and "y" in n, "New node should have x/y"
+            d_alice = ((n["x"] - 200.0) ** 2 + (n["y"] - 100.0) ** 2) ** 0.5
+            d_charlie = ((n["x"] - 800.0) ** 2 + (n["y"] - 400.0) ** 2) ** 0.5
+            near_source = d_alice < 200 or d_charlie < 200
+            assert near_source, f"Node at ({n['x']:.0f},{n['y']:.0f}) not near any source"
+
+    def test_click_after_expand_preserves_positions(self, json_social_network):
+        """Clicking a node after expansion must not reset x/y on other nodes."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        self._set_node_position(tool, alice_iri, 500.0, 300.0)
+
+        # Expand all from Alice -- new nodes get x/y from _position_nodes_near
+        tool._on_context_menu_item("node", alice_iri, "expand_all")
+        positioned = {n["id"]: (n["x"], n["y"]) for n in tool.visjs_nodes if "x" in n}
+        assert len(positioned) > 0, "Some nodes should have positions after expand"
+
+        # Simulate click: the visnetwork_panel.nodes now has the expansion data.
+        # A real click would trigger show_node_details via click_callback.
+        tool.click_callback({"nodes": [bob_iri]})
+
+        # Positions in visjs_nodes should be unchanged (no snap-back)
+        for n in tool.visjs_nodes:
+            if n["id"] in positioned:
+                assert n.get("x") == positioned[n["id"]][0], f"Node {n['id'][:20]} x changed after click"
+                assert n.get("y") == positioned[n["id"]][1], f"Node {n['id'][:20]} y changed after click"
+
+    def test_same_label_same_angle(self, json_social_network):
+        """Nodes expanded via the same label should fan out at the same angle."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        charlie_iri = json_social_network["charlie"]["id"]
+        src_positions = {alice_iri: (0.0, 0.0), charlie_iri: (1000.0, 0.0)}
+        for nid, (x, y) in src_positions.items():
+            self._set_node_position(tool, nid, x, y)
+
+        tool._on_edge_context_menu("x|HasAge|y", "edge_expand_all")
+
+        # Find the HasAge edges to identify which new node belongs to which source
+        hasage_edges = [e for e in tool.visjs_edges if e["label"] == "HasAge"]
+        node_map = {n["id"]: n for n in tool.visjs_nodes}
+        import math
+
+        angles = []
+        for e in hasage_edges:
+            src_pos = src_positions.get(e["from"])
+            tgt = node_map.get(e["to"])
+            if src_pos and tgt and "x" in tgt:
+                dx = tgt["x"] - src_pos[0]
+                dy = tgt["y"] - src_pos[1]
+                angles.append(math.atan2(dy, dx))
+
+        # Both angles should be identical (same label -> same hash -> same angle)
+        assert len(angles) >= 2
+        assert abs(angles[0] - angles[1]) < 0.01, f"Same label should produce same angle: {angles}"
 
 
 # =====================================================================

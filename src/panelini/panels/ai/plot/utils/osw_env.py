@@ -2,16 +2,16 @@
 
 The OSW connector tools need six environment variables to function:
 
-- ``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD`` — used by
+- ``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD`` - used by
   :class:`osw.express.OswExpress` to authenticate against the wiki.
-- ``BLAZEGRAPH_ENDPOINT``, ``BLAZEGRAPH_USER``, ``BLAZEGRAPH_PASSWORD`` —
+- ``BLAZEGRAPH_ENDPOINT``, ``BLAZEGRAPH_USER``, ``BLAZEGRAPH_PASSWORD`` -
   used by the SPARQL-backed tools.
 
 When any are missing, :func:`make_osw_tools` skips registration so the
 example remains runnable without an OSW instance. When a caller invokes
 :func:`build_osw_express` directly without the three auth vars,
 :func:`check_osw_auth_env` raises a :class:`RuntimeError` listing the
-missing variables — this replaces osw's default
+missing variables - this replaces osw's default
 ``input()``/``getpass.getpass()`` prompt (unsuitable for a Panel server)
 with an explicit startup-time failure.
 
@@ -103,7 +103,11 @@ def build_osw_express(domain: str | None = None) -> Any:
     username = os.environ["OSW_USER"]
     password = os.environ["OSW_PASSWORD"]
 
-    mgr = EnvCredentialManager()
+    # osw.auth.CredentialManager declares cred_filepath/cert_filepath as bare
+    # Optional[...] fields (no explicit "= None"); ty synthesizes a pydantic
+    # constructor that treats them as required, but the base class's own
+    # __init__(self, **data) makes both genuinely optional at runtime.
+    mgr = EnvCredentialManager()  # ty: ignore[missing-argument]
     mgr.add_credential(
         CredentialManager.UserPwdCredential(
             iri=resolved_domain,

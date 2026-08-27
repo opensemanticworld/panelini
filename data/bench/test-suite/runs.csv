@@ -1,0 +1,96 @@
+phase,directory,run,command,passed,failed,errors,xfailed,deselected,duration_s,notes
+baseline,non-ai-ui-plus-unit,1,"pytest -m ""not portfolio and not ai""",156,0,0,1,193,388.16,baseline before any changes
+baseline,ai-examples,1,"pytest tests/panels/ai/examples -m ""not portfolio""",15,0,0,0,0,18.00,baseline before any changes; already fast (pre-existing module-scoped pattern)
+baseline,ai-unit,1,pytest -m ai,167,0,0,0,183,3.69,baseline before any changes; non-UI ai tests
+baseline,wunderbaum,1,pytest tests/panels/wunderbaum -q (git stash control),37,0,0,1,0,180.91,unmodified code control run
+baseline,wunderbaum,2,pytest tests/panels/wunderbaum -q (git stash control),37,0,0,1,0,181.18,unmodified code control run
+baseline,visnetwork,1,estimated from time.sleep() calls in source (no control run captured),0,0,0,0,0,40,estimate not a measured run
+baseline,jsoneditor,1,estimated from time.sleep() calls in source (no control run captured),0,0,0,0,0,27,estimate not a measured run
+baseline,terminalmirror,1,estimated from time.sleep() calls in source (no control run captured),0,0,0,0,0,8,estimate not a measured run
+baseline,usecases,1,estimated from time.sleep() calls in source (no control run captured),0,0,0,0,0,75,estimate not a measured run
+wunderbaum,checkbox_tree-pilot,1,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,8.16,pilot file before directory-wide rollout
+wunderbaum,checkbox_tree-pilot,2,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,8.74,
+wunderbaum,checkbox_tree-pilot,3,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,7.50,
+wunderbaum,checkbox_tree-pilot,4,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,7.37,
+wunderbaum,full-dir-reload-pattern,1,pytest tests/panels/wunderbaum -q,37,0,0,1,0,26.15,first clean full-directory run after conversion (page.reload reset pattern)
+wunderbaum,full-dir-reload-pattern,2,pytest tests/panels/wunderbaum -q,37,0,0,1,0,26.21,
+wunderbaum,full-dir-reload-pattern,3,pytest tests/panels/wunderbaum -q,37,0,1,1,0,26.09,RuntimeError Thread already stopping in unrelated test_wunderbaum.py teardown
+wunderbaum,full-dir-reload-pattern,4,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.75,
+wunderbaum,full-dir-reload-pattern,5,pytest tests/panels/wunderbaum -q,37,0,0,1,0,26.08,
+wunderbaum,full-dir-reload-pattern,6,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.05,
+wunderbaum,full-dir-reload-pattern,7,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.51,
+wunderbaum,full-dir-reload-pattern,8,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.82,
+wunderbaum,full-dir-reload-pattern,9,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.68,
+wunderbaum,full-dir-reload-pattern,10,pytest tests/panels/wunderbaum -q,30,1,7,1,0,53.52,"worst run: page.reload() raced with in-flight server activity (TimeoutError / net::ERR_ABORTED in _reset_tree), cascaded into 7 errors"
+wunderbaum,full-dir-reload-pattern,11,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.81,
+wunderbaum,full-dir-reload-pattern,12,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.69,
+wunderbaum,full-dir-reload-pattern,13,pytest tests/panels/wunderbaum -q,37,0,0,1,0,26.29,
+wunderbaum,full-dir-reload-pattern,14,pytest tests/panels/wunderbaum -q,37,0,0,1,0,26.04,
+wunderbaum,full-dir-reload-pattern,15,pytest tests/panels/wunderbaum -q,37,0,1,1,0,25.44,RuntimeError Thread already stopping (same as run 3)
+wunderbaum,full-dir-reload-pattern,16,pytest tests/panels/wunderbaum -q,37,0,0,1,0,25.55,
+wunderbaum,full-dir-reload-pattern,17,pytest tests/panels/wunderbaum -q,36,1,0,1,0,25.13,"test_check_leaf_node failed: checked_display.object still (none) while tree.source already showed the checkbox checked (watcher-fires-after-attribute-visible race)"
+wunderbaum,checkbox_tree-pilot-fixed,1,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,9.82,after fresh-page-per-test + kill_all_servers() fix
+wunderbaum,checkbox_tree-pilot-fixed,2,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,8.46,
+wunderbaum,checkbox_tree-pilot-fixed,3,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,8.46,
+wunderbaum,checkbox_tree-pilot-fixed,4,pytest tests/panels/wunderbaum/examples/test_checkbox_tree.py -q,8,0,0,0,0,9.84,
+wunderbaum,full-dir-fixed,1,pytest tests/panels/wunderbaum -q,37,0,0,1,0,29.07,after all fixes applied
+wunderbaum,full-dir-fixed,2,pytest tests/panels/wunderbaum -q,37,0,0,1,0,28.76,
+visnetwork,full-dir,1,pytest tests/panels/visnetwork -q,11,0,0,0,0,16.89,first full run after conversion (fresh-page pattern applied from the start)
+visnetwork,full-dir,2,pytest tests/panels/visnetwork -q,11,0,0,0,0,15.90,
+visnetwork,full-dir,3,pytest tests/panels/visnetwork -q,11,0,0,0,0,15.65,
+visnetwork,full-dir,4,pytest tests/panels/visnetwork -q,11,0,0,0,0,15.78,
+visnetwork,full-dir,5,pytest tests/panels/visnetwork -q,11,0,0,0,0,15.86,
+jsoneditor,full-dir,1,pytest tests/panels/jsoneditor -q,6,2,0,0,0,7.22,"test_jsoneditor_panel_min/panelini_min failed: get_value() returned None right after input field wait_for() resolved (widget async init not finished)"
+jsoneditor,full-dir,2,pytest tests/panels/jsoneditor -q,8,0,0,0,0,7.87,after fix: wait on get_value() is not None
+jsoneditor,full-dir,3,pytest tests/panels/jsoneditor -q,8,0,0,0,0,7.76,
+jsoneditor,full-dir,4,pytest tests/panels/jsoneditor -q,8,0,0,0,0,6.67,
+jsoneditor,full-dir,5,pytest tests/panels/jsoneditor -q,8,0,0,0,0,6.66,
+jsoneditor,full-dir,6,pytest tests/panels/jsoneditor -q,8,0,0,0,0,6.70,
+jsoneditor,full-dir,7,pytest tests/panels/jsoneditor -q,8,0,0,0,0,7.79,
+terminalmirror,full-dir,1,pytest tests/panels/terminalmirror -q,14,0,0,0,0,2.77,
+terminalmirror,full-dir,2,pytest tests/panels/terminalmirror -q,14,0,0,0,0,1.35,
+terminalmirror,full-dir,3,pytest tests/panels/terminalmirror -q,14,0,0,0,0,1.28,
+terminalmirror,full-dir,4,pytest tests/panels/terminalmirror -q,14,0,0,0,0,1.27,
+usecases,wunderbaum_visnetwork-only,1,pytest tests/usecases/test_wunderbaum_visnetwork.py -q,10,0,0,0,0,17.24,biggest reset surface: NODES/EDGES/tree/graph module-level singletons rebuilt before every test
+usecases,full-dir,1,pytest tests/usecases -q,11,0,0,0,0,19.47,
+usecases,full-dir,2,pytest tests/usecases -q,11,0,0,0,0,19.23,
+usecases,full-dir,3,pytest tests/usecases -q,11,0,0,0,0,19.02,
+usecases,full-dir,4,pytest tests/usecases -q,11,0,0,0,0,19.24,
+usecases,full-dir,5,pytest tests/usecases -q,11,0,0,0,0,18.93,
+full-suite,not-portfolio-with-coverage,1,"pytest -m ""not portfolio"" --cov --cov-config=pyproject.toml --cov-report=xml -q",322,1,0,1,29,130.42,"test_terminalmirror_panelini_min failed: waited only on clear-counter increment, but redraw() clears then rewrites buffer as a separate later step"
+full-suite,not-portfolio-with-coverage,2,"pytest -m ""not portfolio"" --cov --cov-config=pyproject.toml --cov-report=xml -q",323,0,0,1,29,130.65,after terminalmirror fix
+full-suite,not-portfolio-no-coverage,1,"pytest -m ""not portfolio"" --durations=30 -q",323,0,0,1,29,119.34,slowest individual test now 4.00s
+full-suite,not-portfolio-with-coverage,3,"pytest -m ""not portfolio"" --cov --cov-config=pyproject.toml --cov-report=xml -q",323,0,0,1,29,130.38,final confirmation run after make check ty-diagnostic fix
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,1,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,2.83,stress test of the redraw double-wait fix
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,2,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,1.33,
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,3,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,1.28,
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,4,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,1.25,
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,5,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,1.30,
+terminalmirror-fix-isolated,test_terminalmirror_panelini_min,6,pytest tests/panels/terminalmirror/examples/test_terminalmirror_panelini_min.py -q,1,0,0,0,0,1.28,
+portfolio,full-suite,1,pytest tests/portfolio -q,28,1,0,0,0,530.02,"test_app_renders[chromium-visnetwork/visnetwork_panelini_min] failed: widget never appeared, console errors GridStack is not defined / Cannot read properties of undefined (reading 'destroy')"
+portfolio,failing-test-isolated,1,"pytest ""tests/portfolio/test_apps.py::test_app_renders[chromium-visnetwork/visnetwork_panelini_min]"" -q",0,1,0,0,0,138.03,"same failure reproduces consistently in isolation, not a timing flake; confirmed pre-existing and unrelated (git status shows zero changes to tests/portfolio, examples/panels/visnetwork, docs/gen_portfolio.py)"
+terminalmirror-ci-flake,ci-run-31187289544,1,"CI: tests-and-type-check (ubuntu-latest, 3.11), 12-job matrix, timeout=2.0s",322,1,0,1,0,142.54,"TimeoutError: wait_until: condition not met within 2.0s (redraw clears+output check)"
+terminalmirror-ci-flake,ci-run-31187289544,2,"CI: tests-and-type-check (macos-latest, 3.11), 12-job matrix, timeout=2.0s",322,1,0,1,0,0,"same TimeoutError as above, timeout=2.0s"
+terminalmirror-ci-flake,ci-run-31187289544,3,"CI: tests-and-type-check (macos-latest, 3.13), 12-job matrix, timeout=2.0s",322,1,0,1,0,0,"same TimeoutError as above, timeout=2.0s"
+terminalmirror-ci-flake,ci-run-31189453155,1,"CI: tests-and-type-check (macos-latest, 3.12), 12-job matrix, timeout=5.0s",322,1,0,1,0,176.43,"TimeoutError: wait_until: condition not met within 5.0s - timeout bump alone did not fix it"
+terminalmirror-ci-flake,ci-run-31189453155,2,"CI: tests-and-type-check (macos-latest, 3.10), 12-job matrix, timeout=5.0s",322,1,0,1,0,0,"same TimeoutError as above, timeout=5.0s"
+terminalmirror-local-repro,test_component-in-dir,1,"pytest tests/panels/terminalmirror/ -q, timeout=15.0s, singleton shared with test_terminalmirror.py",0,1,0,0,0,16.31,"reproduced locally (not CI-only): test_example_redraws_on_card_expand mutating the same terminalmirror_panelini_min.card/terminalmirror_panel singleton the UI test serves caused intermittent cross-test interference, ~1-in-15 local runs"
+terminalmirror-local-repro,test_component-in-dir,2,"pytest tests/panels/terminalmirror/ -q, timeout=15.0s, singleton shared with test_terminalmirror.py",0,1,0,0,0,17.87,"same root cause as above"
+terminalmirror-fixed,full-dir,1,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s, test_example_redraws_on_card_expand now uses its own local TerminalMirrorDemo instance instead of the shared singleton",14,0,0,0,0,2.85,"post-fix stress run 1/12, clean"
+terminalmirror-fixed,full-dir,2,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.34,"post-fix stress run 2/12, clean"
+terminalmirror-fixed,full-dir,3,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.30,"post-fix stress run 3/12, clean"
+terminalmirror-fixed,full-dir,4,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.36,"post-fix stress run 4/12, clean"
+terminalmirror-fixed,full-dir,5,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.44,"post-fix stress run 5/12, clean"
+terminalmirror-fixed,full-dir,6,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.38,"post-fix stress run 6/12, clean"
+terminalmirror-fixed,full-dir,7,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.39,"post-fix stress run 7/12, clean"
+terminalmirror-fixed,full-dir,8,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.34,"post-fix stress run 8/12, clean"
+terminalmirror-fixed,full-dir,9,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.44,"post-fix stress run 9/12, clean"
+terminalmirror-fixed,full-dir,10,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.31,"post-fix stress run 10/12, clean"
+terminalmirror-fixed,full-dir,11,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.42,"post-fix stress run 11/12, clean"
+terminalmirror-fixed,full-dir,12,"pytest tests/panels/terminalmirror/ -q, timeout=5.0s",14,0,0,0,0,1.32,"post-fix stress run 12/12, clean"
+terminalmirror-deterministic,full-dir,1,"pytest tests/panels/terminalmirror/ -q, xterm_wait_for_text() checks actual rendered buffer instead of racing Python-side state",14,0,0,0,0,2.87,"still failed in CI after singleton fix - .xterm visibility is a client-only toggle, proves nothing about server round trip; fixed by waiting on the real rendered xterm buffer via Bokeh.index instead"
+terminalmirror-deterministic,full-dir,2,"pytest tests/panels/terminalmirror/ -q",14,0,0,0,0,1.34,"clean"
+terminalmirror-deterministic,full-dir,3,"pytest tests/panels/terminalmirror/ -q",14,0,0,0,0,1.36,"clean"
+terminalmirror-deterministic,full-dir,4,"pytest tests/panels/terminalmirror/ -q",14,0,0,0,0,1.39,"clean"
+terminalmirror-deterministic,full-dir,5,"pytest tests/panels/terminalmirror/ -q",14,0,0,0,0,1.37,"clean"
+terminalmirror-deterministic,full-dir,6,"pytest tests/panels/terminalmirror/ -q",14,0,0,0,0,1.38,"clean"

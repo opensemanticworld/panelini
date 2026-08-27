@@ -3,11 +3,14 @@
 import time
 
 import panel as pn
+import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.wunderbaum_panelini_min import app, tree
+from panelini.testing import wb_wait
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_component(page: Page, port):
     url = f"http://localhost:{port}"
 
@@ -15,13 +18,13 @@ def test_component(page: Page, port):
     time.sleep(0.2)
 
     page.goto(url)
-    time.sleep(5)
+    wb_wait(page)
 
     assert len(tree.source) == 3
     assert page.locator(".wunderbaum-wrapper").first.is_visible()
 
     # Actual tree rows must be visible
     rows = page.locator(".wb-row")
-    assert rows.count() > 0, "No .wb-row elements — tree did not render"
+    assert rows.count() > 0, "No .wb-row elements - tree did not render"
 
     server.stop()

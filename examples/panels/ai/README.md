@@ -1,11 +1,11 @@
 # AI panel examples
 
-- `chat_min.py` — minimal AI chat inside Panelini.
-- `chat_custom_tool.py` — AI chat wired with a custom in-memory storage tool.
-- `chat_multi_tab.py` — multiple AI chats in separate tabs, with config switching.
-- `plot_by_code.py` — AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).
+- `chat_min.py` - minimal AI chat inside Panelini.
+- `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
+- `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
+- `plot_by_code.py` - AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).
 
-## Plot by Code — sandboxed matplotlib
+## Plot by Code - sandboxed matplotlib
 
 `plot_by_code.py` renders matplotlib figures inside a Docker sandbox via
 `llm-sandbox`. An `AiChat` is wired to five plot tools (`plot_by_code`,
@@ -15,7 +15,7 @@ additional OSW connector tools.
 
 ### Prerequisites
 
-- Docker daemon running (`docker ps` must succeed) — `plot_by_code` /
+- Docker daemon running (`docker ps` must succeed) - `plot_by_code` /
   `run_code` spin up `python:3.12-slim` sandbox containers.
 - An Anthropic or Azure OpenAI API key (see env vars below).
 - `uv` installed (<https://docs.astral.sh/uv/>).
@@ -49,13 +49,13 @@ LLM (one of):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-...
-# — or —
+# - or -
 export AZURE_OPENAI_API_KEY=...
 export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
 export AZURE_OPENAI_API_VERSION=2024-06-01
 ```
 
-OSW (optional — all six required together to enable OSW tools):
+OSW (optional - all six required together to enable OSW tools):
 
 ```bash
 export OSW_DOMAIN=wiki.example.org
@@ -66,7 +66,7 @@ export BLAZEGRAPH_USER=alice
 export BLAZEGRAPH_PASSWORD=hunter2
 ```
 
-Credentials stay in memory — no `accounts.pwd.yaml` is written, and the
+Credentials stay in memory - no `accounts.pwd.yaml` is written, and the
 `input()` / `getpass` prompt that `osw.express` normally shows on a fresh
 machine is bypassed. Missing any of the three auth vars when an OSW tool
 is invoked produces a `RuntimeError` listing the missing names.
@@ -81,7 +81,7 @@ Open the URL it prints (default `http://localhost:5008`) and prompt the
 chat, e.g. *"plot y = sin(x) for x in 0..2π and save to /sandbox/output.png"*.
 The figure appears in the right pane.
 
-## DrawAI — AI-assisted drawio beautifier
+## DrawAI - AI-assisted drawio beautifier
 
 `drawai_beautify.py` is a self-contained example that:
 
@@ -91,7 +91,7 @@ The figure appears in the right pane.
    a LangChain tool to return new drawio XML.
 4. Renders a before/after visual comparison using the drawio web viewer
    (`viewer.diagrams.net`) embedded in an iframe.
-5. Lets the user download the beautified file — original pixels reused, new
+5. Lets the user download the beautified file - original pixels reused, new
    XML embedded in the PNG `tEXt` chunk (for `.drawio.png` inputs) or raw
    XML bytes (for `.drawio` inputs).
 
@@ -122,7 +122,7 @@ work well too.
 ### Known trade-offs
 
 - The downloaded `.drawio.png` reuses the **original pixels** with the new
-  XML embedded — drawio opens it correctly, but file-manager thumbnails
+  XML embedded - drawio opens it correctly, but file-manager thumbnails
   will still show the old pixels. Re-rasterization would require a drawio
   CLI dependency, deliberately out of scope for v1.
 - `.drawio.svg` input/output is not supported in v1.

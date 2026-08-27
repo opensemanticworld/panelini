@@ -15622,21 +15622,23 @@ function Om({ model: l, el: u }) {
     }
     //   startval: this.data
   };
-  const C = bm(xm, {
+  const _ = l.get("value");
+  _ != null && w.startval === void 0 && (w = { ...w, startval: _ });
+  const d = bm(xm, {
     options: w,
-    onChange: (d) => {
-      console.debug("CHANGE", d), d instanceof Event || (l.set("value", d), l.save_changes());
+    onChange: (g) => {
+      console.debug("CHANGE", g), g instanceof Event || (l.set("value", g), l.save_changes());
     },
-    onReady: (d) => {
-      console.debug("JSONEditor is ready"), l.set("ready", d), l.save_changes();
+    onReady: (g) => {
+      console.debug("JSONEditor is ready"), l.set("ready", g), l.save_changes();
     }
   }).mount(u);
   l.on("change:value", () => {
-    C.setValue(l.get("value"));
+    d.setValue(l.get("value"));
   }), l.on("change:options", () => {
-    C.setOptions(l.get("options"));
+    d.setOptions(l.get("options"));
   }), l.on("change:schema", () => {
-    C.setSchema(l.get("schema"));
+    d.setSchema(l.get("schema"));
   });
 }
 export {

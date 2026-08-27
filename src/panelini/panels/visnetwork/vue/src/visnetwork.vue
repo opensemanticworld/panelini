@@ -521,8 +521,19 @@ export default {
     },
 
     emitNodesAndEdges() {
-      // Strip title (DOM element, not JSON-serializable) -- regenerable from json_data
-      const nodes = this.nodesDataSet.get().map(({ title, ...rest }) => rest);
+      // Sync current physics positions into the DataSet so the round-trip
+      // through Python doesn't snap nodes back to their initial x/y.
+      const network = this.network;
+      const nodes = this.nodesDataSet.get().map(({ title, ...rest }) => {
+        if (network) {
+          try {
+            const pos = network.getPosition(rest.id);
+            rest.x = pos.x;
+            rest.y = pos.y;
+          } catch (e) { /* node may not exist in network yet */ }
+        }
+        return rest;
+      });
       this.$emit('change:nodes', nodes);
       this.$emit('change:edges', this.edgesDataSet.get());
     },

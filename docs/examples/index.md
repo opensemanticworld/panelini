@@ -1,40 +1,50 @@
-# Examples
+# Overview
 
-Every example lives in [`examples/`](https://github.com/opensemanticworld/panelini/tree/main/examples) in the repository. This section walks through each one, explains what it demonstrates, and shows how it's covered by the test suite.
+Walkthroughs of every example in [`examples/`](https://github.com/opensemanticworld/panelini/tree/main/examples), grouped by component. Each page explains the code, shows a short screen capture recorded from that example's Playwright test, and - where available - lets you run it live in your browser.
 
-## At a glance
-
-::::{grid} 1 1 2 2
+::::{grid} 1 2 2 3
 :gutter: 3
 
-:::{grid-item-card} AI chat — minimal
-:link: ai_chat_min
+:::{grid-item-card} Chat
+:link: chat/index
 :link-type: doc
-Drop an LLM chat into a Panelini dashboard with one flag.
+:img-top: /_static/media/ai/chat_min_overview.webp
+LLM chat panels - drop-in, tool-augmented, and multi-tab.
 :::
 
-:::{grid-item-card} AI chat — custom tool
-:link: ai_chat_custom_tool
+:::{grid-item-card} JSON Editor
+:link: jsoneditor/index
 :link-type: doc
-Hook a LangChain `BaseTool` (a local key–value store) into the chat.
+:img-top: /_static/media/jsoneditor/jsoneditor_pydantic_overview.png
+Schema-driven forms, including a Pydantic-backed variant.
 :::
 
-:::{grid-item-card} AI chat — multi-tab
-:link: ai_chat_multi_tab
+:::{grid-item-card} VisNetwork
+:link: visnetwork/index
 :link-type: doc
-Host two independent chats in synced tabs with `jslink`.
+:img-top: /_static/media/visnetwork/visnetwork_context_menu_feature.webp
+Interactive network graphs with context menus and drag interactions.
 :::
 
-:::{grid-item-card} JSON editor
-:link: jsoneditor
+:::{grid-item-card} Wunderbaum
+:link: wunderbaum/index
 :link-type: doc
-Render a JSON-Schema driven form inside a Panelini card.
+:img-top: /_static/media/wunderbaum/virtual_filesystem_overview.webp
+Trees and tree-grids - columns, checkboxes, lazy loading, drag-and-drop, and more.
 :::
 
-:::{grid-item-card} VisNetwork graph
-:link: visnetwork
+:::{grid-item-card} Terminal Mirror
+:link: terminalmirror/index
 :link-type: doc
-Interactive network graph with `vis-network` + Vue.
+:img-top: /_static/media/terminalmirror/terminalmirror_panelini_min_feature.webp
+Stream Python stdout and stderr into a live on-screen terminal.
+:::
+
+:::{grid-item-card} Use cases
+:link: usecases/index
+:link-type: doc
+:img-top: /_static/media/usecases/wunderbaum_visnetwork_overview.webp
+Multi-component highlights - two panels wired together through one shared data model.
 :::
 
 ::::
@@ -42,28 +52,18 @@ Interactive network graph with `vis-network` + Vue.
 ## Running the examples
 
 ```bash
-# Clone the repo
 git clone https://github.com/opensemanticworld/panelini.git
-cd panelini
-uv sync
-
-# Run any example
-python examples/panels/ai/chat_min.py
+cd panelini && uv sync
 python examples/panels/jsoneditor/jsoneditor_panelini_min.py
-python examples/panels/visnetwork/visnetwork_panelini_min.py
 ```
 
-Each example ends with `pn.serve(...)` when run directly — just open the URL printed in the terminal.
+Each example ends with `pn.serve(...)` when run directly - just open the URL printed in the terminal.
 
 ## Tested end-to-end
 
-Every example under `examples/panels/` is exercised by a Playwright test that imports the real module and asserts on rendered DOM. If an example breaks, the corresponding test fails — see [`tests/panels/*/examples/`](https://github.com/opensemanticworld/panelini/tree/main/tests/panels).
-
-Run them locally:
+Every example under `examples/panels/` is exercised by a Playwright test that imports the real module and asserts on rendered DOM. The screen captures are recorded from those same tests, so the docs never drift from the code - see [`tests/panels/*/examples/`](https://github.com/opensemanticworld/panelini/tree/main/tests/panels).
 
 ```bash
 make test-ui         # UI tests only
-make test-full       # unit + UI
+make docs-media      # re-record the screen captures
 ```
-
-With background images disabled globally in `tests/conftest.py`, the full UI suite completes in ~43 s.

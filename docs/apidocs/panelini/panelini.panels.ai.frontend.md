@@ -53,4 +53,12 @@
 
 ````
 
+````{py:method} batch_update_tools(tool_names_checked: set[str]) -> int
+:canonical: panelini.panels.ai.frontend.AiChat.batch_update_tools
+
+```{autodoc2-docstring} panelini.panels.ai.frontend.AiChat.batch_update_tools
+```
+
+````
+
 `````

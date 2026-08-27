@@ -23,5 +23,7 @@ panelini.panels
 :titlesonly:
 :maxdepth: 1
 
+panelini.ai_testing
 panelini.main
+panelini.testing
 ```

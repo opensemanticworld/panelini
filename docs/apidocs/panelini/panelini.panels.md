@@ -20,6 +20,7 @@ panelini.panels.camera
 panelini.panels.compass
 panelini.panels.gps
 panelini.panels.jsoneditor
+panelini.panels.terminalmirror
 panelini.panels.visnetwork
 panelini.panels.wunderbaum
 ```

@@ -3,7 +3,7 @@
 A shared data model (NODES, EDGES) is displayed as both a tree (left) and
 a graph (right).  Every mutation goes through the data model and uses the
 incremental APIs of both widgets (add_node / remove_node / add_edge /
-remove_edge) — no full re-render.
+remove_edge) - no full re-render.
 
 - Tree columns: Name, Description
 - Tree DnD:  move a node → old SubClassOf edge removed, new one added
@@ -246,7 +246,7 @@ def sync_remove_node(node_id: str) -> None:
 def sync_move_node(node_id: str, new_parent_id: str) -> str | None:
     """Move node in model, update graph edges. Returns old parent.
 
-    Tree DnD already moved the node visually — only update the
+    Tree DnD already moved the node visually - only update the
     data model and graph (no tree.set_source, which would conflict
     with the JS-side move).
     """
@@ -447,12 +447,15 @@ def show_details(nid: str) -> None:
 app = Panelini(
     title="Class Hierarchy Editor",
     sidebar_right_enabled=True,
+    # Details live in the right sidebar; the left one stays empty, so collapse it for
+    # more width (the toggle button remains, so it can still be opened).
+    sidebar_visible=False,
 )
 app.main_set(
     objects=[
         pn.Row(
             pn.Card(
-                title="Hierarchy — drag to move, right-click for menu",
+                title="Hierarchy - drag to move, right-click for menu",
                 objects=[tree],
                 sizing_mode="stretch_both",
             ),

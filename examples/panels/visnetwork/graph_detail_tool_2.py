@@ -26,4 +26,8 @@ edges = []
 
 if __name__ == "__main__":
     graph_detail_panel = GraphDetailTool(nodes=nodes, edges=edges)
-    pn.serve(graph_detail_panel, threaded=True)
+    # GraphDetailTool duck-types as a Viewer (has __panel__) but does not
+    # subclass panel.viewable.Viewer, so it does not satisfy serve()'s
+    # TViewableFuncOrPath union. Fixing the base class lives in src/, out of
+    # scope here.
+    pn.serve(graph_detail_panel, threaded=True)  # ty: ignore[invalid-argument-type]

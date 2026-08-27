@@ -37,8 +37,8 @@ def _is_pydantic_class(obj: Any) -> bool:
 class EntityAdapter:
     """Uniform wrapper around an entity's data dict and its OO-LD schema.
 
-    After construction every entity — whether it originated as a pydantic
-    ``LinkedBaseModel`` instance or as a plain JSON dict — is accessed
+    After construction every entity --whether it originated as a pydantic
+    ``LinkedBaseModel`` instance or as a plain JSON dict --is accessed
     through the same interface.
     """
 
@@ -106,7 +106,7 @@ class EntityAdapter:
 
     @property
     def name(self) -> str:
-        return self._data.get("name", "")
+        return self._data.get("name") or self._data.get("title") or self._data.get("prefLabel") or ""
 
     @property
     def type_name(self) -> str:
@@ -193,10 +193,10 @@ def adapt_entity(item: Any, schema_registry: dict[str, dict]) -> EntityAdapter:
     """Convert a pydantic instance **or** a plain JSON dict into an
     `EntityAdapter`.
 
-    * **pydantic instance** — ``model_dump()`` extracts the data; the IRI
+    * **pydantic instance** --``model_dump()`` extracts the data; the IRI
       is ensured via ``get_iri()``; the schema is looked up in the registry
       by class name or IRI.
-    * **plain dict** — the ``type`` (or ``@type``) value is used to find the
+    * **plain dict** --the ``type`` (or ``@type``) value is used to find the
       matching schema in the registry.
     """
     if isinstance(item, dict):

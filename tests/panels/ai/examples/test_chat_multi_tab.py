@@ -30,6 +30,10 @@ def ready_page(browser, panel_server):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
+    # The left sidebar starts collapsed (Panelini's sidebar_visible defaults to
+    # False), and this test verifies the main-area and sidebar tab copies stay
+    # in sync, so both must be visible/interactable throughout.
+    page.locator(".left-navbar-button").first.click()
     page.locator(".bk-tab").first.wait_for()
     yield page
     page.goto("about:blank")

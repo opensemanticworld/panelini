@@ -18,7 +18,12 @@ hide-toc: true
 
 **A beautiful, batteries-included dashboard framework for [HoloViz Panel](https://panel.holoviz.org/).**
 
-panelini gives you a responsive, production-ready layout — header, sidebars, main area, footer — plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
+panelini gives you a responsive, production-ready layout - header, sidebars, main area, footer - plus a growing library of reusable panels for JSON editing, network graphs, and LLM chat. Drop it in, point it at your data, ship your app.
+
+```{image} /_static/media/ai/chat_min_overview.webp
+:alt: A panelini AI chat dashboard - chat, live preview, and a provider/model sidebar
+:class: docs-media
+```
 
 ---
 
@@ -34,12 +39,12 @@ Responsive layout, sensible defaults, warm colour palette. No CSS wrestling befo
 
 :::{grid-item-card} Panel-native
 :columns: 12 12 4 4
-Every region accepts any `panel` object. Bring your own widgets, plots, and reactive state — panelini just composes the shell.
+Every region accepts any `panel` object. Bring your own widgets, plots, and reactive state - panelini just composes the shell.
 :::
 
 :::{grid-item-card} Reusable panels
 :columns: 12 12 4 4
-Standalone `JsonEditor`, `VisNetwork`, `GraphDetailTool`, and `AiChat` components — usable with or without panelini.
+Standalone `JsonEditor`, `VisNetwork`, `GraphDetailTool`, and `AiChat` components - usable with or without panelini.
 :::
 
 ::::
@@ -77,7 +82,7 @@ Run it:
 panel serve app.py --dev
 ```
 
-That's it — you now have a branded, responsive dashboard at `http://localhost:5006`.
+That's it - you now have a branded, responsive dashboard at `http://localhost:5006`.
 
 ---
 
@@ -95,7 +100,7 @@ Install, build your first app, learn the layout regions.
 :::{grid-item-card} 🧪 Examples
 :link: examples/index
 :link-type: doc
-Walkthroughs of every example in `examples/panels/` — AI chat, JSON editor, network graphs.
+Walkthroughs of every example in `examples/panels/` - AI chat, JSON editor, network graphs.
 :::
 
 :::{grid-item-card} 🧭 Architecture
@@ -113,6 +118,14 @@ Handwritten overview plus the full auto-generated API.
 ::::
 
 ---
+
+## Releases
+
+Versions are cut automatically from [Conventional
+Commits](https://www.conventionalcommits.org/) on every merge to
+`main`. See the [CHANGELOG](https://github.com/opensemanticworld/panelini/blob/main/CHANGELOG.md)
+for release notes, and [CONTRIBUTING](https://github.com/opensemanticworld/panelini/blob/main/CONTRIBUTING.md)
+for the commit convention and pull request flow.
 
 ## Authors
 
@@ -135,23 +148,30 @@ getting_started/quickstart
 
 ```{toctree}
 :maxdepth: 2
-:caption: Examples
+:caption: Panels
 :hidden:
 
-examples/index
-examples/ai_chat_min
-examples/ai_chat_custom_tool
-examples/ai_chat_multi_tab
-examples/jsoneditor
-examples/visnetwork
+Overview <panels/index>
+panels/jsoneditor
+panels/visnetwork
+panels/wunderbaum
+panels/graph_detail_tool
+panels/ai
+panels/terminalmirror
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Panels
+:caption: Examples
 :hidden:
 
-panels/index
+Overview <examples/index>
+examples/chat/index
+examples/jsoneditor/index
+examples/visnetwork/index
+examples/wunderbaum/index
+examples/terminalmirror/index
+examples/usecases/index
 ```
 
 ```{toctree}
@@ -169,11 +189,4 @@ components/index
 :hidden:
 
 modules
-```
-
-```{toctree}
-:maxdepth: 2
-:hidden:
-
-superpowers/index
 ```

@@ -11,7 +11,7 @@ silently omitted and the example still runs with the three core plotting tools.
 
 Environment variables
 ---------------------
-LLM — one of the following provider set-ups (see ``src/panelini/panels/ai/default_config.yml``):
+LLM - one of the following provider set-ups (see ``src/panelini/panels/ai/default_config.yml``):
     ANTHROPIC_API_KEY
   OR
     AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION
@@ -26,7 +26,7 @@ OSW (optional, enables 8 extra tools + OSW upload of the current plot):
 
 The three OSW auth variables (``OSW_DOMAIN``, ``OSW_USER``, ``OSW_PASSWORD``)
 are *required together* when any OSW tool is invoked. Credentials stay in
-memory — no ``accounts.pwd.yaml`` is written, and the ``input()`` / ``getpass``
+memory - no ``accounts.pwd.yaml`` is written, and the ``input()`` / ``getpass``
 prompt that ``osw.express`` normally shows on a fresh machine is bypassed.
 Missing any of the three produces a ``RuntimeError`` with the missing names.
 
@@ -65,11 +65,11 @@ OSW connector behaviour
 The OSW tools are registered only when *all six* OSW env vars are set
 (three auth vars + three Blazegraph vars). Otherwise they are silently
 omitted from the tool list, and the example runs with ``plot_by_code``,
-``run_code``, and ``load_data_from_csv`` only — plus the two OSW-bound
+``run_code``, and ``load_data_from_csv`` only - plus the two OSW-bound
 plot tools, which themselves degrade gracefully (returning an error
 string instead of raising) when ``osw`` is unavailable at runtime.
 
-Right sidebar — plot model override
+Right sidebar - plot model override
 -----------------------------------
 The right sidebar exposes the last plot's Python code, a model picker
 (default: *Claude Sonnet 4.6*), and a *Regenerate plot* button. Clicking
@@ -98,7 +98,7 @@ load_dotenv()
 
 SYSTEM_MESSAGE = (
     "You are a helpful assistant with access to tools. "
-    "ALWAYS call tools directly to fulfill the user's request — never describe "
+    "ALWAYS call tools directly to fulfill the user's request - never describe "
     "what a tool call would look like or output JSON of a hypothetical call. "
     "If you have the information needed to call a tool, call it immediately.\n\n"
     "When the user asks to download files and run code:\n"
@@ -111,7 +111,7 @@ SYSTEM_MESSAGE = (
     "* Files passed via file_paths are available at '/sandbox/<BASENAME>'.\n\n"
     "MICRESS / micpy usage (pip package: micress-micpy):\n"
     "Geometry files (.geof) are automatically paired with binary files in the "
-    "sandbox — do NOT set geometry manually. Correct API:\n"
+    "sandbox - do NOT set geometry manually. Correct API:\n"
     "    from micpy import bin\n"
     "    with bin.File('/sandbox/FILENAME.conc1') as f:\n"
     "        field = f.read(-1)            # NOT read_field()\n"

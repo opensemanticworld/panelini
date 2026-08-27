@@ -18,23 +18,21 @@ edges = [
 
 visnetwork_panel = VisNetwork(nodes=nodes, edges=edges)
 
-# Create an instance of Panelini
+# Create an instance of Panelini (empty sidebar collapsed for full width)
 app = Panelini(
     title="Network Graph Demo",
+    sidebar_visible=False,
 )
-
-gstack = pn.GridStack(sizing_mode="stretch_both", min_height=600, allow_drag=False)
-
-gstack[:, :] = pn.Card(
-    title="VisNetwork Graph",
-    objects=[visnetwork_panel],
-    max_height=800,
-)
-
 
 # Set the main content with the VisNetwork component
 app.main_set(
-    objects=[gstack],
+    objects=[
+        pn.Card(
+            title="VisNetwork Graph",
+            objects=[visnetwork_panel],
+            max_height=800,
+        ),
+    ],
 )
 
 # Servable for debugging using command

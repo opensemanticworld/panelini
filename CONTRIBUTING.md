@@ -65,14 +65,24 @@ Please note this documentation assumes you already have `uv` and `Git` installed
    Then, install and activate the environment with:
 
       ```bash
-      uv sync
+      uv sync --all-extras
       ```
+
+      `--all-extras` is required: plain `uv sync` skips the optional
+      `ai`/`ai-drawio`/`ai-llm-sandbox`/`ai-osw` extras, and `make
+      check` (ty, deptry) will fail on those code paths without
+      them installed.
 
 4. Install pre-commit to run linters/formatters at commit time:
 
       ```bash
       uv run pre-commit install
       ```
+
+      This also installs a `commit-msg` hook that rejects commit messages
+      that aren't [Conventional Commits](https://www.conventionalcommits.org/)
+      before they're made. If you already ran `pre-commit install` before
+      this hook was added, rerun the command once to pick it up.
 
 5. Create a branch for local development:
 
@@ -117,17 +127,51 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       ```
 
       This requires you to have multiple versions of python installed.
-      This step is also triggered in the CI/CD pipeline, so you could also choose to skip this step locally.
+      CI already runs your code across every supported Python version, and
+      across ubuntu, macOS and windows, via the GitHub Actions matrix, not
+      via `tox` itself. Running `tox` locally is optional, and mainly
+      useful for catching environment-isolation issues the matrix wouldn't.
 
-11. Commit your changes and push your branch to GitHub:
+11. Commit your changes using
+    [Conventional Commits](https://www.conventionalcommits.org/) and
+    push your branch to GitHub:
 
       ```bash
       git add .
-      git commit -m "Your detailed description of your changes."
+      git commit -m "fix: correct sidebar collapse on small screens"
       git push origin name-of-your-bugfix-or-feature
       ```
 
 12. Submit a pull request through the GitHub website.
+
+## Building the documentation
+
+The docs are built with Sphinx (strict, warnings-as-errors in CI). To preview locally:
+
+```bash
+make docs            # live-reload server on http://localhost:8000
+```
+
+Two things to keep in mind:
+
+- **Always clean-build before trusting a `-W` result.** `sphinx-autobuild` and repeated
+  `make docs-test` reuse cached doctrees, which can hide moved cross-references and stale
+  navigation. Reproduce the CI build on a clean tree:
+
+  ```bash
+  rm -rf docs/_build && make docs-test
+  ```
+
+- **The "Run it live" players need the Pyodide apps built first.** They are gitignored build
+  artifacts, so run `make portfolio` before `make docs` (the release deploy does this too), or the
+  embedded iframes will not resolve:
+
+  ```bash
+  make portfolio && make docs
+  ```
+
+Screen captures on the example pages are recorded from the `@pytest.mark.media` tests; regenerate
+them with `make docs-media` and commit the output.
 
 ## Pull Request Guidelines
 
@@ -137,3 +181,32 @@ Before you submit a pull request, check that it meets these guidelines:
 
 2. If the pull request adds functionality, the docs should be updated.
    Put your new functionality into a function with a docstring, and add the feature to the list in `README.md`.
+
+## Commit Messages and Releases
+
+Releases are fully automated with
+[python-semantic-release](https://python-semantic-release.readthedocs.io/),
+driven by your commit messages. Please write commits as
+`type(scope): subject`, for example:
+
+- `feat: ...` for a new feature (bumps the minor version)
+- `fix: ...` for a bug fix (bumps the patch version)
+- `perf: ...` for a performance improvement (bumps the patch version)
+- `BREAKING CHANGE:` in the commit body (bumps the major version)
+- `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `style:` for everything
+  else that shouldn't trigger a release on its own
+
+You do not need to bump the version yourself or edit `CHANGELOG.md`.
+Once your pull request is open, CI posts a comment with the version
+that would be released if it's merged, so you can check the outcome
+before merging. `main` requires one approving review; once merged, CI
+bumps the version, updates the changelog, tags the release, publishes
+to PyPI, and deploys the docs automatically.
+
+## AI Guidelines
+
+AI tools may be used to assist development, but a human developer is
+always the author: carefully review all generated content for
+correctness, quality and license compliance before submitting it.
+Avoid patterns that are hard to maintain manually, such as duplicated
+content or em dashes.
