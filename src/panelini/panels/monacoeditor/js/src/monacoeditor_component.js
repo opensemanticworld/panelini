@@ -7,8 +7,21 @@ import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker&inline";
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker&inline";
+import codiconTtf from "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.ttf?inline";
 
 const SYNC_DEBOUNCE_MS = 300;
+
+// Panel injects _stylesheets into the shadow root, where @font-face is ignored, so the
+// suggest and folding icons render as tofu boxes. Register the font on the document once.
+let codiconInjected = false;
+
+function injectCodiconFont() {
+  if (codiconInjected) return;
+  codiconInjected = true;
+  const style = document.createElement("style");
+  style.textContent = `@font-face{font-family:codicon;font-display:block;src:url(${codiconTtf}) format("truetype")}`;
+  document.head.appendChild(style);
+}
 
 self.MonacoEnvironment = {
   getWorker(_, label) {
@@ -44,6 +57,7 @@ function setSchema(uri, schema) {
 }
 
 export function render({ model, el }) {
+  injectCodiconFont();
   el.style.height = "100%";
   const container = document.createElement("div");
   container.style.cssText = "width:100%;height:100%;min-height:150px";
@@ -62,6 +76,12 @@ export function render({ model, el }) {
     scrollBeyondLastLine: false,
     ...(model.get("options") || {}),
   });
+
+  // Monaco's global mouse-leave monitor tests viewDomNode.contains(event.target) on a
+  // document listener. Inside a shadow root the event retargets to the host, so that is
+  // always false and every mouse move is treated as leaving the editor, which cancels the
+  // pending hover. Monaco's own handler sits deeper, so it has already run by now.
+  container.addEventListener("mousemove", (event) => event.stopPropagation());
 
   let applying = false;
   let timer = null;
