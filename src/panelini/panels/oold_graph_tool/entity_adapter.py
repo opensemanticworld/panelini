@@ -7,7 +7,6 @@ works exclusively through EntityAdapter + OOLDSchemaIntrospector.
 
 from __future__ import annotations
 
-import copy
 import json
 from typing import Any
 
@@ -92,8 +91,9 @@ class EntityAdapter:
         return doc
 
     def deep_copy(self) -> EntityAdapter:
+        data_copy = json.loads(json.dumps(self._data, default=str))
         return EntityAdapter(
-            data=copy.deepcopy(self._data),
+            data=data_copy,
             schema=self._schema,
             type_name=self._type_name,
             schema_registry=self._schema_registry,

@@ -340,6 +340,20 @@ class TestSingleNodeEditing:
         tool = json_social_network["tool"]
         assert tool._serialize_property_value(None) is None
 
+    def test_deserialize_nan_integer_returns_none(self, json_social_network):
+        """Tabulator sends NaN for empty integer cells; it must become None."""
+        tool = json_social_network["tool"]
+        person = next(e for e in tool.entity_list if e.type_name == "Person")
+        result = tool._deserialize_property_value(person, "age", float("nan"))
+        assert result is None
+
+    def test_deserialize_nan_float_returns_none(self, json_social_network):
+        """Tabulator sends NaN for empty number cells; it must become None."""
+        tool = json_social_network["tool"]
+        person = next(e for e in tool.entity_list if e.type_name == "Person")
+        result = tool._deserialize_property_value(person, "body_weight", float("nan"))
+        assert result is None
+
 
 # =====================================================================
 # 5. Multi-node editing
@@ -381,6 +395,24 @@ class TestMultiNodeEditing:
         data = [{"_iri": "a", "name": "Alice"}, {"_iri": "b", "name": "Bob"}]
         row = tool._build_set_all_row(data, ["name"])
         assert row["name"] == ""  # values differ → empty
+
+    def test_multi_node_apply_with_nan_values(self, json_social_network):
+        """NaN values from empty Tabulator cells must not crash the apply."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        persons = [e for e in tool.entity_list if e.type_name == "Person"]
+        iris = [e.get_iri() for e in persons[:2]]
+        tool.show_multi_node_editor(iris)
+
+        df = tool.oold_comparison_tabulator.value.copy()
+        if "age" in df.columns:
+            df["age"] = float("nan")
+            tool.oold_comparison_tabulator.value = df
+        tool.on_multi_node_apply_changes(None)
+
+        for iri in iris:
+            entity = tool.entity_dict[iri]
+            assert entity.get("age") is None
 
 
 # =====================================================================
@@ -552,6 +584,17 @@ class TestUndoRedo:
         original_name = snapshot["entities"][0].name if snapshot["entities"][0].get_iri() == alice_iri else None
         if original_name is not None:
             assert original_name == "Alice"
+
+    def test_deep_copy_with_unpicklable_data(self):
+        """deep_copy must not crash even if entity data contains non-serializable objects."""
+        import contextvars
+
+        ctx = contextvars.copy_context()
+        data = {"id": "urn:test:1", "name": "broken", "_leak": ctx}
+        entity = EntityAdapter(data, {}, "Test")
+        clone = entity.deep_copy()
+        assert clone.get_iri() == "urn:test:1"
+        assert clone.name == "broken"
 
 
 # =====================================================================

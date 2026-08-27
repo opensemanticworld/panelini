@@ -1,6 +1,7 @@
 ## uv pip install "git+https://github.com/opensemanticworld/panelini.git@feat-visnetwork-incremental-updates"
 
 import json
+import math
 import uuid
 from enum import Enum
 from typing import Any, Callable, Optional, Union
@@ -982,20 +983,22 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     pass
             return value
 
+        _is_nan = isinstance(value, float) and math.isnan(value)
+
         if base_type == "integer":
-            if value == "" or value is None:
+            if value == "" or value is None or _is_nan:
                 return None
             return int(value)
         elif base_type == "number":
-            if value == "" or value is None:
+            if value == "" or value is None or _is_nan:
                 return None
             return float(value)
         elif base_type == "boolean":
-            if value == "" or value is None:
+            if value == "" or value is None or _is_nan:
                 return None
             return bool(value)
         elif base_type == "string":
-            if value == "" or value is None:
+            if value == "" or value is None or _is_nan:
                 return None
             return str(value)
 
