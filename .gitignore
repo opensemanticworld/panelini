@@ -20,6 +20,8 @@ develop-eggs/
 dist/
 # Include pre-built Vue assets for custom panels
 !src/panelini/panels/*/vue/dist/
+# Include pre-built plain-JS assets for custom panels
+!src/panelini/panels/*/js/dist/
 downloads/
 eggs/
 .eggs/
