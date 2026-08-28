@@ -215,6 +215,7 @@ _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
     "jsoneditor": ((13, 148, 136), "JSON Editor"),
     "visnetwork": ((37, 99, 235), "VisNetwork"),
     "wunderbaum": ((217, 119, 6), "Wunderbaum"),
+    "tanstack": ((5, 150, 105), "TanStack Table"),
     "usecases": ((190, 24, 93), "Use cases"),
 }
 

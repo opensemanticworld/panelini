@@ -1,0 +1,45 @@
+/* Scoped under .pnl-tst so nothing leaks into the host Panel app. No icon font:
+   twisties and checkboxes are inline SVG, added in later phases. */
+
+.pnl-tst {
+  --pnl-tst-row-height: 28px;
+  --pnl-tst-fg: #1f2328;
+  --pnl-tst-muted: #6b7280;
+  --pnl-tst-hover: rgba(0, 0, 0, 0.04);
+  --pnl-tst-focus: #2563eb;
+
+  box-sizing: border-box;
+  width: 100%;
+  color: var(--pnl-tst-fg);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: var(--pnl-tst-row-height);
+}
+
+.pnl-tst *,
+.pnl-tst *::before,
+.pnl-tst *::after {
+  box-sizing: inherit;
+}
+
+.pnl-tst-row {
+  display: flex;
+  align-items: center;
+  min-height: var(--pnl-tst-row-height);
+  cursor: default;
+}
+
+.pnl-tst-row:hover {
+  background: var(--pnl-tst-hover);
+}
+
+.pnl-tst-row:focus-visible {
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+}
+
+.pnl-tst-empty {
+  padding: 8px;
+  color: var(--pnl-tst-muted);
+  font-style: italic;
+}
