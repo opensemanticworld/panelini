@@ -72,3 +72,6 @@ class JsonEditor(AnyWidgetComponent):
         else:
             new_options["startval"] = None
         self.options = new_options
+        # Sync Python-side value so it's readable without a JS runtime
+        if startval is not None:
+            self.value = startval

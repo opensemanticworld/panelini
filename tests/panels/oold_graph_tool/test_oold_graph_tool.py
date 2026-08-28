@@ -305,27 +305,59 @@ class TestSingleNodeEditing:
         entity = tool.entity_dict[alice_iri]
         assert entity.name == "Alice2"
 
+    def test_name_change_survives_expand(self, json_social_network):
+        """Renaming an entity and then expanding a node must preserve the new name."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+
+        # Rename Alice -> Maya
+        tool.show_node_details(alice_iri)
+        tool.current_node_oold_editor.value = {**tool.current_node_oold_editor.value, "name": "Maya"}
+        tool.on_single_node_apply_changes(None)
+
+        # Verify label in both node lists
+        vis_label = next(n["label"] for n in tool.visjs_nodes if n["id"] == alice_iri)
+        full_label = next(n["label"] for n in tool._full_visjs_nodes if n["id"] == alice_iri)
+        assert vis_label == "Maya"
+        assert full_label == "Maya"
+
+        # Expand Person: IsA -- triggers _apply_visibility_filter_inplace which
+        # rebuilds visjs_nodes from _full_visjs_nodes
+        tool._on_context_menu_item("node", person_nid, "expand_IsA")
+
+        # After expand, the label must still be Maya, not the original name
+        vis_label_after = next(n["label"] for n in tool.visjs_nodes if n["id"] == alice_iri)
+        assert vis_label_after == "Maya"
+        panel_label = next(n["label"] for n in tool.visnetwork_panel.nodes if n["id"] == alice_iri)
+        assert panel_label == "Maya"
+
     def test_show_node_details_class_node(self, json_social_network):
-        """Clicking a class node shows 'Class' type label and schema in native JSONEditor."""
+        """Clicking a class node shows 'Class' label and OO-LD Form JsonEditor."""
         tool = json_social_network["tool"]
         tool.build_panel()
         person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
         tool.show_node_details(person_nid)
         assert hasattr(tool, "current_node_oold_editor")
-        assert isinstance(tool.current_node_oold_editor, pn.widgets.JSONEditor)
+        assert isinstance(tool.current_node_oold_editor, JsonEditor)
         assert tool.current_node_oold_editor.value == json_social_network["schemas"]["Person"]
         md = tool.oold_detail_col[0]
         assert "Class" in md.object
 
-    def test_class_node_editor_sizing(self, json_social_network):
-        """The class schema JSONEditor should stretch to fill the column width."""
+    def test_class_node_form_has_apply_button(self, json_social_network):
+        """The class OO-LD Form should have an Apply Changes button."""
         tool = json_social_network["tool"]
         tool.build_panel()
         person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
         tool.show_node_details(person_nid)
-        editor = tool.current_node_oold_editor
-        assert editor.sizing_mode == "stretch_width"
-        assert editor.height is not None and editor.height > 0
+        buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button)
+        ]
+        assert any(b.name == "Apply Changes" for b in buttons)
 
     def test_text_tab_exists(self, json_social_network):
         """The tool should have a text_col for the Text tab."""
@@ -577,6 +609,70 @@ class TestSingleNodeEditing:
         person = next(e for e in tool.entity_list if e.type_name == "Person")
         result = tool._deserialize_property_value(person, "body_weight", float("nan"))
         assert result is None
+
+    def test_first_click_defaults_to_oold_form_tab(self, json_social_network):
+        """First node click should activate OO-LD Form tab (index 2)."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        tool.detail_tabs.active = 0
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        assert tool.detail_tabs.active == 2
+
+    def test_tab_preserved_when_on_text_tab(self, json_social_network):
+        """If user is on Text tab and clicks another node, Text tab stays active."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        tool.show_node_details(alice_iri)
+        tool.detail_tabs.active = 3  # user switches to Text tab
+        tool.show_node_details(bob_iri)
+        assert tool.detail_tabs.active == 3
+
+    def test_tab_preserved_when_on_oold_form(self, json_social_network):
+        """If user is on OO-LD Form tab, it stays on OO-LD Form."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        tool.show_node_details(alice_iri)
+        assert tool.detail_tabs.active == 2
+        tool.show_node_details(bob_iri)
+        assert tool.detail_tabs.active == 2
+
+    def test_tab_preserved_across_node_types(self, json_social_network):
+        """Switching from entity to class node preserves Text tab selection."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool.show_node_details(alice_iri)
+        tool.detail_tabs.active = 3
+        tool.show_node_details(person_nid)
+        assert tool.detail_tabs.active == 3
+
+    def test_tab_preserved_for_literal_nodes(self, json_social_network):
+        """Clicking a literal node preserves the current tab."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        tool.detail_tabs.active = 3
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        assert tool.detail_tabs.active == 3
+
+    def test_tab_preserved_when_on_node_style(self, json_social_network):
+        """If user selected Node Style tab, clicking another node should NOT switch away."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        tool.show_node_details(alice_iri)
+        tool.detail_tabs.active = 1  # user switches to Node Style
+        tool.show_node_details(bob_iri)
+        assert tool.detail_tabs.active == 1
 
 
 # =====================================================================
@@ -1425,7 +1521,1133 @@ class TestEdgeCreation:
 
 
 # =====================================================================
-# 16. Pydantic-specific backward compatibility
+# 15b. Property create form (JsonEditor with sub-schema)
+# =====================================================================
+
+
+class TestPropertyCreateForm:
+    def test_create_form_uses_json_editor(self, json_social_network):
+        """The create form should use a panelini JsonEditor, not a TextInput."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+        assert isinstance(tool._create_input, JsonEditor)
+
+    def test_create_form_schema_scoped_to_property(self, json_social_network):
+        """The create form schema should only describe the target property."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+        schema = tool._create_input.options.get("schema", {})
+        assert "properties" in schema
+        assert "age" in schema["properties"]
+        assert len(schema["properties"]) == 1
+
+    def test_create_form_preserves_type_constraint(self, json_social_network):
+        """The property sub-schema should carry over the type from the original schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+        schema = tool._create_input.options["schema"]
+        age_schema = schema["properties"]["age"]
+        assert age_schema.get("type") == "integer"
+
+    def test_create_form_apply_sets_value(self, json_social_network):
+        """Applying the create form should set the property on the entity."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        charlie_iri = json_social_network["charlie"]["id"]
+        tool._show_property_create_form(charlie_iri, "body_weight")
+        tool._create_input.value = {"body_weight": 75.5}
+        tool._on_property_create_apply(None)
+        entity = tool.entity_dict[charlie_iri]
+        assert entity.get("body_weight") == 75.5
+
+    def test_create_form_subobject_uses_json_editor(self, json_recipe):
+        """Sub-object create forms should also use the panelini JsonEditor."""
+        tool = json_recipe["tool"]
+        tool.build_panel()
+        cake_iri = json_recipe["cake"]["id"]
+        tool._show_property_create_form(cake_iri, "ingredients")
+        assert isinstance(tool._create_input, JsonEditor)
+
+    def test_create_form_subobject_schema_has_properties(self, json_recipe):
+        """Sub-object create forms should have a schema with the inner type's properties."""
+        tool = json_recipe["tool"]
+        tool.build_panel()
+        cake_iri = json_recipe["cake"]["id"]
+        tool._show_property_create_form(cake_iri, "ingredients")
+        schema = tool._create_input.options.get("schema", {})
+        assert "properties" in schema
+        assert "planned_mass_grams" in schema["properties"]
+
+    def test_create_form_has_apply_and_cancel(self, json_social_network):
+        """The create form should have Apply and Cancel buttons."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+        buttons = [w for w in tool.oold_detail_col if isinstance(w, pn.Row)]
+        assert len(buttons) == 1
+        btn_names = [b.name for b in buttons[0] if isinstance(b, pn.widgets.Button)]
+        assert "Apply" in btn_names
+        assert "Cancel" in btn_names
+
+    def test_create_form_preloads_existing_value(self, json_social_network):
+        """Create form should show the current value, not an empty/default start."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "hobbies")
+        editor_val = tool._create_input.value
+        current = tool.entity_dict[alice_iri].get("hobbies")
+        assert editor_val.get("hobbies") == current
+
+    def test_create_form_preloads_scalar(self, json_social_network):
+        """Create form for a scalar field with a value should show that value."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+        editor_val = tool._create_input.value
+        assert editor_val.get("age") == 41
+
+    def test_create_form_appends_to_list(self, json_social_network):
+        """Editing a pre-loaded list in the create form should keep old + add new elements."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        sports_iri = json_social_network["sports"]["id"]
+        music_iri = json_social_network["music"]["id"]
+
+        tool._show_property_create_form(alice_iri, "hobbies")
+        existing = tool._create_input.value["hobbies"]
+        assert sports_iri in existing
+
+        tool._create_input.value = {"hobbies": [*existing, music_iri]}
+        tool._on_property_create_apply(None)
+
+        entity = tool.entity_dict[alice_iri]
+        assert sports_iri in entity.get("hobbies")
+        assert music_iri in entity.get("hobbies")
+
+    def test_create_list_iri_reveals_all_targets(self, json_social_network):
+        """Creating a list-typed IRI property should reveal all target nodes in the graph."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        charlie_iri = json_social_network["charlie"]["id"]
+        sports_iri = json_social_network["sports"]["id"]
+        music_iri = json_social_network["music"]["id"]
+
+        tool._show_property_create_form(charlie_iri, "hobbies")
+        tool._create_input.value = {"hobbies": [sports_iri, music_iri]}
+        tool._on_property_create_apply(None)
+
+        entity = tool.entity_dict[charlie_iri]
+        assert entity.get("hobbies") == [sports_iri, music_iri]
+
+        if tool._visible_node_ids is not None:
+            assert sports_iri in tool._visible_node_ids, "Sports node should be visible"
+            assert music_iri in tool._visible_node_ids, "Music node should be visible"
+
+        visible_ids = {n["id"] for n in tool.visjs_nodes}
+        assert sports_iri in visible_ids, "Sports node should be in visjs_nodes"
+        assert music_iri in visible_ids, "Music node should be in visjs_nodes"
+
+    def test_create_list_iri_creates_edges_for_all(self, json_social_network):
+        """Creating a list-typed IRI property should create edges to all targets."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        charlie_iri = json_social_network["charlie"]["id"]
+        sports_iri = json_social_network["sports"]["id"]
+        music_iri = json_social_network["music"]["id"]
+
+        tool._show_property_create_form(charlie_iri, "hobbies")
+        tool._create_input.value = {"hobbies": [sports_iri, music_iri]}
+        tool._on_property_create_apply(None)
+
+        hobby_edges = [e for e in tool.visjs_edges if e["from"] == charlie_iri and e["label"] == "hobbies"]
+        target_ids = {e["to"] for e in hobby_edges}
+        assert sports_iri in target_ids, "Edge to Sports should exist"
+        assert music_iri in target_ids, "Edge to Music should exist"
+
+    def test_create_literal_list_all_nodes_visible(self):
+        """Creating a non-IRI list property via Create: should show all elements as nodes."""
+        from panelini.panels.oold_graph_tool.oold_graph_tool import (
+            ExpansionStep,
+            OOLDGraphConfig,
+            OOLDGraphDetailTool,
+            SingleNodeExpansionPolicy,
+        )
+        from tests.panels.oold_graph_tool.conftest import ENTITY_IRI, ENTITY_SCHEMA, _make_entity
+
+        schema = {
+            "$id": "https://example.com/TaggedThing",
+            "title": "TaggedThing",
+            "type": "object",
+            "@context": [ENTITY_IRI, {"tags": {"@id": "ex:HasTag"}}],
+            "allOf": [{"$ref": ENTITY_IRI}],
+            "properties": {
+                "type": {"type": "string", "default": "https://example.com/TaggedThing"},
+                "tags": {
+                    "anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}],
+                    "default": None,
+                    "description": "Free-form tags.",
+                },
+            },
+        }
+        thing = _make_entity("MyThing", "https://example.com/TaggedThing")
+        config = OOLDGraphConfig(
+            uuid=str(uuid.uuid4()),
+            name="test",
+            entity_list=[thing],
+            entity_types={"Entity": ENTITY_SCHEMA, "TaggedThing": schema},
+            expansion_policy=SingleNodeExpansionPolicy(
+                uuid=str(uuid.uuid4()),
+                name="p",
+                root_node=thing,
+                expansion_steps=[ExpansionStep(uuid=str(uuid.uuid4()), name="s", relations=["tags"], iter_limit=5)],
+            ),
+        )
+        tool = OOLDGraphDetailTool(config=config)
+        tool.build_panel()
+        thing_iri = thing["id"]
+
+        tool._show_property_create_form(thing_iri, "tags")
+        tool._create_input.value = {"tags": ["alpha", "beta", "gamma"]}
+        tool._on_property_create_apply(None)
+
+        assert tool.entity_dict[thing_iri].get("tags") == ["alpha", "beta", "gamma"]
+
+        tag_literals = [n for n in tool.visjs_nodes if n.get("node_kind") == "literal" and "tags" in n["id"]]
+        assert len(tag_literals) == 3, (
+            f"Expected 3 literal nodes, got {len(tag_literals)}: {[n['label'] for n in tag_literals]}"
+        )
+        labels = {n["label"] for n in tag_literals}
+        assert labels == {"alpha", "beta", "gamma"}
+
+    def test_literal_list_nodes_from_rdf(self, json_physics):
+        """Multiple literal values for the same predicate should each get their own node."""
+        tool = json_physics["tool"]
+        # The physics example may not have list literals, so set one up manually.
+        entity = tool.entity_list[0]
+        entity_iri = entity.get_iri()
+
+        # Pick a field that is NOT @type:@id. In physics, "radius" is a number,
+        # but it's scalar. We need to test at the RDF level: if the RDF graph
+        # produces multiple literal triples for the same predicate, each gets a node.
+        # Inject directly into the RDF graph and rebuild edges.
+        from rdflib import Literal as RDFLit
+        from rdflib import Namespace, URIRef
+
+        EX = Namespace("https://example.com/")
+        tool.rdf_graph.add((URIRef(entity_iri), EX.HasTag, RDFLit("alpha")))
+        tool.rdf_graph.add((URIRef(entity_iri), EX.HasTag, RDFLit("beta")))
+        tool.rdf_graph.add((URIRef(entity_iri), EX.HasTag, RDFLit("gamma")))
+
+        tool._rebuild_visjs_edges()
+
+        tag_nodes = [n for n in tool._full_visjs_nodes if n.get("node_kind") == "literal" and "HasTag" in n["id"]]
+        assert len(tag_nodes) == 3, (
+            f"Expected 3 literal nodes for HasTag, got {len(tag_nodes)}: {[n['id'] for n in tag_nodes]}"
+        )
+        labels = {n["label"] for n in tag_nodes}
+        assert labels == {"alpha", "beta", "gamma"}
+
+
+# =====================================================================
+# 15c. Schema property creation (Create New Property on class nodes)
+# =====================================================================
+
+
+class TestSchemaPropertyCreation:
+    def test_class_node_context_menu_has_create_property(self, json_social_network):
+        """Class nodes should have a 'Create New Property' entry in their context menu."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        cb = tool._expand_dict_for_node(person_nid)
+        assert "create_property" in cb
+        assert cb["create_property"] == "Create New Property"
+
+    def test_create_property_form_shows_json_editor(self, json_social_network):
+        """The create-property form should show a JsonEditor."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+        assert hasattr(tool, "_create_prop_input")
+        assert isinstance(tool._create_prop_input, JsonEditor)
+
+    def test_create_property_form_has_name_field(self, json_social_network):
+        """The form schema should include a 'name' field."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+        form_schema = tool._create_prop_input.options["schema"]
+        assert "name" in form_schema["properties"]
+
+    def test_apply_creates_property_in_schema(self, json_social_network):
+        """Applying the form should add the property to the schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "email",
+            "type": "string",
+            "description": "Email address",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "ex:HasEmail",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        updated = tool.schema_registry.get("Person") or tool.schema_registry.get("Person.json")
+        assert "email" in updated["properties"]
+        assert updated["properties"]["email"].get("description") == "Email address"
+
+    def test_apply_creates_defines_property_edge(self, json_social_network):
+        """After applying, a definesProperty edge to the new field node should exist."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "phone",
+            "type": "string",
+            "description": "Phone number",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        dp_edges = [e for e in tool._full_visjs_edges if e["label"] == "definesProperty" and e["from"] == person_nid]
+        dp_targets = {e["to"] for e in dp_edges}
+        assert any("phone" in t for t in dp_targets), (
+            f"Expected a definesProperty edge to a 'phone' field node, got {dp_targets}"
+        )
+
+    def test_apply_adds_context_entry(self, json_social_network):
+        """Applying with a context_iri should add an @context entry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "email",
+            "type": "string",
+            "description": "",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "ex:HasEmail",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        updated = tool.schema_registry.get("Person") or tool.schema_registry.get("Person.json")
+        ctx = updated.get("@context")
+        ctx_dicts = [c for c in ctx if isinstance(c, dict)] if isinstance(ctx, list) else [ctx]
+        found = any("email" in d for d in ctx_dicts)
+        assert found, f"Expected 'email' in @context, got {ctx}"
+
+    def test_apply_iri_reference_context(self, json_social_network):
+        """Setting is_iri_reference should add @type:@id to the context entry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "mentor",
+            "type": "string",
+            "description": "IRI of mentor",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "ex:HasMentor",
+            "is_iri_reference": True,
+            "x_oold_range": "Person.json",
+        }
+        tool._on_create_property_apply(None)
+
+        updated = tool.schema_registry.get("Person") or tool.schema_registry.get("Person.json")
+        ctx = updated.get("@context")
+        ctx_dicts = [c for c in ctx if isinstance(c, dict)] if isinstance(ctx, list) else [ctx]
+        mentor_ctx = None
+        for d in ctx_dicts:
+            if "mentor" in d:
+                mentor_ctx = d["mentor"]
+        assert mentor_ctx is not None
+        assert mentor_ctx.get("@type") == "@id"
+        assert updated["properties"]["mentor"].get("x-oold-range") == "Person.json"
+
+    def test_apply_array_type_creates_items(self, json_social_network):
+        """Choosing type=array should create an items sub-schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "tags",
+            "type": "array",
+            "description": "Tags",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        updated = tool.schema_registry.get("Person") or tool.schema_registry.get("Person.json")
+        prop = updated["properties"]["tags"]
+        inner = prop.get("anyOf", [{}])[0] if "anyOf" in prop else prop
+        assert inner.get("type") == "array"
+        assert inner.get("items", {}).get("type") == "string"
+
+    def test_apply_empty_name_rejected(self, json_social_network):
+        """An empty property name should not modify the schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        props_before = set(json_social_network["schemas"]["Person"].get("properties", {}).keys())
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "",
+            "type": "string",
+            "description": "",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        updated = tool.schema_registry.get("Person") or tool.schema_registry.get("Person.json")
+        props_after = set(updated.get("properties", {}).keys())
+        assert props_after == props_before
+
+    def test_create_property_updates_entity_context_menus(self, json_social_network):
+        """After creating a property, entities should show it in their Create: menu."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_property_form(person_nid)
+
+        tool._create_prop_input.value = {
+            "name": "nickname",
+            "type": "string",
+            "description": "",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        alice_iri = json_social_network["alice"]["id"]
+        creatable = tool._get_creatable_fields(alice_iri)
+        assert "nickname" in creatable
+
+    def test_create_property_field_node_visible(self, json_social_network):
+        """The field node must be visible; sub-nodes and HasType edges must not leak."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        assert tool._visible_node_ids is not None, "Expansion policy should be active"
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+
+        edges_before = {(e.get("from"), e.get("to"), e.get("label")) for e in tool.visjs_edges}
+
+        tool._show_create_property_form(person_nid)
+        tool._create_prop_input.value = {
+            "name": "zipcode",
+            "type": "string",
+            "description": "Postal code",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "ex:HasZipCode",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        tool._on_create_property_apply(None)
+
+        field_nid = f"{person_nid}#field_zipcode"
+        assert field_nid in tool._visible_node_ids, "Field node should be visible"
+        visible_ids = {n["id"] for n in tool.visjs_nodes}
+        assert field_nid in visible_ids, "Field node should be in rendered visjs_nodes"
+
+        dp_edges = [
+            e
+            for e in tool.visjs_edges
+            if e["from"] == person_nid and e["to"] == field_nid and e["label"] == "definesProperty"
+        ]
+        assert dp_edges, "definesProperty edge should be visible in rendered graph"
+
+        new_has_type = [
+            (e.get("from"), e.get("to"), e.get("label"))
+            for e in tool.visjs_edges
+            if e.get("label") == "HasType" and (e.get("from"), e.get("to"), "HasType") not in edges_before
+        ]
+        assert not new_has_type, f"No new HasType edges should appear, got {new_has_type}"
+
+        sub_nids = [n["id"] for n in tool._full_visjs_nodes if n["id"].startswith(field_nid + "#")]
+        assert sub_nids, "Sub-nodes (type/default/description) should exist in full graph"
+        for nid in sub_nids:
+            assert nid not in tool._visible_node_ids, f"Sub-node {nid} should NOT be auto-revealed"
+
+    def test_entity_create_property_node_visible(self, json_social_network):
+        """When creating a property value on an entity, the new node must be visible."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        assert tool._visible_node_ids is not None
+
+        alice_iri = json_social_network["alice"]["id"]
+        tool._show_property_create_form(alice_iri, "age")
+
+        tool._create_input.value = {"age": 30}
+        tool._on_property_create_apply(None)
+
+        lit_id = f"{alice_iri}#age"
+        assert lit_id in tool._visible_node_ids, "Literal node should be visible"
+        visible_ids = {n["id"] for n in tool.visjs_nodes}
+        assert lit_id in visible_ids, "Literal node should appear in rendered graph"
+
+
+# =====================================================================
+# 15d. Schema subclass creation (Create New Subclass on class nodes)
+# =====================================================================
+
+
+class TestSchemaSubclassCreation:
+    def test_class_node_context_menu_has_create_subclass(self, json_social_network):
+        """Class nodes should have a 'Create New Subclass' entry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        cb = tool._expand_dict_for_node(person_nid)
+        assert "create_subclass" in cb
+        assert cb["create_subclass"] == "Create New Subclass"
+
+    def test_create_subclass_form_shows_json_editor(self, json_social_network):
+        """The form should show a JsonEditor with the subclass schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+        assert hasattr(tool, "_create_subclass_input")
+        assert isinstance(tool._create_subclass_input, JsonEditor)
+
+    def test_create_subclass_form_prefills_inheritance(self, json_social_network):
+        """The form should pre-fill allOf with a $ref to the parent schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        parent_id = person_schema.get("$id")
+        tool._show_create_subclass_form(person_nid)
+
+        val = tool._create_subclass_input.value
+        assert val.get("allOf") == [{"$ref": parent_id}]
+        ctx = val.get("@context")
+        assert isinstance(ctx, list)
+        assert parent_id in ctx
+
+    def test_create_subclass_form_prefills_title(self, json_social_network):
+        """The form should pre-fill a default title derived from the parent."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        val = tool._create_subclass_input.value
+        assert "Person" in val.get("title", "")
+
+    def test_apply_registers_new_schema(self, json_social_network):
+        """Applying should register the new schema in entity_types and schema_registry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/Student",
+            "title": "Student",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+            "defaultProperties": ["type", "name"],
+        }
+        tool._on_create_subclass_apply(None)
+
+        assert "Student" in tool.entity_types
+        assert "https://example.com/Student" in tool.schema_registry
+        assert tool.entity_types["Student"]["allOf"] == [{"$ref": "Person.json"}]
+
+    def test_apply_creates_isa_edge(self, json_social_network):
+        """The new subclass should have an IsA edge to the parent."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/Student",
+            "title": "Student",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+            "defaultProperties": ["type", "name"],
+        }
+        tool._on_create_subclass_apply(None)
+
+        isa_edges = [
+            e
+            for e in tool._full_visjs_edges
+            if e["label"] == "IsA" and e["from"] == "https://example.com/Student" and e["to"] == person_nid
+        ]
+        assert isa_edges, "Expected IsA edge from Student to Person"
+
+    def test_apply_creates_class_node(self, json_social_network):
+        """The new subclass should appear as a class node in the graph."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/Student",
+            "title": "Student",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+            "defaultProperties": ["type", "name"],
+        }
+        tool._on_create_subclass_apply(None)
+
+        class_nodes = [
+            n
+            for n in tool._full_visjs_nodes
+            if n["id"] == "https://example.com/Student" and n.get("node_kind") == "class"
+        ]
+        assert class_nodes, "Expected a class node for Student"
+        assert class_nodes[0]["label"] == "Student"
+
+    def test_apply_subclass_visible_with_isa_edge(self, json_social_network):
+        """New subclass node and its IsA edge should be visible in rendered graph."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        assert tool._visible_node_ids is not None
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        edges_before = {(e.get("from"), e.get("to"), e.get("label")) for e in tool.visjs_edges}
+
+        tool._show_create_subclass_form(person_nid)
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/Student",
+            "title": "Student",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+            "defaultProperties": ["type", "name"],
+        }
+        tool._on_create_subclass_apply(None)
+
+        visible_ids = {n["id"] for n in tool.visjs_nodes}
+        assert "https://example.com/Student" in visible_ids
+
+        isa_visible = [
+            e
+            for e in tool.visjs_edges
+            if e["from"] == "https://example.com/Student" and e["to"] == person_nid and e["label"] == "IsA"
+        ]
+        assert isa_visible, "IsA edge should be visible in rendered graph"
+
+        new_has_type = [
+            (e.get("from"), e.get("to"), e.get("label"))
+            for e in tool.visjs_edges
+            if e.get("label") == "HasType" and (e.get("from"), e.get("to"), "HasType") not in edges_before
+        ]
+        assert not new_has_type, f"No new HasType edges should leak, got {new_has_type}"
+
+    def test_apply_empty_title_rejected(self, json_social_network):
+        """An empty title should not create a schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        types_before = set(tool.entity_types.keys())
+
+        tool._show_create_subclass_form(person_nid)
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/NoName",
+            "title": "",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+        }
+        tool._on_create_subclass_apply(None)
+
+        assert set(tool.entity_types.keys()) == types_before
+
+    def test_apply_empty_id_rejected(self, json_social_network):
+        """An empty $id should not create a schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        types_before = set(tool.entity_types.keys())
+
+        tool._show_create_subclass_form(person_nid)
+        tool._create_subclass_input.value = {
+            "$id": "",
+            "title": "Orphan",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+        }
+        tool._on_create_subclass_apply(None)
+
+        assert set(tool.entity_types.keys()) == types_before
+
+    def test_subclass_gets_type_property_with_own_id(self, json_social_network):
+        """Subclass schema should have a type property defaulting to its own $id."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        tool._create_subclass_input.value = {
+            "$id": "https://example.com/Student",
+            "title": "Student",
+            "type": "object",
+            "allOf": [{"$ref": "Person.json"}],
+            "@context": ["Person.json", {}],
+            "properties": {},
+            "defaultProperties": ["type", "name"],
+        }
+        tool._on_create_subclass_apply(None)
+
+        student = tool.entity_types["Student"]
+        assert "type" in student["properties"]
+        assert student["properties"]["type"]["default"] == "https://example.com/Student"
+
+    def test_subclass_form_prefills_type_property(self, json_social_network):
+        """The subclass form start value should include a type property with the subclass $id."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        tool._show_create_subclass_form(person_nid)
+
+        val = tool._create_subclass_input.value
+        assert "type" in val.get("properties", {})
+        assert val["properties"]["type"]["default"] == val["$id"]
+
+    def test_entity_creation_prefills_type(self, json_social_network):
+        """Creating an entity should pre-fill type with the schema's $id."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        tool._show_create_entity_editor(person_schema)
+        defaults = tool.new_entity_editor.value
+        assert defaults.get("type") == person_schema["$id"]
+
+
+# =====================================================================
+# 16. Field node editing (property sub-schema)
+# =====================================================================
+
+
+class TestFieldNodeEditing:
+    def test_click_field_node_shows_property_schema(self, json_social_network):
+        """Clicking a field node should show its property sub-schema in the OO-LD Form."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        editor = tool.current_node_oold_editor
+        assert isinstance(editor, JsonEditor)
+        val = editor.value
+        assert isinstance(val, dict)
+        assert "anyOf" in val or "type" in val
+
+    def test_field_form_contains_property_sub_schema(self, json_social_network):
+        """The editor value should match the property definition from the parent class."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        val = tool.current_node_oold_editor.value
+        original = person_schema["properties"]["age"]
+        for key in original:
+            assert val.get(key) == original[key], f"Mismatch on key {key}"
+
+    def test_field_form_includes_context_entry(self, json_social_network):
+        """If the property has a @context entry, it should be included as _context_entry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        val = tool.current_node_oold_editor.value
+        assert "_context_entry" in val
+        assert val["_context_entry"] == {"@id": "ex:HasAge"}
+
+    def test_field_form_no_context_entry_when_absent(self, json_social_network):
+        """Properties without @context entries should not have _context_entry."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_schema["properties"]["no_ctx_prop"] = {"type": "string"}
+        person_nid = _cls_node_id(person_schema)
+        tool._rebuild_visjs_edges()
+        field_nid = f"{person_nid}#field_no_ctx_prop"
+        for n in tool._full_visjs_nodes:
+            if n["id"] == field_nid:
+                break
+        else:
+            tool._full_visjs_nodes.append({
+                "id": field_nid,
+                "label": "no_ctx_prop",
+                "node_kind": "field",
+                "color": "#ccc",
+                "shape": "ellipse",
+            })
+        tool.show_node_details(field_nid)
+        val = tool.current_node_oold_editor.value
+        assert "_context_entry" not in val
+
+    def test_field_form_has_apply_button(self, json_social_network):
+        """The field node form should have an Apply Changes button."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button) and c.name == "Apply Changes"
+        ]
+        assert len(buttons) == 1
+
+    def test_field_form_shows_header(self, json_social_network):
+        """The form header should show the field name and parent class name."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        md_panes = [c for c in tool.oold_detail_col if isinstance(c, pn.pane.Markdown)]
+        assert len(md_panes) >= 1
+        header_text = md_panes[0].object
+        assert "age" in header_text
+        assert "Person" in header_text
+
+    def test_apply_updates_parent_schema(self, json_social_network):
+        """Applying field changes should update the property in the parent schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        new_val = {"type": "number", "description": "Age in years"}
+        tool.current_node_oold_editor.value = new_val
+        tool._on_field_form_apply(None)
+        updated_schema = tool._get_class_for_node_id(person_nid)
+        assert updated_schema["properties"]["age"] == {"type": "number", "description": "Age in years"}
+
+    def test_apply_updates_context_entry(self, json_social_network):
+        """Applying with _context_entry should update the @context in the parent schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        person_nid = _cls_node_id(person_schema)
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        new_val = dict(tool.current_node_oold_editor.value)
+        new_val["_context_entry"] = {"@id": "ex:HasAgeInYears"}
+        tool.current_node_oold_editor.value = new_val
+        tool._on_field_form_apply(None)
+        updated_schema = tool._get_class_for_node_id(person_nid)
+        ctx = updated_schema["@context"]
+        found = None
+        if isinstance(ctx, list):
+            for item in ctx:
+                if isinstance(item, dict) and "age" in item:
+                    found = item["age"]
+        elif isinstance(ctx, dict):
+            found = ctx.get("age")
+        assert found == {"@id": "ex:HasAgeInYears"}
+
+    def test_apply_context_entry_not_in_property_schema(self, json_social_network):
+        """The _context_entry key should NOT be stored in the property schema itself."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        new_val = dict(tool.current_node_oold_editor.value)
+        new_val["_context_entry"] = {"@id": "ex:HasAgeInYears"}
+        tool.current_node_oold_editor.value = new_val
+        tool._on_field_form_apply(None)
+        updated = tool._get_class_for_node_id(person_nid)
+        assert "_context_entry" not in updated["properties"]["age"]
+
+    def test_apply_rebuilds_graph_edges(self, json_social_network):
+        """Applying should trigger graph rebuild with updated edges."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+        tool.show_node_details(field_nid)
+        tool.current_node_oold_editor.value = dict(tool.current_node_oold_editor.value)
+        tool._on_field_form_apply(None)
+        assert len(tool.visnetwork_panel.edges) >= 0
+
+    def test_text_tab_shows_field_schema(self, json_social_network):
+        """The Text tab should show the field sub-schema as JSON."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        text_editor = tool.current_text_editor
+        assert isinstance(text_editor, MonacoEditor)
+        text_data = json.loads(text_editor.value)
+        assert "anyOf" in text_data or "type" in text_data
+
+    def test_parse_field_node_id_valid(self, json_social_network):
+        """_parse_field_node_id should parse a valid field node ID."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        result = tool._parse_field_node_id(field_nid)
+        assert result is not None
+        assert result == (person_nid, "age")
+
+    def test_parse_field_node_id_non_field(self, json_social_network):
+        """_parse_field_node_id should return None for non-field nodes."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        result = tool._parse_field_node_id(person_nid)
+        assert result is None
+
+    def test_field_form_activates_oold_form_tab(self, json_social_network):
+        """Clicking a field node should activate the OO-LD Form tab."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        assert tool.detail_tabs.active == 2
+
+    def test_field_editor_has_schema(self, json_social_network):
+        """The JsonEditor for a field must have a 'schema' key in options."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        opts = tool.current_node_oold_editor.options
+        assert "schema" in opts
+        schema = opts["schema"]
+        assert schema["type"] == "object"
+        assert "properties" in schema
+
+    def test_complex_property_editor_has_schema(self, json_social_network):
+        """A complex property (anyOf, null default, x-oold-range) must get a proper schema."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+        tool.show_node_details(field_nid)
+        editor = tool.current_node_oold_editor
+        assert isinstance(editor, JsonEditor)
+        opts = editor.options
+        assert "schema" in opts
+        schema = opts["schema"]
+        assert "anyOf" in schema["properties"]
+        assert schema["properties"]["anyOf"]["type"] == "array"
+
+    def test_complex_property_value_contains_anyof(self, json_social_network):
+        """For a property with anyOf (like knows), the editor value must have anyOf."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+        tool.show_node_details(field_nid)
+        val = tool.current_node_oold_editor.value
+        assert "anyOf" in val
+        assert isinstance(val["anyOf"], list)
+        assert len(val["anyOf"]) == 2
+
+    def test_null_default_handled_in_schema(self, json_social_network):
+        """A property with default=None should get a nullable schema entry for 'default'."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_age"
+        tool.show_node_details(field_nid)
+        schema = tool.current_node_oold_editor.options["schema"]
+        default_schema = schema["properties"]["default"]
+        assert "anyOf" in default_schema
+        type_strs = [s.get("type") for s in default_schema["anyOf"]]
+        assert "null" in type_strs
+
+
+# =====================================================================
+# 17. Instance property node editing
+# =====================================================================
+
+
+class TestInstancePropertyEditing:
+    def test_click_literal_shows_single_property(self, json_social_network):
+        """Clicking a literal node should show only that property, not the full entity."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        editor = tool.current_node_oold_editor
+        assert isinstance(editor, JsonEditor)
+        val = editor.value
+        assert list(val.keys()) == ["age"]
+        assert val["age"] == 41
+
+    def test_instance_property_schema_scoped(self, json_social_network):
+        """The editor schema should only contain the clicked property."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        opts = tool.current_node_oold_editor.options
+        schema = opts["schema"]
+        assert "age" in schema["properties"]
+        assert len(schema["properties"]) == 1
+
+    def test_instance_property_header(self, json_social_network):
+        """Header should mention the property name and entity name."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        md_panes = [c for c in tool.oold_detail_col if isinstance(c, pn.pane.Markdown)]
+        header = md_panes[0].object
+        assert "age" in header
+        assert "Alice" in header
+
+    def test_instance_property_has_apply_button(self, json_social_network):
+        """The form should have an Apply Changes button."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button) and c.name == "Apply Changes"
+        ]
+        assert len(buttons) == 1
+
+    def test_instance_property_has_jump_button(self, json_social_network):
+        """The form should have a 'Jump to Defining Schema' button."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button) and c.name == "Jump to Defining Schema"
+        ]
+        assert len(buttons) == 1
+
+    def test_apply_updates_entity_property(self, json_social_network):
+        """Applying changes should update the entity's property value."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        tool.current_node_oold_editor.value = {"age": 99}
+        tool._on_instance_property_apply(None)
+        entity = tool.entity_dict[alice_iri]
+        assert entity.get("age") == 99
+
+    def test_jump_button_shows_field_node(self, json_social_network):
+        """The jump button should navigate to the field node on the class."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        jump_buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button) and c.name == "Jump to Defining Schema"
+        ]
+        jump_buttons[0].clicks += 1
+        md_panes = [c for c in tool.oold_detail_col if isinstance(c, pn.pane.Markdown)]
+        header = md_panes[0].object
+        assert "Person" in header
+
+    def test_entity_node_still_shows_full_editor(self, json_social_network):
+        """Clicking an entity node directly should still show the full entity editor."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        tool.show_node_details(alice_iri)
+        val = tool.current_node_oold_editor.value
+        assert "name" in val
+        assert "age" in val
+
+    def test_text_tab_scoped_to_property(self, json_social_network):
+        """The Text tab should show only the single property, not the full entity."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        lit_id = f"{alice_iri}#age"
+        tool.show_node_details(lit_id)
+        text_data = json.loads(tool.current_text_editor.value)
+        assert list(text_data.keys()) == ["age"]
+
+
+# =====================================================================
+# 18. Pydantic-specific backward compatibility
 # =====================================================================
 
 
@@ -1515,3 +2737,190 @@ class TestClassGraph:
         tool = json_social_network["tool"]
         type_nodes = [n for n in tool._full_visjs_nodes if n.get("node_kind") == "type"]
         assert len(type_nodes) > 0
+
+
+# =====================================================================
+# Edge context menu: Reveal Definition
+# =====================================================================
+
+
+class TestRevealDefinition:
+    """Tests for the 'Reveal Definition' edge context menu action."""
+
+    def test_context_menu_has_reveal_definition(self, json_social_network):
+        """Instance-level edges should have a 'Reveal Definition' option."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        knows_edges = [e for e in tool.visjs_edges if e.get("from") == alice_iri and e.get("label") == "knows"]
+        assert len(knows_edges) > 0
+        cb = knows_edges[0].get("callback_name_dict", {})
+        assert "edge_reveal_definition" in cb
+        assert cb["edge_reveal_definition"] == "Reveal Definition"
+
+    def test_structural_edges_no_reveal_definition(self, json_social_network):
+        """Structural edges (IsA, definesProperty, HasType, HasRange) should NOT have Reveal Definition."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        structural_edges = [
+            e for e in tool._full_visjs_edges if e.get("label") in {"IsA", "definesProperty", "HasType", "HasRange"}
+        ]
+        for edge in structural_edges:
+            cb = edge.get("callback_name_dict", {})
+            assert "edge_reveal_definition" not in cb
+
+    def test_reveal_definition_shows_field_node(self, json_social_network):
+        """Reveal Definition on a 'knows' edge should make the field node visible."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        visible_ids = tool._visible_node_ids
+        assert field_nid in visible_ids
+
+    def test_reveal_definition_shows_class_node(self, json_social_network):
+        """Reveal Definition should make the defining class node visible."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        assert person_nid in tool._visible_node_ids
+
+    def test_reveal_definition_shows_defines_property_edge(self, json_social_network):
+        """The definesProperty edge from class to field should become visible."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        assert (person_nid, field_nid, "definesProperty") in tool._visible_edge_keys
+
+    def test_reveal_definition_shows_has_type_edge(self, json_social_network):
+        """Reveal Definition should connect the entity to its type class via HasType."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        assert (alice_iri, person_nid, "HasType") in tool._visible_edge_keys
+
+    def test_reveal_own_property_no_ancestors_beyond_definer(self, json_social_network):
+        """For a property defined on the entity's own type, ancestors should NOT be revealed."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        entity_nid = _cls_node_id(json_social_network["schemas"]["Entity"])
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        assert entity_nid not in tool._visible_node_ids
+
+    def test_reveal_inherited_property_finds_ancestor(self, json_physics):
+        """For an inherited property, Reveal Definition should find the ancestor that defines it."""
+        tool = json_physics["tool"]
+        tool.build_panel()
+        circle = json_physics["unit_circle"]
+        circle_iri = circle["id"]
+        circle_nid = _cls_node_id(json_physics["schemas"]["Circle"])
+        geometry_nid = _cls_node_id(json_physics["schemas"]["Geometry"])
+        field_nid = f"{geometry_nid}#field_dimensions"
+
+        tool._reveal_property_definition(circle_iri, "hasDimensions")
+
+        # Field node should point to Geometry, not Circle
+        assert field_nid in tool._visible_node_ids
+        assert geometry_nid in tool._visible_node_ids
+        assert (geometry_nid, field_nid, "definesProperty") in tool._visible_edge_keys
+        # HasType connects the entity to its direct type class
+        assert (circle_iri, circle_nid, "HasType") in tool._visible_edge_keys
+
+    def test_reveal_inherited_property_shows_chain_to_definer(self, json_physics):
+        """The IsA chain from entity type up to (but not beyond) the defining class should be visible."""
+        tool = json_physics["tool"]
+        tool.build_panel()
+        circle = json_physics["unit_circle"]
+        circle_iri = circle["id"]
+        circle_nid = _cls_node_id(json_physics["schemas"]["Circle"])
+        geometry_nid = _cls_node_id(json_physics["schemas"]["Geometry"])
+        entity_nid = _cls_node_id(json_physics["schemas"]["Entity"])
+
+        # Snapshot what was already visible before reveal
+        edges_before = set(tool._visible_edge_keys) if tool._visible_edge_keys else set()
+
+        tool._reveal_property_definition(circle_iri, "hasDimensions")
+
+        added_edges = tool._visible_edge_keys - edges_before
+
+        # Circle --HasType--> Circle class --IsA--> Geometry --definesProperty--> field
+        assert circle_nid in tool._visible_node_ids
+        assert geometry_nid in tool._visible_node_ids
+        assert (circle_iri, circle_nid, "HasType") in tool._visible_edge_keys
+        assert (circle_nid, geometry_nid, "IsA") in tool._visible_edge_keys
+
+        # The reveal should NOT add Geometry→Entity IsA (beyond the definer)
+        assert (geometry_nid, entity_nid, "IsA") not in added_edges
+
+    def test_reveal_definition_updates_visjs(self, json_social_network):
+        """After Reveal Definition, the visjs_nodes/edges should include the revealed items."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
+        field_nid = f"{person_nid}#field_knows"
+
+        edge_id = f"{alice_iri}|knows|{bob_iri}"
+        tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
+
+        visible_node_ids = {n["id"] for n in tool.visjs_nodes}
+        assert field_nid in visible_node_ids
+        visible_edge_labels = {(e["from"], e["to"], e["label"]) for e in tool.visjs_edges}
+        assert (person_nid, field_nid, "definesProperty") in visible_edge_labels
+
+    def test_find_defining_schema_own_property(self, json_social_network):
+        """_find_defining_schema should return the schema itself for own properties."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        person_schema = json_social_network["schemas"]["Person"]
+        result = tool._find_defining_schema(person_schema, "age")
+        assert result is person_schema
+
+    def test_find_defining_schema_inherited(self, json_physics):
+        """_find_defining_schema should return the ancestor for inherited properties."""
+        tool = json_physics["tool"]
+        tool.build_panel()
+        circle_schema = json_physics["schemas"]["Circle"]
+        geometry_schema = json_physics["schemas"]["Geometry"]
+        result = tool._find_defining_schema(circle_schema, "dimensions")
+        assert result is geometry_schema
+
+    def test_find_defining_schema_deep_inherited(self, json_physics):
+        """_find_defining_schema should find properties from grandparent schemas."""
+        tool = json_physics["tool"]
+        tool.build_panel()
+        circle_schema = json_physics["schemas"]["Circle"]
+        entity_schema = json_physics["schemas"]["Entity"]
+        result = tool._find_defining_schema(circle_schema, "name")
+        assert result is entity_schema

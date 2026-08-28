@@ -148,6 +148,7 @@ PERSON_SCHEMA = {
             "generation": {"@id": "ex:HasGeneration"},
             "gender": {"@id": "ex:HasGender"},
             "age": {"@id": "ex:HasAge"},
+            "hobbies": {"@id": "ex:HasHobbies"},
         },
     ],
     "allOf": [{"$ref": ENTITY_IRI}],
@@ -185,6 +186,14 @@ PERSON_SCHEMA = {
             "default": None,
             "description": "IRIs of friends.",
             "x-oold-range": "https://example.com/Person",
+        },
+        "hobbies": {
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "null"},
+            ],
+            "default": None,
+            "description": "Hobby tags of the person.",
         },
     },
     "defaultProperties": ["type", "name", "generation"],

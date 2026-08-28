@@ -103,7 +103,7 @@ class GraphDetailTool:
         )
         self.detail_col = pn.Column(
             pn.pane.Markdown("## Click on a node to see details"),
-            name="Details",
+            name="Node Style",
         )
 
         self.detail_tabs = pn.Tabs(self.visualizations_col, self.detail_col)

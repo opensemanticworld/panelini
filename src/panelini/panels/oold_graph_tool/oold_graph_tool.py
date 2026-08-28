@@ -5,7 +5,7 @@ import math
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, ClassVar, Optional, Union
 
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -93,6 +93,41 @@ def _cls_node_id(cls_or_schema: Any) -> str:
     except AttributeError:
         pass
     return f"class:{cls_or_schema.__name__}"
+
+
+def _infer_je_schema(val: Any) -> dict:
+    """Infer a json-editor-compatible schema for a single value.
+
+    Used to build schemas for the field-edit form so that json-editor
+    treats JSON Schema keywords in the *value* as plain data.
+    """
+    if val is None:
+        return {"anyOf": [{"type": "string"}, {"type": "null"}]}
+    if isinstance(val, bool):
+        return {"type": "boolean"}
+    if isinstance(val, int):
+        return {"type": "integer"}
+    if isinstance(val, float):
+        return {"type": "number"}
+    if isinstance(val, str):
+        return {"type": "string"}
+    if isinstance(val, list):
+        if val and isinstance(val[0], dict):
+            return {
+                "type": "array",
+                "format": "table",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": True,
+                },
+            }
+        return {"type": "array", "items": {"type": "string"}}
+    if isinstance(val, dict):
+        sub: dict[str, Any] = {}
+        for k, v in val.items():
+            sub[k] = _infer_je_schema(v)
+        return {"type": "object", "properties": sub, "additionalProperties": True}
+    return {"type": "string"}
 
 
 def numeric_to_color(value: float, min_val: float, max_val: float, colormap_name: str = "viridis") -> str:
@@ -466,8 +501,41 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Call parent to set up buttons and structure
         super().build_panel()
 
+        # -- Persistent widgets for OO-LD Form tab (reused across node clicks) --
+        self.oold_detail_col.clear()
+        self.text_col.clear()
+
+        self._oold_header = pn.pane.Markdown("")
+        self.current_node_oold_editor = JsonEditor(
+            value={},
+            options={"schema": {"type": "object", "properties": {}}, "startval": {}},
+        )
+        self._oold_apply_btn = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
+        self._oold_apply_btn.on_click(self._on_oold_form_apply)
+        self._oold_jump_btn = pn.widgets.Button(
+            name="Jump to Defining Schema", button_type="default", width=200, visible=False
+        )
+        self._oold_jump_btn.on_click(
+            lambda _: self.show_node_details(getattr(self, "_oold_jump_target", None))
+            if getattr(self, "_oold_jump_target", None)
+            else None
+        )
+        self._oold_jump_target = None
+        self._oold_btn_row = pn.Row(self._oold_apply_btn, self._oold_jump_btn)
+        self.oold_detail_col.extend([self._oold_header, self.current_node_oold_editor, self._oold_btn_row])
+
+        # -- Persistent widgets for Text tab --
+        self.current_text_editor = MonacoEditor(
+            value="{}",
+            language="json",
+            height=600,
+        )
+        self.text_apply_button = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
+        self.text_apply_button.on_click(self._on_text_apply)
+        self.text_col.extend([self.current_text_editor, self.text_apply_button])
+
         # Re-append OO-LD tabs (parent build_panel recreates detail_tabs)
-        self.detail_tabs.append(("OO-LD Details", self.oold_detail_col))
+        self.detail_tabs.append(("OO-LD Form", self.oold_detail_col))
         self.detail_tabs.append(("Text", self.text_col))
         self.detail_tabs.append(("Visualization Config", self.viz_config_col))
 
@@ -729,101 +797,114 @@ class OOLDGraphDetailTool(GraphDetailTool):
             result["type"] = "string"
         return result
 
+    def _restore_persistent_oold_widgets(self) -> None:
+        """Ensure persistent OO-LD Form widgets are in the column (context menus may clear it)."""
+        if self._oold_header not in list(self.oold_detail_col):
+            self.oold_detail_col.clear()
+            self.oold_detail_col.extend([self._oold_header, self.current_node_oold_editor, self._oold_btn_row])
+
     def show_node_details(self, node_id: Any) -> None:
         """Override the method to show node details in the side panel in a OO-LD-specific fashion"""
 
+        prev_active = self.detail_tabs.active
         super().show_node_details(node_id)
+        self.detail_tabs.active = prev_active
+        self._default_detail_tab_once()
+        self._restore_persistent_oold_widgets()
 
-        # Check if this is a class/schema node
+        # Determine node kind and gather data
         class_schema = self._get_class_for_node_id(node_id)
         if class_schema is not None:
-            self.oold_detail_col.clear()
-            self.oold_detail_col.append(pn.pane.Markdown(f"### Node ID: {node_id} of type Class"))
-            self.current_node_oold_editor = pn.widgets.JSONEditor(
-                value=class_schema,
-                mode="view",
-                sizing_mode="stretch_width",
-                height=600,
-            )
-            self.oold_detail_col.append(self.current_node_oold_editor)
+            type_name = self.introspector.get_type_name(class_schema)
+            self._class_form_node_id = node_id
+            self._oold_form_kind = "class"
+            self._oold_header.object = f"### {type_name} (Class)"
+            self.current_node_oold_editor.set_schema(self._SUBCLASS_DEF_SCHEMA, startval=class_schema)
+            self._oold_jump_btn.visible = False
             self._update_text_tab(
                 class_schema, json_schema=_OOLD_META_SCHEMA or None, node_id=node_id, node_kind="class"
             )
-            self.detail_tabs.active = 2
+            return
+
+        field_parts = self._parse_field_node_id(node_id)
+        if field_parts is not None:
+            cls_nid, field_name = field_parts
+            self._show_field_node_form(node_id, cls_nid, field_name)
+            return
+
+        parsed = self._parent_of_literal(node_id)
+        if parsed is not None:
+            entity_iri, field_name = parsed
+            self._show_instance_property_form(node_id, entity_iri, field_name)
             return
 
         _node_entity = self.entity_dict.get(node_id)
         _node_type_label = _node_entity.type_name if _node_entity else "Unknown"
-
-        # For literal nodes, show the parent entity's editor instead
-        resolved_id = node_id
-        parsed = self._parent_of_literal(node_id)
-        if parsed is not None:
-            resolved_id = parsed[0]
-
-        current_entity = self.entity_dict.get(resolved_id, None)
-
-        self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### Node ID: {node_id} of type {_node_type_label}"))
+        current_entity = self.entity_dict.get(node_id, None)
 
         if current_entity is not None:
             schema = self._build_editor_schema(current_entity.schema)
-            self.current_node_oold_editor = JsonEditor(
-                value=current_entity.data,
-                options={"schema": schema, "startval": current_entity.data},
-            )
-            self._current_single_node_id = resolved_id
-
-            self.single_node_apply_button = pn.widgets.Button(
-                name="Apply Changes",
-                button_type="primary",
-                width=150,
-            )
-            self.single_node_apply_button.on_click(self.on_single_node_apply_changes)
-
-            self.oold_detail_col.append(self.current_node_oold_editor)
-            self.oold_detail_col.append(self.single_node_apply_button)
-            self._update_text_tab(current_entity.data, json_schema=schema, node_id=resolved_id, node_kind="entity")
+            self._current_single_node_id = node_id
+            self._oold_form_kind = "entity"
+            self._oold_header.object = f"### Node ID: {node_id} of type {_node_type_label}"
+            self.current_node_oold_editor.set_schema(schema, startval=current_entity.data)
+            self._oold_jump_btn.visible = False
+            self._update_text_tab(current_entity.data, json_schema=schema, node_id=node_id, node_kind="entity")
         else:
             self._new_entity_node_id = node_id
-            if self.entity_types:
-                self.new_entity_type_select = pn.widgets.Select(
-                    name="Entity Type",
-                    options=list(self.entity_types.keys()),
-                    value=next(iter(self.entity_types.keys())),
-                    width=200,
-                )
-                self.new_entity_confirm_button = pn.widgets.Button(
-                    name="Create Entity",
-                    button_type="success",
-                    width=150,
-                )
-                self.new_entity_confirm_button.on_click(self.on_create_entity_click)
-                self.oold_detail_col.append(pn.Row(self.new_entity_type_select, self.new_entity_confirm_button))
+            self._oold_form_kind = "create_entity"
+            self._oold_header.object = f"### Node ID: {node_id} of type {_node_type_label}"
+            self.current_node_oold_editor.set_schema({"type": "object", "properties": {}}, startval={})
+            self._oold_jump_btn.visible = False
 
-        self.detail_tabs.active = 2
+    def _default_detail_tab_once(self) -> None:
+        """On the very first node click, switch to OO-LD Form. After that, preserve the user's tab."""
+        if not getattr(self, "_detail_tab_initialized", False):
+            self._detail_tab_initialized = True
+            self.detail_tabs.active = 2
+
+    def _on_oold_form_apply(self, event: Any) -> None:
+        """Unified apply handler for the persistent OO-LD Form editor."""
+        kind = getattr(self, "_oold_form_kind", None)
+        new_val = self.current_node_oold_editor.value
+        if not isinstance(new_val, dict):
+            return
+        if kind == "class":
+            node_id = getattr(self, "_class_form_node_id", None)
+            if node_id is None:
+                return
+            self._save_state()
+            self._apply_schema_text_changes(node_id, new_val)
+        elif kind == "field":
+            self._on_field_form_apply(event)
+        elif kind == "instance_prop":
+            self._on_instance_property_apply(event)
+        elif kind == "entity":
+            node_id = getattr(self, "_current_single_node_id", None)
+            if node_id is None:
+                return
+            self._save_state()
+            self._apply_entity_data_changes(node_id, new_val)
+
+    def _apply_entity_data_changes(self, node_id: str, new_data: dict) -> None:
+        """Apply edited entity data from the OO-LD Form back to the entity."""
+        entity = self.entity_dict.get(node_id)
+        if entity is None:
+            return
+        _internal = {"id", "__iris__"} | _SKIP_FIELDS
+        entity_props = self.introspector.get_properties(entity.schema)
+        self._set_entity_props_from_dict(entity, new_data, entity_props, _internal)
+        self._clear_removed_optional_props(entity, new_data, entity_props, _internal)
+        self._full_sync_after_edit(replace_nodes=True)
 
     def _update_text_tab(
         self, data: dict, json_schema: dict | None = None, *, node_id: str | None = None, node_kind: str | None = None
     ) -> None:
-        """Populate the Text tab with a Monaco editor showing *data* as JSON."""
+        """Update the persistent Text tab editor with new data."""
         self._text_tab_node_id = node_id
         self._text_tab_node_kind = node_kind
-        self.text_col.clear()
-        self.current_text_editor = MonacoEditor(
-            value=json.dumps(data, indent=2, default=str),
-            language="json",
-            json_schema=json_schema,
-            height=600,
-        )
-        self.text_apply_button = pn.widgets.Button(
-            name="Apply Changes",
-            button_type="primary",
-            width=150,
-        )
-        self.text_apply_button.on_click(self._on_text_apply)
-        self.text_col.append(self.current_text_editor)
-        self.text_col.append(self.text_apply_button)
+        self.current_text_editor.value = json.dumps(data, indent=2, default=str)
+        self.current_text_editor.json_schema = json_schema
 
     def _on_text_apply(self, event: Any) -> None:
         """Apply changes from the Text tab Monaco editor."""
@@ -842,6 +923,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         if node_kind == "class":
             self._apply_schema_text_changes(node_id, new_data)
+        elif node_kind == "field":
+            self._apply_field_text_changes(node_id, new_data)
+        elif node_kind == "instance_prop":
+            self._apply_instance_prop_text_changes(node_id, new_data)
         else:
             self._apply_entity_text_changes(node_id, new_data)
 
@@ -861,6 +946,166 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.schema_registry[new_title] = new_schema
             self.entity_types[new_title] = new_schema
 
+    # -- Field node editing (property sub-schema) --------------------------------
+
+    def _parse_field_node_id(self, node_id: str) -> tuple[str, str] | None:
+        """Parse a field node ID into (class_node_id, field_name), or None."""
+        sep = "#field_"
+        idx = node_id.find(sep)
+        if idx < 0:
+            return None
+        for n in self._full_visjs_nodes:
+            if n["id"] == node_id and n.get("node_kind") == "field":
+                return node_id[:idx], node_id[idx + len(sep) :]
+        return None
+
+    def _show_field_node_form(self, node_id: str, cls_nid: str, field_name: str) -> None:
+        """Update persistent widgets for editing a property's sub-schema."""
+        parent_schema = self._get_class_for_node_id(cls_nid)
+        if parent_schema is None:
+            return
+
+        prop_sub_schema = parent_schema.get("properties", {}).get(field_name, {})
+
+        ctx_entry = self._extract_context_entry(parent_schema, field_name)
+        edit_value: dict[str, Any] = dict(prop_sub_schema)
+        if ctx_entry is not None:
+            edit_value["_context_entry"] = ctx_entry
+
+        self._field_form_node_id = node_id
+        self._field_form_cls_nid = cls_nid
+        self._field_form_field_name = field_name
+        self._oold_form_kind = "field"
+
+        parent_name = self.introspector.get_type_name(parent_schema)
+        self._oold_header.object = f"### Property **{field_name}** on {parent_name}"
+        field_schema = self._build_field_edit_schema(edit_value)
+        self.current_node_oold_editor.set_schema(field_schema, startval=edit_value)
+        self._oold_jump_btn.visible = False
+        self._update_text_tab(edit_value, node_id=node_id, node_kind="field")
+
+    @staticmethod
+    def _extract_context_entry(schema: dict, prop_name: str) -> Any:
+        """Extract the JSON-LD @context entry for a property, or None."""
+        ctx = schema.get("@context")
+        if isinstance(ctx, dict):
+            return ctx.get(prop_name)
+        if isinstance(ctx, list):
+            for item in ctx:
+                if isinstance(item, dict) and prop_name in item:
+                    return item[prop_name]
+        return None
+
+    @staticmethod
+    def _build_field_edit_schema(edit_value: dict) -> dict:
+        """Build a json-editor compatible schema from a property sub-schema value."""
+        props: dict[str, Any] = {}
+        for key, val in edit_value.items():
+            props[key] = _infer_je_schema(val)
+        return {
+            "type": "object",
+            "title": "Property Definition",
+            "properties": props,
+            "additionalProperties": True,
+        }
+
+    def _on_field_form_apply(self, event: Any) -> None:
+        """Apply edited property sub-schema back to the parent class schema."""
+        cls_nid = getattr(self, "_field_form_cls_nid", None)
+        field_name = getattr(self, "_field_form_field_name", None)
+        if cls_nid is None or field_name is None:
+            return
+        parent_schema = self._get_class_for_node_id(cls_nid)
+        if parent_schema is None:
+            return
+        new_val = self.current_node_oold_editor.value
+        if not isinstance(new_val, dict):
+            return
+
+        self._save_state()
+
+        ctx_entry = new_val.pop("_context_entry", None)
+        parent_schema.setdefault("properties", {})[field_name] = new_val
+
+        if ctx_entry is not None:
+            self._set_context_entry(parent_schema, field_name, ctx_entry)
+
+        self._apply_schema_text_changes(cls_nid, parent_schema)
+
+    @staticmethod
+    def _set_context_entry(schema: dict, prop_name: str, entry: Any) -> None:
+        """Write a JSON-LD @context entry for a property."""
+        ctx = schema.get("@context")
+        if isinstance(ctx, list):
+            for item in ctx:
+                if isinstance(item, dict) and prop_name in item:
+                    item[prop_name] = entry
+                    return
+            ctx_dicts = [c for c in ctx if isinstance(c, dict)]
+            if ctx_dicts:
+                ctx_dicts[-1][prop_name] = entry
+            else:
+                ctx.append({prop_name: entry})
+        elif isinstance(ctx, dict):
+            ctx[prop_name] = entry
+        else:
+            schema["@context"] = {prop_name: entry}
+
+    # -- Instance property node editing ------------------------------------------
+
+    def _show_instance_property_form(self, node_id: str, entity_iri: str, field_name: str) -> None:
+        """Update persistent widgets for editing a single instance property value."""
+        entity = self.entity_dict.get(entity_iri)
+        if entity is None:
+            return
+
+        all_props = self.introspector.get_properties(entity.schema)
+        prop_info = all_props.get(field_name)
+        prop_schema = self._clean_prop_for_editor(prop_info.raw_schema) if prop_info else {}
+
+        current_value = entity.get(field_name)
+        wrapped_value = {field_name: current_value}
+        wrapped_schema = {
+            "type": "object",
+            "properties": {field_name: prop_schema},
+        }
+
+        self._inst_prop_node_id = node_id
+        self._inst_prop_entity_iri = entity_iri
+        self._inst_prop_field_name = field_name
+        self._oold_form_kind = "instance_prop"
+
+        entity_name = entity.name or entity_iri
+        self._oold_header.object = f"### Property **{field_name}** on {entity_name}"
+        self.current_node_oold_editor.set_schema(wrapped_schema, startval=wrapped_value)
+
+        cls_nid = _cls_node_id(entity.schema)
+        field_nid = f"{cls_nid}#field_{field_name}"
+        self._oold_jump_btn.name = "Jump to Defining Schema"
+        self._oold_jump_btn.visible = True
+        self._oold_jump_target = field_nid
+
+        self._update_text_tab(wrapped_value, json_schema=wrapped_schema, node_id=node_id, node_kind="instance_prop")
+
+    def _on_instance_property_apply(self, event: Any) -> None:
+        """Apply edited instance property value back to the entity."""
+        entity_iri = getattr(self, "_inst_prop_entity_iri", None)
+        field_name = getattr(self, "_inst_prop_field_name", None)
+        if entity_iri is None or field_name is None:
+            return
+        entity = self.entity_dict.get(entity_iri)
+        if entity is None:
+            return
+        new_val = self.current_node_oold_editor.value
+        if not isinstance(new_val, dict):
+            return
+
+        self._save_state()
+        prop_value = new_val.get(field_name)
+        deserialized = self._deserialize_property_value(entity, field_name, prop_value)
+        entity.set(field_name, deserialized)
+        self._full_sync_after_edit(replace_nodes=True)
+
     def _apply_schema_text_changes(self, node_id: str, new_schema: dict) -> None:
         """Apply edited schema from the Text tab back to the registry and rebuild the graph."""
         self._update_schema_in_registries(node_id, new_schema)
@@ -874,10 +1119,68 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if n["id"] == node_id and n.get("node_kind") == "class":
                 n["label"] = self.introspector.get_type_name(new_schema)
 
+        nodes_before = {n["id"] for n in self._full_visjs_nodes}
         self._rebuild_visjs_edges()
+        self._reveal_new_schema_nodes(node_id, nodes_before)
+
         self.visnetwork_panel.nodes = list(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
         self.show_node_details(node_id)
+
+    def _reveal_new_schema_nodes(self, node_id: str, nodes_before: set[str]) -> None:
+        """After a schema rebuild, reveal newly created class/field nodes and their edges."""
+        if self._visible_node_ids is None:
+            return
+        self._visible_node_ids.add(node_id)
+        new_nodes = [n for n in self._full_visjs_nodes if n["id"] not in nodes_before]
+        new_revealed = set()
+        for n in new_nodes:
+            if n.get("node_kind") in {"class", "field"}:
+                self._visible_node_ids.add(n["id"])
+                new_revealed.add(n["id"])
+        if new_revealed and self._visible_edge_keys is not None:
+            for e in self._full_visjs_edges:
+                frm, to = e.get("from", ""), e.get("to", "")
+                if (
+                    (frm in new_revealed or to in new_revealed)
+                    and frm in self._visible_node_ids
+                    and to in self._visible_node_ids
+                ):
+                    self._visible_edge_keys.add((frm, to, e.get("label", "")))
+        self._apply_visibility_filter_inplace()
+
+    def _apply_field_text_changes(self, node_id: str, new_data: dict) -> None:
+        """Apply edited field sub-schema from the Text tab back to the parent class."""
+        field_parts = self._parse_field_node_id(node_id)
+        if field_parts is None:
+            return
+        cls_nid, field_name = field_parts
+        parent_schema = self._get_class_for_node_id(cls_nid)
+        if parent_schema is None:
+            return
+
+        ctx_entry = new_data.pop("_context_entry", None)
+        parent_schema.setdefault("properties", {})[field_name] = new_data
+
+        if ctx_entry is not None:
+            self._set_context_entry(parent_schema, field_name, ctx_entry)
+
+        self._apply_schema_text_changes(cls_nid, parent_schema)
+
+    def _apply_instance_prop_text_changes(self, node_id: str, new_data: dict) -> None:
+        """Apply an edited instance property value from the Text tab."""
+        parsed = self._parent_of_literal(node_id)
+        if parsed is None:
+            return
+        entity_iri, field_name = parsed
+        entity = self.entity_dict.get(entity_iri)
+        if entity is None:
+            return
+        self._save_state()
+        prop_value = new_data.get(field_name)
+        deserialized = self._deserialize_property_value(entity, field_name, prop_value)
+        entity.set(field_name, deserialized)
+        self._full_sync_after_edit(replace_nodes=True)
 
     def _apply_entity_text_changes(self, node_id: str, new_data: dict) -> None:
         """Apply edited entity data from the Text tab back to the entity and rebuild."""
@@ -997,8 +1300,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Store selected IDs for callbacks
         self._current_selected_node_ids = node_ids
 
-        # Switch to OO-LD Details tab
-        self.detail_tabs.active = 2
+        self._default_detail_tab_once()
 
     # ===== Property Introspection Helpers =====
 
@@ -1425,6 +1727,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
             exp = expand_map.get(sid)
             if exp:
                 expanded_source.add(exp)
+        lit_counter: dict[str, int] = {}
         for s, p, o in self.rdf_graph:
             s_str = str(s)
             if s_str not in expanded_source:
@@ -1434,7 +1737,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 continue
             pred_label = str(p).split("/")[-1].split("#")[-1]
             if isinstance(o, RDFLiteral):
-                lit_id = self._literal_node_id(s_compact, pred_label, s_compact)
+                base_lit_id = self._literal_node_id(s_compact, pred_label, s_compact)
+                idx = lit_counter.get(base_lit_id, 0)
+                lit_counter[base_lit_id] = idx + 1
+                lit_id = base_lit_id if idx == 0 else f"{base_lit_id}_{idx}"
                 if lit_id not in existing_node_ids:
                     self.visjs_nodes.append({
                         "id": lit_id,
@@ -1609,6 +1915,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             schema = self._get_class_for_node_id(node_id)
             type_name = self.introspector.get_type_name(schema) if schema else "Unknown"
             d["create_instance"] = f"Create a: {type_name}"
+            d["create_property"] = "Create New Property"
+            d["create_subclass"] = "Create New Subclass"
         return d
 
     def _apply_visibility_filter_inplace(self) -> None:
@@ -1635,6 +1943,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if (e.get("from", ""), e.get("to", ""), e.get("label", "")) in self._visible_edge_keys
             ]
 
+        _structural_labels = {"IsA", "definesProperty", "HasType", "HasRange"}
         for edge in self.visjs_edges:
             frm, to, lbl = edge.get("from", ""), edge.get("to", ""), edge.get("label", "")
             edge["id"] = f"{frm}|{lbl}|{to}"
@@ -1646,6 +1955,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             else:
                 edge_cb["edge_hide"] = "Hide"
                 edge_cb["edge_hide_all"] = f"Hide All: {lbl}"
+            if lbl not in _structural_labels and frm in self.entity_dict:
+                edge_cb["edge_reveal_definition"] = "Reveal Definition"
             edge["callback_name_dict"] = edge_cb
 
         for node in self.visjs_nodes:
@@ -1685,6 +1996,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if cls is not None:
                 self._new_entity_node_id = None
                 self._show_create_entity_editor(cls)
+            return
+
+        if action_id == "create_property":
+            self._show_create_property_form(node_id)
+            return
+
+        if action_id == "create_subclass":
+            self._show_create_subclass_form(node_id)
             return
 
         if action_id.startswith("expand_subobj_"):
@@ -1794,6 +2113,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._visible_edge_keys = {k for k in self._visible_edge_keys if k[2] != lbl}
         elif action_id == "edge_expand_all":
             source_to_added = self._expand_edge_label_for_all(lbl)
+        elif action_id == "edge_reveal_definition":
+            self._reveal_property_definition(frm, lbl)
 
         self._apply_visibility_filter_inplace()
 
@@ -1803,6 +2124,89 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         self.visnetwork_panel.nodes = list(self.visjs_nodes)
         self.visnetwork_panel.edges = list(self.visjs_edges)
+
+    def _reveal_property_definition(self, entity_iri: str, pred_label: str) -> None:
+        """Reveal the field node that defines the schema property behind an edge.
+
+        Shows the connected chain: entity --HasType--> type_class --IsA-->...
+        --IsA--> defining_class --definesProperty--> field_node.
+        Only classes between the entity's type and the defining class are
+        revealed, not ancestors beyond the defining class.
+        """
+        entity = self.entity_dict.get(entity_iri)
+        if entity is None:
+            return
+
+        field_name = self._field_name_for_predicate(entity, pred_label)
+        if field_name is None:
+            return
+
+        defining_schema = self._find_defining_schema(entity.schema, field_name)
+        if defining_schema is None:
+            return
+
+        if self._visible_node_ids is None:
+            self._visible_node_ids = {n["id"] for n in self.visjs_nodes}
+        if self._visible_edge_keys is None:
+            self._visible_edge_keys = self._snapshot_visible_edge_keys()
+
+        defining_nid = _cls_node_id(defining_schema)
+        field_nid = f"{defining_nid}#field_{field_name}"
+
+        self._visible_node_ids.add(field_nid)
+        self._visible_node_ids.add(defining_nid)
+        self._visible_edge_keys.add((defining_nid, field_nid, "definesProperty"))
+
+        type_cls_nid = _cls_node_id(entity.schema)
+        self._visible_node_ids.add(type_cls_nid)
+        self._visible_edge_keys.add((entity_iri, type_cls_nid, "HasType"))
+
+        self._reveal_isa_chain_to(entity.schema, defining_schema)
+
+    def _reveal_isa_chain_to(self, schema: dict, target: dict) -> None:
+        """Walk IsA chain from schema up to target, revealing each step."""
+        target_nid = _cls_node_id(target)
+        while _cls_node_id(schema) != target_nid:
+            schema_nid = _cls_node_id(schema)
+            parent_refs = self.introspector.get_parent_schema_refs(schema)
+            if not parent_refs:
+                break
+            for ref in parent_refs:
+                parent = self.introspector.resolve_ref(ref)
+                if parent is not None and self._is_ancestor_of(parent, target):
+                    parent_nid = _cls_node_id(parent)
+                    self._visible_node_ids.add(parent_nid)
+                    self._visible_edge_keys.add((schema_nid, parent_nid, "IsA"))
+            first_parent = self.introspector.resolve_ref(parent_refs[0])
+            if first_parent is None:
+                break
+            schema = first_parent
+
+    def _is_ancestor_of(self, candidate: dict, target: dict) -> bool:
+        """Return True if candidate is target or an ancestor of target."""
+        if candidate is target:
+            return True
+        cand_nid = _cls_node_id(candidate)
+        target_nid = _cls_node_id(target)
+        if cand_nid == target_nid:
+            return True
+        for ref in self.introspector.get_parent_schema_refs(target):
+            parent = self.introspector.resolve_ref(ref)
+            if parent is not None and self._is_ancestor_of(candidate, parent):
+                return True
+        return False
+
+    def _find_defining_schema(self, schema: dict, field_name: str) -> dict | None:
+        """Find the schema in the inheritance chain that directly defines field_name."""
+        if field_name in self.introspector.get_own_properties(schema):
+            return schema
+        for ref in self.introspector.get_parent_schema_refs(schema):
+            parent = self.introspector.resolve_ref(ref)
+            if parent is not None:
+                result = self._find_defining_schema(parent, field_name)
+                if result is not None:
+                    return result
+        return None
 
     def _get_node_position(self, node_id: str) -> tuple[float, float] | None:
         """Return (x, y) of *node_id* from the last JS-synced positions, or *None*."""
@@ -1974,6 +2378,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return None
         entity_iri, rest = node_id.rsplit("#", 1)
         field_name = rest[len("literal_") :] if rest.startswith("literal_") else rest
+        # Strip list-element suffix (e.g. "hobbies_1" -> "hobbies")
+        if "_" in field_name and field_name.rsplit("_", 1)[-1].isdigit():
+            field_name = field_name.rsplit("_", 1)[0]
         if entity_iri in self.entity_dict and field_name in self.introspector.get_properties(
             self.entity_dict[entity_iri].schema
         ):
@@ -2209,11 +2616,326 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return resolved
         return None
 
-    def _show_property_create_form(self, entity_id: str, field_name: str) -> None:
-        """Show an inline create form for a field that currently has no value.
+    def _build_property_create_schema(self, entity: "EntityAdapter", field_name: str) -> tuple[dict, dict]:
+        """Build a JSON Schema and start value for a single-property create form."""
+        prop_info = self.introspector.get_properties(entity.schema).get(field_name)
+        if prop_info is None:
+            return {"type": "object", "properties": {field_name: {"type": "string"}}}, {field_name: ""}
 
-        Shows a JSON editor for sub-object fields, TextInput for literals/IRI refs.
-        """
+        cleaned = self._clean_prop_for_editor(prop_info.raw_schema)
+        schema = {"type": "object", "properties": {field_name: cleaned}}
+        current = entity.get(field_name)
+        if current is not None:
+            start = {field_name: current}
+        else:
+            default = prop_info.default if prop_info.default is not MISSING else None
+            start = {field_name: default}
+        return schema, start
+
+    # -- Schema property creation ------------------------------------------------
+
+    _PROPERTY_DEF_SCHEMA: ClassVar[dict] = {
+        "type": "object",
+        "title": "New Property",
+        "properties": {
+            "name": {"type": "string", "description": "Property name (key in the schema)."},
+            "type": {
+                "type": "string",
+                "enum": ["string", "integer", "number", "boolean", "array", "object"],
+                "default": "string",
+                "description": "JSON Schema type.",
+            },
+            "description": {
+                "type": "string",
+                "default": "",
+                "description": "Human-readable description.",
+            },
+            "default": {"description": "Default value (leave empty for none)."},
+            "nullable": {
+                "type": "boolean",
+                "default": True,
+                "description": "Wrap in anyOf with null.",
+            },
+            "items_type": {
+                "type": "string",
+                "enum": ["string", "integer", "number", "boolean", "object"],
+                "default": "string",
+                "description": "Element type (only for arrays).",
+            },
+            "context_iri": {
+                "type": "string",
+                "default": "",
+                "description": "JSON-LD predicate IRI (e.g. ex:HasAge).",
+            },
+            "is_iri_reference": {
+                "type": "boolean",
+                "default": False,
+                "description": "Mark as @type:@id in JSON-LD context.",
+            },
+            "x_oold_range": {
+                "type": "string",
+                "default": "",
+                "description": "OO-LD range constraint ($id of target schema).",
+            },
+        },
+        "required": ["name", "type"],
+    }
+
+    def _show_create_property_form(self, class_node_id: str) -> None:
+        """Show a form to define a new property on a class/schema node."""
+        schema = self._get_class_for_node_id(class_node_id)
+        if schema is None:
+            return
+        self._create_prop_class_node_id = class_node_id
+        type_name = self.introspector.get_type_name(schema)
+
+        self.oold_detail_col.clear()
+        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New Property on **{type_name}**"))
+
+        start_val = {
+            "name": "",
+            "type": "string",
+            "description": "",
+            "nullable": True,
+            "items_type": "string",
+            "context_iri": "",
+            "is_iri_reference": False,
+            "x_oold_range": "",
+        }
+        self._create_prop_input = JsonEditor(
+            value=start_val,
+            options={"schema": self._PROPERTY_DEF_SCHEMA, "startval": start_val},
+        )
+        apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
+        apply_btn.on_click(self._on_create_property_apply)
+        cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+        cancel_btn.on_click(lambda _: self.oold_detail_col.clear())
+
+        self.oold_detail_col.append(self._create_prop_input)
+        self.oold_detail_col.append(pn.Row(apply_btn, cancel_btn))
+        self.detail_tabs.active = 2
+
+    def _on_create_property_apply(self, event: Any) -> None:
+        """Apply a new property definition to the class schema."""
+        node_id = getattr(self, "_create_prop_class_node_id", None)
+        if node_id is None:
+            return
+        schema = self._get_class_for_node_id(node_id)
+        if schema is None:
+            return
+
+        val = self._create_prop_input.value
+        prop_name = (val.get("name") or "").strip()
+        if not prop_name:
+            print("Property name is required")
+            return
+
+        self._save_state()
+
+        prop_schema = self._build_prop_schema_from_form(val)
+        schema.setdefault("properties", {})[prop_name] = prop_schema
+
+        self._add_property_to_context(schema, prop_name, val)
+
+        self._apply_schema_text_changes(node_id, schema)
+        self.oold_detail_col.clear()
+
+    @staticmethod
+    def _build_prop_schema_from_form(val: dict) -> dict:
+        """Convert the create-property form values into a JSON Schema property dict."""
+        prop_type = val.get("type", "string")
+        nullable = val.get("nullable", True)
+        description = (val.get("description") or "").strip()
+        x_range = (val.get("x_oold_range") or "").strip()
+
+        inner: dict[str, Any] = {}
+        if prop_type == "array":
+            items_type = val.get("items_type", "string")
+            inner = {"type": "array", "items": {"type": items_type}}
+        else:
+            inner = {"type": prop_type}
+
+        if nullable:
+            prop_schema: dict[str, Any] = {"anyOf": [inner, {"type": "null"}], "default": None}
+        else:
+            prop_schema = dict(inner)
+
+        if "default" in val and val["default"] is not None and val["default"] != "":
+            prop_schema["default"] = val["default"]
+
+        if description:
+            prop_schema["description"] = description
+        if x_range:
+            prop_schema["x-oold-range"] = x_range
+        return prop_schema
+
+    @staticmethod
+    def _add_property_to_context(schema: dict, prop_name: str, val: dict) -> None:
+        """Add a JSON-LD context entry for the new property if a context IRI was given."""
+        context_iri = (val.get("context_iri") or "").strip()
+        if not context_iri:
+            return
+        ctx = schema.get("@context")
+        if isinstance(ctx, list):
+            ctx_dicts = [c for c in ctx if isinstance(c, dict)]
+            if ctx_dicts:
+                target = ctx_dicts[-1]
+            else:
+                target: dict = {}
+                ctx.append(target)
+        elif isinstance(ctx, dict):
+            target = ctx
+        else:
+            target = {}
+            schema["@context"] = target
+
+        if val.get("is_iri_reference"):
+            target[prop_name] = {"@id": context_iri, "@type": "@id"}
+        else:
+            target[prop_name] = {"@id": context_iri}
+
+    # -- Schema subclass creation ------------------------------------------------
+
+    _SUBCLASS_DEF_SCHEMA: ClassVar[dict] = {
+        "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+        "type": "object",
+        "title": "New Subclass",
+        "properties": {
+            "$id": {
+                "type": "string",
+                "description": "Unique IRI identifier for the new schema.",
+            },
+            "title": {
+                "type": "string",
+                "description": "Human-readable class name.",
+            },
+            "description": {
+                "type": "string",
+                "default": "",
+                "description": "Description of the new class.",
+            },
+            "type": {
+                "type": "string",
+                "default": "object",
+                "enum": ["object"],
+                "description": "JSON Schema type (always 'object' for classes).",
+                "x-oold-ui-form-hidden": True,
+            },
+            "allOf": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"$ref": {"type": "string"}},
+                },
+                "description": "Parent schema references (inheritance).",
+            },
+            "@context": {
+                "description": "JSON-LD context (inherits parent context by reference).",
+                "anyOf": [
+                    {"type": "object"},
+                    {"type": "string"},
+                    {"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}, {"type": "null"}]}},
+                    {"type": "null"},
+                ],
+            },
+            "properties": {
+                "type": "object",
+                "default": {},
+                "description": "Own properties (start empty, add later).",
+            },
+            "x-oold-instance-rdf-type": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": "rdf:type(s) for instances (OO-LD spec section 6.3).",
+            },
+            "defaultProperties": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": "Properties shown by default in forms.",
+            },
+        },
+        "required": ["$id", "title"],
+    }
+
+    def _show_create_subclass_form(self, parent_node_id: str) -> None:
+        """Show a form to create a new subclass inheriting from the given class."""
+        parent_schema = self._get_class_for_node_id(parent_node_id)
+        if parent_schema is None:
+            return
+        self._create_subclass_parent_node_id = parent_node_id
+        parent_name = self.introspector.get_type_name(parent_schema)
+        parent_id = parent_schema.get("$id") or parent_schema.get("iri") or parent_node_id
+
+        self.oold_detail_col.clear()
+        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New Subclass of **{parent_name}**"))
+
+        subclass_id = f"{parent_id.rsplit('.', 1)[0]}Subclass.json" if "." in parent_id else f"{parent_id}/Subclass"
+        start_val: dict[str, Any] = {
+            "$id": subclass_id,
+            "title": f"{parent_name}Subclass",
+            "description": "",
+            "type": "object",
+            "allOf": [{"$ref": parent_id}],
+            "@context": [parent_id, {}],
+            "properties": {"type": {"type": "string", "default": subclass_id}},
+            "x-oold-instance-rdf-type": [subclass_id],
+            "defaultProperties": ["type", "name"],
+        }
+
+        self._create_subclass_input = JsonEditor(
+            value=start_val,
+            options={"schema": self._SUBCLASS_DEF_SCHEMA, "startval": start_val},
+        )
+        apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
+        apply_btn.on_click(self._on_create_subclass_apply)
+        cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+        cancel_btn.on_click(lambda _: self.oold_detail_col.clear())
+
+        self.oold_detail_col.append(self._create_subclass_input)
+        self.oold_detail_col.append(pn.Row(apply_btn, cancel_btn))
+        self.detail_tabs.active = 2
+
+    def _on_create_subclass_apply(self, event: Any) -> None:
+        """Apply the new subclass schema: register it and rebuild the graph."""
+        parent_node_id = getattr(self, "_create_subclass_parent_node_id", None)
+        if parent_node_id is None:
+            return
+
+        new_schema = self._create_subclass_input.value
+        if not isinstance(new_schema, dict):
+            return
+        schema_id = (new_schema.get("$id") or "").strip()
+        title = (new_schema.get("title") or "").strip()
+        if not schema_id or not title:
+            print("$id and title are required")
+            return
+
+        self._save_state()
+
+        new_schema.setdefault("type", "object")
+        new_schema.setdefault("properties", {})
+        new_schema["properties"].setdefault("type", {"type": "string", "default": schema_id})
+
+        self.schema_registry[schema_id] = new_schema
+        self.schema_registry[title] = new_schema
+        self.entity_types[title] = new_schema
+
+        self.introspector = OOLDSchemaIntrospector(self.schema_registry)
+
+        new_node_id = _cls_node_id(new_schema)
+        nodes_before = {n["id"] for n in self._full_visjs_nodes}
+        self._rebuild_visjs_edges()
+        self._reveal_new_schema_nodes(parent_node_id, nodes_before)
+
+        self.visnetwork_panel.nodes = list(self.visjs_nodes)
+        self.visnetwork_panel.edges = list(self.visjs_edges)
+        self.oold_detail_col.clear()
+        self.show_node_details(new_node_id)
+
+    def _show_property_create_form(self, entity_id: str, field_name: str) -> None:
+        """Show an inline create form for a single property using the panelini JsonEditor."""
         entity = self.entity_dict.get(entity_id)
         if entity is None:
             return
@@ -2232,21 +2954,23 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         if self._create_is_subobject:
             self._create_inner_type = inner_type
+            inner_schema = self._build_editor_schema(inner_type)
             inner_props = self.introspector.get_properties(inner_type)
             default_values: dict[str, Any] = {}
             if "uuid" in inner_props:
                 default_values["uuid"] = str(uuid.uuid4())
             if "name" in inner_props:
                 default_values["name"] = f"New{self.introspector.get_type_name(inner_type)}"
-            self._create_input = pn.widgets.JSONEditor(
+            self._create_input = JsonEditor(
                 value=default_values,
-                schema=inner_type,
-                width=700,
-                height=400,
-                mode="tree",
+                options={"schema": inner_schema, "startval": default_values},
             )
         else:
-            self._create_input = pn.widgets.TextInput(value="", name="Value", width=300)
+            schema, start_val = self._build_property_create_schema(entity, field_name)
+            self._create_input = JsonEditor(
+                value=start_val,
+                options={"schema": schema, "startval": start_val},
+            )
 
         self.oold_detail_col.append(self._create_input)
         self.oold_detail_col.append(pn.Row(apply_btn, cancel_btn))
@@ -2304,22 +3028,32 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.oold_detail_col.clear()
             return
 
-        raw = self._create_input.value.strip()
-        if not raw:
+        editor_val = self._create_input.value
+        raw = editor_val.get(field_name) if isinstance(editor_val, dict) else editor_val
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
             return
+        if isinstance(raw, str):
+            raw = raw.strip()
 
         is_iri = self._is_iri_field(entity, field_name)
         known_ids = set(self.entity_dict.keys()) | {_cls_node_id(c) for c in (self.entity_types or {}).values()}
 
-        if is_iri and raw in known_ids:
-            # URI-reference field pointing to a known node --store the IRI
+        new_node_ids: list[str] = []
+
+        if is_iri:
+            iri_values = raw if isinstance(raw, list) else [raw]
+            iri_values = [v for v in iri_values if isinstance(v, str) and v.strip()]
+            if not iri_values:
+                return
             prop_info = self.introspector.get_properties(entity.schema).get(field_name)
             if prop_info is not None:
                 _base_type, is_list, _is_optional = self.introspector.classify_property(prop_info)
             else:
-                is_list = False
-            entity.set(field_name, [raw] if is_list else raw)
-            new_node_id = raw  # the target entity/class node
+                is_list = isinstance(raw, list)
+            entity.set(field_name, iri_values if is_list else iri_values[0])
+            for v in iri_values:
+                if v in known_ids:
+                    new_node_ids.append(v)
         else:
             try:
                 new_val = self._deserialize_property_value(entity, field_name, raw)
@@ -2327,14 +3061,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
             except Exception as exc:
                 print(f"Error creating {entity.name}.{field_name}: {exc}")
                 return
-            # Literal node ID is stable: <entity_iri>#<field_name>
-            new_node_id = f"{entity.get_iri()}#{field_name}"
+            base_lit_id = f"{entity.get_iri()}#{field_name}"
+            new_node_ids.append(base_lit_id)
+            if isinstance(raw, list):
+                for i in range(1, len(raw)):
+                    new_node_ids.append(f"{base_lit_id}_{i}")
 
-        # Reveal the new node before syncing so the visibility filter includes it
         if self._visible_node_ids is not None:
-            self._visible_node_ids.add(new_node_id)
+            for nid in new_node_ids:
+                self._visible_node_ids.add(nid)
 
-        # replace_nodes=True so vis-network's DataSet gets the new node added, not just updated
         self._full_sync_after_edit(replace_nodes=True)
         self.oold_detail_col.clear()
 
@@ -2529,23 +3265,24 @@ class OOLDGraphDetailTool(GraphDetailTool):
     def _sync_entity_to_visjs(self, entity: EntityAdapter) -> None:
         """Sync a single entity's data to its corresponding visjs node.
 
-        Updates node label if entity.name changed.
+        Updates node label if entity.name changed.  Both the filtered
+        (``visjs_nodes``) and full (``_full_visjs_nodes``) lists are
+        updated so that later visibility rebuilds preserve the change.
 
         Args:
             entity: The updated entity
         """
         iri = entity.get_iri()
-        for node in self.visjs_nodes:
-            if node["id"] == iri:
-                node["label"] = entity.name
-                # Ensure entity_type metadata is preserved
-                entity_type_name = entity.type_name
-                if "entity_type" not in node:
-                    node["entity_type"] = entity_type_name
-                # Ensure color is set based on type
-                if "color" not in node:
-                    node["color"] = self._get_color_for_type(entity_type_name)
-                break
+        for node_list in (self._full_visjs_nodes, self.visjs_nodes):
+            for node in node_list:
+                if node["id"] == iri:
+                    node["label"] = entity.name
+                    entity_type_name = entity.type_name
+                    if "entity_type" not in node:
+                        node["entity_type"] = entity_type_name
+                    if "color" not in node:
+                        node["color"] = self._get_color_for_type(entity_type_name)
+                    break
 
     def _full_sync_after_edit(self, replace_nodes: bool = False) -> None:
         """Perform full sync of all data structures after entity edit.
@@ -2610,74 +3347,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Event Handlers =====
 
-    def on_single_node_apply_changes(self, event: Any) -> None:  # noqa: C901
+    def on_single_node_apply_changes(self, event: Any) -> None:
         """Callback when 'Apply Changes' button is clicked for single node editing.
 
-        Reads the current value from the JSON editor and applies changes.
-
-        Args:
-            event: Button click event
+        Delegates to the unified apply handler. Kept for backward compatibility.
         """
-        try:
-            if not hasattr(self, "_current_single_node_id"):
-                return
-
-            node_id = self._current_single_node_id
-            new_value_dict = self.current_node_oold_editor.value
-
-            if node_id not in self.entity_dict:
-                print(f"Warning: Entity {node_id} not found in entity_dict")
-                return
-
-            entity = self.entity_dict[node_id]
-
-            print(f"Applying changes to entity {node_id} from JSON editor")
-
-            # Save state before making changes
-            self._save_state()
-
-            _internal = {"id", "__iris__"} | _SKIP_FIELDS
-
-            # Update each property from the edited JSON
-            entity_props = self.introspector.get_properties(entity.schema)
-            for prop_name, prop_value in new_value_dict.items():
-                if prop_name in _internal:
-                    continue
-                if prop_name in entity_props:
-                    try:
-                        deserialized = self._deserialize_property_value(entity, prop_name, prop_value)
-                        entity.set(prop_name, deserialized)
-                        print(f"  Updated property '{prop_name}' to: {deserialized}")
-                    except Exception as e:
-                        print(f"  Warning: Could not update property '{prop_name}': {e}")
-
-            # Clear fields that were removed from the editor (deleted by user)
-
-            for prop_name, prop_info in entity_props.items():
-                if prop_name in _internal or prop_name in new_value_dict:
-                    continue
-                # Mandatory field --cannot delete it
-                if prop_info.required:
-                    continue
-                try:
-                    _base_type, _is_list, is_optional = self.introspector.classify_property(prop_info)
-                    if not is_optional:
-                        continue  # cannot delete a non-nullable field --leave it unchanged
-                    entity.set(prop_name, None)
-                    print(f"  Cleared deleted property '{prop_name}'")
-                except Exception as e:
-                    print(f"  Warning: Could not clear property '{prop_name}': {e}")
-
-            # replace_nodes=True ensures the vis-network DataSet is fully refreshed,
-            # including callback_name_dict on all nodes (new literal nodes, updated expand options).
-            self._full_sync_after_edit(replace_nodes=True)
-            print("Changes applied successfully")
-
-        except Exception as e:
-            print(f"Error applying single node changes: {e}")
-            import traceback
-
-            traceback.print_exc()
+        self._on_oold_form_apply(event)
 
     def on_multi_node_apply_changes(self, event: Any) -> None:  # noqa: C901
         """Callback when 'Apply Changes' button is clicked for multi-node editing.
@@ -3852,6 +4527,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
             default_values["id"] = f"urn:uuid:{new_uuid}"
         if "name" in type_props:
             default_values["name"] = f"New{entity_type_name}"
+        if "type" in type_props:
+            schema_id = entity_type.get("$id") or entity_type.get("iri")
+            if schema_id:
+                default_values["type"] = schema_id
 
         schema = self._build_editor_schema(entity_type)
         self.new_entity_editor = JsonEditor(
