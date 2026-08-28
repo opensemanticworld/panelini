@@ -1,10 +1,11 @@
 /* Scoped under .pnl-tst so nothing leaks into the host Panel app. No icon font:
-   twisties and checkboxes are inline SVG, added in later phases. */
+   twisties and checkboxes are inline SVG. */
 
 .pnl-tst {
   --pnl-tst-row-height: 28px;
   --pnl-tst-fg: #1f2328;
   --pnl-tst-muted: #6b7280;
+  --pnl-tst-border: #e5e7eb;
   --pnl-tst-hover: rgba(0, 0, 0, 0.04);
   --pnl-tst-focus: #2563eb;
 
@@ -22,6 +23,22 @@
   box-sizing: inherit;
 }
 
+.pnl-tst-head {
+  display: flex;
+  align-items: center;
+  min-height: var(--pnl-tst-row-height);
+  border-bottom: 1px solid var(--pnl-tst-border);
+  color: var(--pnl-tst-muted);
+  font-weight: 600;
+}
+
+.pnl-tst-hcell {
+  overflow: hidden;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pnl-tst-row {
   display: flex;
   align-items: center;
@@ -36,6 +53,40 @@
 .pnl-tst-row:focus-visible {
   outline: 2px solid var(--pnl-tst-focus);
   outline-offset: -2px;
+}
+
+.pnl-tst-cell {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  gap: 4px;
+  padding: 0 6px;
+}
+
+.pnl-tst-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pnl-tst-twisty {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--pnl-tst-muted);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.pnl-tst-twisty--open {
+  transform: rotate(90deg);
+}
+
+.pnl-tst-twisty--leaf {
+  cursor: default;
 }
 
 .pnl-tst-empty {

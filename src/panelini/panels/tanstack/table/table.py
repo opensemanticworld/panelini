@@ -47,6 +47,12 @@ class TanstackTable(AnyWidgetComponent):
         doc="Display options, e.g. indent_px, select_mode, enable_dnd, expand_all.",
     )
 
+    # Bidirectional, but safe: a sorted key set, so an echo is value-equal and stops.
+    expanded_keys = param.List(
+        default=[],
+        doc="Keys of the currently expanded nodes.",
+    )
+
     # JavaScript to Python. Carries intent, never a mutated tree.
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
@@ -55,6 +61,7 @@ class TanstackTable(AnyWidgetComponent):
         source: Optional[list[dict[str, Any]]] = None,
         columns: Optional[list[dict[str, Any]]] = None,
         options: Optional[dict[str, Any]] = None,
+        expanded_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         **params: Any,
     ) -> None:
@@ -64,6 +71,7 @@ class TanstackTable(AnyWidgetComponent):
             source: Tree source data - list of node dicts.
             columns: Column definitions for treegrid mode.
             options: Display options.
+            expanded_keys: Keys of nodes to show expanded.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
             **params: Additional parameters passed to AnyWidgetComponent.
@@ -76,6 +84,8 @@ class TanstackTable(AnyWidgetComponent):
             self.columns = columns
         if options is not None:
             self.options = options
+        if expanded_keys is not None:
+            self.expanded_keys = expanded_keys
 
         self._event_callback = event_callback
 
@@ -117,3 +127,26 @@ class TanstackTable(AnyWidgetComponent):
     def clear(self) -> None:
         """Remove all nodes from the tree."""
         self.source = []
+        self.expanded_keys = []
+
+    def get_expanded(self) -> list[str]:
+        """Return the keys of the currently expanded nodes."""
+        return list(self.expanded_keys)
+
+    def expand_node(self, key: str, expanded: bool = True) -> None:
+        """Expand or collapse a single node.
+
+        Args:
+            key: Key of the node.
+            expanded: True to expand, False to collapse.
+        """
+        keys = set(self.expanded_keys)
+        if expanded:
+            keys.add(key)
+        else:
+            keys.discard(key)
+        self.expanded_keys = sorted(keys)
+
+    def collapse_all(self) -> None:
+        """Collapse every node."""
+        self.expanded_keys = []
