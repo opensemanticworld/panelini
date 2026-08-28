@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   createCoreRowModel,
   createExpandedRowModel,
@@ -105,6 +105,17 @@ watch(
 const rows = computed(() => table.getRowModel().rows)
 const headers = computed(() => table.getHeaderGroups()[0]?.headers ?? [])
 const indentPx = computed(() => props.state.options.indent_px ?? 16)
+const ariaLabel = computed(() => props.state.options.aria_label ?? 'Tree table')
+
+// The header occupies aria row 1 when columns are shown, so body rows start at 2.
+const rowIndexOffset = computed(() => (hasColumns.value ? 2 : 1))
+const ariaRowCount = computed(() => rows.value.length + (hasColumns.value ? 1 : 0))
+
+// aria-setsize is the sibling count: the parent's children, or the root count.
+function setSize(row) {
+  const parent = row.getParentRow()
+  return parent ? parent.subRows.length : table.getCoreRowModel().rows.length
+}
 
 function cellStyle(columnDef) {
   const width = columnDef.meta?.width
@@ -115,52 +126,176 @@ function treeCellStyle(row, columnDef) {
   return { ...cellStyle(columnDef), paddingInlineStart: `${row.depth * indentPx.value}px` }
 }
 
+// Roving tabindex: exactly one row is tabbable, and it is the one that has, or
+// would next receive, focus. Falls back to the first row when the active key is
+// gone (collapsed away, or removed by a Python source push).
+const activeKey = ref(null)
+const rowElements = new Map()
+
+function setRowElement(key, element) {
+  if (element) rowElements.set(key, element)
+  else rowElements.delete(key)
+}
+
+const focusKey = computed(() => {
+  const list = rows.value
+  if (list.length === 0) return null
+  return list.some((row) => row.id === activeKey.value) ? activeKey.value : list[0].id
+})
+
+function focusRowByKey(key) {
+  if (key == null) return
+  activeKey.value = key
+  nextTick(() => rowElements.get(key)?.focus())
+}
+
+function focusRowByIndex(index) {
+  const list = rows.value
+  if (list.length === 0) return
+  focusRowByKey(list[Math.max(0, Math.min(index, list.length - 1))].id)
+}
+
+function onKeydown(event) {
+  const list = rows.value
+  if (list.length === 0) return
+  const index = Math.max(
+    0,
+    list.findIndex((row) => row.id === focusKey.value),
+  )
+  const row = list[index]
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusRowByIndex(index + 1)
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      focusRowByIndex(index - 1)
+      break
+    case 'ArrowRight':
+      // Expand a closed branch, otherwise step into it. Leaves do nothing.
+      event.preventDefault()
+      if (!row.getCanExpand()) break
+      if (row.getIsExpanded()) focusRowByIndex(index + 1)
+      else {
+        row.toggleExpanded(true)
+        focusRowByKey(row.id)
+      }
+      break
+    case 'ArrowLeft':
+      // Collapse an open branch, otherwise step out to the parent.
+      event.preventDefault()
+      if (row.getCanExpand() && row.getIsExpanded()) {
+        row.toggleExpanded(false)
+        focusRowByKey(row.id)
+      } else if (row.parentId) {
+        focusRowByKey(row.parentId)
+      }
+      break
+    case 'Home':
+      event.preventDefault()
+      focusRowByIndex(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusRowByIndex(list.length - 1)
+      break
+    case 'Enter':
+      event.preventDefault()
+      props.emitEvent('activate', { key: row.id })
+      break
+    default:
+      break
+  }
+}
+
 function onRowClick(row) {
+  activeKey.value = row.id
   props.emitEvent('activate', { key: row.id })
 }
 
 function onToggle(row) {
+  activeKey.value = row.id
   row.toggleExpanded()
 }
 </script>
 
 <template>
   <div class="pnl-tst">
-    <div v-if="hasColumns" class="pnl-tst-head">
-      <div
-        v-for="header in headers"
-        :key="header.id"
-        class="pnl-tst-hcell"
-        :style="cellStyle(header.column.columnDef)"
-      >
-        {{ header.column.columnDef.header }}
-      </div>
-    </div>
+    <div v-if="rows.length === 0" class="pnl-tst-empty">No data</div>
 
-    <div class="pnl-tst-body">
-      <div v-if="rows.length === 0" class="pnl-tst-empty">No data</div>
-      <div v-for="row in rows" :key="row.id" class="pnl-tst-row" @click="onRowClick(row)">
+    <div
+      v-else
+      class="pnl-tst-grid"
+      role="treegrid"
+      :aria-label="ariaLabel"
+      :aria-colcount="headers.length"
+      :aria-rowcount="ariaRowCount"
+      @keydown="onKeydown"
+    >
+      <div v-if="hasColumns" class="pnl-tst-head" role="rowgroup">
+        <div class="pnl-tst-hrow" role="row" :aria-rowindex="1">
+          <div
+            v-for="(header, index) in headers"
+            :key="header.id"
+            class="pnl-tst-hcell"
+            role="columnheader"
+            :aria-colindex="index + 1"
+            :style="cellStyle(header.column.columnDef)"
+          >
+            {{ header.column.columnDef.header }}
+          </div>
+        </div>
+      </div>
+
+      <div class="pnl-tst-body" role="rowgroup">
         <div
-          v-for="(cell, index) in row.getAllCells()"
-          :key="cell.id"
-          class="pnl-tst-cell"
-          :class="{ 'pnl-tst-cell--tree': index === 0 }"
-          :style="index === 0 ? treeCellStyle(row, cell.column.columnDef) : cellStyle(cell.column.columnDef)"
+          v-for="(row, rowIndex) in rows"
+          :key="row.id"
+          :ref="(element) => setRowElement(row.id, element)"
+          class="pnl-tst-row"
+          role="row"
+          :aria-level="row.depth + 1"
+          :aria-posinset="row.index + 1"
+          :aria-setsize="setSize(row)"
+          :aria-rowindex="rowIndex + rowIndexOffset"
+          :aria-expanded="row.getCanExpand() ? row.getIsExpanded() : undefined"
+          :tabindex="row.id === focusKey ? 0 : -1"
+          @click="onRowClick(row)"
+          @focus="activeKey = row.id"
         >
-          <template v-if="index === 0">
-            <span
-              v-if="row.getCanExpand()"
-              class="pnl-tst-twisty"
-              :class="{ 'pnl-tst-twisty--open': row.getIsExpanded() }"
-              @click.stop="onToggle(row)"
-            >
-              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
-                <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" />
-              </svg>
-            </span>
-            <span v-else class="pnl-tst-twisty pnl-tst-twisty--leaf"></span>
-          </template>
-          <span class="pnl-tst-value">{{ cell.getValue() }}</span>
+          <div
+            v-for="(cell, cellIndex) in row.getAllCells()"
+            :key="cell.id"
+            class="pnl-tst-cell"
+            :class="{ 'pnl-tst-cell--tree': cellIndex === 0 }"
+            role="gridcell"
+            :aria-colindex="cellIndex + 1"
+            :style="
+              cellIndex === 0
+                ? treeCellStyle(row, cell.column.columnDef)
+                : cellStyle(cell.column.columnDef)
+            "
+          >
+            <template v-if="cellIndex === 0">
+              <!-- Decorative: expanded state is announced from the row's
+                   aria-expanded, so a second announcement here would duplicate. -->
+              <span
+                v-if="row.getCanExpand()"
+                class="pnl-tst-twisty"
+                :class="{ 'pnl-tst-twisty--open': row.getIsExpanded() }"
+                aria-hidden="true"
+                @click.stop="onToggle(row)"
+              >
+                <svg viewBox="0 0 16 16" width="12" height="12" focusable="false">
+                  <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+                </svg>
+              </span>
+              <span v-else class="pnl-tst-twisty pnl-tst-twisty--leaf" aria-hidden="true"></span>
+            </template>
+            <span class="pnl-tst-value">{{ cell.getValue() }}</span>
+          </div>
         </div>
       </div>
     </div>

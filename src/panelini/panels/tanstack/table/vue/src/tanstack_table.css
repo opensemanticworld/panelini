@@ -23,13 +23,20 @@
   box-sizing: inherit;
 }
 
+.pnl-tst-grid:focus-visible {
+  outline: none;
+}
+
 .pnl-tst-head {
-  display: flex;
-  align-items: center;
-  min-height: var(--pnl-tst-row-height);
   border-bottom: 1px solid var(--pnl-tst-border);
   color: var(--pnl-tst-muted);
   font-weight: 600;
+}
+
+.pnl-tst-hrow {
+  display: flex;
+  align-items: center;
+  min-height: var(--pnl-tst-row-height);
 }
 
 .pnl-tst-hcell {

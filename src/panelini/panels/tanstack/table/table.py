@@ -44,7 +44,7 @@ class TanstackTable(AnyWidgetComponent):
     )
     options = param.Dict(
         default={},
-        doc="Display options, e.g. indent_px, select_mode, enable_dnd, expand_all.",
+        doc="Display options: indent_px, aria_label, expand_all, select_mode, enable_dnd.",
     )
 
     # Bidirectional, but safe: a sorted key set, so an echo is value-equal and stops.
