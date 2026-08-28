@@ -25,6 +25,7 @@ export function render({ model, el }) {
     columns: model.get("columns") || [],
     options: model.get("options") || {},
     expandedKeys: model.get("expanded_keys") || [],
+    selectedKeys: model.get("selected_keys") || [],
   });
 
   const emitEvent = (eventName, eventParams) => {
@@ -38,16 +39,20 @@ export function render({ model, el }) {
 
   const sameKeys = (a, b) => a.length === b.length && a.every((key, i) => key === b[i]);
 
-  // `expanded_keys` is bidirectional but safe: it is a sorted key set, so an echo
-  // back from Python is value-equal and stops here instead of looping.
-  const setExpandedKeys = (keys) => {
-    const current = [...(model.get("expanded_keys") || [])].sort();
+  // `expanded_keys` and `selected_keys` are bidirectional but safe: both are
+  // sorted key sets, so an echo back from Python is value-equal and stops here
+  // instead of looping.
+  const setKeys = (name) => (keys) => {
+    const current = [...(model.get(name) || [])].sort();
     if (sameKeys(current, keys)) return;
-    model.set("expanded_keys", keys);
+    model.set(name, keys);
     model.save_changes();
   };
 
-  const app = createApp(TanstackTable, { state, emitEvent, setExpandedKeys });
+  const setExpandedKeys = setKeys("expanded_keys");
+  const setSelectedKeys = setKeys("selected_keys");
+
+  const app = createApp(TanstackTable, { state, emitEvent, setExpandedKeys, setSelectedKeys });
   app.mount(container);
 
   model.on("change:source", () => {
@@ -61,6 +66,9 @@ export function render({ model, el }) {
   });
   model.on("change:expanded_keys", () => {
     state.expandedKeys = model.get("expanded_keys") || [];
+  });
+  model.on("change:selected_keys", () => {
+    state.selectedKeys = model.get("selected_keys") || [];
   });
 
   return () => {

@@ -4,6 +4,7 @@ import {
   createCoreRowModel,
   createExpandedRowModel,
   rowExpandingFeature,
+  rowSelectionFeature,
   tableFeatures,
   useTable,
 } from '@tanstack/vue-table'
@@ -15,12 +16,15 @@ const props = defineProps({
   emitEvent: { type: Function, required: true },
   // Two-way, set-semantics sync of the expanded key list.
   setExpandedKeys: { type: Function, required: true },
+  // Two-way, set-semantics sync of the selected key list.
+  setSelectedKeys: { type: Function, required: true },
 })
 
 // Built once, outside the table instance: the adapter injects
 // `coreReactivityFeature` itself, so only the opt-in features are listed here.
 const features = tableFeatures({
   rowExpandingFeature,
+  rowSelectionFeature,
   coreRowModel: createCoreRowModel(),
   expandedRowModel: createExpandedRowModel(),
 })
@@ -69,16 +73,34 @@ function sameKeys(a, b) {
   return a.every((key, index) => key === b[index])
 }
 
+// select_mode drives the whole selection behaviour:
+//   none      no checkbox column at all
+//   single    one row at a time, no cascade
+//   multi     independent checkboxes, no cascade
+//   hierarchy checking a parent cascades down, unchecking a child prunes ancestors
+const selectMode = computed(() => props.state.options.select_mode ?? 'none')
+const selectable = computed(() => selectMode.value !== 'none')
+const cascades = computed(() => selectMode.value === 'hierarchy')
+
+const rowSelection = ref(keysToRecord(props.state.selectedKeys))
+
 const table = useTable({
   features,
   data: computed(() => props.state.source || []),
   columns: columnDefs,
   getRowId: (row) => row.key,
   getSubRows: (row) => row.children,
-  state: computed(() => ({ expanded: expanded.value })),
+  enableRowSelection: selectable,
+  enableMultiRowSelection: computed(() => selectMode.value !== 'single'),
+  enableSubRowSelection: cascades,
+  state: computed(() => ({ expanded: expanded.value, rowSelection: rowSelection.value })),
   onExpandedChange: (updater) => {
     expanded.value = typeof updater === 'function' ? updater(expanded.value) : updater
     props.setExpandedKeys(recordToKeys(expanded.value))
+  },
+  onRowSelectionChange: (updater) => {
+    rowSelection.value = typeof updater === 'function' ? updater(rowSelection.value) : updater
+    props.setSelectedKeys(recordToKeys(rowSelection.value))
   },
 })
 
@@ -89,6 +111,14 @@ watch(
   (keys) => {
     if (sameKeys(recordToKeys(expanded.value), [...(keys || [])].sort())) return
     expanded.value = keysToRecord(keys)
+  },
+)
+
+watch(
+  () => props.state.selectedKeys,
+  (keys) => {
+    if (sameKeys(recordToKeys(rowSelection.value), [...(keys || [])].sort())) return
+    rowSelection.value = keysToRecord(keys)
   },
 )
 
@@ -205,6 +235,11 @@ function onKeydown(event) {
       event.preventDefault()
       props.emitEvent('activate', { key: row.id })
       break
+    case ' ':
+      if (!selectable.value) break
+      event.preventDefault()
+      toggleSelected(row)
+      break
     default:
       break
   }
@@ -218,6 +253,26 @@ function onRowClick(row) {
 function onToggle(row) {
   activeKey.value = row.id
   row.toggleExpanded()
+}
+
+// Tri-state: checked when the row itself is selected, mixed when only part of
+// its subtree is. `deselectParents` stops a parent staying checked after one of
+// its children is unchecked.
+function isIndeterminate(row) {
+  return !row.getIsSelected() && row.getIsSomeSelected()
+}
+
+function toggleSelected(row) {
+  activeKey.value = row.id
+  row.toggleSelected(undefined, {
+    selectChildren: cascades.value,
+    deselectParents: cascades.value,
+  })
+}
+
+function onCheckboxClick(row) {
+  toggleSelected(row)
+  focusRowByKey(row.id)
 }
 </script>
 
@@ -261,6 +316,7 @@ function onToggle(row) {
           :aria-setsize="setSize(row)"
           :aria-rowindex="rowIndex + rowIndexOffset"
           :aria-expanded="row.getCanExpand() ? row.getIsExpanded() : undefined"
+          :aria-selected="selectable ? row.getIsSelected() : undefined"
           :tabindex="row.id === focusKey ? 0 : -1"
           @click="onRowClick(row)"
           @focus="activeKey = row.id"
@@ -293,6 +349,19 @@ function onToggle(row) {
                 </svg>
               </span>
               <span v-else class="pnl-tst-twisty pnl-tst-twisty--leaf" aria-hidden="true"></span>
+              <!-- Native checkbox: the browser maps the `indeterminate` DOM
+                   property to aria-checked="mixed" on its own. Kept out of the
+                   tab order because the row carries the roving tabindex. -->
+              <input
+                v-if="selectable"
+                class="pnl-tst-check"
+                type="checkbox"
+                tabindex="-1"
+                :checked="row.getIsSelected()"
+                :indeterminate.prop="isIndeterminate(row)"
+                :aria-label="`Select ${row.original.title ?? row.id}`"
+                @click.stop="onCheckboxClick(row)"
+              />
             </template>
             <span class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>

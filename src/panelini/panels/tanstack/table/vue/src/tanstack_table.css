@@ -96,6 +96,16 @@
   cursor: default;
 }
 
+.pnl-tst-check {
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.pnl-tst-row[aria-selected='true'] {
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .pnl-tst-empty {
   padding: 8px;
   color: var(--pnl-tst-muted);

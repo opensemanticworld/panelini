@@ -47,10 +47,14 @@ class TanstackTable(AnyWidgetComponent):
         doc="Display options: indent_px, aria_label, expand_all, select_mode, enable_dnd.",
     )
 
-    # Bidirectional, but safe: a sorted key set, so an echo is value-equal and stops.
+    # Bidirectional, but safe: sorted key sets, so an echo is value-equal and stops.
     expanded_keys = param.List(
         default=[],
         doc="Keys of the currently expanded nodes.",
+    )
+    selected_keys = param.List(
+        default=[],
+        doc="Keys of the currently selected nodes. In hierarchy mode this includes cascaded children.",
     )
 
     # JavaScript to Python. Carries intent, never a mutated tree.
@@ -62,6 +66,7 @@ class TanstackTable(AnyWidgetComponent):
         columns: Optional[list[dict[str, Any]]] = None,
         options: Optional[dict[str, Any]] = None,
         expanded_keys: Optional[list[str]] = None,
+        selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         **params: Any,
     ) -> None:
@@ -72,6 +77,7 @@ class TanstackTable(AnyWidgetComponent):
             columns: Column definitions for treegrid mode.
             options: Display options.
             expanded_keys: Keys of nodes to show expanded.
+            selected_keys: Keys of nodes to show selected.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
             **params: Additional parameters passed to AnyWidgetComponent.
@@ -86,6 +92,8 @@ class TanstackTable(AnyWidgetComponent):
             self.options = options
         if expanded_keys is not None:
             self.expanded_keys = expanded_keys
+        if selected_keys is not None:
+            self.selected_keys = selected_keys
 
         self._event_callback = event_callback
 
@@ -128,6 +136,7 @@ class TanstackTable(AnyWidgetComponent):
         """Remove all nodes from the tree."""
         self.source = []
         self.expanded_keys = []
+        self.selected_keys = []
 
     def get_expanded(self) -> list[str]:
         """Return the keys of the currently expanded nodes."""
@@ -150,3 +159,32 @@ class TanstackTable(AnyWidgetComponent):
     def collapse_all(self) -> None:
         """Collapse every node."""
         self.expanded_keys = []
+
+    def get_selected(self) -> list[str]:
+        """Return the keys of the currently selected nodes.
+
+        In ``hierarchy`` select mode a checked parent cascades to its children,
+        so the returned list contains the descendants as well.
+        """
+        return list(self.selected_keys)
+
+    def select_node(self, key: str, selected: bool = True) -> None:
+        """Select or deselect a single node.
+
+        This writes the key set directly and does not cascade. Cascading is a
+        browser-side behaviour of ``select_mode="hierarchy"``.
+
+        Args:
+            key: Key of the node.
+            selected: True to select, False to deselect.
+        """
+        keys = set(self.selected_keys)
+        if selected:
+            keys.add(key)
+        else:
+            keys.discard(key)
+        self.selected_keys = sorted(keys)
+
+    def clear_selection(self) -> None:
+        """Deselect every node."""
+        self.selected_keys = []
