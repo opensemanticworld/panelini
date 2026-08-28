@@ -79,9 +79,10 @@ compounds = Wunderbaum(source=compound_nodes, options={"dnd": True}, tree_id="co
 #                   "source_keys": ["fg/1"], "target_key": "c/7", "region": "over"})
 ```
 
-`source_keys` is a list: with `selectMode: "multi"`, dragging a selected node
-drags the whole selection. Dropping does not move anything by itself. What
-happens to either tree is the callback's decision.
+`source_keys` is a list: dragging a selected node drags the whole selection, and
+dragging an unselected one selects it first and drags it alone. Dropping does
+not move anything by itself. What happens to either tree is the callback's
+decision.
 
 A drag that stays inside one tree emits `drop` instead, and moves the nodes
 itself. It carries the same selection under `sourceKeys`, next to the scalar
@@ -97,6 +98,38 @@ Ctrl+drag sends `copy: True` with `copiedNodeId`/`copiedNodeIds` instead, and
 moves nothing - the copy is the callback's job. Nodes that cannot be moved are
 dropped from the set: a node whose ancestor is dragged with it, and any drop
 onto the selection itself. If that leaves nothing, no `drop` is emitted.
+
+### Selection
+
+Selection follows Windows Explorer:
+
+| Gesture | Effect |
+| --- | --- |
+| click | replaces the selection with that row |
+| ctrl+click | adds or removes that row |
+| shift+click | replaces the selection with the range from the anchor |
+| ctrl+shift+click | adds that range to the selection |
+
+The anchor is the last row selected without shift, so a shift range can be
+resized without re-anchoring. Ranges follow what is on screen: children of a
+collapsed node are not part of a range that spans it.
+
+A checkbox is not a second state. It is another display of the same selection
+and another way to add to or remove from it, so `checkbox: True` changes what
+the tree looks like, not how it behaves.
+
+Selecting a row selects its whole subtree, so checking a folder checks its
+children. Selecting every child does *not* select the parent. That is why the
+default `selectMode: "multi"` is the mode to use; `"hier"` adds wunderbaum's own
+upward propagation on top, which checks the parent as soon as all of its
+children are checked.
+
+Selection is reported per node through the `select` event, and mirrors into
+`tree.source` as a `selected` key on each selected node. Drive it from Python
+with `tree.select_node(key, True)`.
+
+Dragging reads the selection, and a selected folder stands in for its selected
+children: grabbing any row of a selected folder drags that folder as one node.
 
 ### Filtering
 
@@ -115,7 +148,8 @@ Tree actions are one-way, so the match count arrives as a `filter` event with
 - Drag and drop within a tree (move, and ctrl+drag to copy) and between trees
 - Drag and drop of external files onto the tree
 - Inline title editing
-- Checkboxes and multi-select
+- Windows Explorer selection (click, ctrl+click, shift+click, ctrl+shift+click),
+  optionally displayed as checkboxes
 - Context menu
 - Incremental updates (`add_node`, `remove_node`, `move_node`, `batch_update`)
 - Filtering driven from Python

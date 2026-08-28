@@ -76,6 +76,8 @@ export default {
   // Store tree as non-reactive property (Wunderbaum has internal state that breaks with Proxy)
   created() {
     this.tree = null;
+    // Row a shift+click range is measured from, as in a file manager.
+    this._anchorKey = null;
   },
 
   methods: {
@@ -132,11 +134,20 @@ export default {
         },
 
         click: (e) => {
+          if (!e.node) return;
           this.sendEvent('click', {
             key: e.node.key,
             title: e.node.title,
             data: e.node.data || {},
           });
+          // The expander is navigation, not selection - leave it to wunderbaum.
+          if (e.info?.region === 'expander') return;
+          // Everything else is Windows Explorer selection, which wunderbaum does
+          // not implement: it has no shift range, a plain click never clears,
+          // and a checkbox click does not reach the subtree. Returning false
+          // aborts its own click handling so ours is the only one that runs.
+          this.applySelectionClick(e.node, e.event, e.info || {});
+          return false;
         },
 
         dblclick: (e) => {
@@ -294,6 +305,11 @@ export default {
             // dataTransfer is in protected mode during dragover, so the
             // payload cannot be read there and origin must be tracked here.
             this._dragActive = true;
+            // A file manager selects a row that is dragged while unselected.
+            // Changing the selection here would re-render rows in the middle of
+            // `dragstart`, which wedges the browser's drag loop, so `dragend`
+            // applies it once the gesture is over.
+            this._selectAfterDrag = e.node.isSelected() ? null : e.node.key;
             const keys = this.getDragKeys(e.node);
             // Set dataTransfer so external drop targets can read the keys
             if (e.event?.dataTransfer) {
@@ -555,6 +571,14 @@ export default {
       container.addEventListener('dragend', () => {
         this._dragActive = false;
         container.style.border = '1px solid #ddd';
+        const key = this._selectAfterDrag;
+        this._selectAfterDrag = null;
+        if (!key) return;
+        const node = this.tree?.findKey?.(key);
+        if (!node) return;
+        this.deselectAll();
+        this.setSubtreeSelected(node, true);
+        this._anchorKey = key;
       });
 
       container.addEventListener('drop', (e) => {
@@ -574,14 +598,125 @@ export default {
       });
     },
 
+    /**
+     * Select or deselect a node together with its whole subtree.
+     *
+     * Checking a parent checks its children, but checking every child leaves
+     * the parent alone. That rules out `selectMode: "hier"`, whose upward
+     * propagation is the point of the mode, so the downward half is driven
+     * here instead. `setSelected(flag, {propagateDown: true})` is not enough:
+     * it skips the node itself (`visit()` defaults to `includeSelf = false`)
+     * and returns before emitting that node's own `select` event.
+     */
+    setSubtreeSelected(node, flag) {
+      node.setSelected(flag);
+      const selectMode = this.tree?.options?.selectMode || 'multi';
+      // 'hier' propagates down by itself, 'single' must not propagate at all.
+      if (selectMode === 'multi') {
+        node.visit((child) => {
+          child.setSelected(flag);
+        });
+      }
+    },
+
+    deselectAll() {
+      for (const node of this.tree?.getSelectedNodes?.() || []) {
+        node.setSelected(false);
+      }
+    },
+
+    /**
+     * Keys of every row between two rows, endpoints included.
+     *
+     * Order and membership come from `visitRows`, so this follows what is on
+     * screen: children of a collapsed node are not part of a range that spans
+     * it. Returns an empty list if either endpoint is not currently a visible
+     * row, which lets the caller fall back to a plain click.
+     */
+    rangeKeys(fromKey, toKey) {
+      const keys = [];
+      let inside = false;
+      let complete = false;
+      this.tree?.visitRows?.((node) => {
+        const isEnd = node.key === fromKey || node.key === toKey;
+        if (!inside) {
+          if (!isEnd) return;
+          inside = true;
+          keys.push(node.key);
+          if (fromKey === toKey) {
+            complete = true;
+            return false;
+          }
+          return;
+        }
+        keys.push(node.key);
+        if (isEnd) {
+          complete = true;
+          return false;
+        }
+      });
+      return complete ? keys : [];
+    },
+
+    /** Apply Windows Explorer click semantics, then move the active cell. */
+    applySelectionClick(node, event, info) {
+      const tree = this.tree;
+      if (!tree) return;
+      const ctrl = !!(event && (event.ctrlKey || event.metaKey));
+      const shift = !!(event && event.shiftKey);
+      // Read before setActive below, so the slow-second-click check still works.
+      const wasActive = node.isActive();
+
+      tree.runWithDeferredUpdate(() => {
+        const range =
+          shift && this._anchorKey ? this.rangeKeys(this._anchorKey, node.key) : [];
+        if (range.length) {
+          // Ctrl+shift adds the range, plain shift replaces with it. Either way
+          // the anchor stays put so the same range can be resized.
+          if (!ctrl) this.deselectAll();
+          for (const key of range) {
+            const target = tree.findKey(key);
+            if (target) this.setSubtreeSelected(target, true);
+          }
+          return;
+        }
+        // A checkbox is just another way to add to or remove from the selection.
+        if (ctrl || info.region === 'checkbox') {
+          this.setSubtreeSelected(node, !node.isSelected());
+        } else {
+          this.deselectAll();
+          this.setSubtreeSelected(node, true);
+        }
+        this._anchorKey = node.key;
+      });
+
+      if (info.colIdx >= 0) {
+        node.setActive(true, { colIdx: info.colIdx, event: event });
+      } else {
+        node.setActive(true, { event: event });
+      }
+
+      // Inline rename on a slow second click, which returning false skipped.
+      const trigger = tree.getOption('edit.trigger') || [];
+      const slowClickDelay = tree.getOption('edit.slowClickDelay');
+      if (
+        trigger.indexOf('clickActive') >= 0 &&
+        info.region === 'title' &&
+        wasActive &&
+        (!slowClickDelay || Date.now() - (tree.lastClickTime || 0) < slowClickDelay)
+      ) {
+        node.startEditTitle();
+      }
+    },
+
     getDragKeys(node) {
-      const selectMode = this.tree?.options?.selectMode || this.options?.selectMode;
-      if (selectMode !== 'multi') return [node.key];
-      const selected = this.tree?.getSelectedNodes?.() || [];
-      // Dragging an unselected node drags only that node, the way every file
-      // manager behaves; dragging a selected one drags the whole selection.
-      if (!selected.some((n) => n.key === node.key)) return [node.key];
-      return selected.map((n) => n.key);
+      // An unselected row drags alone. Selecting it is left to `dragend`, see
+      // the `_selectAfterDrag` note in dragStart.
+      if (!node.isSelected()) return [node.key];
+      // stopOnParents: a selected folder stands in for its selected descendants,
+      // so a checked folder drags as one node rather than as node plus children.
+      const selected = this.tree?.getSelectedNodes?.(true) || [];
+      return selected.length ? selected.map((n) => n.key) : [node.key];
     },
 
     getDragNodes(sourceNode, targetNode) {
@@ -738,8 +873,15 @@ export default {
     },
 
     emitSource() {
-      const source = this.getSerializableSource();
-      this.$emit('change:source', source);
+      // Selecting a subtree fires `select` once per descendant, and each one
+      // would otherwise serialize and ship the whole source. Coalesce into one
+      // sync per tick, built from the state as it stands when it flushes.
+      if (this._emitSourcePending) return;
+      this._emitSourcePending = true;
+      setTimeout(() => {
+        this._emitSourcePending = false;
+        this.$emit('change:source', this.getSerializableSource());
+      }, 0);
     },
 
     getSerializableSource() {
