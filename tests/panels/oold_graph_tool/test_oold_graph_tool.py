@@ -700,7 +700,7 @@ class TestMultiNodeEditing:
         df = tool.oold_comparison_tabulator.value.copy()
         df["name"] = "RENAMED"
         tool.oold_comparison_tabulator.value = df
-        tool.on_multi_node_apply_changes(None)
+        tool._on_multi_node_individual_apply(None)
 
     def test_build_comparison_dataframe(self, json_social_network):
         tool = json_social_network["tool"]
@@ -728,11 +728,71 @@ class TestMultiNodeEditing:
         if "age" in df.columns:
             df["age"] = float("nan")
             tool.oold_comparison_tabulator.value = df
-        tool.on_multi_node_apply_changes(None)
+        tool._on_multi_node_individual_apply(None)
 
         for iri in iris:
             entity = tool.entity_dict[iri]
             assert entity.get("age") is None
+
+    def test_multi_node_selects_oold_tab(self, json_social_network):
+        """Multi-node selection should activate the OO-LD Form tab (index 2)."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        # Click a single node first to mark _detail_tab_initialized
+        tool.show_node_details(alice_iri)
+        assert tool.detail_tabs.active == 2
+        # Switch to a different tab manually
+        tool.detail_tabs.active = 0
+        # Multi-select should switch back to OO-LD tab
+        tool.show_multi_node_editor([alice_iri, bob_iri])
+        assert tool.detail_tabs.active == 2
+
+    def test_individual_apply_button_present(self, json_social_network):
+        """An 'Apply Individual Changes' button should appear after the comparison table."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        bob_iri = json_social_network["bob"]["id"]
+        tool.show_multi_node_editor([alice_iri, bob_iri])
+        buttons = [
+            c
+            for row in tool.oold_detail_col
+            for c in (row if isinstance(row, pn.Row) else [row])
+            if isinstance(c, pn.widgets.Button)
+        ]
+        button_names = [b.name for b in buttons]
+        assert "Apply Individual Changes" in button_names
+        assert "Apply to All" in button_names
+
+    def test_individual_apply_updates_entities_and_graph(self, json_social_network):
+        """Clicking 'Apply Individual Changes' should update entity data and sync the graph."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        persons = [e for e in tool.entity_list if e.type_name == "Person"]
+        iris = [e.get_iri() for e in persons[:2]]
+        original_names = [tool.entity_dict[iri].name for iri in iris]
+        tool.show_multi_node_editor(iris)
+
+        df = tool.oold_comparison_tabulator.value.copy()
+        df.loc[df.index[0], "name"] = "ChangedName1"
+        df.loc[df.index[1], "name"] = "ChangedName2"
+        tool.oold_comparison_tabulator.value = df
+
+        tool._on_multi_node_individual_apply(None)
+
+        assert tool.entity_dict[iris[0]].name == "ChangedName1"
+        assert tool.entity_dict[iris[1]].name == "ChangedName2"
+
+        # Check graph labels updated too
+        node_labels = {n["id"]: n["label"] for n in tool.visjs_nodes}
+        assert node_labels[iris[0]] == "ChangedName1"
+        assert node_labels[iris[1]] == "ChangedName2"
+
+        # Verify original names are gone
+        assert original_names[0] != "ChangedName1"
+        assert original_names[1] != "ChangedName2"
 
 
 # =====================================================================
@@ -833,6 +893,61 @@ class TestDuplication:
 
         new_entity = tool.entity_list[-1]
         assert new_entity.get_iri() != alice_iri
+
+    def test_duplicate_has_valid_iri(self, json_social_network):
+        """Duplicated entity must have a non-empty IRI (not blank)."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        dup_node = {"id": "temp", "label": "Alice", "entity_type": "Person"}
+        tool.on_nodes_duplicated([dup_node])
+        new_entity = tool.entity_list[-1]
+        new_iri = new_entity.get_iri()
+        assert new_iri, "Duplicated entity must have a non-empty IRI"
+        assert new_iri != json_social_network["alice"]["id"]
+
+    def test_duplicate_iri_preserves_base_url(self, json_social_network):
+        """If the parent IRI contains the UUID, the copy should use the same base URL."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        dup_node = {"id": "temp", "label": "Alice", "entity_type": "Person"}
+        tool.on_nodes_duplicated([dup_node])
+        new_entity = tool.entity_list[-1]
+        new_iri = new_entity.get_iri()
+        base = alice_iri.rsplit("/", 1)[0]
+        assert new_iri.startswith(base), f"Expected IRI to start with {base}, got {new_iri}"
+
+    def test_duplicate_initialized_from_edge_visible(self, json_social_network):
+        """The InitializedFrom edge should appear in the visible graph after duplication."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        alice_iri = json_social_network["alice"]["id"]
+        dup_node = {"id": "temp", "label": "Alice", "entity_type": "Person", "x": 10, "y": 20}
+        tool.on_nodes_duplicated([dup_node])
+        new_entity = tool.entity_list[-1]
+        new_iri = new_entity.get_iri()
+        edge_labels = {
+            e.get("label") for e in tool.visjs_edges if e.get("from") == new_iri and e.get("to") == alice_iri
+        }
+        assert "InitializedFrom" in edge_labels, (
+            f"Expected InitializedFrom edge from {new_iri} to {alice_iri}, "
+            f"got edges: {[e for e in tool.visjs_edges if e.get('from') == new_iri]}"
+        )
+
+    def test_duplicate_context_menu_has_expand_options(self, json_social_network):
+        """The duplicated node should have context menu options (expand, create, etc.)."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        dup_node = {"id": "temp", "label": "Alice", "entity_type": "Person", "x": 10, "y": 20}
+        tool.on_nodes_duplicated([dup_node])
+        new_entity = tool.entity_list[-1]
+        new_iri = new_entity.get_iri()
+        new_visjs = [n for n in tool.visjs_nodes if n["id"] == new_iri]
+        assert len(new_visjs) == 1
+        cb = new_visjs[0].get("callback_name_dict", {})
+        assert cb, "Duplicated node should have context menu options"
+        assert "hide" in cb
+        assert "delete" in cb
 
     def test_generate_unique_name(self, json_social_network):
         tool = json_social_network["tool"]

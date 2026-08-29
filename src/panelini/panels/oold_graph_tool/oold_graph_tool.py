@@ -1275,6 +1275,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Don't auto-apply edits - wait for button click
         self.oold_detail_col.append(self.oold_comparison_tabulator)
 
+        # "Apply Individual Changes" button for the comparison table
+        self.multi_node_individual_apply_button = pn.widgets.Button(
+            name="Apply Individual Changes", button_type="primary", width=200
+        )
+        self.multi_node_individual_apply_button.on_click(self._on_multi_node_individual_apply)
+        self.oold_detail_col.append(self.multi_node_individual_apply_button)
+
         # Build set-all table
         self.oold_detail_col.append(pn.pane.Markdown("#### Set Value for All Selected Entities"))
         self.oold_detail_col.append(pn.pane.Markdown("*Edit cells to apply value to ALL selected entities*"))
@@ -1292,15 +1299,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Don't auto-apply edits - wait for button click
         self.oold_detail_col.append(self.oold_set_all_tabulator)
 
-        # Add "Apply Changes" button for multi-node editing
-        self.multi_node_apply_button = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
+        # "Apply to All" button for the set-all table
+        self.multi_node_apply_button = pn.widgets.Button(name="Apply to All", button_type="primary", width=150)
         self.multi_node_apply_button.on_click(self.on_multi_node_apply_changes)
         self.oold_detail_col.append(self.multi_node_apply_button)
 
         # Store selected IDs for callbacks
         self._current_selected_node_ids = node_ids
 
-        self._default_detail_tab_once()
+        # Always switch to OO-LD tab for multi-node selection
+        self.detail_tabs.active = 2
 
     # ===== Property Introspection Helpers =====
 
@@ -3354,51 +3362,57 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         self._on_oold_form_apply(event)
 
-    def on_multi_node_apply_changes(self, event: Any) -> None:  # noqa: C901
-        """Callback when 'Apply Changes' button is clicked for multi-node editing.
+    def _apply_comparison_table(self) -> None:
+        """Apply individual edits from the comparison tabulator to entity data."""
+        comparison_df = self.oold_comparison_tabulator.value
+        for _idx, row in comparison_df.iterrows():
+            entity_iri = row["_iri"]
+            if entity_iri not in self.entity_dict:
+                continue
+            entity = self.entity_dict[entity_iri]
+            for col in comparison_df.columns:
+                if col == "_iri":
+                    continue
+                entity_props = self.introspector.get_properties(entity.schema)
+                if col in entity_props:
+                    try:
+                        value = row[col]
+                        deserialized = self._deserialize_property_value(entity, col, value)
+                        entity.set(col, deserialized)
+                    except Exception as e:
+                        print(f"  Warning: Could not update {entity_iri}.{col}: {e}")
 
-        Applies changes from both comparison and set-all tables.
+    def _on_multi_node_individual_apply(self, event: Any) -> None:
+        """Apply only individual edits from the comparison table to the graph."""
+        try:
+            if not hasattr(self, "oold_comparison_tabulator"):
+                return
+            self._save_state()
+            self._apply_comparison_table()
+            self._full_sync_after_edit()
+        except Exception as e:
+            print(f"Error applying individual changes: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    def on_multi_node_apply_changes(self, event: Any) -> None:  # noqa: C901
+        """Callback when 'Apply to All' button is clicked for multi-node editing.
+
+        Applies changes from the set-all table to all selected entities.
 
         Args:
             event: Button click event
         """
         try:
-            if not hasattr(self, "oold_comparison_tabulator") or not hasattr(self, "oold_set_all_tabulator"):
+            if not hasattr(self, "oold_set_all_tabulator"):
                 return
 
-            print("Applying multi-node changes...")
-
-            # Save state before making changes
             self._save_state()
 
-            # Get current table data
-            comparison_df = self.oold_comparison_tabulator.value
             set_all_df = self.oold_set_all_tabulator.value
 
-            # Apply changes from comparison table (individual node edits)
-            for _idx, row in comparison_df.iterrows():
-                entity_iri = row["_iri"]
-                if entity_iri not in self.entity_dict:
-                    continue
-
-                entity = self.entity_dict[entity_iri]
-
-                # Update each property
-                for col in comparison_df.columns:
-                    if col == "_iri":
-                        continue
-
-                    entity_props = self.introspector.get_properties(entity.schema)
-                    if col in entity_props:
-                        try:
-                            value = row[col]
-                            deserialized = self._deserialize_property_value(entity, col, value)
-                            entity.set(col, deserialized)
-                        except Exception as e:
-                            print(f"  Warning: Could not update {entity_iri}.{col}: {e}")
-
             # Apply changes from set-all table (bulk edits)
-            # Only apply non-empty/non-None values from set-all row
             if len(set_all_df) > 0:
                 set_all_row = set_all_df.iloc[0]
                 for col in set_all_df.columns:
@@ -3406,7 +3420,6 @@ class OOLDGraphDetailTool(GraphDetailTool):
                         continue
 
                     value = set_all_row[col]
-                    # Only apply if value is not empty/None
                     if value is not None and value != "":
                         for node_id in self._current_selected_node_ids:
                             if node_id in self.entity_dict:
@@ -3419,9 +3432,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                                     except Exception as e:
                                         print(f"  Warning: Could not update {node_id}.{col}: {e}")
 
-            # Full sync to update all data structures
             self._full_sync_after_edit()
-            print("Multi-node changes applied successfully")
 
         except Exception as e:
             print(f"Error applying multi-node changes: {e}")
@@ -3448,14 +3459,25 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._pending_node_positions: dict[Any, dict] = {}
         self._pending_node_positions[node_id] = {"x": x, "y": y}
 
+    @staticmethod
+    def _derive_new_iri_from_parts(parent_iri: str, parent_uuid: str, new_uuid: str) -> str:
+        """Derive a new IRI by replacing the parent UUID in the parent IRI."""
+        if parent_uuid and parent_iri and parent_uuid in parent_iri:
+            return parent_iri.replace(parent_uuid, new_uuid, 1)
+        return f"urn:uuid:{new_uuid}"
+
+    def _derive_new_iri(self, parent_entity: "EntityAdapter", new_uuid: str) -> str:
+        """Derive a new IRI for a duplicated entity based on its parent's IRI pattern."""
+        parent_iri = parent_entity.get_iri()
+        parent_uuid = parent_entity.get("uuid", "")
+        return self._derive_new_iri_from_parts(parent_iri, parent_uuid, new_uuid)
+
     def _reassign_and_register_subobjects(self, entity: "EntityAdapter") -> None:  # noqa: C901
         """Recursively give each sub-object field a new UUID and register it as a standalone entity.
 
         Called after deep-copying a parent entity so that embedded sub-objects don't share
         IRIs with the originals.
         """
-        import copy as _copy
-
         props = self.introspector.get_properties(entity.schema)
         for field_name, prop_info in props.items():
             if field_name in _SKIP_FIELDS:
@@ -3478,13 +3500,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     continue
                 try:
                     if isinstance(sub_obj, EntityAdapter):
-                        sub_data = _copy.deepcopy(sub_obj.data)
+                        sub_data = json.loads(json.dumps(sub_obj.data, default=str))
                     else:
-                        sub_data = _copy.deepcopy(sub_obj)
+                        sub_data = json.loads(json.dumps(sub_obj, default=str))
+                    old_uuid = sub_data.get("uuid", "")
+                    old_iri = sub_data.get("id") or sub_data.get("@id", "")
                     sub_data.pop("id", None)
                     sub_data.pop("__iris__", None)
-                    sub_data["uuid"] = str(uuid.uuid4())
-                    sub_data["id"] = ""
+                    new_sub_uuid = str(uuid.uuid4())
+                    sub_data["uuid"] = new_sub_uuid
+                    sub_data["id"] = self._derive_new_iri_from_parts(old_iri, old_uuid, new_sub_uuid)
                     new_sub = EntityAdapter(sub_data, inner_type, inner_type_name, self.schema_registry)
                 except Exception:
                     new_items.append(sub_obj)
@@ -3535,15 +3560,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
                         break
 
                 if parent_entity is not None:
-                    import copy as _copy
-
                     new_uuid = str(uuid.uuid4())
-                    entity_data = _copy.deepcopy(parent_entity.data)
+                    entity_data = json.loads(json.dumps(parent_entity.data, default=str))
                     entity_data.pop("id", None)
                     entity_data.pop("__iris__", None)
                     entity_data["uuid"] = new_uuid
                     entity_data["name"] = unique_name
-                    entity_data["id"] = ""
+                    entity_data["id"] = self._derive_new_iri(parent_entity, new_uuid)
                     entity_data["initialized_from"] = parent_entity.get_iri()
                     new_entity = EntityAdapter(entity_data, entity_type, entity_type_name, self.schema_registry)
                     # Deep-copy sub-objects: give each a new UUID and register as standalone entity
