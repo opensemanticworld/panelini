@@ -481,9 +481,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._apply_visibility_filter_inplace()
 
         # Create OO-LD tab columns BEFORE super().__init__ (which calls build_panel)
-        self.oold_detail_col = pn.Column()
-        self.text_col = pn.Column()
-        self.viz_config_col = pn.Column()
+        self.oold_detail_col = pn.Column(sizing_mode="stretch_both")
+        self.text_col = pn.Column(sizing_mode="stretch_width")
+        self.viz_config_col = pn.Column(sizing_mode="stretch_width")
 
         # Property mapping state
         self.property_mappings = {"color": None, "size": None, "x": None, "y": None, "shape": None}
@@ -509,6 +509,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.current_node_oold_editor = JsonEditor(
             value={},
             options={"schema": {"type": "object", "properties": {}}, "startval": {}},
+            compact=True,
+            sizing_mode="stretch_both",
+            styles={"flex": "1 1 auto", "min-height": "0", "overflow-y": "auto"},
         )
         self._oold_apply_btn = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
         self._oold_apply_btn.on_click(self._on_oold_form_apply)
@@ -521,7 +524,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
             else None
         )
         self._oold_jump_target = None
-        self._oold_btn_row = pn.Row(self._oold_apply_btn, self._oold_jump_btn)
+        self._oold_btn_row = pn.Row(
+            self._oold_apply_btn,
+            self._oold_jump_btn,
+            styles={"flex": "0 0 auto", "margin-top": "auto"},
+        )
         self.oold_detail_col.extend([self._oold_header, self.current_node_oold_editor, self._oold_btn_row])
 
         # -- Persistent widgets for Text tab --
@@ -2713,6 +2720,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._create_prop_input = JsonEditor(
             value=start_val,
             options={"schema": self._PROPERTY_DEF_SCHEMA, "startval": start_val},
+            compact=True,
+            sizing_mode="stretch_width",
         )
         apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
         apply_btn.on_click(self._on_create_property_apply)
@@ -2895,6 +2904,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._create_subclass_input = JsonEditor(
             value=start_val,
             options={"schema": self._SUBCLASS_DEF_SCHEMA, "startval": start_val},
+            compact=True,
+            sizing_mode="stretch_width",
         )
         apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
         apply_btn.on_click(self._on_create_subclass_apply)
@@ -2972,12 +2983,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._create_input = JsonEditor(
                 value=default_values,
                 options={"schema": inner_schema, "startval": default_values},
+                compact=True,
+                sizing_mode="stretch_width",
             )
         else:
             schema, start_val = self._build_property_create_schema(entity, field_name)
             self._create_input = JsonEditor(
                 value=start_val,
                 options={"schema": schema, "startval": start_val},
+                compact=True,
+                sizing_mode="stretch_width",
             )
 
         self.oold_detail_col.append(self._create_input)
@@ -4559,6 +4574,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.new_entity_editor = JsonEditor(
             value=default_values,
             options={"schema": schema, "startval": default_values},
+            compact=True,
+            sizing_mode="stretch_width",
         )
         self.new_entity_save_button = pn.widgets.Button(name="Save Entity", button_type="primary", width=150)
         self.new_entity_save_button.on_click(self.on_new_entity_save)

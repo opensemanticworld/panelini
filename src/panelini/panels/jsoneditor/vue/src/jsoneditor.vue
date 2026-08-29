@@ -44,6 +44,7 @@ export default {
       this.editor.on('ready', () => {
         // Now the api methods will be available
         console.debug("JSONEditor is ready");
+        this._ensureDescriptions();
         this.$emit('ready', true)
       });
 
@@ -68,9 +69,29 @@ export default {
         this.editor.destroy();
       }
       this._options = {...this._options, ...options}
+      this._applyCompactClass();
       this.editor = new JSONEditor(this.$el, this._options);
       this.$emit('ready', false)
       this.init();
+    },
+    _applyCompactClass() {
+      if (this._options && this._options.compact) {
+        this.$el.classList.add('je-compact');
+      } else {
+        this.$el.classList.remove('je-compact');
+      }
+    },
+    _ensureDescriptions() {
+      if (!this._options || !this._options.compact) return;
+      this.$el.querySelectorAll('.form-group').forEach(group => {
+        if (group.querySelector('.form-text')) return;
+        const label = group.querySelector('.form-label, label');
+        const key = label ? label.textContent.trim() : '?';
+        const desc = document.createElement('small');
+        desc.classList.add('form-text', 'd-block');
+        desc.textContent = 'No description available for “' + key + '”';
+        group.appendChild(desc);
+      });
     },
     setSchema(schema) {
       console.debug("setSchema: ", schema);
@@ -113,6 +134,8 @@ export default {
       //"form_name_root": "this.jsonschema.getSchema().id",
       //"user_language": "this.config.lang"
     }, ...this.options}
+
+    this._applyCompactClass();
 
     console.debug("Options: ", this._options)
     this.editor = new JSONEditor(this.$el, this._options);

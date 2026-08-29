@@ -94,21 +94,37 @@ class GraphDetailTool:
             network_event_callback=self.network_event_callback,
         )
 
-        self.graph_col = pn.Column(self.edit_row, self.visnetwork_panel)
+        self.graph_col = pn.Column(
+            self.edit_row,
+            self.visnetwork_panel,
+            sizing_mode="stretch_both",
+            styles={"flex": "3 1 0"},
+        )
 
         # Detail panels
         self.visualizations_col = pn.Column(
             pn.pane.Markdown("## Click on node for Visualizations"),
             name="Visualization",
+            sizing_mode="stretch_width",
         )
         self.detail_col = pn.Column(
             pn.pane.Markdown("## Click on a node to see details"),
             name="Node Style",
+            sizing_mode="stretch_width",
         )
 
-        self.detail_tabs = pn.Tabs(self.visualizations_col, self.detail_col)
+        self.detail_tabs = pn.Tabs(
+            self.visualizations_col,
+            self.detail_col,
+            sizing_mode="stretch_both",
+            styles={"flex": "1 1 0", "min-width": "250px"},
+        )
 
-        self._panel = pn.Row(self.graph_col, self.detail_tabs)
+        self._panel = pn.Row(
+            self.graph_col,
+            self.detail_tabs,
+            sizing_mode="stretch_width",
+        )
 
     def network_event_callback(self, event_name: str, event_params_dict: dict[str, Any]) -> None:
         """Callback for network events from the VisNetwork component.
