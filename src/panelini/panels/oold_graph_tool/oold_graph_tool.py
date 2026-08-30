@@ -484,6 +484,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.oold_detail_col = pn.Column(sizing_mode="stretch_both")
         self.text_col = pn.Column(sizing_mode="stretch_width")
         self.viz_config_col = pn.Column(sizing_mode="stretch_width")
+        self.query_col = pn.Column(sizing_mode="stretch_both")
 
         # Property mapping state
         self.property_mappings = {"color": None, "size": None, "x": None, "y": None, "shape": None}
@@ -495,6 +496,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Populate visualization config tab
         self._populate_viz_config_tab()
+
+        # Populate query tab
+        self._init_query_tab()
 
     def build_panel(self) -> None:
         """Override to add nodes_duplicated_callback to VisNetwork."""
@@ -545,6 +549,41 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.detail_tabs.append(("OO-LD Form", self.oold_detail_col))
         self.detail_tabs.append(("Text", self.text_col))
         self.detail_tabs.append(("Visualization Config", self.viz_config_col))
+
+        # -- Query tab widgets --
+        self._query_editor = JsonEditor(
+            value={},
+            options={"schema": {"type": "object", "properties": {}}, "startval": {}},
+            compact=True,
+            sizing_mode="stretch_both",
+            styles={"flex": "1 1 auto", "min-height": "0", "overflow-y": "auto"},
+        )
+        self._query_apply_btn = pn.widgets.Button(
+            name="Apply Query",
+            button_type="primary",
+            width=150,
+        )
+        self._query_apply_btn.on_click(self._on_query_apply)
+        self._query_show_all_btn = pn.widgets.Button(
+            name="Show All",
+            button_type="warning",
+            width=150,
+        )
+        self._query_show_all_btn.on_click(self._on_query_show_all)
+        self._query_status = pn.pane.Markdown("")
+        self._query_btn_row = pn.Row(
+            self._query_apply_btn,
+            self._query_show_all_btn,
+            styles={"flex": "0 0 auto", "margin-top": "auto"},
+        )
+        self.query_col.extend([
+            pn.pane.Markdown("### Graph Query"),
+            self._query_editor,
+            self._query_btn_row,
+            self._query_status,
+        ])
+        self.detail_tabs.append(("Query", self.query_col))
+        self._init_query_tab()
 
         # Add undo/redo buttons to edit row
         self.undo_button = pn.widgets.Button(name="↶ Undo (Ctrl+Z)", button_type="default", width=150)
@@ -1589,6 +1628,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             root_id = str(root.get_iri())
         elif isinstance(root, type):
             root_id = _cls_node_id(root)
+        elif isinstance(root, str):
+            root_id = root
         else:
             return set(), set()
 
@@ -1598,11 +1639,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         visible: set[str] = {root_id}
         traversed_edges: set[tuple] = set()
-        frontier: set[str] = {root_id}
 
         for step in policy.expansion_steps:
-            new_frontier: set[str] = set()
-            current = frontier
+            current = set(visible)
             iterations = 0
             while current:
                 if step.iter_limit is not None and iterations >= step.iter_limit:
@@ -1620,10 +1659,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 new_nodes = found - visible
                 visible |= new_nodes
                 traversed_edges |= step_edges
-                new_frontier = new_nodes
-                current = new_frontier
+                current = new_nodes
                 iterations += 1
-            frontier = new_frontier
 
         return visible, traversed_edges
 
@@ -4455,6 +4492,264 @@ class OOLDGraphDetailTool(GraphDetailTool):
             info.append(pn.pane.Markdown("*No active mappings - using default visualization*"))
 
         return info
+
+    # ===== Query Tab =====
+
+    def _get_all_edge_labels(self) -> list[str]:
+        """Return sorted unique edge labels from the full graph."""
+        labels: set[str] = set()
+        for e in self._full_visjs_edges:
+            lbl = e.get("label")
+            if lbl:
+                labels.add(lbl)
+        return sorted(labels)
+
+    def _build_query_schema(self) -> dict:
+        """Build a JSON Schema for the multi-policy query editor."""
+        labels = self._get_all_edge_labels()
+        relation_enum = []
+        for lbl in labels:
+            relation_enum.append(lbl)
+            relation_enum.append(f"-{lbl}")
+        step_schema = {
+            "type": "object",
+            "title": "Step",
+            "properties": {
+                "relations": {
+                    "type": "array",
+                    "title": "Relations",
+                    "items": {
+                        "type": "string",
+                        "enum": relation_enum if relation_enum else ["(no relations)"],
+                    },
+                    "description": "Edge labels to follow (prefix - for inverse/incoming)",
+                },
+                "iter_limit": {
+                    "type": "integer",
+                    "title": "Depth Limit",
+                    "default": 1,
+                    "minimum": 1,
+                    "description": "Max BFS depth per step",
+                },
+            },
+            "required": ["relations"],
+        }
+        return {
+            "type": "object",
+            "title": "Query",
+            "properties": {
+                "policies": {
+                    "type": "array",
+                    "format": "tabs",
+                    "title": "Policies",
+                    "items": {
+                        "type": "object",
+                        "title": "Policy",
+                        "properties": {
+                            "root_node": {
+                                "type": "string",
+                                "title": "Root Node",
+                                "description": "Name or ID of the root node",
+                            },
+                            "steps": {
+                                "type": "array",
+                                "title": "Steps",
+                                "items": step_schema,
+                                "default": [{"relations": [], "iter_limit": 1}],
+                            },
+                        },
+                        "required": ["root_node", "steps"],
+                    },
+                },
+            },
+        }
+
+    def _build_query_node_options(self) -> list[str]:
+        """Return display strings for all nodes: 'label (id)'."""
+        options = []
+        for n in self._full_visjs_nodes:
+            nid = n.get("id", "")
+            label = n.get("label", nid)
+            options.append(f"{label} ({nid})")
+        return sorted(options)
+
+    def _init_query_tab(self) -> None:
+        """Initialize query tab schema and pre-populate from current policy."""
+        if not hasattr(self, "_query_editor"):
+            return
+
+        schema = self._build_query_schema()
+        empty_policy = {"root_node": "", "steps": [{"relations": [], "iter_limit": 1}]}
+        startval = {"policies": [empty_policy]}
+
+        policies = self._extract_policies_from_expansion()
+        if policies:
+            policy_vals = []
+            for p in policies:
+                root_id = self._resolve_root_id(p.root_node)
+                root_label = self._node_display_name(root_id) if root_id else ""
+                steps_val = []
+                for step in p.expansion_steps:
+                    steps_val.append({
+                        "relations": list(step.relations),
+                        "iter_limit": step.iter_limit if step.iter_limit is not None else 1,
+                    })
+                policy_vals.append({
+                    "root_node": root_label,
+                    "steps": steps_val if steps_val else [{"relations": [], "iter_limit": 1}],
+                })
+            if policy_vals:
+                startval = {"policies": policy_vals}
+
+        self._query_editor.set_schema(schema, startval=startval)
+        self._update_query_status()
+
+    def _node_display_name(self, node_id: str) -> str:
+        """Return the display label for a node ID, or the ID itself."""
+        for n in self._full_visjs_nodes:
+            if n.get("id") == node_id:
+                return n.get("label", node_id)
+        return node_id
+
+    def _resolve_query_root(self, root_str: str) -> Optional[str]:
+        """Resolve a user-typed root node string to a node ID.
+
+        Matches by exact ID, exact label (case-insensitive), or 'label (id)' format.
+        """
+        if not root_str:
+            return None
+        root_str = root_str.strip()
+        for n in self._full_visjs_nodes:
+            if n.get("id") == root_str:
+                return root_str
+        for n in self._full_visjs_nodes:
+            if n.get("label", "").lower() == root_str.lower():
+                return n["id"]
+        idx = root_str.rfind("(")
+        if idx != -1:
+            candidate = root_str[idx + 1 :].rstrip(")")
+            for n in self._full_visjs_nodes:
+                if n.get("id") == candidate:
+                    return candidate
+        return None
+
+    def _extract_policies_from_expansion(self) -> list["SingleNodeExpansionPolicy"]:
+        """Extract the list of SingleNodeExpansionPolicy from the current expansion_policy."""
+        if isinstance(self.expansion_policy, MultiExpansionPolicy):
+            return list(self.expansion_policy.expansion_policies)
+        if isinstance(self.expansion_policy, SingleNodeExpansionPolicy):
+            return [self.expansion_policy]
+        return []
+
+    @staticmethod
+    def _resolve_root_id(root: Any) -> Optional[str]:
+        """Resolve a root_node value to a node ID string."""
+        if isinstance(root, EntityAdapter):
+            return root.get_iri()
+        if isinstance(root, str):
+            return root
+        if isinstance(root, dict):
+            return root.get("id") or root.get("@id", "")
+        if isinstance(root, LinkedBaseModel):
+            return str(root.get_iri())
+        return None
+
+    def _on_query_apply(self, event: Any) -> None:
+        """Apply the query expansion policy built from the UI.
+
+        Stateless: always resets visibility before computing so the result
+        never depends on a previous apply / show-all cycle.
+        """
+        editor_val = self._query_editor.get_value()
+        policies_data = editor_val.get("policies", [])
+        if not policies_data:
+            self._query_status.object = "**Error:** Add at least one policy."
+            return
+
+        # Reset visibility to a clean slate before computing
+        self._visible_node_ids = None
+        self._visible_edge_keys = None
+
+        all_nodes: set[str] = set()
+        all_edges: set[tuple] = set()
+        errors: list[str] = []
+
+        for i, p_data in enumerate(policies_data):
+            root_str = p_data.get("root_node", "")
+            root_id = self._resolve_query_root(root_str)
+            if not root_id:
+                errors.append(f"Policy {i + 1}: root '{root_str}' not found")
+                continue
+
+            steps_data = p_data.get("steps", [])
+            expansion_steps = []
+            for s in steps_data:
+                rels = s.get("relations", [])
+                if not rels:
+                    continue
+                limit = s.get("iter_limit", 1)
+                expansion_steps.append(
+                    ExpansionStep(
+                        uuid=str(uuid.uuid4()),
+                        name=f"step_{len(expansion_steps)}",
+                        relations=rels,
+                        iter_limit=limit,
+                    )
+                )
+            if not expansion_steps:
+                errors.append(f"Policy {i + 1}: no steps with relations")
+                continue
+
+            policy = SingleNodeExpansionPolicy(
+                uuid=str(uuid.uuid4()),
+                name=f"query_{root_id}",
+                root_node=root_id,
+                expansion_steps=expansion_steps,
+            )
+            vis_nodes, vis_edges = self._apply_single_policy(policy)
+            all_nodes |= vis_nodes
+            all_edges |= vis_edges
+
+        if not all_nodes:
+            msg = "**Error:** No matching nodes found."
+            if errors:
+                msg += "\n\n" + "\n".join(f"- {e}" for e in errors)
+            self._query_status.object = msg
+            return
+
+        self._visible_node_ids = all_nodes
+        self._visible_edge_keys = all_edges
+        self._apply_visibility_filter_inplace()
+        self.visnetwork_panel.nodes = self.visjs_nodes
+        self.visnetwork_panel.edges = self.visjs_edges
+        self._update_query_status(errors)
+
+    def _on_query_show_all(self, event: Any) -> None:
+        """Reset visibility to show all nodes and edges."""
+        self._visible_node_ids = None
+        self._visible_edge_keys = None
+        self._apply_visibility_filter_inplace()
+        self.visnetwork_panel.nodes = self.visjs_nodes
+        self.visnetwork_panel.edges = self.visjs_edges
+        self._update_query_status()
+
+    def _update_query_status(self, errors: list[str] | None = None) -> None:
+        """Update the query status markdown with current visibility counts."""
+        if not hasattr(self, "_query_status"):
+            return
+        total_nodes = len(self._full_visjs_nodes)
+        total_edges = len(self._full_visjs_edges)
+        shown_nodes = len(self.visjs_nodes)
+        shown_edges = len(self.visjs_edges)
+        if self._visible_node_ids is None and self._visible_edge_keys is None:
+            msg = f"Showing all **{total_nodes}** nodes and **{total_edges}** edges"
+        else:
+            msg = (
+                f"Showing **{shown_nodes}**/{total_nodes} nodes and **{shown_edges}**/{total_edges} edges *(filtered)*"
+            )
+        if errors:
+            msg += "\n\n" + "\n".join(f"- {e}" for e in errors)
+        self._query_status.object = msg
 
     def _generate_unique_name(self, base_name: str) -> str:
         """Generate a unique name by appending _copy, _copy_2, etc.

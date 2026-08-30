@@ -3039,3 +3039,191 @@ class TestRevealDefinition:
         entity_schema = json_physics["schemas"]["Entity"]
         result = tool._find_defining_schema(circle_schema, "name")
         assert result is entity_schema
+
+
+# =====================================================================
+# Query Tab
+# =====================================================================
+
+
+class TestQueryTab:
+    def test_query_tab_exists(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        assert "Query" in tool.detail_tabs._names
+
+    def test_get_all_edge_labels(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        labels = tool._get_all_edge_labels()
+        assert isinstance(labels, list)
+        assert len(labels) > 0
+        assert "knows" in labels or any("knows" in lbl.lower() for lbl in labels)
+
+    def test_query_schema_has_relation_options(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        schema = tool._build_query_schema()
+        step_schema = schema["properties"]["policies"]["items"]["properties"]["steps"]["items"]
+        enum_vals = step_schema["properties"]["relations"]["items"]["enum"]
+        assert len(enum_vals) > 0
+        has_inverse = any(v.startswith("-") for v in enum_vals)
+        assert has_inverse, "Schema should include inverse (-prefixed) relation labels"
+
+    def _make_policy_val(self, root_name, steps):
+        """Helper: build a single policy dict for the editor."""
+        return {"root_node": root_name, "steps": steps}
+
+    def test_apply_query_filters_graph(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        total_nodes = len(tool._full_visjs_nodes)
+
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+
+        alice_id = json_social_network["alice"]["id"]
+        assert tool._visible_node_ids is not None
+        assert len(tool._visible_node_ids) <= total_nodes
+        assert alice_id in tool._visible_node_ids
+
+    def test_show_all_resets(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        assert tool._visible_node_ids is not None
+
+        tool._on_query_show_all(None)
+        assert tool._visible_node_ids is None
+        assert tool._visible_edge_keys is None
+
+    def test_multistep_expansion_applies_all_steps(self, json_social_network):
+        """Two steps (knows depth 1, then HasAge) should include age literal nodes."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+
+        # Single step
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        knows_only_ids = set(tool._visible_node_ids)
+
+        # Two steps
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val(
+                    "Alice",
+                    [
+                        {"relations": ["knows"], "iter_limit": 1},
+                        {"relations": ["HasAge"], "iter_limit": 1},
+                    ],
+                ),
+            ]
+        }
+        tool._on_query_apply(None)
+        both_steps_ids = set(tool._visible_node_ids)
+
+        assert len(both_steps_ids) > len(knows_only_ids), "Multi-step should reveal more nodes than single step"
+        assert knows_only_ids.issubset(both_steps_ids), "All nodes from step 1 should still be visible after step 2"
+
+    def test_reapply_same_query_is_idempotent(self, json_social_network):
+        """Applying the same query twice, or after a different query, must give identical results."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+
+        two_steps = {
+            "policies": [
+                self._make_policy_val(
+                    "Alice",
+                    [
+                        {"relations": ["knows"], "iter_limit": 1},
+                        {"relations": ["HasAge"], "iter_limit": 1},
+                    ],
+                ),
+            ]
+        }
+
+        # First apply
+        tool._query_editor.value = two_steps
+        tool._on_query_apply(None)
+        first_nodes = set(tool._visible_node_ids)
+        first_edges = set(tool._visible_edge_keys)
+
+        # Different query, then show all
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        tool._on_query_show_all(None)
+
+        # Re-apply original
+        tool._query_editor.value = two_steps
+        tool._on_query_apply(None)
+        second_nodes = set(tool._visible_node_ids)
+        second_edges = set(tool._visible_edge_keys)
+
+        assert first_nodes == second_nodes, "Re-applying same query must produce same visible nodes"
+        assert first_edges == second_edges, "Re-applying same query must produce same visible edges"
+
+    def test_multi_root_independent_steps(self, json_social_network):
+        """Each policy has its own root + steps; results are unioned."""
+        tool = json_social_network["tool"]
+        tool.build_panel()
+
+        # Alice with knows
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        alice_only = set(tool._visible_node_ids)
+
+        # Bob with HasAge (different steps!)
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Bob", [{"relations": ["HasAge"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        bob_only = set(tool._visible_node_ids)
+
+        # Both policies together
+        tool._query_editor.value = {
+            "policies": [
+                self._make_policy_val("Alice", [{"relations": ["knows"], "iter_limit": 1}]),
+                self._make_policy_val("Bob", [{"relations": ["HasAge"], "iter_limit": 1}]),
+            ]
+        }
+        tool._on_query_apply(None)
+        both = set(tool._visible_node_ids)
+
+        assert alice_only.issubset(both), "Multi-policy should include Alice's expansion"
+        assert bob_only.issubset(both), "Multi-policy should include Bob's expansion"
+        assert both == alice_only | bob_only, "Multi-policy should be exact union"
+
+    def test_prepopulate_from_policy(self, json_social_network):
+        tool = json_social_network["tool"]
+        tool.build_panel()
+        editor_val = tool._query_editor.value
+        assert "policies" in editor_val
+        assert len(editor_val["policies"]) > 0
+        first = editor_val["policies"][0]
+        assert first.get("root_node", "") != ""
+        assert len(first.get("steps", [])) > 0
+        assert len(first["steps"][0].get("relations", [])) > 0
