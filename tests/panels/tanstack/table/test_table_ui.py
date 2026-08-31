@@ -16,7 +16,7 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page, expect
 
-from panelini.panels.tanstack.table import TanstackTable
+from panelini.panels.tanstack.table import TanstackTable, tree
 from panelini.testing import wait_until
 
 SOURCE = [
@@ -96,20 +96,13 @@ def shape(nodes) -> str:
     return ",".join(node["key"] + (f"({shape(node['children'])})" if node.get("children") else "") for node in nodes)
 
 
-#: pdnd resolves the dragged element from ``event.target`` of a ``dragstart``
-#: listener bound on ``document``. Panel renders every component into a Bokeh
-#: shadow root, so that target is retargeted to the shadow host and pdnd never
-#: recognises the row as one of its own draggables. The drag session therefore
-#: never starts and no drop is ever dispatched.
-SHADOW_DOM_DND = "pdnd cannot see its draggables through Panel's shadow root"
-
-
 def drag_row(
     page: Page,
     source_index: int,
     target_index: int,
     y_frac: float = 0.5,
     expect_session: bool = True,
+    expect_blocked: bool = False,
 ) -> None:
     """Drag one row onto another, releasing at *y_frac* of the target's height.
 
@@ -120,7 +113,8 @@ def drag_row(
 
     ``expect_session`` asserts that a drag actually started. Without it a test
     that expects no move event passes just as happily when drag and drop is
-    broken outright.
+    broken outright. ``expect_blocked`` asserts the no-drop affordance while the
+    pointer is still held down, since the class only exists during the drag.
     """
     src = rows(page).nth(source_index).bounding_box()
     dst = rows(page).nth(target_index).bounding_box()
@@ -134,6 +128,8 @@ def drag_row(
         expect(page.locator(".pnl-tst-row--dragging")).to_have_count(1, timeout=2000)
     page.mouse.move(dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] * y_frac, steps=12)
     page.wait_for_timeout(120)
+    if expect_blocked:
+        expect(page.locator(".pnl-tst-row--blocked")).to_have_count(1, timeout=2000)
     page.mouse.up()
 
 
@@ -205,6 +201,22 @@ def test_python_expanded_keys_push_down(page: Page, port):
     expect(rows(page)).to_have_count(5)
 
     assert row_titles(page) == ["Folder A", "File A1", "File A2", "Folder B", "File B1"]
+
+    server.stop()
+
+
+def test_expand_all_option_reports_the_expanded_keys(page: Page, port):
+    """The `expand_all` option and `expand_all()` must agree on what they report.
+
+    TanStack stores "everything is expanded" as the sentinel `true` rather than a
+    record, so this is the path where an empty key list would claim the opposite
+    of what is on screen.
+    """
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True})
+    server = serve(table, page, port)
+
+    expect(rows(page)).to_have_count(5)
+    wait_until(lambda: table.expanded_keys == ["a", "b"], timeout=10)
 
     server.stop()
 
@@ -384,7 +396,6 @@ def test_accessibility_tree_exposes_the_mixed_checkbox(page: Page, port):
     server.stop()
 
 
-@pytest.mark.xfail(reason=SHADOW_DOM_DND, strict=True)
 @pytest.mark.parametrize(
     ("target_index", "y_frac", "expected"),
     [
@@ -413,15 +424,16 @@ def test_drag_reparent_round_trip(page: Page, port, target_index, y_frac, expect
     assert params["applied"] is True
     assert shape(table.source) == expected
 
-    # The rewritten source is pushed back down, and expansion survives it.
+    # The rewritten source is pushed back down and expansion survives it: every
+    # row stays visible, and the key list follows the new shape rather than the
+    # one that was expanded before the drop.
     expect(rows(page)).to_have_count(5)
     assert "File B1" in row_titles(page)
-    assert table.expanded_keys == ["a", "b"]
+    wait_until(lambda: table.expanded_keys == tree.expandable_keys(table.source), timeout=10)
 
     server.stop()
 
 
-@pytest.mark.xfail(reason=SHADOW_DOM_DND, strict=True)
 def test_drop_into_own_subtree_is_blocked(page: Page, port):
     """No intent is emitted at all, so Python never sees an impossible move."""
     events: list = []
@@ -432,7 +444,7 @@ def test_drop_into_own_subtree_is_blocked(page: Page, port):
     )
     server = serve(table, page, port)
 
-    drag_row(page, 0, 1)  # Folder A onto its own child
+    drag_row(page, 0, 1, expect_blocked=True)  # Folder A onto its own child
     page.wait_for_timeout(500)
 
     assert events == []

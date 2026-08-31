@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   createCoreRowModel,
   createExpandedRowModel,
@@ -71,7 +71,17 @@ function keysToRecord(keys) {
 }
 
 function recordToKeys(record) {
-  if (record === true) return []
+  // `true` is TanStack's "everything is expanded" sentinel, which is what
+  // `toggleAllRowsExpanded` sets. Python is only ever given a key list, so the
+  // sentinel is materialised here; reporting an empty list would otherwise say
+  // the exact opposite of what is on screen.
+  if (record === true) {
+    return table
+      .getCoreRowModel()
+      .flatRows.filter((row) => row.subRows.length > 0)
+      .map((row) => row.id)
+      .sort()
+  }
   return Object.keys(record)
     .filter((key) => record[key])
     .sort()
@@ -109,13 +119,19 @@ const table = useTable({
   state: computed(() => ({ expanded: expanded.value, rowSelection: rowSelection.value })),
   onExpandedChange: (updater) => {
     expanded.value = typeof updater === 'function' ? updater(expanded.value) : updater
-    props.setExpandedKeys(recordToKeys(expanded.value))
   },
   onRowSelectionChange: (updater) => {
     rowSelection.value = typeof updater === 'function' ? updater(rowSelection.value) : updater
     props.setSelectedKeys(recordToKeys(rowSelection.value))
   },
 })
+
+// JS to Python. The projection is watched rather than pushed from
+// `onExpandedChange`, because under the `true` sentinel the set of keys it stands
+// for changes whenever the tree does and TanStack reports no state change for
+// that: after a move, a node that just gained children is expanded on screen, and
+// pushing only on state change would leave Python claiming otherwise.
+watch(() => recordToKeys(expanded.value), props.setExpandedKeys, { flush: 'post' })
 
 // Python to JS. Applied only when the incoming set actually differs, so an echo
 // of a JS-originated change terminates instead of looping.
@@ -293,6 +309,15 @@ function onCheckboxClick(row) {
 // invalid target (itself, or one of its own descendants) is expressed, because
 // the hitbox turns a blocked type into `instruction-blocked` and that renders as
 // a no-drop state instead of silently doing nothing.
+//
+// Both pdnd adapters resolve their element from `event.target` of listeners
+// bound on `document`: the draggable adapter looks the target up in a WeakMap,
+// the drop target adapter runs `target.closest('[data-drop-target-for-element]')`
+// and then walks up `parentElement`. Panel renders every component into a Bokeh
+// shadow root, and shadow retargeting rewrites that target to the shadow host,
+// so a registration on a row is something pdnd can never see. Exactly one
+// draggable and one drop target are therefore registered, on the host, and the
+// row under the pointer is resolved from the pointer position instead.
 const DND_TYPE = 'pnl-tst-row'
 const AUTO_EXPAND_MS = 500
 const ALL_INSTRUCTIONS = ['reorder-above', 'reorder-below', 'make-child', 'reparent']
@@ -354,77 +379,126 @@ function clearDropTarget() {
   cancelAutoExpand()
 }
 
-// The key lives on the element rather than in the closure so a recycled row
-// element cannot register a stale identity.
-const vDndRow = {
-  mounted(element, binding) {
-    element.__tstKey = binding.value
-    element.__tstCleanup = combine(
-      draggable({
-        element,
-        canDrag: () => dndEnabled.value,
-        getInitialData: () => ({ type: DND_TYPE, key: element.__tstKey }),
-        onDragStart: () => {
-          draggingKey.value = element.__tstKey
-        },
-        onDrop: () => {
-          draggingKey.value = null
-          clearDropTarget()
-        },
-      }),
-      dropTargetForElements({
-        element,
-        canDrop: ({ source }) => dndEnabled.value && source.data.type === DND_TYPE,
-        getIsSticky: () => true,
-        getData: ({ input, element: target, source }) => {
-          const data = { type: DND_TYPE, key: element.__tstKey }
-          const row = rowByKey(element.__tstKey)
-          if (!row) return data
-          const blocked = isSelfOrDescendant(row, source.data.key)
-          return attachInstruction(data, {
-            element: target,
-            input,
-            currentLevel: row.depth,
-            indentPerLevel: indentPx.value,
-            mode: itemMode(row),
-            block: blocked ? ALL_INSTRUCTIONS : [],
-          })
-        },
-        onDrag: ({ self }) => {
-          const instruction = extractInstruction(self.data)
-          dropTarget.value = instruction ? { key: element.__tstKey, instruction } : null
-          scheduleAutoExpand(element.__tstKey, instruction)
-        },
-        onDragLeave: () => {
-          if (dropTarget.value?.key === element.__tstKey) dropTarget.value = null
-          cancelAutoExpand()
-        },
-        onDrop: ({ self, source }) => {
-          clearDropTarget()
-          const instruction = extractInstruction(self.data)
-          if (!instruction || instruction.type === 'instruction-blocked') return
-          if (element.__tstKey === source.data.key) return
-          props.emitEvent('move', {
-            key: source.data.key,
-            targetKey: element.__tstKey,
-            instruction: instruction.type,
-            desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
-          })
-        },
-      }),
-    )
-  },
-  updated(element, binding) {
-    element.__tstKey = binding.value
-  },
-  unmounted(element) {
-    element.__tstCleanup?.()
-    delete element.__tstCleanup
-    delete element.__tstKey
-  },
+const rootElement = ref(null)
+
+// The element pdnd will actually be handed by the browser: the outermost shadow
+// host, or the root itself when the component is mounted in the light DOM.
+function dndHost() {
+  let node = rootElement.value
+  if (!node) return null
+  let root = node.getRootNode()
+  while (root.host) {
+    node = root.host
+    root = node.getRootNode()
+  }
+  return node
 }
 
-onBeforeUnmount(cancelAutoExpand)
+// The row under the pointer, found geometrically because pdnd only ever reports
+// the host element. Rows are laid out in a single non-overlapping column, so a
+// linear scan of the rendered rows is exact. `elementFromPoint` on the shadow
+// root would also work, but it returns null whenever the topmost element at that
+// point sits outside the shadow tree, which pdnd's post-drag honey pot does.
+function rowAt(input) {
+  for (const row of rows.value) {
+    const element = rowElements.get(row.id)
+    if (!element) continue
+    const rect = element.getBoundingClientRect()
+    if (
+      input.clientX >= rect.left &&
+      input.clientX < rect.right &&
+      input.clientY >= rect.top &&
+      input.clientY < rect.bottom
+    ) {
+      return { row, element, rect }
+    }
+  }
+  return null
+}
+
+let dndCleanup = null
+
+// Registered on mount and re-registered when `enable_dnd` flips, so a disabled
+// table never carries `draggable="true"` on the host at all.
+function registerDnd() {
+  dndCleanup?.()
+  dndCleanup = null
+
+  const host = dndHost()
+  if (!host || !dndEnabled.value) return
+
+  dndCleanup = combine(
+    draggable({
+      element: host,
+      // Anything outside a row (the header, the empty space below the last row)
+      // is not a drag handle, and returning false cancels the native drag.
+      canDrag: ({ input }) => rowAt(input) !== null,
+      getInitialData: ({ input }) => ({ type: DND_TYPE, key: rowAt(input)?.row.id ?? null }),
+      onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
+        // The registered element is the host, so the default preview would be a
+        // snapshot of the entire table. Point it at the row being dragged, offset
+        // so the preview stays under the cursor where it was grabbed.
+        const input = location.current.input
+        const hit = rowAt(input)
+        if (!hit || !nativeSetDragImage) return
+        nativeSetDragImage(hit.element, input.clientX - hit.rect.left, input.clientY - hit.rect.top)
+      },
+      onDragStart: ({ source }) => {
+        draggingKey.value = source.data.key
+      },
+      onDrop: () => {
+        draggingKey.value = null
+        clearDropTarget()
+      },
+    }),
+    dropTargetForElements({
+      element: host,
+      canDrop: ({ source }) => source.data.type === DND_TYPE,
+      getData: ({ input, source }) => {
+        const hit = rowAt(input)
+        if (!hit) return { type: DND_TYPE, key: null }
+        const data = { type: DND_TYPE, key: hit.row.id }
+        const blocked = isSelfOrDescendant(hit.row, source.data.key)
+        return attachInstruction(data, {
+          element: hit.element,
+          input,
+          currentLevel: hit.row.depth,
+          indentPerLevel: indentPx.value,
+          mode: itemMode(hit.row),
+          block: blocked ? ALL_INSTRUCTIONS : [],
+        })
+      },
+      onDrag: ({ self }) => {
+        const key = self.data.key
+        const instruction = extractInstruction(self.data)
+        dropTarget.value = key && instruction ? { key, instruction } : null
+        scheduleAutoExpand(key ?? null, instruction)
+      },
+      onDragLeave: clearDropTarget,
+      onDrop: ({ self, source }) => {
+        clearDropTarget()
+        const key = self.data.key
+        const instruction = extractInstruction(self.data)
+        if (!key || !instruction || instruction.type === 'instruction-blocked') return
+        if (key === source.data.key) return
+        props.emitEvent('move', {
+          key: source.data.key,
+          targetKey: key,
+          instruction: instruction.type,
+          desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
+        })
+      },
+    }),
+  )
+}
+
+onMounted(registerDnd)
+watch(dndEnabled, registerDnd)
+
+onBeforeUnmount(() => {
+  cancelAutoExpand()
+  dndCleanup?.()
+})
 
 function instructionFor(row) {
   return dropTarget.value?.key === row.id ? dropTarget.value.instruction : null
@@ -462,7 +536,7 @@ function dropLineStyle(row) {
 </script>
 
 <template>
-  <div class="pnl-tst">
+  <div ref="rootElement" class="pnl-tst">
     <div v-if="rows.length === 0" class="pnl-tst-empty">No data</div>
 
     <div
@@ -494,7 +568,6 @@ function dropLineStyle(row) {
           v-for="(row, rowIndex) in rows"
           :key="row.id"
           :ref="(element) => setRowElement(row.id, element)"
-          v-dnd-row="row.id"
           class="pnl-tst-row"
           :class="rowDndClass(row)"
           role="row"
