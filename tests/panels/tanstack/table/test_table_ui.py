@@ -306,13 +306,13 @@ def test_hierarchy_checkbox_partial_selection_is_mixed(page: Page, port):
     server.stop()
 
 
-def test_hierarchy_checking_every_child_rolls_up_to_the_parent(page: Page, port):
+def test_hierarchy_checking_every_child_shows_the_parent_checked(page: Page, port):
     """The parent must not go from mixed back to empty as the last child is checked.
 
-    TanStack cascades downward only, so without a roll-up the parent renders
-    unchecked above a fully checked subtree, and the same visual state maps to two
-    different key sets depending on whether the parent or the children were
-    clicked.
+    TanStack cascades downward only, so the parent box has to summarise the
+    subtree itself. It is a rendering rule and nothing more: the parent reads as
+    checked without joining ``selected_keys``, which is what keeps the folder out
+    of a drag of its own files.
     """
     table = TanstackTable(
         source=copy.deepcopy(SOURCE),
@@ -327,19 +327,41 @@ def test_hierarchy_checking_every_child_rolls_up_to_the_parent(page: Page, port)
     assert indeterminate(boxes, 0) is True
 
     boxes.nth(2).click()  # File A2 completes the subtree
-    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
 
     assert boxes.nth(0).is_checked() is True
     assert indeterminate(boxes, 0) is False
-    assert rows(page).nth(0).get_attribute("aria-selected") == "true"
-    # Clicking the children reaches the same state as clicking the parent.
+    # Summarised, not selected: the row is not highlighted and not reported.
+    assert rows(page).nth(0).get_attribute("aria-selected") == "false"
     assert boxes.nth(3).is_checked() is False
 
     server.stop()
 
 
-def test_hierarchy_selection_from_python_is_canonicalised(page: Page, port):
-    """A partial key set that completes a subtree comes back with the parent."""
+def test_hierarchy_unchecking_a_summarised_parent_clears_the_subtree(page: Page, port):
+    """A box that reads checked must uncheck what made it read that way."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    boxes = page.locator(".pnl-tst-check")
+    boxes.nth(1).click()
+    boxes.nth(2).click()
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+    assert boxes.nth(0).is_checked() is True
+
+    boxes.nth(0).click()  # Folder A, checked only because its children are
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+
+    assert [boxes.nth(i).is_checked() for i in range(3)] == [False, False, False]
+
+    server.stop()
+
+
+def test_hierarchy_selection_from_python_is_shown_but_not_rewritten(page: Page, port):
+    """A key set that completes a subtree renders the parent checked, unchanged."""
     table = TanstackTable(
         source=copy.deepcopy(SOURCE),
         options={"select_mode": "hierarchy", "expand_all": True},
@@ -347,11 +369,12 @@ def test_hierarchy_selection_from_python_is_canonicalised(page: Page, port):
     server = serve(table, page, port)
 
     table.selected_keys = ["a1", "a2"]
-    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
 
     boxes = page.locator(".pnl-tst-check")
-    assert boxes.nth(0).is_checked() is True
+    expect(boxes.nth(0)).to_be_checked(timeout=10000)
     assert indeterminate(boxes, 0) is False
+    # The browser never writes a key Python did not ask for.
+    assert table.selected_keys == ["a1", "a2"]
 
     server.stop()
 
@@ -384,6 +407,44 @@ def test_hierarchy_checkbox_cascades_and_prunes(page: Page, port):
     server.stop()
 
 
+def test_clicking_a_folder_row_does_not_select_its_children(page: Page, port):
+    """Pointer selection never cascades, not even in hierarchy mode.
+
+    Clicking a folder means the folder. Only its checkbox means everything in it.
+    """
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 0)  # Folder A
+    wait_until(lambda: table.selected_keys == ["a"], timeout=10)
+
+    boxes = page.locator(".pnl-tst-check")
+    assert [boxes.nth(i).is_checked() for i in range(3)] == [True, False, False]
+    assert rows(page).nth(1).get_attribute("aria-selected") == "false"
+
+    server.stop()
+
+
+def test_clicking_every_child_leaves_the_folder_out(page: Page, port):
+    """The gesture that empties a folder must not end up selecting the folder."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # plus File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    assert rows(page).nth(0).get_attribute("aria-selected") == "false"
+
+    server.stop()
+
+
 def test_multi_select_mode_does_not_cascade(page: Page, port):
     table = TanstackTable(
         source=copy.deepcopy(SOURCE),
@@ -401,12 +462,176 @@ def test_multi_select_mode_does_not_cascade(page: Page, port):
     server.stop()
 
 
+def test_hiding_the_checkboxes_keeps_selection_working(page: Page, port):
+    """The column is an affordance for the selection, not the selection itself."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "show_checkboxes": False, "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator(".pnl-tst-check").count() == 0
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 2, "Shift")  # range through File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    click_row(page, 4, "Control")  # plus File B1
+    wait_until(lambda: table.selected_keys == ["a1", "a2", "b1"], timeout=10)
+
+    # The rows still report their state, so a screen reader is no worse off.
+    assert rows(page).nth(4).get_attribute("aria-selected") == "true"
+
+    server.stop()
+
+
+def test_hidden_checkboxes_still_drag_the_whole_selection(page: Page, port):
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={
+            "select_mode": "multi",
+            "show_checkboxes": False,
+            "enable_dnd": True,
+            "expand_all": True,
+        },
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # plus File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+    events.clear()
+
+    drag_row(page, 1, 3, expect_dragging=2)  # onto Folder B
+    wait_until(lambda: any(name == "move" for name, _ in events), timeout=10)
+
+    assert shape(table.source) == "a,b(b1,a1,a2)"
+
+    server.stop()
+
+
 def test_select_mode_none_renders_no_checkboxes(page: Page, port):
     table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True})
     server = serve(table, page, port)
 
     assert page.locator(".pnl-tst-check").count() == 0
     assert rows(page).nth(0).get_attribute("aria-selected") is None
+
+    server.stop()
+
+
+def expect_titles(page: Page, titles: list[str]) -> None:
+    """Wait for the tree column to show exactly these rows, in order.
+
+    Waiting on the row count instead would pass the moment the count happens to
+    match, which for a filter is often before the new one has crossed the
+    websocket at all.
+    """
+    expect(page.locator(".pnl-tst-cell--tree .pnl-tst-value")).to_have_text(titles, timeout=10000)
+
+
+def test_filter_keeps_the_matches_and_the_path_to_them(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    table.filter_text = "B1"
+    # Folder B does not match, but it is the path to the row that does.
+    expect_titles(page, ["Folder B", "File B1"])
+
+    table.filter_text = ""
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_filter_reveals_a_match_inside_a_collapsed_branch(page: Page, port):
+    """A hit hidden by a closed twisty would make the search look broken."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS)
+    server = serve(table, page, port)
+
+    assert row_titles(page) == ["Folder A", "Folder B"]
+
+    table.filter_text = "A2"
+    expect_titles(page, ["Folder A", "File A2"])
+    assert rows(page).nth(0).get_attribute("aria-expanded") == "true"
+
+    server.stop()
+
+
+def test_filter_narrows_the_reported_sibling_counts(page: Page, port):
+    """aria-setsize must describe the rows on screen, not the ones filtered out."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    assert rows(page).nth(1).get_attribute("aria-setsize") == "2"  # File A1 of two
+
+    table.filter_text = "A2"
+    expect_titles(page, ["Folder A", "File A2"])
+    assert rows(page).nth(0).get_attribute("aria-setsize") == "1"
+    assert rows(page).nth(1).get_attribute("aria-setsize") == "1"
+    assert rows(page).nth(1).get_attribute("aria-posinset") == "1"
+
+    server.stop()
+
+
+def test_filter_matches_any_column_not_just_the_title(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    table.filter_text = "3 kB"
+    expect_titles(page, ["Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_filter_without_a_match_reports_it(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    table.filter_text = "nothing here"
+    page.locator(".pnl-tst-empty").wait_for(state="visible", timeout=10000)
+    assert page.locator(".pnl-tst-empty").inner_text() == "No matches"
+
+    server.stop()
+
+
+def test_filtering_leaves_the_source_alone(page: Page, port):
+    """A drop while filtering is still a move on the whole tree."""
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"enable_dnd": True, "expand_all": True},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    table.filter_text = "A1"
+    expect_titles(page, ["Folder A", "File A1"])
+
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    table.filter_text = ""
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
 
     server.stop()
 
@@ -536,8 +761,8 @@ def test_dragging_a_selected_row_moves_the_whole_selection(page: Page, port):
     server.stop()
 
 
-def test_dragging_children_out_does_not_carry_the_rolled_up_parent(page: Page, port):
-    """Selecting every file in a folder rolls the folder up, but moves the files.
+def test_dragging_children_out_does_not_carry_the_checked_parent(page: Page, port):
+    """Ticking a folder selects it too, but dragging a file out moves files.
 
     Without dropping ancestors from the batch the folder would win the prune on
     the Python side, so the gesture would move the folder instead of emptying it.
@@ -550,9 +775,7 @@ def test_dragging_children_out_does_not_carry_the_rolled_up_parent(page: Page, p
     )
     server = serve(table, page, port)
 
-    boxes = page.locator(".pnl-tst-check")
-    boxes.nth(1).click()  # File A1
-    boxes.nth(2).click()  # File A2 completes Folder A, which rolls up
+    page.locator(".pnl-tst-check").nth(0).click()  # Folder A cascades
     wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
     events.clear()
 

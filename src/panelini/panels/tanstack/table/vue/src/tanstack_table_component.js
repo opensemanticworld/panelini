@@ -11,12 +11,16 @@ import "@/tanstack_table.css";
  * JS to Python to JS feedback loop.
  */
 export function render({ model, el }) {
-  // Give the shadow host layout dimensions so percentage widths resolve.
+  // Give the shadow host layout dimensions so percentage sizes resolve. Height is
+  // only meaningful once Panel gives the host one, which is what lets a stretched
+  // layout hand the table a fixed box to scroll inside.
   el.style.display = "block";
   el.style.width = "100%";
+  el.style.height = "100%";
 
   const container = document.createElement("div");
   container.className = "pnl-tst-root";
+  container.style.height = "100%";
   el.append(container);
 
   // Written only by the model listeners below, never by the component.
@@ -25,6 +29,7 @@ export function render({ model, el }) {
     columns: model.get("columns") || [],
     options: model.get("options") || {},
     icons: model.get("icons") || {},
+    filterText: model.get("filter_text") || "",
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
   });
@@ -67,6 +72,9 @@ export function render({ model, el }) {
   });
   model.on("change:icons", () => {
     state.icons = model.get("icons") || {};
+  });
+  model.on("change:filter_text", () => {
+    state.filterText = model.get("filter_text") || "";
   });
   model.on("change:expanded_keys", () => {
     state.expandedKeys = model.get("expanded_keys") || [];

@@ -120,7 +120,7 @@ function iconMarkup(row) {
   // The `icons` param wins, so an app can restyle or replace the bundled set
   // without the panel having to grow a second way of naming things.
   const icons = { ...BUNDLED_ICONS, ...(props.state.icons || {}) }
-  if (row.getIsExpanded() && icons[`${name}-open`]) return icons[`${name}-open`]
+  if (isExpanded(row) && icons[`${name}-open`]) return icons[`${name}-open`]
   return icons[name] ?? null
 }
 
@@ -129,19 +129,34 @@ function sameKeys(a, b) {
   return a.every((key, index) => key === b[index])
 }
 
-// select_mode drives the whole selection behaviour:
-//   none      no checkbox column at all
-//   single    one row at a time, no cascade
-//   multi     independent checkboxes, no cascade
-//   hierarchy a branch is checked exactly when all of its children are
+// select_mode drives the selection behaviour, and nothing else:
+//   none      rows cannot be selected at all
+//   single    one row at a time
+//   multi     independent rows
+//   hierarchy independent rows, plus a checkbox that cascades
 //
-// Every mode but `none` also answers to the file manager gestures: a plain click
+// Every mode but `none` answers to the file manager gestures: a plain click
 // selects one row, Ctrl or Cmd click toggles one, and Shift click takes the range
 // from the anchor. `single` gets the plain click only, since the rest would need a
 // selection it cannot hold.
+//
+// Pointer selection never cascades, in any mode. Clicking a folder selects the
+// folder and nothing under it, and selecting every file in a folder leaves the
+// folder itself out, which is the whole point of being able to drag those files
+// somewhere else.
+//
+// The checkbox is the one control that does cascade, and only in `hierarchy`:
+// ticking a folder ticks its whole subtree. It also reads as a summary of that
+// subtree, so a folder shows ticked once all of its children are without joining
+// the selection itself. Hiding the column with `show_checkboxes` takes away that
+// affordance, not the selection: clicking, Shift clicking and the space key go on
+// working exactly as they were.
 const selectMode = computed(() => props.state.options.select_mode ?? 'none')
 const selectable = computed(() => selectMode.value !== 'none')
 const cascades = computed(() => selectMode.value === 'hierarchy')
+const showCheckboxes = computed(
+  () => selectable.value && props.state.options.show_checkboxes !== false,
+)
 
 const rowSelection = ref(keysToRecord(props.state.selectedKeys))
 
@@ -167,45 +182,23 @@ const table = useTable({
   },
 })
 
-// TanStack cascades a parent's check down to its children but never rolls the
-// children's state back up. Checking the last unchecked sibling therefore leaves
-// the parent unselected and, because `getIsSomeSelected()` means "some but not
-// all", not even mixed: the checkbox goes from mixed straight back to empty above
-// a fully checked subtree. This restores the invariant that in hierarchy mode a
-// branch is checked exactly when all of its children are, which is also what
-// keeps one visual state mapped to one `selected_keys` value.
-function rollUp(record) {
-  const next = { ...record }
-  const visit = (row) => {
-    // Post-order, so a branch sees its own children already settled and a
-    // completed subtree propagates all the way to the root in one pass.
-    row.subRows.forEach(visit)
-    if (row.subRows.length === 0) return
-    if (row.subRows.every((child) => next[child.id])) next[row.id] = true
-    else delete next[row.id]
-  }
-  table.getCoreRowModel().rows.forEach(visit)
-  return next
+// Tri-state, derived rather than stored. TanStack cascades a parent's tick down
+// to its children but never rolls the children's state back up, so ticking the
+// last unticked sibling would leave the parent empty above a fully ticked
+// subtree. Writing the parent into the selection to fix that is what made
+// selecting every file in a folder also select the folder, and a drag of those
+// files collapse into a drag of the folder. Summarising the subtree at render
+// time instead keeps `selected_keys` exactly the set the user picked.
+function checkState(row) {
+  if (row.getIsSelected()) return 'all'
+  if (!cascades.value || row.subRows.length === 0) return 'none'
+  const states = row.subRows.map(checkState)
+  if (states.every((state) => state === 'all')) return 'all'
+  return states.some((state) => state !== 'none') ? 'some' : 'none'
 }
 
 // JS to Python, for the same reason the expanded projection below is watched.
-// Registered before the canonicalisation watcher so that the correction the
-// latter makes on its immediate run is pushed down as well.
 watch(() => recordToKeys(rowSelection.value), props.setSelectedKeys, { flush: 'post' })
-
-// Canonicalisation is watched rather than done inline so that it covers every
-// way the selection can change: a click, the space key, a Python push, and a move
-// that completes or breaks a subtree. `rollUp` is idempotent, so the re-run its
-// own write triggers settles immediately.
-watch(
-  () => [rowSelection.value, table.getCoreRowModel().rows],
-  () => {
-    if (!cascades.value) return
-    const next = rollUp(rowSelection.value)
-    if (!sameKeys(recordToKeys(next), recordToKeys(rowSelection.value))) rowSelection.value = next
-  },
-  { immediate: true, flush: 'post' },
-)
 
 // JS to Python. The projection is watched rather than pushed from
 // `onExpandedChange`, because under the `true` sentinel the set of keys it stands
@@ -242,19 +235,79 @@ watch(
   { immediate: true },
 )
 
-const rows = computed(() => table.getRowModel().rows)
+// Search is a view concern, so it never touches `source`: the row model still
+// holds the whole tree and this only decides what is rendered. That is what keeps
+// a drop valid while a filter is active, and what lets Python go on owning the
+// tree without knowing that a search box exists.
+const filterText = computed(() => (props.state.filterText ?? '').trim().toLowerCase())
+const filtering = computed(() => filterText.value.length > 0)
+
+// Any rendered column value counts, which is what makes this a global filter
+// rather than a title search. In tree-only mode the one column is the title.
+function rowMatches(row) {
+  return row
+    .getAllCells()
+    .some((cell) => String(cell.getValue() ?? '').toLowerCase().includes(filterText.value))
+}
+
+// Matches plus their ancestors, so a hit keeps the path that leads to it. The
+// filtered view deliberately ignores the expanded state: leaving a match hidden
+// inside a collapsed branch would make the search look broken.
+const rows = computed(() => {
+  if (!filtering.value) return table.getRowModel().rows
+  const keep = new Set()
+  for (const row of table.getCoreRowModel().flatRows) {
+    if (!rowMatches(row)) continue
+    keep.add(row.id)
+    for (let cursor = row.getParentRow(); cursor; cursor = cursor.getParentRow()) keep.add(cursor.id)
+  }
+  return table.getCoreRowModel().flatRows.filter((row) => keep.has(row.id))
+})
+
 const headers = computed(() => table.getHeaderGroups()[0]?.headers ?? [])
 const indentPx = computed(() => props.state.options.indent_px ?? 16)
 const ariaLabel = computed(() => props.state.options.aria_label ?? 'Tree table')
+const emptyMessage = computed(() => (filtering.value ? 'No matches' : 'No data'))
 
 // The header occupies aria row 1 when columns are shown, so body rows start at 2.
 const rowIndexOffset = computed(() => (hasColumns.value ? 2 : 1))
 const ariaRowCount = computed(() => rows.value.length + (hasColumns.value ? 1 : 0))
 
-// aria-setsize is the sibling count: the parent's children, or the root count.
+// Siblings as rendered, not as stored. A filter drops unmatched siblings from the
+// screen, and aria-posinset and aria-setsize describing a tree the user cannot see
+// is exactly the kind of mismatch this panel exists to avoid.
+const siblingGroups = computed(() => {
+  const groups = new Map()
+  for (const row of rows.value) {
+    const parent = row.parentId ?? ''
+    const group = groups.get(parent) ?? []
+    group.push(row.id)
+    groups.set(parent, group)
+  }
+  return groups
+})
+
+function siblingsOf(row) {
+  return siblingGroups.value.get(row.parentId ?? '') ?? []
+}
+
+function posInSet(row) {
+  return siblingsOf(row).indexOf(row.id) + 1
+}
+
 function setSize(row) {
-  const parent = row.getParentRow()
-  return parent ? parent.subRows.length : table.getCoreRowModel().rows.length
+  return siblingsOf(row).length
+}
+
+// While filtering the kept subset is shown in full, so a branch is expandable
+// exactly when it still has a visible child, and it is always open.
+function canExpand(row) {
+  if (!filtering.value) return row.getCanExpand()
+  return (siblingGroups.value.get(row.id) ?? []).length > 0
+}
+
+function isExpanded(row) {
+  return filtering.value ? canExpand(row) : row.getIsExpanded()
 }
 
 function cellStyle(columnDef) {
@@ -328,17 +381,18 @@ function onKeydown(event) {
     case 'ArrowRight':
       // Expand a closed branch, otherwise step into it. Leaves do nothing.
       event.preventDefault()
-      if (!row.getCanExpand()) break
-      if (row.getIsExpanded()) focusRowByIndex(index + 1)
+      if (!canExpand(row)) break
+      if (isExpanded(row)) focusRowByIndex(index + 1)
       else {
         row.toggleExpanded(true)
         focusRowByKey(row.id)
       }
       break
     case 'ArrowLeft':
-      // Collapse an open branch, otherwise step out to the parent.
+      // Collapse an open branch, otherwise step out to the parent. A filtered
+      // view is always open, so there it is only ever the step out.
       event.preventDefault()
-      if (row.getCanExpand() && row.getIsExpanded()) {
+      if (!filtering.value && row.getCanExpand() && row.getIsExpanded()) {
         row.toggleExpanded(false)
         focusRowByKey(row.id)
       } else if (row.parentId) {
@@ -358,9 +412,12 @@ function onKeydown(event) {
       props.emitEvent('activate', { key: row.id })
       break
     case ' ':
+      // Space is the checkbox's key, so it cascades wherever the checkbox would.
+      // That holds with the column hidden too: the box is not drawn, it is still
+      // the control being operated.
       if (!selectable.value) break
       event.preventDefault()
-      toggleSelected(row)
+      toggleCheck(row)
       break
     default:
       break
@@ -371,10 +428,13 @@ function onKeydown(event) {
 // Shift, which is what a range is measured from, exactly as in a file manager.
 const rangeAnchorKey = ref(null)
 
+// `selectChildren: false` on every pointer gesture. It is the difference between
+// picking a folder and picking everything in it, and only the checkbox is allowed
+// to mean the second one.
 function selectOnly(row) {
   rangeAnchorKey.value = row.id
   rowSelection.value = {}
-  row.toggleSelected(true, { selectChildren: cascades.value, deselectParents: cascades.value })
+  row.toggleSelected(true, { selectChildren: false })
 }
 
 function selectRange(row, additive) {
@@ -391,7 +451,7 @@ function selectRange(row, additive) {
   if (!additive) rowSelection.value = {}
   const [start, end] = from <= to ? [from, to] : [to, from]
   for (let index = start; index <= end; index += 1) {
-    list[index].toggleSelected(true, { selectChildren: cascades.value, deselectParents: cascades.value })
+    list[index].toggleSelected(true, { selectChildren: false })
   }
 }
 
@@ -402,7 +462,7 @@ function onRowClick(row, event) {
     if (event?.shiftKey) selectRange(row, event.ctrlKey || event.metaKey)
     else if (event?.ctrlKey || event?.metaKey) {
       rangeAnchorKey.value = row.id
-      toggleSelected(row)
+      toggleRow(row)
     } else selectOnly(row)
   } else if (selectable.value) {
     selectOnly(row)
@@ -413,26 +473,40 @@ function onRowClick(row, event) {
 
 function onToggle(row) {
   activeKey.value = row.id
+  // A filtered branch is shown open whatever its stored state is, so toggling it
+  // would only change what the tree looks like once the search box is cleared.
+  if (filtering.value) return
   row.toggleExpanded()
 }
 
-// Tri-state: checked when the row itself is selected, mixed when only part of
-// its subtree is. `deselectParents` stops a parent staying checked after one of
-// its children is unchecked.
-function isIndeterminate(row) {
-  return !row.getIsSelected() && row.getIsSomeSelected()
+function isChecked(row) {
+  return checkState(row) === 'all'
 }
 
-function toggleSelected(row) {
+function isIndeterminate(row) {
+  return checkState(row) === 'some'
+}
+
+// The pointer half of a Ctrl click: one row in or out, subtree untouched.
+function toggleRow(row) {
   activeKey.value = row.id
-  row.toggleSelected(undefined, {
+  row.toggleSelected(undefined, { selectChildren: false })
+}
+
+// The checkbox half. The next state comes from what the box shows rather than
+// from `getIsSelected()`, so unticking a folder that reads as ticked only because
+// its children are actually clears the children. `deselectParents` drops an
+// ancestor that was ticked explicitly once part of its subtree goes.
+function toggleCheck(row) {
+  activeKey.value = row.id
+  row.toggleSelected(!isChecked(row), {
     selectChildren: cascades.value,
     deselectParents: cascades.value,
   })
 }
 
 function onCheckboxClick(row) {
-  toggleSelected(row)
+  toggleCheck(row)
   focusRowByKey(row.id)
 }
 
@@ -476,11 +550,11 @@ function isSelfOrDescendant(row, keys) {
 // is what a file manager does. Dragging an unselected row drags just that row and
 // leaves the selection alone, rather than silently discarding it.
 //
-// Ancestors of the grabbed row are dropped from the batch. In `hierarchy` mode a
-// parent rolls up to selected once its whole subtree is, so selecting every file
-// in a folder also selects the folder, and without this the drag would collapse
-// to "move the folder" instead of "move the files out of it". Dragging a child
-// never moves its parent, whichever way the parent came to be selected.
+// Ancestors of the grabbed row are dropped from the batch. Ticking a folder's
+// checkbox selects the folder and everything under it, and without this, dragging
+// one of those files would collapse into "move the folder" instead of "move the
+// files out of it". Dragging a child never moves its parent, whichever way the
+// parent came to be selected.
 function dragKeysFor(row) {
   if (!selectable.value || !row.getIsSelected()) return [row.id]
   const ancestors = new Set()
@@ -503,10 +577,9 @@ function blockedInstructions(row, sourceKeys) {
 // The hitbox needs to know where a row sits so it can offer `make-child` on an
 // open branch and `reparent` on the last row of a group.
 function itemMode(row) {
-  if (row.getCanExpand() && row.getIsExpanded()) return 'expanded'
-  const parent = row.getParentRow()
-  const siblings = parent ? parent.subRows : table.getCoreRowModel().rows
-  return row.index === siblings.length - 1 ? 'last-in-group' : 'standard'
+  if (canExpand(row) && isExpanded(row)) return 'expanded'
+  const siblings = siblingsOf(row)
+  return siblings[siblings.length - 1] === row.id ? 'last-in-group' : 'standard'
 }
 
 let autoExpandKey = null
@@ -724,7 +797,7 @@ function dropLineStyle(row) {
 
 <template>
   <div ref="rootElement" class="pnl-tst">
-    <div v-if="rows.length === 0" class="pnl-tst-empty">No data</div>
+    <div v-if="rows.length === 0" class="pnl-tst-empty">{{ emptyMessage }}</div>
 
     <div
       v-else
@@ -759,10 +832,10 @@ function dropLineStyle(row) {
           :class="[rowDndClass(row), { 'pnl-tst-row--active': row.id === activeKey }]"
           role="row"
           :aria-level="row.depth + 1"
-          :aria-posinset="row.index + 1"
+          :aria-posinset="posInSet(row)"
           :aria-setsize="setSize(row)"
           :aria-rowindex="rowIndex + rowIndexOffset"
-          :aria-expanded="row.getCanExpand() ? row.getIsExpanded() : undefined"
+          :aria-expanded="canExpand(row) ? isExpanded(row) : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :tabindex="row.id === focusKey ? 0 : -1"
           @click="onRowClick(row, $event)"
@@ -794,9 +867,9 @@ function dropLineStyle(row) {
               <!-- Decorative: expanded state is announced from the row's
                    aria-expanded, so a second announcement here would duplicate. -->
               <span
-                v-if="row.getCanExpand()"
+                v-if="canExpand(row)"
                 class="pnl-tst-twisty"
-                :class="{ 'pnl-tst-twisty--open': row.getIsExpanded() }"
+                :class="{ 'pnl-tst-twisty--open': isExpanded(row) }"
                 aria-hidden="true"
                 @click.stop="onToggle(row)"
               >
@@ -809,11 +882,11 @@ function dropLineStyle(row) {
                    property to aria-checked="mixed" on its own. Kept out of the
                    tab order because the row carries the roving tabindex. -->
               <input
-                v-if="selectable"
+                v-if="showCheckboxes"
                 class="pnl-tst-check"
                 type="checkbox"
                 tabindex="-1"
-                :checked="row.getIsSelected()"
+                :checked="isChecked(row)"
                 :indeterminate.prop="isIndeterminate(row)"
                 :aria-label="`Select ${row.original.title ?? row.id}`"
                 @click.stop="onCheckboxClick(row)"

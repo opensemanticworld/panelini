@@ -50,7 +50,15 @@ class TanstackTable(AnyWidgetComponent):
     )
     options = param.Dict(
         default={},
-        doc="Display options: indent_px, aria_label, expand_all, select_mode, enable_dnd.",
+        doc=(
+            "Display options: indent_px, aria_label, expand_all, enable_dnd, select_mode in "
+            "none | single | multi | hierarchy, and show_checkboxes to hide the checkbox column "
+            "without giving up selection, which stays reachable by click, Ctrl click, Shift click "
+            "and the space key. Clicking never cascades: selecting a folder selects the folder "
+            "alone, and selecting every file in one leaves the folder out. Only the checkbox "
+            "cascades, and only under hierarchy, where ticking a folder ticks its whole subtree "
+            "and a folder reads as ticked once all of its children are."
+        ),
     )
     icons = param.Dict(
         default={},
@@ -59,6 +67,16 @@ class TanstackTable(AnyWidgetComponent):
             "set (document, file, folder, folder-open, image, markdown, pdf, python). See "
             "panelini.panels.tanstack.table.load_icons. An expanded node prefers the '<name>-open' "
             "entry when it exists, which is how a folder opens."
+        ),
+    )
+
+    filter_text = param.String(
+        default="",
+        doc=(
+            "Search text. Rows whose cell values all miss it are hidden, and the ancestors of a "
+            "match are kept so the path to it stays visible. Filtering is a view concern: source "
+            "is untouched, so a move made while a filter is active is still a move on the whole "
+            "tree."
         ),
     )
 
@@ -81,6 +99,7 @@ class TanstackTable(AnyWidgetComponent):
         columns: Optional[list[dict[str, Any]]] = None,
         options: Optional[dict[str, Any]] = None,
         icons: Optional[dict[str, str]] = None,
+        filter_text: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
@@ -95,6 +114,8 @@ class TanstackTable(AnyWidgetComponent):
             options: Display options.
             icons: Extra icons as name to inline SVG markup, merged over the
                 bundled set and referenced by a node's ``icon``.
+            filter_text: Search text. Hides every row that neither matches nor
+                leads to a match.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
             event_callback: Callback for events emitted by the browser. Receives
@@ -117,6 +138,8 @@ class TanstackTable(AnyWidgetComponent):
             self.options = options
         if icons is not None:
             self.icons = icons
+        if filter_text is not None:
+            self.filter_text = filter_text
         if expanded_keys is not None:
             self.expanded_keys = expanded_keys
         if selected_keys is not None:
@@ -369,16 +392,18 @@ class TanstackTable(AnyWidgetComponent):
     def get_selected(self) -> list[str]:
         """Return the keys of the currently selected nodes.
 
-        In ``hierarchy`` select mode a checked parent cascades to its children,
-        so the returned list contains the descendants as well.
+        The list is exactly what was picked, with no branch folded in or out:
+        ticking a folder's checkbox in ``hierarchy`` mode adds the folder and its
+        descendants, while clicking rows adds only the rows clicked, even when
+        that happens to be every child of one folder.
         """
         return list(self.selected_keys)
 
     def select_node(self, key: str, selected: bool = True) -> None:
         """Select or deselect a single node.
 
-        This writes the key set directly and does not cascade. Cascading is a
-        browser-side behaviour of ``select_mode="hierarchy"``.
+        This writes the key set directly and does not cascade. Cascading belongs
+        to the checkbox in ``select_mode="hierarchy"`` and stays in the browser.
 
         Args:
             key: Key of the node.

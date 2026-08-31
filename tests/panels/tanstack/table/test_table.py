@@ -69,6 +69,7 @@ def test_defaults_are_empty():
     assert table.source == []
     assert table.columns == []
     assert table.options == {}
+    assert table.filter_text == ""
     assert table.expanded_keys == []
     assert table.selected_keys == []
 
@@ -80,6 +81,7 @@ def test_init_arguments_land_on_the_params(source):
         source=source,
         columns=columns,
         options=options,
+        filter_text="note",
         expanded_keys=["a"],
         selected_keys=["b1"],
     )
@@ -87,6 +89,7 @@ def test_init_arguments_land_on_the_params(source):
     assert table.source == source
     assert table.columns == columns
     assert table.options == options
+    assert table.filter_text == "note"
     assert table.expanded_keys == ["a"]
     assert table.selected_keys == ["b1"]
 

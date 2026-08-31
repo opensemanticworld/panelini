@@ -3,6 +3,7 @@
 
 .pnl-tst {
   --pnl-tst-row-height: 28px;
+  --pnl-tst-bg: #ffffff;
   --pnl-tst-fg: #1f2328;
   --pnl-tst-muted: #6b7280;
   --pnl-tst-border: #e5e7eb;
@@ -11,12 +12,33 @@
   --pnl-tst-focus: #2563eb;
   --pnl-tst-blocked: rgba(220, 38, 38, 0.08);
 
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   width: 100%;
+  /* Resolves to `auto` unless the host is given a height, so a table sized by its
+     content is unaffected and one in a stretched layout fills and scrolls. */
+  height: 100%;
   color: var(--pnl-tst-fg);
   font-family: inherit;
   font-size: 13px;
   line-height: var(--pnl-tst-row-height);
+}
+
+/* The grid owns the vertical space and only the body scrolls, so the column
+   headers stay put. `min-height: 0` is what lets a flex child shrink below its
+   content height and hand the overflow to the body instead of the page. */
+.pnl-tst-grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pnl-tst-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .pnl-tst *,
@@ -30,7 +52,11 @@
 }
 
 .pnl-tst-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   border-bottom: 1px solid var(--pnl-tst-border);
+  background: var(--pnl-tst-bg);
   color: var(--pnl-tst-muted);
   font-weight: 600;
 }
