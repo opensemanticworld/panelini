@@ -17,6 +17,17 @@ import {
   attachInstruction,
   extractInstruction,
 } from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
+// Material Icon Theme (MIT), the VS Code file icon set. Imported one file at a
+// time and inlined at build time, so the panel stays offline and only the icons
+// listed below reach the bundle rather than the set's thousand-odd SVGs.
+import documentIcon from 'material-icon-theme/icons/document.svg?raw'
+import fileIcon from 'material-icon-theme/icons/file.svg?raw'
+import folderIcon from 'material-icon-theme/icons/folder.svg?raw'
+import folderOpenIcon from 'material-icon-theme/icons/folder-open.svg?raw'
+import imageIcon from 'material-icon-theme/icons/image.svg?raw'
+import markdownIcon from 'material-icon-theme/icons/markdown.svg?raw'
+import pdfIcon from 'material-icon-theme/icons/pdf.svg?raw'
+import pythonIcon from 'material-icon-theme/icons/python.svg?raw'
 
 const props = defineProps({
   // Python-owned state. The component reads it and never writes it back.
@@ -85,6 +96,32 @@ function recordToKeys(record) {
   return Object.keys(record)
     .filter((key) => record[key])
     .sort()
+}
+
+// A node opts into an icon by naming one. Nothing is inferred from the node's
+// shape, so a tree without `icon` renders exactly as it did before.
+const BUNDLED_ICONS = {
+  document: documentIcon,
+  file: fileIcon,
+  folder: folderIcon,
+  'folder-open': folderOpenIcon,
+  image: imageIcon,
+  markdown: markdownIcon,
+  pdf: pdfIcon,
+  python: pythonIcon,
+}
+
+// One convention, and only one: an expanded row prefers `<name>-open` when that
+// entry exists. That lets a folder open without the panel having to know which
+// names mean "folder".
+function iconMarkup(row) {
+  const name = row.original.icon
+  if (!name) return null
+  // The `icons` param wins, so an app can restyle or replace the bundled set
+  // without the panel having to grow a second way of naming things.
+  const icons = { ...BUNDLED_ICONS, ...(props.state.icons || {}) }
+  if (row.getIsExpanded() && icons[`${name}-open`]) return icons[`${name}-open`]
+  return icons[name] ?? null
 }
 
 function sameKeys(a, b) {
@@ -379,6 +416,15 @@ function isSelfOrDescendant(row, key) {
   return false
 }
 
+// A node may declare that it can never gain children, which is how a file is told
+// apart from an empty folder. Blocking only `make-child` keeps reordering next to
+// such a node available, and Python enforces the same rule on the drop it is sent,
+// so the browser is showing the outcome rather than deciding it.
+function blockedInstructions(row, sourceKey) {
+  if (isSelfOrDescendant(row, sourceKey)) return ALL_INSTRUCTIONS
+  return row.original.allow_children === false ? ['make-child'] : []
+}
+
 // The hitbox needs to know where a row sits so it can offer `make-child` on an
 // open branch and `reparent` on the last row of a group.
 function itemMode(row) {
@@ -455,6 +501,25 @@ function rowAt(input) {
   return null
 }
 
+// The checkbox and the twisty are the two controls inside a row. `draggable` is
+// registered on the host, so without this a press on either one starts a drag and
+// the click that would have toggled it never lands, which is what made checkbox
+// selection and drag and drop mutually exclusive.
+function onRowControl(hit, input) {
+  for (const control of hit.element.querySelectorAll('.pnl-tst-check, .pnl-tst-twisty')) {
+    const rect = control.getBoundingClientRect()
+    if (
+      input.clientX >= rect.left &&
+      input.clientX < rect.right &&
+      input.clientY >= rect.top &&
+      input.clientY < rect.bottom
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 let dndCleanup = null
 
 // Registered on mount and re-registered when `enable_dnd` flips, so a disabled
@@ -471,7 +536,10 @@ function registerDnd() {
       element: host,
       // Anything outside a row (the header, the empty space below the last row)
       // is not a drag handle, and returning false cancels the native drag.
-      canDrag: ({ input }) => rowAt(input) !== null,
+      canDrag: ({ input }) => {
+        const hit = rowAt(input)
+        return hit !== null && !onRowControl(hit, input)
+      },
       getInitialData: ({ input }) => ({ type: DND_TYPE, key: rowAt(input)?.row.id ?? null }),
       onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
         // The registered element is the host, so the default preview would be a
@@ -497,14 +565,13 @@ function registerDnd() {
         const hit = rowAt(input)
         if (!hit) return { type: DND_TYPE, key: null }
         const data = { type: DND_TYPE, key: hit.row.id }
-        const blocked = isSelfOrDescendant(hit.row, source.data.key)
         return attachInstruction(data, {
           element: hit.element,
           input,
           currentLevel: hit.row.depth,
           indentPerLevel: indentPx.value,
           mode: itemMode(hit.row),
-          block: blocked ? ALL_INSTRUCTIONS : [],
+          block: blockedInstructions(hit.row, source.data.key),
         })
       },
       onDrag: ({ self }) => {
@@ -608,7 +675,7 @@ function dropLineStyle(row) {
           :key="row.id"
           :ref="(element) => setRowElement(row.id, element)"
           class="pnl-tst-row"
-          :class="rowDndClass(row)"
+          :class="[rowDndClass(row), { 'pnl-tst-row--active': row.id === activeKey }]"
           role="row"
           :aria-level="row.depth + 1"
           :aria-posinset="row.index + 1"
@@ -670,6 +737,17 @@ function dropLineStyle(row) {
                 :aria-label="`Select ${row.original.title ?? row.id}`"
                 @click.stop="onCheckboxClick(row)"
               />
+              <!-- Decorative, so aria-hidden: the icon only restates the node's
+                   own kind, which is already in the title or in a column. The
+                   markup comes from the `icons` param, which the app author
+                   controls exactly as they control `source`. -->
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <span
+                v-if="iconMarkup(row)"
+                class="pnl-tst-icon"
+                aria-hidden="true"
+                v-html="iconMarkup(row)"
+              ></span>
             </template>
             <span class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>

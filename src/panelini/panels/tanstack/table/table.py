@@ -38,7 +38,11 @@ class TanstackTable(AnyWidgetComponent):
     # Python to JavaScript. Never written from the browser.
     source = param.List(
         default=[],
-        doc="Tree source data - list of node dicts with key, title, children, plus column fields.",
+        doc=(
+            "Tree source data - list of node dicts with key, title, children, plus column fields. "
+            "Optional per node: icon, naming an entry of the icons param, and allow_children=False "
+            "to make the node a leaf nothing can be dropped into."
+        ),
     )
     columns = param.List(
         default=[],
@@ -47,6 +51,15 @@ class TanstackTable(AnyWidgetComponent):
     options = param.Dict(
         default={},
         doc="Display options: indent_px, aria_label, expand_all, select_mode, enable_dnd.",
+    )
+    icons = param.Dict(
+        default={},
+        doc=(
+            "Extra icons as name to inline SVG markup, merged over the bundled Material Icon Theme "
+            "set (document, file, folder, folder-open, image, markdown, pdf, python). See "
+            "panelini.panels.tanstack.table.load_icons. An expanded node prefers the '<name>-open' "
+            "entry when it exists, which is how a folder opens."
+        ),
     )
 
     # Bidirectional, but safe: sorted key sets, so an echo is value-equal and stops.
@@ -67,6 +80,7 @@ class TanstackTable(AnyWidgetComponent):
         source: Optional[list[dict[str, Any]]] = None,
         columns: Optional[list[dict[str, Any]]] = None,
         options: Optional[dict[str, Any]] = None,
+        icons: Optional[dict[str, str]] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
@@ -79,6 +93,8 @@ class TanstackTable(AnyWidgetComponent):
             source: Tree source data - list of node dicts.
             columns: Column definitions for treegrid mode.
             options: Display options.
+            icons: Extra icons as name to inline SVG markup, merged over the
+                bundled set and referenced by a node's ``icon``.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
             event_callback: Callback for events emitted by the browser. Receives
@@ -97,6 +113,8 @@ class TanstackTable(AnyWidgetComponent):
             self.columns = columns
         if options is not None:
             self.options = options
+        if icons is not None:
+            self.icons = icons
         if expanded_keys is not None:
             self.expanded_keys = expanded_keys
         if selected_keys is not None:

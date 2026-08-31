@@ -20,6 +20,9 @@ Tree = list[Node]
 
 KEY = "key"
 CHILDREN = "children"
+#: Node flag. Set it to False to make a node a leaf that can never gain children,
+#: which is how a file is told apart from an empty folder.
+ALLOW_CHILDREN = "allow_children"
 
 #: Normalised drop positions. Every hitbox instruction maps onto one of these.
 POSITIONS = ("before", "after", "child")
@@ -247,6 +250,17 @@ def resolve_instruction(
     return "after", anchor
 
 
+def accepts_children(tree: Tree, key: str) -> bool:
+    """Return whether ``key`` may hold children.
+
+    Any node may, unless it carries ``allow_children: False``. Absence of a
+    ``children`` list is deliberately not enough: an empty folder is still a
+    folder, so the distinction has to be declared rather than inferred.
+    """
+    node = find_node(tree, key)
+    return node is not None and node.get(ALLOW_CHILDREN, True) is not False
+
+
 def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | None:
     """Move ``key`` next to or under ``anchor_key``.
 
@@ -259,13 +273,16 @@ def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | N
     Returns:
         A new tree, or None when the move is rejected or would change nothing.
         Rejected covers an unknown position, an unknown key, dropping a node onto
-        itself, and dropping a node into its own subtree.
+        itself, dropping a node into its own subtree, and dropping a node into an
+        anchor that does not accept children.
     """
     if position not in POSITIONS or key == anchor_key:
         return None
     if find_node(tree, key) is None or find_node(tree, anchor_key) is None:
         return None
     if is_descendant(tree, anchor_key, key):
+        return None
+    if position == "child" and not accepts_children(tree, anchor_key):
         return None
 
     pruned, node = remove_key(tree, key)

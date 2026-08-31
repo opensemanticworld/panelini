@@ -7,6 +7,7 @@
   --pnl-tst-muted: #6b7280;
   --pnl-tst-border: #e5e7eb;
   --pnl-tst-hover: rgba(0, 0, 0, 0.04);
+  --pnl-tst-active: rgba(0, 0, 0, 0.07);
   --pnl-tst-focus: #2563eb;
   --pnl-tst-blocked: rgba(220, 38, 38, 0.08);
 
@@ -98,10 +99,36 @@
   cursor: default;
 }
 
+/* Icon markup is supplied by the app, so its intrinsic size is unknown. The size
+   is pinned here rather than trusted from the SVG. */
+.pnl-tst-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--pnl-tst-muted);
+}
+
+.pnl-tst-icon svg,
+.pnl-tst-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .pnl-tst-check {
   flex: 0 0 auto;
   margin: 0;
   cursor: pointer;
+}
+
+/* The row the keyboard is on. `:focus-visible` alone leaves a clicked row with no
+   visible state at all, so the active row is marked regardless of how it got
+   there, and checked rows keep the stronger accent on top of it. */
+.pnl-tst-row--active {
+  background: var(--pnl-tst-active);
 }
 
 .pnl-tst-row[aria-selected='true'] {

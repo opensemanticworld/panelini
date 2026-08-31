@@ -24,6 +24,7 @@ export function render({ model, el }) {
     source: model.get("source") || [],
     columns: model.get("columns") || [],
     options: model.get("options") || {},
+    icons: model.get("icons") || {},
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
   });
@@ -63,6 +64,9 @@ export function render({ model, el }) {
   });
   model.on("change:options", () => {
     state.options = model.get("options") || {};
+  });
+  model.on("change:icons", () => {
+    state.icons = model.get("icons") || {};
   });
   model.on("change:expanded_keys", () => {
     state.expandedKeys = model.get("expanded_keys") || [];
