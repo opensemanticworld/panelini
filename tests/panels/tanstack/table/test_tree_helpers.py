@@ -302,6 +302,64 @@ def test_apply_move_rejects_a_no_op(sample):
     assert tree.apply_move(sample, "e", "b", "after") is None
 
 
+# --- multi-row moves ----------------------------------------------------------
+
+
+def test_prune_redundant_keys_drops_what_a_parent_already_carries(sample):
+    """b1 travels inside b, so moving it again would be a second move."""
+    assert tree.prune_redundant_keys(sample, ["b", "b1", "e"]) == ["b", "e"]
+
+
+def test_prune_redundant_keys_keeps_order_and_deduplicates(sample):
+    assert tree.prune_redundant_keys(sample, ["e", "b", "e"]) == ["e", "b"]
+
+
+def test_apply_moves_keeps_the_relative_order(sample):
+    """b1 and b2 land under d in the order they were given, not reversed."""
+    result, moved = tree.apply_moves(sample, ["b1", "b2"], "d", "child")
+    assert moved == ["b1", "b2"]
+    assert shape(result) == "a(b,e),d(d1,b1,b2)"
+
+
+def test_apply_moves_before_an_anchor_keeps_the_order(sample):
+    result, moved = tree.apply_moves(sample, ["b1", "b2"], "d1", "before")
+    assert moved == ["b1", "b2"]
+    assert shape(result) == "a(b,e),d(b1,b2,d1)"
+
+
+def test_apply_moves_rejects_the_batch_when_the_anchor_is_inside_it(sample):
+    """A partial move here would strand the rest of the branch."""
+    result, moved = tree.apply_moves(sample, ["b", "e"], "b1", "child")
+    assert moved == []
+    assert result is sample
+
+
+def test_apply_moves_rejects_an_anchor_that_takes_no_children():
+    nodes = [{"key": "a", "title": "A"}, {"key": "f", "title": "F", "allow_children": False}]
+    result, moved = tree.apply_moves(nodes, ["a"], "f", "child")
+    assert moved == []
+    assert result is nodes
+
+
+def test_apply_moves_skips_a_node_that_is_already_in_place(sample):
+    """e already sits after b, so only b1 counts as moved, and order still holds."""
+    result, moved = tree.apply_moves(sample, ["e", "b1"], "b", "after")
+    assert moved == ["b1"]
+    assert shape(result) == "a(b(b2),e,b1),d(d1)"
+
+
+def test_apply_moves_ignores_unknown_keys(sample):
+    result, moved = tree.apply_moves(sample, ["nope", "e"], "d", "child")
+    assert moved == ["e"]
+    assert shape(result) == "a(b(b1,b2)),d(d1,e)"
+
+
+def test_apply_moves_does_not_mutate_its_input(sample):
+    before = copy.deepcopy(sample)
+    tree.apply_moves(sample, ["b1", "b2"], "d", "child")
+    assert sample == before
+
+
 # --- key sets -----------------------------------------------------------------
 
 

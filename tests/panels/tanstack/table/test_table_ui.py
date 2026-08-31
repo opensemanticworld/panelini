@@ -103,6 +103,7 @@ def drag_row(
     y_frac: float = 0.5,
     expect_session: bool = True,
     expect_blocked: bool = False,
+    expect_dragging: int = 1,
 ) -> None:
     """Drag one row onto another, releasing at *y_frac* of the target's height.
 
@@ -115,6 +116,8 @@ def drag_row(
     that expects no move event passes just as happily when drag and drop is
     broken outright. ``expect_blocked`` asserts the no-drop affordance while the
     pointer is still held down, since the class only exists during the drag.
+    ``expect_dragging`` is how many rows should be marked as travelling, which is
+    the whole selection when the grabbed row is part of it.
     """
     src = rows(page).nth(source_index).bounding_box()
     dst = rows(page).nth(target_index).bounding_box()
@@ -125,7 +128,7 @@ def drag_row(
     # A short first move starts the drag session before the long travel.
     page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2 + 6, steps=2)
     if expect_session:
-        expect(page.locator(".pnl-tst-row--dragging")).to_have_count(1, timeout=2000)
+        expect(page.locator(".pnl-tst-row--dragging")).to_have_count(expect_dragging, timeout=2000)
     page.mouse.move(dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] * y_frac, steps=12)
     page.wait_for_timeout(120)
     if expect_blocked:
@@ -404,6 +407,212 @@ def test_select_mode_none_renders_no_checkboxes(page: Page, port):
 
     assert page.locator(".pnl-tst-check").count() == 0
     assert rows(page).nth(0).get_attribute("aria-selected") is None
+
+    server.stop()
+
+
+def click_row(page: Page, index: int, *modifiers) -> None:
+    """Click a row on its title, well clear of the checkbox and the twisty."""
+    page.locator(".pnl-tst-cell--tree .pnl-tst-value").nth(index).click(modifiers=list(modifiers))
+
+
+def test_plain_click_selects_one_row_and_marks_it_active(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(1)
+
+    # A second plain click replaces the selection rather than growing it.
+    click_row(page, 4)  # File B1
+    wait_until(lambda: table.selected_keys == ["b1"], timeout=10)
+
+    server.stop()
+
+
+def test_ctrl_click_toggles_rows_without_clearing(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 4, "Control")  # add File B1
+    wait_until(lambda: table.selected_keys == ["a1", "b1"], timeout=10)
+
+    click_row(page, 4, "Control")  # and take it away again
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    server.stop()
+
+
+def test_shift_click_extends_a_range_from_the_anchor(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # anchor on File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 3, "Shift")  # through Folder B
+    wait_until(lambda: table.selected_keys == ["a1", "a2", "b"], timeout=10)
+
+    # The anchor stays put, so shrinking the range back is one more Shift click.
+    click_row(page, 2, "Shift")
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    server.stop()
+
+
+def test_shift_arrow_extends_the_selection(page: Page, port):
+    """The keyboard reaches the same range gesture the mouse does."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    page.keyboard.press("Shift+ArrowDown")
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+    assert focused_title(page) == "File A2"
+
+    page.keyboard.press("Shift+ArrowUp")
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    server.stop()
+
+
+def test_single_select_mode_ignores_the_modifiers(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "single", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 4, "Control")
+    wait_until(lambda: table.selected_keys == ["b1"], timeout=10)
+
+    server.stop()
+
+
+def test_dragging_a_selected_row_moves_the_whole_selection(page: Page, port):
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "enable_dnd": True, "expand_all": True},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # plus File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+    events.clear()
+
+    drag_row(page, 1, 3, expect_dragging=2)  # onto Folder B
+    wait_until(lambda: any(name == "move" for name, _ in events), timeout=10)
+
+    params = next(params for name, params in events if name == "move")
+    assert params["keys"] == ["a1", "a2"]
+    assert params["applied_keys"] == ["a1", "a2"]
+    # Order survives the trip: the rows land the way they were shown.
+    assert shape(table.source) == "a,b(b1,a1,a2)"
+
+    server.stop()
+
+
+def test_dragging_children_out_does_not_carry_the_rolled_up_parent(page: Page, port):
+    """Selecting every file in a folder rolls the folder up, but moves the files.
+
+    Without dropping ancestors from the batch the folder would win the prune on
+    the Python side, so the gesture would move the folder instead of emptying it.
+    """
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "enable_dnd": True, "expand_all": True},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    boxes = page.locator(".pnl-tst-check")
+    boxes.nth(1).click()  # File A1
+    boxes.nth(2).click()  # File A2 completes Folder A, which rolls up
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
+    events.clear()
+
+    drag_row(page, 1, 3, expect_dragging=2)  # File A1 onto Folder B
+    wait_until(lambda: any(name == "move" for name, _ in events), timeout=10)
+
+    params = next(params for name, params in events if name == "move")
+    assert params["keys"] == ["a1", "a2"]
+    assert shape(table.source) == "a,b(b1,a1,a2)"
+
+    server.stop()
+
+
+def test_dragging_the_parent_still_moves_the_branch(page: Page, port):
+    """Grabbing the folder itself moves the branch, children and all."""
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "enable_dnd": True, "expand_all": True},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    page.locator(".pnl-tst-check").nth(0).click()  # Folder A cascades
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
+    events.clear()
+
+    drag_row(page, 0, 3, expect_dragging=3)  # Folder A onto Folder B
+    wait_until(lambda: any(name == "move" for name, _ in events), timeout=10)
+
+    params = next(params for name, params in events if name == "move")
+    assert params["keys"] == ["a", "a1", "a2"]
+    # Python prunes the children that travel inside a.
+    assert params["applied_keys"] == ["a"]
+    assert shape(table.source) == "b(b1,a(a1,a2))"
+
+    server.stop()
+
+
+def test_dragging_an_unselected_row_leaves_the_selection_alone(page: Page, port):
+    """Grabbing outside the selection moves one row, rather than discarding it."""
+    events: list = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "multi", "enable_dnd": True, "expand_all": True},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    events.clear()
+
+    drag_row(page, 4, 0)  # File B1 onto Folder A
+    wait_until(lambda: any(name == "move" for name, _ in events), timeout=10)
+
+    params = next(params for name, params in events if name == "move")
+    assert params["keys"] == ["b1"]
+    assert shape(table.source) == "a(a1,a2,b1),b"
+    assert table.selected_keys == ["a1"]
 
     server.stop()
 

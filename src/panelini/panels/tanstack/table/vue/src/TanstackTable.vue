@@ -134,6 +134,11 @@ function sameKeys(a, b) {
 //   single    one row at a time, no cascade
 //   multi     independent checkboxes, no cascade
 //   hierarchy a branch is checked exactly when all of its children are
+//
+// Every mode but `none` also answers to the file manager gestures: a plain click
+// selects one row, Ctrl or Cmd click toggles one, and Shift click takes the range
+// from the anchor. `single` gets the plain click only, since the rest would need a
+// selection it cannot hold.
 const selectMode = computed(() => props.state.options.select_mode ?? 'none')
 const selectable = computed(() => selectMode.value !== 'none')
 const cascades = computed(() => selectMode.value === 'hierarchy')
@@ -290,6 +295,18 @@ function focusRowByIndex(index) {
   focusRowByKey(list[Math.max(0, Math.min(index, list.length - 1))].id)
 }
 
+// Shift plus arrow is the keyboard half of Shift click. Without it the grid would
+// have a selection gesture that only a mouse can reach.
+function moveFocus(index, event) {
+  const list = rows.value
+  if (list.length === 0) return
+  const next = list[Math.max(0, Math.min(index, list.length - 1))]
+  const extends_ = event?.shiftKey && selectable.value && selectMode.value !== 'single'
+  if (extends_ && rangeAnchorKey.value === null) rangeAnchorKey.value = focusKey.value
+  focusRowByKey(next.id)
+  if (extends_) selectRange(next, false)
+}
+
 function onKeydown(event) {
   const list = rows.value
   if (list.length === 0) return
@@ -302,11 +319,11 @@ function onKeydown(event) {
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault()
-      focusRowByIndex(index + 1)
+      moveFocus(index + 1, event)
       break
     case 'ArrowUp':
       event.preventDefault()
-      focusRowByIndex(index - 1)
+      moveFocus(index - 1, event)
       break
     case 'ArrowRight':
       // Expand a closed branch, otherwise step into it. Leaves do nothing.
@@ -350,8 +367,47 @@ function onKeydown(event) {
   }
 }
 
-function onRowClick(row) {
+// Explorer-style pointer selection. The anchor is the last row picked without
+// Shift, which is what a range is measured from, exactly as in a file manager.
+const rangeAnchorKey = ref(null)
+
+function selectOnly(row) {
+  rangeAnchorKey.value = row.id
+  rowSelection.value = {}
+  row.toggleSelected(true, { selectChildren: cascades.value, deselectParents: cascades.value })
+}
+
+function selectRange(row, additive) {
+  const list = rows.value
+  const from = list.findIndex((candidate) => candidate.id === rangeAnchorKey.value)
+  const to = list.findIndex((candidate) => candidate.id === row.id)
+  if (to === -1) return
+  // Without an anchor there is no range to speak of, so the click behaves as a
+  // plain one and becomes the anchor for the next Shift click.
+  if (from === -1) {
+    selectOnly(row)
+    return
+  }
+  if (!additive) rowSelection.value = {}
+  const [start, end] = from <= to ? [from, to] : [to, from]
+  for (let index = start; index <= end; index += 1) {
+    list[index].toggleSelected(true, { selectChildren: cascades.value, deselectParents: cascades.value })
+  }
+}
+
+function onRowClick(row, event) {
   activeKey.value = row.id
+
+  if (selectable.value && selectMode.value !== 'single') {
+    if (event?.shiftKey) selectRange(row, event.ctrlKey || event.metaKey)
+    else if (event?.ctrlKey || event?.metaKey) {
+      rangeAnchorKey.value = row.id
+      toggleSelected(row)
+    } else selectOnly(row)
+  } else if (selectable.value) {
+    selectOnly(row)
+  }
+
   props.emitEvent('activate', { key: row.id })
 }
 
@@ -399,7 +455,7 @@ const AUTO_EXPAND_MS = 500
 const ALL_INSTRUCTIONS = ['reorder-above', 'reorder-below', 'make-child', 'reparent']
 
 const dndEnabled = computed(() => props.state.options.enable_dnd === true)
-const draggingKey = ref(null)
+const draggingKeys = ref([])
 // The one row currently under the pointer, plus the instruction it resolved to.
 const dropTarget = ref(null)
 
@@ -407,21 +463,40 @@ function rowByKey(key) {
   return rows.value.find((row) => row.id === key) ?? null
 }
 
-function isSelfOrDescendant(row, key) {
+function isSelfOrDescendant(row, keys) {
   let cursor = row
   while (cursor) {
-    if (cursor.id === key) return true
+    if (keys.includes(cursor.id)) return true
     cursor = cursor.getParentRow()
   }
   return false
+}
+
+// Dragging a row that is part of the selection drags the whole selection, which
+// is what a file manager does. Dragging an unselected row drags just that row and
+// leaves the selection alone, rather than silently discarding it.
+//
+// Ancestors of the grabbed row are dropped from the batch. In `hierarchy` mode a
+// parent rolls up to selected once its whole subtree is, so selecting every file
+// in a folder also selects the folder, and without this the drag would collapse
+// to "move the folder" instead of "move the files out of it". Dragging a child
+// never moves its parent, whichever way the parent came to be selected.
+function dragKeysFor(row) {
+  if (!selectable.value || !row.getIsSelected()) return [row.id]
+  const ancestors = new Set()
+  for (let cursor = row.getParentRow(); cursor; cursor = cursor.getParentRow()) ancestors.add(cursor.id)
+  const selected = rows.value
+    .filter((candidate) => candidate.getIsSelected() && !ancestors.has(candidate.id))
+    .map((candidate) => candidate.id)
+  return selected.length > 1 ? selected : [row.id]
 }
 
 // A node may declare that it can never gain children, which is how a file is told
 // apart from an empty folder. Blocking only `make-child` keeps reordering next to
 // such a node available, and Python enforces the same rule on the drop it is sent,
 // so the browser is showing the outcome rather than deciding it.
-function blockedInstructions(row, sourceKey) {
-  if (isSelfOrDescendant(row, sourceKey)) return ALL_INSTRUCTIONS
+function blockedInstructions(row, sourceKeys) {
+  if (isSelfOrDescendant(row, sourceKeys)) return ALL_INSTRUCTIONS
   return row.original.allow_children === false ? ['make-child'] : []
 }
 
@@ -540,7 +615,11 @@ function registerDnd() {
         const hit = rowAt(input)
         return hit !== null && !onRowControl(hit, input)
       },
-      getInitialData: ({ input }) => ({ type: DND_TYPE, key: rowAt(input)?.row.id ?? null }),
+      getInitialData: ({ input }) => {
+        const hit = rowAt(input)
+        if (!hit) return { type: DND_TYPE, key: null, keys: [] }
+        return { type: DND_TYPE, key: hit.row.id, keys: dragKeysFor(hit.row) }
+      },
       onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
         // The registered element is the host, so the default preview would be a
         // snapshot of the entire table. Point it at the row being dragged, offset
@@ -551,10 +630,10 @@ function registerDnd() {
         nativeSetDragImage(hit.element, input.clientX - hit.rect.left, input.clientY - hit.rect.top)
       },
       onDragStart: ({ source }) => {
-        draggingKey.value = source.data.key
+        draggingKeys.value = source.data.keys ?? []
       },
       onDrop: () => {
-        draggingKey.value = null
+        draggingKeys.value = []
         clearDropTarget()
       },
     }),
@@ -571,7 +650,7 @@ function registerDnd() {
           currentLevel: hit.row.depth,
           indentPerLevel: indentPx.value,
           mode: itemMode(hit.row),
-          block: blockedInstructions(hit.row, source.data.key),
+          block: blockedInstructions(hit.row, source.data.keys ?? []),
         })
       },
       onDrag: ({ self }) => {
@@ -586,9 +665,11 @@ function registerDnd() {
         const key = self.data.key
         const instruction = extractInstruction(self.data)
         if (!key || !instruction || instruction.type === 'instruction-blocked') return
-        if (key === source.data.key) return
+        const keys = source.data.keys ?? []
+        if (keys.includes(key)) return
         props.emitEvent('move', {
           key: source.data.key,
+          keys,
           targetKey: key,
           instruction: instruction.type,
           desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
@@ -614,7 +695,7 @@ function rowDndClass(row) {
   const instruction = instructionFor(row)
   return {
     'pnl-tst-row--draggable': dndEnabled.value,
-    'pnl-tst-row--dragging': draggingKey.value === row.id,
+    'pnl-tst-row--dragging': draggingKeys.value.includes(row.id),
     'pnl-tst-row--blocked': instruction?.type === 'instruction-blocked',
     'pnl-tst-row--child-target': instruction?.type === 'make-child',
   }
@@ -684,7 +765,7 @@ function dropLineStyle(row) {
           :aria-expanded="row.getCanExpand() ? row.getIsExpanded() : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :tabindex="row.id === focusKey ? 0 : -1"
-          @click="onRowClick(row)"
+          @click="onRowClick(row, $event)"
           @focus="activeKey = row.id"
         >
           <!-- Decorative drop indicator. aria-hidden keeps the row's children a

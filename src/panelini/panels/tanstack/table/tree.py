@@ -12,7 +12,7 @@ so the caller can assign the result to a param and get a change event.
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 Node = dict[str, Any]
@@ -295,6 +295,60 @@ def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | N
         result = insert_sibling(pruned, anchor_key, node, before=position == "before")
 
     return None if result == tree else result
+
+
+def prune_redundant_keys(tree: Tree, keys: Sequence[str]) -> list[str]:
+    """Drop keys that another key in the list already carries.
+
+    Selecting a folder and something inside it and then dragging both means the
+    child travels with its parent, so moving it a second time would be wrong.
+    Order and the first occurrence of each key are preserved.
+    """
+    unique = list(dict.fromkeys(keys))
+    return [key for key in unique if not any(other != key and is_descendant(tree, key, other) for other in unique)]
+
+
+def apply_moves(tree: Tree, keys: Sequence[str], anchor_key: str, position: str) -> tuple[Tree, list[str]]:
+    """Move several nodes to the same place, keeping their relative order.
+
+    The first node lands where the drop asked for, and each later one lands after
+    the previous, which is what keeps a multi-row drag from arriving reversed or
+    scattered.
+
+    The batch is validated as a whole first: if the anchor sits inside any of the
+    dragged subtrees, or does not accept children, nothing moves. A partial result
+    there would leave the tree in a shape nobody asked for.
+
+    Args:
+        tree: Tree to copy from.
+        keys: Keys of the nodes being moved, in display order.
+        anchor_key: Key the nodes land next to or inside.
+        position: One of :data:`POSITIONS`.
+
+    Returns:
+        ``(tree, moved_keys)``. On rejection this is the original tree and an
+        empty list, so the caller can tell "nothing happened" from "some moved".
+    """
+    ordered = [key for key in prune_redundant_keys(tree, keys) if find_node(tree, key) is not None]
+    if not ordered or position not in POSITIONS or find_node(tree, anchor_key) is None:
+        return tree, []
+    if any(anchor_key == key or is_descendant(tree, anchor_key, key) for key in ordered):
+        return tree, []
+    if position == "child" and not accepts_children(tree, anchor_key):
+        return tree, []
+
+    current = tree
+    anchor, pos = anchor_key, position
+    moved: list[str] = []
+    for key in ordered:
+        result = apply_move(current, key, anchor, pos)
+        if result is not None:
+            current = result
+            moved.append(key)
+        # Advance even when the node was already in place, so the rest of the
+        # batch still lands after it rather than jumping back to the anchor.
+        anchor, pos = key, "after"
+    return current, moved
 
 
 def subtree_keys(tree: Tree, key: str) -> list[str]:

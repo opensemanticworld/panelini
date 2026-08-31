@@ -102,7 +102,9 @@ class TanstackTable(AnyWidgetComponent):
             move_callback: Veto hook for drag and drop. Receives
                 ``(key, anchor_key, position)`` with position in
                 ``before | after | child``, and returning False cancels the move
-                so ``source`` is left untouched.
+                so ``source`` is left untouched. Called once per node, so a drag
+                of several rows can be vetoed for some of them and allowed for
+                the rest.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -169,37 +171,49 @@ class TanstackTable(AnyWidgetComponent):
             actually changed.
         """
         key = event_params.get("key")
+        keys = event_params.get("keys") or ([key] if key else [])
         target_key = event_params.get("target_key", event_params.get("targetKey"))
         instruction = event_params.get("instruction")
         desired_level = event_params.get("desired_level", event_params.get("desiredLevel"))
 
         resolved = None
-        if key and target_key and instruction:
+        if keys and target_key and instruction:
             resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
         position, anchor_key = resolved if resolved else (None, None)
 
         params: dict[str, Any] = {
             "key": key,
+            "keys": keys,
             "target_key": target_key,
             "instruction": instruction,
             "desired_level": desired_level,
             "position": position,
             "anchor_key": anchor_key,
             "applied": False,
+            "applied_keys": [],
         }
 
-        if not key or position is None or anchor_key is None:
-            return params
-        if self._move_callback and not self._move_callback(key, anchor_key, position):
+        if not keys or position is None or anchor_key is None:
             return params
 
-        updated = tree.apply_move(self.source, key, anchor_key, position)
-        if updated is None:
+        # The veto is per node, so a drag of several rows can be allowed in part.
+        # Whether that is sensible is the callback's business, not this method's.
+        allowed = [candidate for candidate in keys if self._allows_move(candidate, anchor_key, position)]
+        if not allowed:
+            return params
+
+        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, position)
+        if not moved:
             return params
 
         self.source = updated
         params["applied"] = True
+        params["applied_keys"] = moved
         return params
+
+    def _allows_move(self, key: str, anchor_key: str, position: str) -> bool:
+        """Return whether ``move_callback`` permits this one node to move."""
+        return not self._move_callback or bool(self._move_callback(key, anchor_key, position))
 
     def get_source(self) -> list[dict[str, Any]]:
         """Return a shallow copy of the current tree source data."""
@@ -275,6 +289,24 @@ class TanstackTable(AnyWidgetComponent):
             return False
         self.source = updated
         return True
+
+    def move_nodes(self, keys: list[str], anchor_key: str, position: str = "child") -> list[str]:
+        """Move several nodes to the same place, keeping their relative order.
+
+        Args:
+            keys: Keys of the nodes to move, in the order they should land.
+            anchor_key: Key the nodes land next to or inside.
+            position: One of ``before``, ``after`` or ``child``.
+
+        Returns:
+            The keys that actually moved. Empty when the batch was rejected,
+            which covers an anchor inside one of the moved subtrees and an anchor
+            that does not accept children.
+        """
+        updated, moved = tree.apply_moves(self.source, keys, anchor_key, position)
+        if moved:
+            self.source = updated
+        return moved
 
     def update_node(self, key: str, values: dict[str, Any]) -> bool:
         """Merge field values into a node.

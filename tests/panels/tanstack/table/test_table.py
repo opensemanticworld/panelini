@@ -231,6 +231,68 @@ def test_move_callback_is_not_called_for_unresolvable_intents(source):
     assert seen == []
 
 
+# --- multi row move intent ----------------------------------------------------
+
+
+def test_multi_move_intent_keeps_the_dragged_order(table):
+    """Dragging a selection lands it in display order, not reversed."""
+    table.handle_event(
+        "move",
+        {"key": "b1", "keys": ["b1", "b2"], "targetKey": "d", "instruction": "make-child"},
+    )
+    assert shape(table.source) == "a(b,e),d(d1,b1,b2)"
+
+
+def test_multi_move_intent_reports_what_moved(table, events):
+    """e is already below b, so only b1 counts, and the payload says so."""
+    table.handle_event(
+        "move",
+        {"key": "e", "keys": ["e", "b1"], "targetKey": "b", "instruction": "reorder-below"},
+    )
+
+    params = events[0][1]
+    assert params["keys"] == ["e", "b1"]
+    assert params["applied"] is True
+    assert params["applied_keys"] == ["b1"]
+
+
+def test_multi_move_intent_falls_back_to_the_single_key(table, events):
+    """An older payload without ``keys`` still moves the grabbed row."""
+    table.handle_event("move", {"key": "d", "targetKey": "b1", "instruction": "make-child"})
+
+    assert shape(table.source) == "a(b(b1(d(d1)),b2),e)"
+    assert events[0][1]["keys"] == ["d"]
+    assert events[0][1]["applied_keys"] == ["d"]
+
+
+def test_multi_move_intent_into_its_own_selection_is_rejected(table, events):
+    """b1 travels inside b, so there is no coherent place for the batch to land."""
+    table.handle_event(
+        "move",
+        {"key": "b", "keys": ["b", "d"], "targetKey": "b1", "instruction": "make-child"},
+    )
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+    assert events[0][1]["applied_keys"] == []
+
+
+def test_multi_move_veto_applies_per_node(source, events):
+    """Vetoing one row of a selection lets the rest of it through."""
+    table = TanstackTable(
+        source=source,
+        event_callback=lambda name, params: events.append((name, params)),
+        move_callback=lambda key, anchor_key, position: key != "b2",
+    )
+    table.handle_event(
+        "move",
+        {"key": "b1", "keys": ["b1", "b2"], "targetKey": "d", "instruction": "make-child"},
+    )
+
+    assert shape(table.source) == "a(b(b2),e),d(d1,b1)"
+    assert events[0][1]["applied_keys"] == ["b1"]
+
+
 # --- source API ---------------------------------------------------------------
 
 
@@ -303,6 +365,16 @@ def test_move_node_defaults_to_child(table):
 )
 def test_move_node_rejections(table, key, anchor_key, position):
     assert table.move_node(key, anchor_key, position) is False
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_move_nodes(table):
+    assert table.move_nodes(["b1", "b2"], "d", "child") == ["b1", "b2"]
+    assert shape(table.source) == "a(b,e),d(d1,b1,b2)"
+
+
+def test_move_nodes_rejected_leaves_the_source_alone(table):
+    assert table.move_nodes(["b", "d"], "b1", "child") == []
     assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
 
 
