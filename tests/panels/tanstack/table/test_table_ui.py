@@ -303,6 +303,56 @@ def test_hierarchy_checkbox_partial_selection_is_mixed(page: Page, port):
     server.stop()
 
 
+def test_hierarchy_checking_every_child_rolls_up_to_the_parent(page: Page, port):
+    """The parent must not go from mixed back to empty as the last child is checked.
+
+    TanStack cascades downward only, so without a roll-up the parent renders
+    unchecked above a fully checked subtree, and the same visual state maps to two
+    different key sets depending on whether the parent or the children were
+    clicked.
+    """
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    boxes = page.locator(".pnl-tst-check")
+
+    boxes.nth(1).click()  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    assert indeterminate(boxes, 0) is True
+
+    boxes.nth(2).click()  # File A2 completes the subtree
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
+
+    assert boxes.nth(0).is_checked() is True
+    assert indeterminate(boxes, 0) is False
+    assert rows(page).nth(0).get_attribute("aria-selected") == "true"
+    # Clicking the children reaches the same state as clicking the parent.
+    assert boxes.nth(3).is_checked() is False
+
+    server.stop()
+
+
+def test_hierarchy_selection_from_python_is_canonicalised(page: Page, port):
+    """A partial key set that completes a subtree comes back with the parent."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"select_mode": "hierarchy", "expand_all": True},
+    )
+    server = serve(table, page, port)
+
+    table.selected_keys = ["a1", "a2"]
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2"], timeout=10)
+
+    boxes = page.locator(".pnl-tst-check")
+    assert boxes.nth(0).is_checked() is True
+    assert indeterminate(boxes, 0) is False
+
+    server.stop()
+
+
 def test_hierarchy_checkbox_cascades_and_prunes(page: Page, port):
     """Checking a parent selects its subtree; unchecking a child prunes it back."""
     table = TanstackTable(

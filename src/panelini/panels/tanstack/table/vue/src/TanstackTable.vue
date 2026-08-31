@@ -96,7 +96,7 @@ function sameKeys(a, b) {
 //   none      no checkbox column at all
 //   single    one row at a time, no cascade
 //   multi     independent checkboxes, no cascade
-//   hierarchy checking a parent cascades down, unchecking a child prunes ancestors
+//   hierarchy a branch is checked exactly when all of its children are
 const selectMode = computed(() => props.state.options.select_mode ?? 'none')
 const selectable = computed(() => selectMode.value !== 'none')
 const cascades = computed(() => selectMode.value === 'hierarchy')
@@ -122,9 +122,48 @@ const table = useTable({
   },
   onRowSelectionChange: (updater) => {
     rowSelection.value = typeof updater === 'function' ? updater(rowSelection.value) : updater
-    props.setSelectedKeys(recordToKeys(rowSelection.value))
   },
 })
+
+// TanStack cascades a parent's check down to its children but never rolls the
+// children's state back up. Checking the last unchecked sibling therefore leaves
+// the parent unselected and, because `getIsSomeSelected()` means "some but not
+// all", not even mixed: the checkbox goes from mixed straight back to empty above
+// a fully checked subtree. This restores the invariant that in hierarchy mode a
+// branch is checked exactly when all of its children are, which is also what
+// keeps one visual state mapped to one `selected_keys` value.
+function rollUp(record) {
+  const next = { ...record }
+  const visit = (row) => {
+    // Post-order, so a branch sees its own children already settled and a
+    // completed subtree propagates all the way to the root in one pass.
+    row.subRows.forEach(visit)
+    if (row.subRows.length === 0) return
+    if (row.subRows.every((child) => next[child.id])) next[row.id] = true
+    else delete next[row.id]
+  }
+  table.getCoreRowModel().rows.forEach(visit)
+  return next
+}
+
+// JS to Python, for the same reason the expanded projection below is watched.
+// Registered before the canonicalisation watcher so that the correction the
+// latter makes on its immediate run is pushed down as well.
+watch(() => recordToKeys(rowSelection.value), props.setSelectedKeys, { flush: 'post' })
+
+// Canonicalisation is watched rather than done inline so that it covers every
+// way the selection can change: a click, the space key, a Python push, and a move
+// that completes or breaks a subtree. `rollUp` is idempotent, so the re-run its
+// own write triggers settles immediately.
+watch(
+  () => [rowSelection.value, table.getCoreRowModel().rows],
+  () => {
+    if (!cascades.value) return
+    const next = rollUp(rowSelection.value)
+    if (!sameKeys(recordToKeys(next), recordToKeys(rowSelection.value))) rowSelection.value = next
+  },
+  { immediate: true, flush: 'post' },
+)
 
 // JS to Python. The projection is watched rather than pushed from
 // `onExpandedChange`, because under the `true` sentinel the set of keys it stands
