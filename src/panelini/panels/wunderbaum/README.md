@@ -96,8 +96,32 @@ itself. It carries the same selection under `sourceKeys`, next to the scalar
 
 Ctrl+drag sends `copy: True` with `copiedNodeId`/`copiedNodeIds` instead, and
 moves nothing - the copy is the callback's job. Nodes that cannot be moved are
-dropped from the set: a node whose ancestor is dragged with it, and any drop
-onto the selection itself. If that leaves nothing, no `drop` is emitted.
+dropped from the set: a node whose ancestor is dragged with it, any drop onto
+the selection itself, and any move that would change nothing (into the folder a
+node already sits in, or before its own next sibling). If that leaves nothing,
+no `drop` is emitted.
+
+### Drop position
+
+A row is split into three bands. The top quarter inserts before it, the bottom
+quarter after it, and the middle half drops into it. The reported `region` is
+`"before"`, `"after"`, `"appendChild"` or `"prependChild"`.
+
+On an **expanded** parent the bottom band is drawn in the gap above the first
+child, so that is where the node lands: the region becomes `prependChild`
+rather than a sibling of the parent two indent levels away. On a **collapsed**
+parent there is nothing below it to be confused with, so the bottom band keeps
+its plain meaning and inserts a sibling. Cross-tree `externalDrop` reports the
+same remapped region, so a callback that performs the move itself lands in the
+slot the user saw the arrow point at.
+
+One consequence worth knowing: hovering a collapsed folder for longer than
+`autoExpandMS` (1.5 s by default) expands it mid-drag, and from that moment its
+bottom band follows the expanded rule. Dwell time changes the result.
+
+A node may be dropped before or after its own parent's row - that is a reparent
+to the level above, and the panel switches wunderbaum's `preventVoidMoves` off
+to allow it, checking for genuine no-ops itself instead.
 
 ### Selection
 
