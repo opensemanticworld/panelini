@@ -8,6 +8,7 @@
   --pnl-tst-border: #e5e7eb;
   --pnl-tst-hover: rgba(0, 0, 0, 0.04);
   --pnl-tst-focus: #2563eb;
+  --pnl-tst-blocked: rgba(220, 38, 38, 0.08);
 
   box-sizing: border-box;
   width: 100%;
@@ -47,6 +48,7 @@
 }
 
 .pnl-tst-row {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: var(--pnl-tst-row-height);
@@ -104,6 +106,55 @@
 
 .pnl-tst-row[aria-selected='true'] {
   background: rgba(37, 99, 235, 0.08);
+}
+
+/* Drag and drop feedback. All of it is presentational: the drop indicator is
+   aria-hidden and the move itself is announced by Python replacing the tree. */
+
+.pnl-tst-row--draggable {
+  cursor: grab;
+}
+
+.pnl-tst-row--dragging {
+  opacity: 0.4;
+}
+
+.pnl-tst-row--child-target {
+  background: rgba(37, 99, 235, 0.08);
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+}
+
+.pnl-tst-row--blocked {
+  background: var(--pnl-tst-blocked);
+  cursor: no-drop;
+}
+
+.pnl-tst-dropline {
+  position: absolute;
+  inset-inline-end: 0;
+  height: 2px;
+  background: var(--pnl-tst-focus);
+  pointer-events: none;
+}
+
+.pnl-tst-dropline::before {
+  position: absolute;
+  inset-inline-start: -1px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--pnl-tst-focus);
+  border-radius: 50%;
+  content: '';
+}
+
+.pnl-tst-dropline--above {
+  top: -1px;
+}
+
+.pnl-tst-dropline--below {
+  bottom: -1px;
 }
 
 .pnl-tst-empty {

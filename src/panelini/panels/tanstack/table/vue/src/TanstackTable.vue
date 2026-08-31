@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   createCoreRowModel,
   createExpandedRowModel,
@@ -8,6 +8,15 @@ import {
   tableFeatures,
   useTable,
 } from '@tanstack/vue-table'
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
+import {
+  draggable,
+  dropTargetForElements,
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import {
+  attachInstruction,
+  extractInstruction,
+} from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
 
 const props = defineProps({
   // Python-owned state. The component reads it and never writes it back.
@@ -274,6 +283,178 @@ function onCheckboxClick(row) {
   toggleSelected(row)
   focusRowByKey(row.id)
 }
+
+// Drag and drop. A drop never mutates the tree here: it emits a `move` intent
+// and Python rewrites `source`. Blocking every instruction type is how an
+// invalid target (itself, or one of its own descendants) is expressed, because
+// the hitbox turns a blocked type into `instruction-blocked` and that renders as
+// a no-drop state instead of silently doing nothing.
+const DND_TYPE = 'pnl-tst-row'
+const AUTO_EXPAND_MS = 500
+const ALL_INSTRUCTIONS = ['reorder-above', 'reorder-below', 'make-child', 'reparent']
+
+const dndEnabled = computed(() => props.state.options.enable_dnd === true)
+const draggingKey = ref(null)
+// The one row currently under the pointer, plus the instruction it resolved to.
+const dropTarget = ref(null)
+
+function rowByKey(key) {
+  return rows.value.find((row) => row.id === key) ?? null
+}
+
+function isSelfOrDescendant(row, key) {
+  let cursor = row
+  while (cursor) {
+    if (cursor.id === key) return true
+    cursor = cursor.getParentRow()
+  }
+  return false
+}
+
+// The hitbox needs to know where a row sits so it can offer `make-child` on an
+// open branch and `reparent` on the last row of a group.
+function itemMode(row) {
+  if (row.getCanExpand() && row.getIsExpanded()) return 'expanded'
+  const parent = row.getParentRow()
+  const siblings = parent ? parent.subRows : table.getCoreRowModel().rows
+  return row.index === siblings.length - 1 ? 'last-in-group' : 'standard'
+}
+
+let autoExpandKey = null
+let autoExpandTimer = null
+
+function cancelAutoExpand() {
+  if (autoExpandTimer) clearTimeout(autoExpandTimer)
+  autoExpandTimer = null
+  autoExpandKey = null
+}
+
+// Hovering a collapsed branch opens it, so a node can be dropped deep into a
+// tree in one gesture. The hitbox re-measures on the next pointer move.
+function scheduleAutoExpand(key, instruction) {
+  if (autoExpandKey === key) return
+  cancelAutoExpand()
+  if (!instruction || instruction.type === 'instruction-blocked') return
+  const row = rowByKey(key)
+  if (!row || !row.getCanExpand() || row.getIsExpanded()) return
+  autoExpandKey = key
+  autoExpandTimer = setTimeout(() => {
+    autoExpandTimer = null
+    const fresh = rowByKey(key)
+    if (fresh && fresh.getCanExpand() && !fresh.getIsExpanded()) fresh.toggleExpanded(true)
+  }, AUTO_EXPAND_MS)
+}
+
+function clearDropTarget() {
+  dropTarget.value = null
+  cancelAutoExpand()
+}
+
+// The key lives on the element rather than in the closure so a recycled row
+// element cannot register a stale identity.
+const vDndRow = {
+  mounted(element, binding) {
+    element.__tstKey = binding.value
+    element.__tstCleanup = combine(
+      draggable({
+        element,
+        canDrag: () => dndEnabled.value,
+        getInitialData: () => ({ type: DND_TYPE, key: element.__tstKey }),
+        onDragStart: () => {
+          draggingKey.value = element.__tstKey
+        },
+        onDrop: () => {
+          draggingKey.value = null
+          clearDropTarget()
+        },
+      }),
+      dropTargetForElements({
+        element,
+        canDrop: ({ source }) => dndEnabled.value && source.data.type === DND_TYPE,
+        getIsSticky: () => true,
+        getData: ({ input, element: target, source }) => {
+          const data = { type: DND_TYPE, key: element.__tstKey }
+          const row = rowByKey(element.__tstKey)
+          if (!row) return data
+          const blocked = isSelfOrDescendant(row, source.data.key)
+          return attachInstruction(data, {
+            element: target,
+            input,
+            currentLevel: row.depth,
+            indentPerLevel: indentPx.value,
+            mode: itemMode(row),
+            block: blocked ? ALL_INSTRUCTIONS : [],
+          })
+        },
+        onDrag: ({ self }) => {
+          const instruction = extractInstruction(self.data)
+          dropTarget.value = instruction ? { key: element.__tstKey, instruction } : null
+          scheduleAutoExpand(element.__tstKey, instruction)
+        },
+        onDragLeave: () => {
+          if (dropTarget.value?.key === element.__tstKey) dropTarget.value = null
+          cancelAutoExpand()
+        },
+        onDrop: ({ self, source }) => {
+          clearDropTarget()
+          const instruction = extractInstruction(self.data)
+          if (!instruction || instruction.type === 'instruction-blocked') return
+          if (element.__tstKey === source.data.key) return
+          props.emitEvent('move', {
+            key: source.data.key,
+            targetKey: element.__tstKey,
+            instruction: instruction.type,
+            desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
+          })
+        },
+      }),
+    )
+  },
+  updated(element, binding) {
+    element.__tstKey = binding.value
+  },
+  unmounted(element) {
+    element.__tstCleanup?.()
+    delete element.__tstCleanup
+    delete element.__tstKey
+  },
+}
+
+onBeforeUnmount(cancelAutoExpand)
+
+function instructionFor(row) {
+  return dropTarget.value?.key === row.id ? dropTarget.value.instruction : null
+}
+
+function rowDndClass(row) {
+  const instruction = instructionFor(row)
+  return {
+    'pnl-tst-row--draggable': dndEnabled.value,
+    'pnl-tst-row--dragging': draggingKey.value === row.id,
+    'pnl-tst-row--blocked': instruction?.type === 'instruction-blocked',
+    'pnl-tst-row--child-target': instruction?.type === 'make-child',
+  }
+}
+
+// `make-child` is shown as a highlight on the row itself, everything else as a
+// line whose indent is the level the node would land on.
+function dropLineClass(row) {
+  const instruction = instructionFor(row)
+  if (!instruction) return null
+  if (instruction.type === 'reorder-above') return 'pnl-tst-dropline--above'
+  if (instruction.type === 'reorder-below' || instruction.type === 'reparent') {
+    return 'pnl-tst-dropline--below'
+  }
+  return null
+}
+
+function dropLineStyle(row) {
+  const instruction = instructionFor(row)
+  if (!instruction) return null
+  const level =
+    instruction.type === 'reparent' ? instruction.desiredLevel : instruction.currentLevel
+  return { insetInlineStart: `${level * instruction.indentPerLevel}px` }
+}
 </script>
 
 <template>
@@ -309,7 +490,9 @@ function onCheckboxClick(row) {
           v-for="(row, rowIndex) in rows"
           :key="row.id"
           :ref="(element) => setRowElement(row.id, element)"
+          v-dnd-row="row.id"
           class="pnl-tst-row"
+          :class="rowDndClass(row)"
           role="row"
           :aria-level="row.depth + 1"
           :aria-posinset="row.index + 1"
@@ -321,6 +504,15 @@ function onCheckboxClick(row) {
           @click="onRowClick(row)"
           @focus="activeKey = row.id"
         >
+          <!-- Decorative drop indicator. aria-hidden keeps the row's children a
+               pure gridcell list as far as assistive technology is concerned. -->
+          <span
+            v-if="dropLineClass(row)"
+            class="pnl-tst-dropline"
+            :class="dropLineClass(row)"
+            :style="dropLineStyle(row)"
+            aria-hidden="true"
+          ></span>
           <div
             v-for="(cell, cellIndex) in row.getAllCells()"
             :key="cell.id"
