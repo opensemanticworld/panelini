@@ -89,11 +89,12 @@ def test_schema_request_warning_reports_the_unresolvable_pointer(page: Page, app
 
 def test_editors_fill_the_viewport_height(page: Page, app):
     """Both editors stretch to the window instead of sitting at the 400px default."""
-    viewport = page.viewport_size["height"]
+    viewport = page.viewport_size
+    assert viewport is not None
     for index in (0, 1):
         box = page.locator(".overflow-guard").nth(index).bounding_box()
         assert box is not None
-        assert box["height"] > viewport * 0.7, f"editor {index} is only {box['height']}px of {viewport}px"
+        assert box["height"] > viewport["height"] * 0.7, f"editor {index} is {box['height']}px"
 
 
 def test_unknown_oold_keywords_do_not_break_validation(page: Page, app):
