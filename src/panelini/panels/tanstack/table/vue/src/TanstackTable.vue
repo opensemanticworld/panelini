@@ -99,6 +99,10 @@ const table = useTable({
   columns: columnDefs,
   getRowId: (row) => row.key,
   getSubRows: (row) => row.children,
+  // TanStack resets `expanded` whenever `data` changes. Python rewrites the
+  // whole tree after every move, so leaving that on would collapse the tree on
+  // each drop and push an empty `expanded_keys` back. Expansion is owned here.
+  autoResetExpanded: false,
   enableRowSelection: selectable,
   enableMultiRowSelection: computed(() => selectMode.value !== 'single'),
   enableSubRowSelection: cascades,

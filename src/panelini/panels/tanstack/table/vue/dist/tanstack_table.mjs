@@ -7326,6 +7326,10 @@ const Jd = { class: "pnl-tst" }, Zd = {
       columns: o,
       getRowId: (d) => d.key,
       getSubRows: (d) => d.children,
+      // TanStack resets `expanded` whenever `data` changes. Python rewrites the
+      // whole tree after every move, so leaving that on would collapse the tree on
+      // each drop and push an empty `expanded_keys` back. Expansion is owned here.
+      autoResetExpanded: !1,
       enableRowSelection: u,
       enableMultiRowSelection: le(() => c.value !== "single"),
       enableSubRowSelection: h,

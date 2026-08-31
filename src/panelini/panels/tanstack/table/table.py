@@ -7,6 +7,8 @@ import panel as pn
 import param  # type: ignore[import-untyped]
 from panel.custom import AnyWidgetComponent
 
+from . import tree
+
 pn.extension()
 
 bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
@@ -68,6 +70,7 @@ class TanstackTable(AnyWidgetComponent):
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
+        move_callback: Optional[Callable[[str, str, str], bool]] = None,
         **params: Any,
     ) -> None:
         """Initialize the TanstackTable component.
@@ -80,6 +83,10 @@ class TanstackTable(AnyWidgetComponent):
             selected_keys: Keys of nodes to show selected.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
+            move_callback: Veto hook for drag and drop. Receives
+                ``(key, anchor_key, position)`` with position in
+                ``before | after | child``, and returning False cancels the move
+                so ``source`` is left untouched.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -96,6 +103,7 @@ class TanstackTable(AnyWidgetComponent):
             self.selected_keys = selected_keys
 
         self._event_callback = event_callback
+        self._move_callback = move_callback
 
         self.param.watch(self._on_event_data_change, ["_event_data"])
 
@@ -114,15 +122,66 @@ class TanstackTable(AnyWidgetComponent):
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        Later phases intercept ``move`` here to rewrite ``source`` before the
-        callback runs. In P1 every event is forwarded untouched.
+        ``move`` is intercepted here: the browser only reports where the pointer
+        let go, and this is where that intent becomes a new tree. Every other
+        event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
             event_params: Event payload, always containing at least ``key``.
         """
+        if event_name == "move":
+            event_params = self._apply_move_intent(event_params)
+
         if self._event_callback:
             self._event_callback(event_name, event_params)
+
+    def _apply_move_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Resolve a browser move intent and rewrite ``source``.
+
+        The browser speaks the pragmatic-drag-and-drop vocabulary in camelCase.
+        This normalises it to a snake_case payload with a resolved ``position``
+        and ``anchor_key``, which is what the callbacks see.
+
+        Args:
+            event_params: Raw payload from the browser.
+
+        Returns:
+            The normalised payload, with ``applied`` recording whether the tree
+            actually changed.
+        """
+        key = event_params.get("key")
+        target_key = event_params.get("target_key", event_params.get("targetKey"))
+        instruction = event_params.get("instruction")
+        desired_level = event_params.get("desired_level", event_params.get("desiredLevel"))
+
+        resolved = None
+        if key and target_key and instruction:
+            resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
+        position, anchor_key = resolved if resolved else (None, None)
+
+        params: dict[str, Any] = {
+            "key": key,
+            "target_key": target_key,
+            "instruction": instruction,
+            "desired_level": desired_level,
+            "position": position,
+            "anchor_key": anchor_key,
+            "applied": False,
+        }
+
+        if not key or position is None or anchor_key is None:
+            return params
+        if self._move_callback and not self._move_callback(key, anchor_key, position):
+            return params
+
+        updated = tree.apply_move(self.source, key, anchor_key, position)
+        if updated is None:
+            return params
+
+        self.source = updated
+        params["applied"] = True
+        return params
 
     def get_source(self) -> list[dict[str, Any]]:
         """Return a shallow copy of the current tree source data."""
@@ -137,6 +196,99 @@ class TanstackTable(AnyWidgetComponent):
         self.source = []
         self.expanded_keys = []
         self.selected_keys = []
+
+    def add_node(
+        self,
+        node: dict[str, Any],
+        parent_key: Optional[str] = None,
+        index: Optional[int] = None,
+    ) -> None:
+        """Add a node to the tree.
+
+        Args:
+            node: Node dict with at least ``key`` and ``title``.
+            parent_key: Key of the parent, or None to add at root level.
+            index: Position among the siblings. None appends.
+        """
+        self.source = tree.insert_child(self.source, parent_key, node, index)
+
+    def remove_node(self, key: str) -> bool:
+        """Remove a node and its subtree.
+
+        The removed keys are also dropped from ``expanded_keys`` and
+        ``selected_keys``, so a deletion cannot leave a node selected that is no
+        longer in the tree.
+
+        Args:
+            key: Key of the node to remove.
+
+        Returns:
+            True when the node existed and was removed.
+        """
+        stale = set(tree.subtree_keys(self.source, key))
+        updated, removed = tree.remove_key(self.source, key)
+        if removed is None:
+            return False
+
+        self.source = updated
+        remaining_expanded = [k for k in self.expanded_keys if k not in stale]
+        if remaining_expanded != list(self.expanded_keys):
+            self.expanded_keys = remaining_expanded
+        remaining_selected = [k for k in self.selected_keys if k not in stale]
+        if remaining_selected != list(self.selected_keys):
+            self.selected_keys = remaining_selected
+        return True
+
+    def move_node(self, key: str, anchor_key: str, position: str = "child") -> bool:
+        """Move a node next to or under another node.
+
+        Args:
+            key: Key of the node to move.
+            anchor_key: Key the node lands next to or inside.
+            position: One of ``before``, ``after`` or ``child``.
+
+        Returns:
+            True when the tree changed. False when the move was rejected, which
+            covers an unknown key, dropping a node onto itself and dropping a
+            node into its own subtree.
+        """
+        updated = tree.apply_move(self.source, key, anchor_key, position)
+        if updated is None:
+            return False
+        self.source = updated
+        return True
+
+    def update_node(self, key: str, values: dict[str, Any]) -> bool:
+        """Merge field values into a node.
+
+        ``key`` and ``children`` entries are ignored: changing them would
+        invalidate the expanded and selected key sets. Use :meth:`move_node`,
+        :meth:`add_node` and :meth:`remove_node` to reshape the tree.
+
+        Args:
+            key: Key of the node to update.
+            values: Fields to merge, for example ``{"title": "New", "size": 12}``.
+
+        Returns:
+            True when the node existed.
+        """
+        updated = tree.update_node(self.source, key, values)
+        if updated is None:
+            return False
+        self.source = updated
+        return True
+
+    def rename_node(self, key: str, title: str) -> bool:
+        """Set the title of a node.
+
+        Args:
+            key: Key of the node to rename.
+            title: New title.
+
+        Returns:
+            True when the node existed.
+        """
+        return self.update_node(key, {"title": title})
 
     def get_expanded(self) -> list[str]:
         """Return the keys of the currently expanded nodes."""
@@ -155,6 +307,10 @@ class TanstackTable(AnyWidgetComponent):
         else:
             keys.discard(key)
         self.expanded_keys = sorted(keys)
+
+    def expand_all(self) -> None:
+        """Expand every node that has children."""
+        self.expanded_keys = tree.expandable_keys(self.source)
 
     def collapse_all(self) -> None:
         """Collapse every node."""
