@@ -10,6 +10,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
+from panelini.testing import stop_server
+
 pytest.importorskip("anthropic")
 pytest.importorskip("PIL")
 
@@ -33,7 +35,7 @@ def panel_server(mock_langchain, mock_anthropic_sdk):
         server = pn.serve(app.servable(), port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT, module
-        server.stop()
+        stop_server(server)
 
 
 @pytest.fixture(scope="module")

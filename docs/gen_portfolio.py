@@ -206,7 +206,10 @@ else:
 # Panels excluded from the Pyodide portfolio (server/sandbox-backed, can't run in WASM).
 # ``drawai_beautify`` drives the Anthropic SDK directly and renders through the hosted
 # drawio viewer, so the LangChain stand-ins do not cover it; it stays media-only.
-_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify"}
+# ``chat_sqlite_history`` opens a file-backed SQLite store at module level; sqlite3 is
+# available in Pyodide but file writes are ephemeral in the WASM virtual FS and the
+# reviewer requirement is: only localStorage and in-memory backends under Pyodide.
+_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify", "chat_sqlite_history"}
 _EXCLUDE_CATEGORIES: set[str] = set()
 
 # Per-category accent colour (background gradient base) + short human label.

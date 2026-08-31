@@ -12,6 +12,8 @@ import time
 import panel as pn
 import pytest
 
+from panelini.testing import stop_server
+
 _PORT = 6350
 
 
@@ -24,7 +26,7 @@ def panel_server(mock_langchain):
         server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT
-        server.stop()
+        stop_server(server)
 
 
 def _open_page(browser, port):

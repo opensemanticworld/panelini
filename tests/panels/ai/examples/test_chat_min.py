@@ -16,7 +16,7 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
-from panelini.testing import wait_until
+from panelini.testing import stop_server, wait_until
 
 _PORT = 6310
 
@@ -40,7 +40,7 @@ def panel_server(mock_langchain, tmp_path_factory):
             server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
             time.sleep(0.5)
             yield server, _PORT
-            server.stop()
+            stop_server(server)
     finally:
         if previous is None:
             os.environ.pop("PANELINI_HISTORY_DB", None)

@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.context_menu import app, status, tree
-from panelini.testing import wait_until, wb_title_center, wb_wait
+from panelini.testing import stop_server, wait_until, wb_row, wb_title_center, wb_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -36,7 +36,13 @@ def test_context_menu_add_child(page: Page, port):
     item.click()
     wait_until(lambda: page.locator(".wb-row").count() > rows_before)
 
+    # Wait for the added row itself: the row count also grows when "src" expands,
+    # so without this the clip ends before the new node is painted.
+    wb_row(page, "New Node 1").wait_for(timeout=10000)
+    page.get_by_text("Added", exact=False).first.wait_for(timeout=10000)
+    time.sleep(1.5)  # hold on the added node
+
     # A child was added under "src" and the status reflects it.
     assert "Added" in status.object
 
-    server.stop()
+    stop_server(server)

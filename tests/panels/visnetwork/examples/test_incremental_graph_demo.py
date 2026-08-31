@@ -7,6 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.incremental_graph_demo import SEQUENCE, app
+from panelini.testing import stop_server
 
 
 @pytest.mark.media(role="feature", capture="gif@2.8")
@@ -38,4 +39,4 @@ def test_incremental_build(page: Page, port):
     )
     assert node_count > 0
 
-    server.stop()
+    stop_server(server)
