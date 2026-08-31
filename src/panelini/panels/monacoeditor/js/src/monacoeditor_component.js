@@ -33,18 +33,33 @@ self.MonacoEnvironment = {
 // jsonDefaults is a page-wide singleton, so every editor's schema is tracked here and
 // scoped to that editor's model URI via fileMatch.
 const schemas = new Map();
+// schemaRequest has no per-editor equivalent either, and unlike schemas it cannot be
+// scoped by fileMatch, so it is merged: the most permissive level on the page wins.
+const SCHEMA_REQUEST_LEVELS = ["ignore", "warning", "error"];
+const schemaRequests = new Map();
 let modelSeq = 0;
 
 function syncSchemas() {
+  const levels = [...schemaRequests.values()];
   monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
     validate: true,
     enableSchemaRequest: false,
+    schemaRequest: SCHEMA_REQUEST_LEVELS.find((level) => levels.includes(level)) ?? "warning",
     schemas: [...schemas].map(([uri, schema]) => ({
       uri: `${uri}#schema`,
       fileMatch: [uri],
       schema,
     })),
   });
+}
+
+function setSchemaRequest(uri, level) {
+  if (level) {
+    schemaRequests.set(uri, level);
+  } else {
+    schemaRequests.delete(uri);
+  }
+  syncSchemas();
 }
 
 function setSchema(uri, schema) {
@@ -66,6 +81,7 @@ export function render({ model, el }) {
   const uri = monaco.Uri.parse(`inmemory://panelini/editor-${modelSeq++}.json`);
   const textModel = monaco.editor.createModel(model.get("value"), model.get("language"), uri);
   setSchema(uri.toString(), model.get("json_schema"));
+  setSchemaRequest(uri.toString(), model.get("schema_request"));
 
   const editor = monaco.editor.create(container, {
     model: textModel,
@@ -103,6 +119,7 @@ export function render({ model, el }) {
     applying = false;
   });
   model.on("change:json_schema", () => setSchema(uri.toString(), model.get("json_schema")));
+  model.on("change:schema_request", () => setSchemaRequest(uri.toString(), model.get("schema_request")));
   model.on("change:language", () => monaco.editor.setModelLanguage(textModel, model.get("language")));
   model.on("change:theme", () => monaco.editor.setTheme(model.get("theme")));
   model.on("change:read_only", () => editor.updateOptions({ readOnly: model.get("read_only") }));
@@ -112,5 +129,6 @@ export function render({ model, el }) {
     editor.dispose();
     textModel.dispose();
     setSchema(uri.toString(), null);
+    setSchemaRequest(uri.toString(), null);
   };
 }
