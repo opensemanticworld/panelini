@@ -297,6 +297,11 @@ export default {
       // Add DnD configuration if enabled in options (dnd: true or dnd: {...})
       if (this.options.dnd) {
         wbOptions.dnd = {
+          // Off because wunderbaum's version of this check also vetoes
+          // dropping a node before or after its own parent's row, and those
+          // are real reparents rather than void moves. `isNoOpDrop` rejects
+          // the moves that genuinely change nothing instead.
+          preventVoidMoves: false,
           dragStart: (e) => {
             // Save original parent - needed to undo auto-move on Ctrl+copy
             this._dragOrigParent = e.node.parent;
@@ -326,6 +331,13 @@ export default {
             return true;
           },
           dragEnter: (e) => {
+            // Turning off preventVoidMoves also dropped its veto on dropping a
+            // node onto itself, so that one is repeated here to keep the
+            // cursor honest. The regions have to stay all three: wunderbaum's
+            // `_calcDropRegion` only splits a row 25/50/25 when it is given
+            // the full set, and degrades to a 50/50 before/after split for any
+            // smaller one.
+            if (e.node === e.sourceNode) return false;
             return ['before', 'after', 'over'];
           },
           dragOver: (e) => {
@@ -338,21 +350,24 @@ export default {
           drop: (e) => {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
-            const region = e.suggestedDropMode;
+            const region = this.effectiveRegion(e.suggestedDropMode, targetNode);
             const isCopy = this._ctrlPressed || !!window.__wbForceCopy;
 
             if (!sourceNode) return;
 
             // A same-tree drag acts on the whole selection, the same set the
             // cross-tree externalDrop payload reports.
-            const dragNodes = this.getDragNodes(sourceNode, targetNode);
+            const dragNodes = this.getDragNodes(sourceNode, targetNode, region);
             if (!dragNodes.length) return;
             const nodeId = (n) => n.data?.node_id || n.key;
 
             if (isCopy) {
               // Ctrl+drop: let Python handle the full copy to keep IDs consistent.
               // suggestedDropMode is 'appendChild' (not 'over') for child drops
-              const isChild = region === 'over' || region === 'appendChild';
+              const isChild =
+                region === 'over' ||
+                region === 'appendChild' ||
+                region === 'prependChild';
               const dropParent = isChild ? targetNode : targetNode.parent;
               this.sendEvent('drop', {
                 sourceKey: sourceNode.key,
@@ -373,14 +388,18 @@ export default {
               }
               this.emitSource();
             } else {
-              // 'after' has to re-anchor on the node just moved, or a
-              // multi-node drop lands in reverse order. 'before' and
-              // 'appendChild' keep inserting at the same spot, which already
-              // preserves selection order.
+              // 'after' and 'prependChild' have to re-anchor on the node just
+              // moved, or a multi-node drop lands in reverse order. 'before'
+              // and 'appendChild' keep inserting at the same spot, which
+              // already preserves selection order.
               let anchor = targetNode;
+              let mode = region;
               for (const node of dragNodes) {
-                node.moveTo(anchor, region);
-                if (region === 'after') anchor = node;
+                node.moveTo(anchor, mode);
+                if (mode === 'after' || mode === 'prependChild') {
+                  anchor = node;
+                  mode = 'after';
+                }
               }
               // After moveTo, get the ACTUAL parent from the tree
               const actualParent = dragNodes[0].parent;
@@ -719,7 +738,7 @@ export default {
       return selected.length ? selected.map((n) => n.key) : [node.key];
     },
 
-    getDragNodes(sourceNode, targetNode) {
+    getDragNodes(sourceNode, targetNode, region) {
       const nodes = this.getDragKeys(sourceNode)
         .map((key) => this.tree?.findKey?.(key))
         .filter((n) => !!n);
@@ -731,8 +750,54 @@ export default {
         (n) =>
           !nodes.some((other) => other !== n && n.isDescendantOf(other)) &&
           n !== targetNode &&
-          !targetNode?.isDescendantOf(n)
+          !targetNode?.isDescendantOf(n) &&
+          !this.isNoOpDrop(n, targetNode, region)
       );
+    },
+
+    /**
+     * Rewrite a drop region into the slot its marker actually points at.
+     *
+     * `after` is the bottom quarter of a row, so on an expanded parent the
+     * insert arrow is drawn in the gap above the first child - that is the
+     * first-child slot, not the parent's own level. wunderbaum's
+     * `_calcDropRegion` is pure geometry and never reads `expanded`, so the
+     * correction happens here. A collapsed parent has nothing below it to be
+     * confused with and keeps `after` meaning 'sibling of the parent'.
+     */
+    effectiveRegion(region, targetNode) {
+      if (region !== 'after') return region;
+      const hasVisibleChildren =
+        targetNode?.isExpanded?.() && !!targetNode.children?.length;
+      return hasVisibleChildren ? 'prependChild' : region;
+    },
+
+    /**
+     * True if the move would put the node exactly where it already is.
+     *
+     * This replaces `preventVoidMoves`, which rejected too much: it also
+     * vetoed dropping a node before or after its own parent's row, a real
+     * reparent to the level above. Only these cases change nothing.
+     *
+     * Dropping onto a folder means 'into this folder', which for a node
+     * already in it is a no-op wherever it sits. `prependChild` names an exact
+     * position, so it only counts when the node is that position already.
+     */
+    isNoOpDrop(node, targetNode, region) {
+      if (!targetNode || !region) return false;
+      switch (region) {
+        case 'over':
+        case 'appendChild':
+          return node.parent === targetNode;
+        case 'prependChild':
+          return node.parent === targetNode && targetNode.children?.[0] === node;
+        case 'before':
+          return targetNode === node.getNextSibling();
+        case 'after':
+          return targetNode === node.getPrevSibling();
+        default:
+          return false;
+      }
     },
 
     nodeFromEvent(e) {
@@ -753,7 +818,9 @@ export default {
       if (!rect || !rect.height) return 'over';
       const rel = (e.clientY - rect.top) / rect.height;
       if (rel < 0.25) return 'before';
-      if (rel > 0.75) return 'after';
+      // Remapped like a same-tree drop, so a Python callback that performs the
+      // move reads the same slot the user saw the arrow point at.
+      if (rel > 0.75) return this.effectiveRegion('after', node);
       return 'over';
     },
 

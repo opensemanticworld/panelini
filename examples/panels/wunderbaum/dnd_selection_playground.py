@@ -162,6 +162,26 @@ Watch the log for the `sourceKeys` each drag reports.
     move and `Folder A` stays. In `hier` the folder moves instead.
 11. Drag an unselected row. It selects itself first and travels alone.
 
+### Drop position
+
+A row is split into three bands: top quarter inserts before, bottom quarter
+inserts after, the middle half drops into the row.
+
+12. Drag `File 4` onto the **bottom edge** of the expanded `Folder A`. It
+    becomes the folder's first child. The arrow is drawn in the gap above
+    `File 1`, so that is where the node now lands - it used to become a
+    root-level sibling of `Folder A` instead.
+13. Collapse `Folder A` and repeat, without lingering. Now the bottom edge does
+    mean "sibling of `Folder A`", because there is no first child below it to
+    confuse it with. Dropping on the row itself still puts the node inside.
+    Hover for more than `autoExpandMS` (1.5 s) and wunderbaum expands the
+    folder under the cursor, after which case 12 applies again - the children
+    are on screen by then, so the bottom edge points at the first-child slot.
+14. Drag `File 1` onto the **top edge** of its own parent `Folder A`. It leaves
+    the folder and lands above it at root level. This used to be refused.
+15. Drag `File 1` onto the middle of `Folder A`. Nothing happens - it is already
+    in that folder, so there is no move to make.
+
 **Across trees**, drag from any tree into another. The receiver emits
 `externalDrop` with `source_keys` and moves nothing on its own.
 """
