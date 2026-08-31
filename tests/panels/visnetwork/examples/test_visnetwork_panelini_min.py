@@ -9,6 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_panelini_min import app, visnetwork_panel
+from panelini.testing import stop_server
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -34,4 +35,4 @@ def test_component(page: Page, port):
     # Check that the Panelini Card title is present
     assert page.locator("text=VisNetwork").is_visible()
 
-    server.stop()
+    stop_server(server)

@@ -484,16 +484,24 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         self._navbar = []
         spacer_width = 60
 
+        # The columns around the title are capped so a global pn.config.sizing_mode
+        # cannot stretch them and spread the header apart.
+
         # Left sidebar toggle button
         if self.sidebar_enabled:
             self._navbar.append(
                 panel.Column(
                     align="center",
+                    max_width=spacer_width,
                     objects=[
                         panel.widgets.Button(
                             css_classes=["left-navbar-button"],
                             button_style="outline",
-                            icon="menu-2",
+                            icon=(
+                                "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'"
+                                " fill='none' stroke='currentColor' stroke-width='2'>"
+                                "<path d='M4 6h16M4 12h16M4 18h16'/></svg>"
+                            ),
                             icon_size="2em",
                             on_click=self._sidebar_left_toggle,
                         ),
@@ -501,7 +509,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
                 ),
             )
         else:
-            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width)))
+            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width), max_width=spacer_width))
 
         # Logo
         self._navbar.append(
@@ -542,11 +550,16 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
             self._navbar.append(
                 panel.Column(
                     align="center",
+                    max_width=spacer_width,
                     objects=[
                         panel.widgets.Button(
                             css_classes=["right-navbar-button"],
                             button_style="outline",
-                            icon="menu-2",
+                            icon=(
+                                "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'"
+                                " fill='none' stroke='currentColor' stroke-width='2'>"
+                                "<path d='M4 6h16M4 12h16M4 18h16'/></svg>"
+                            ),
                             icon_size="2em",
                             on_click=self._sidebar_right_toggle,
                         ),
@@ -554,7 +567,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
                 )
             )
         else:
-            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width)))
+            self._navbar.append(panel.Column(panel.Spacer(width=spacer_width), max_width=spacer_width))
 
     def _panel_set(self) -> None:
         """Update the main panel with the current layout."""

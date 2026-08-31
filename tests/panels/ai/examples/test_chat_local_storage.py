@@ -11,6 +11,7 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
+from panelini.testing import stop_server
 
 _PORT = 6380
 _MODULE = "examples.panels.ai.chat_local_storage"
@@ -31,7 +32,7 @@ def panel_server(mock_langchain):
         server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server
-        server.stop()
+        stop_server(server)
 
 
 def _open_sidebar(page: Page) -> None:

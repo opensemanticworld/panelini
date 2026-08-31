@@ -27,6 +27,10 @@
 :class: autosummary longtable
 :align: left
 
+* - {py:obj}`logger <panelini.panels.wunderbaum.wunderbaum.logger>`
+  - ```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.logger
+    :summary:
+    ```
 * - {py:obj}`bundled_assets_dir <panelini.panels.wunderbaum.wunderbaum.bundled_assets_dir>`
   - ```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.bundled_assets_dir
     :summary:
@@ -34,6 +38,16 @@
 ````
 
 ### API
+
+````{py:data} logger
+:canonical: panelini.panels.wunderbaum.wunderbaum.logger
+:value: >
+   'getLogger(...)'
+
+```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.logger
+```
+
+````
 
 ````{py:data} bundled_assets_dir
 :canonical: panelini.panels.wunderbaum.wunderbaum.bundled_assets_dir
@@ -201,6 +215,14 @@ Bases: {py:obj}`panel.custom.AnyWidgetComponent`
 :canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.set_active_node
 
 ```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.set_active_node
+```
+
+````
+
+````{py:method} start_edit_title(key: str) -> None
+:canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.start_edit_title
+
+```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.start_edit_title
 ```
 
 ````

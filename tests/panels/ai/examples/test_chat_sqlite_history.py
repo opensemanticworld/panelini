@@ -13,6 +13,7 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
+from panelini.testing import stop_server
 
 _PORTS = (6360, 6361)  # one per server generation, avoids rebind races
 _MODULE = "examples.panels.ai.chat_sqlite_history"
@@ -80,7 +81,7 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
                 _send_message(page, "Persist me across restarts")
                 page.locator(".wb-row", has_text="Persist me").first.wait_for()
             finally:
-                server.stop()
+                stop_server(server)
 
             # the conversation is a document row in the SQLite file
             with sqlite3.connect(history_db) as conn:
@@ -98,6 +99,6 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
                 replayed.wait_for()
                 assert replayed.is_visible()
             finally:
-                server.stop()
+                stop_server(server)
         finally:
             context.close()

@@ -19,6 +19,10 @@
   - ```{autodoc2-docstring} panelini.testing.free_port
     :summary:
     ```
+* - {py:obj}`stop_server <panelini.testing.stop_server>`
+  - ```{autodoc2-docstring} panelini.testing.stop_server
+    :summary:
+    ```
 * - {py:obj}`disable_panelini_backgrounds <panelini.testing.disable_panelini_backgrounds>`
   - ```{autodoc2-docstring} panelini.testing.disable_panelini_backgrounds
     :summary:
@@ -105,6 +109,13 @@
 :canonical: panelini.testing.free_port
 
 ```{autodoc2-docstring} panelini.testing.free_port
+```
+````
+
+````{py:function} stop_server(server: typing.Any) -> None
+:canonical: panelini.testing.stop_server
+
+```{autodoc2-docstring} panelini.testing.stop_server
 ```
 ````
 

@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_panel_min import App
-from panelini.testing import wait_until
+from panelini.testing import stop_server, wait_until
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -47,4 +47,4 @@ def test_component(page: Page, port):
     # assert that the input field has the value "new value"
     wait_until(lambda: page.locator("#root\\[testxy\\]").input_value() == "new value")
 
-    server.stop()
+    stop_server(server)

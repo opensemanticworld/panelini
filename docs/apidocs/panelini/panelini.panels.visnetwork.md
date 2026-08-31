@@ -14,6 +14,6 @@
 :maxdepth: 1
 
 panelini.panels.visnetwork.graph_detail_tool
-panelini.panels.visnetwork.utils
 panelini.panels.visnetwork.visnetwork
+panelini.panels.visnetwork.utils
 ```
