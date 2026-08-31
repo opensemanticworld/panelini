@@ -108,4 +108,4 @@ mermaid_init_js = (
 )
 
 root_doc = "index"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "portfolio"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

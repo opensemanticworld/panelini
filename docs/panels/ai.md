@@ -1,13 +1,43 @@
-# AI Chat Panel
+# AiChat
 
 ```{image} /_static/media/ai/chat_min_overview.webp
-:alt: chat min feature
+:alt: A panelini AI chat dashboard - chat, live preview, and a provider/model sidebar
 :class: docs-media
 ```
 
-The AI chat panel adds an LLM-powered chat interface to any Panel application or Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.
+`AiChat` adds an LLM-powered chat to any Panel application or Panelini dashboard: multiple providers, a tool-calling loop, streaming responses, per-user conversation history, and an optional markdown preview pane. It is a plain Panel component that exposes two widget lists (`sidebar_objects`, `main_objects`), so it drops into the Panelini shell with one flag or composes by hand anywhere else.
 
-## Overview
+```{note}
+Every live demo on this page runs against a stand-in model that streams one fixed answer: **no language model is running and no request leaves your browser**. LangChain cannot be installed under Pyodide (`langchain-core` needs `uuid-utils` and `zstandard`, native extensions with no pure-Python wheel), and provider credentials do not belong in a public page. Run the examples locally with your own credentials to chat for real.
+```
+
+## Quickstart
+
+The chat is an optional extra:
+
+```bash
+uv add "panelini[ai]"          # or: pip install "panelini[ai]"
+```
+
+That pulls in `langchain`, `langchain-anthropic`, `langchain-openai`, `pyyaml`, and `python-dotenv`. Credentials come from the environment, so drop a `.env` next to your script:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_ENDPOINT=https://api.anthropic.com
+```
+
+Then one flag is enough:
+
+```python
+from panelini import Panelini
+
+app = Panelini(title="My AI App", use_ai=True)
+app.servable()
+```
+
+`use_ai=True` puts the chat interface in the main area and the provider, model, and history controls in the left sidebar.
+
+## Architecture
 
 ```{mermaid}
 graph TB
@@ -48,102 +78,271 @@ graph TB
     class anthropic,azure providerNode
 ```
 
-The panel is structured in layers:
+- **AiChat** - UI widgets: chat interface, sidebar controls, preview pane
+- **AiBackend** - business logic: provider management, tool execution, message routing
+- **AiInterface** - provider-agnostic LLM wrapper built on LangChain
+- **Config** - YAML configuration with environment variable resolution
+- **Tools** - extensible LangChain tool system
 
-- **AiChat** -- UI widgets (chat interface, sidebar controls, preview pane)
-- **AiBackend** -- Business logic (provider management, tool execution, message routing)
-- **AiInterface** -- Provider-agnostic LLM wrapper (LangChain-based)
-- **Config** -- YAML configuration with environment variable resolution
-- **Tools** -- Extensible LangChain tool system
+A single message makes the round trip like this:
 
-## Installation
+```{mermaid}
+sequenceDiagram
+    participant User as User
+    participant Chat as ChatInterface
+    participant FE as AiChat
+    participant BE as AiBackend
+    participant AI as AiInterface
+    participant LLM as LLM Provider
 
-The AI chat panel is an optional extra:
-
-```bash
-uv add panelini[ai]
+    User->>Chat: Type message
+    Chat->>FE: _handle_message()
+    FE->>BE: process_message() or stream_message()
+    BE->>AI: get_response() or get_response_with_tools()
+    AI->>LLM: ainvoke() / astream()
+    LLM-->>AI: Response / chunks
+    AI-->>BE: Text + tool_calls
+    BE->>BE: Execute tools (if any)
+    BE-->>FE: {"response", "preview_updates"}
+    FE-->>Chat: Yield response
+    Chat-->>User: Display message
 ```
 
-or with pip:
+## Minimal chat
 
-```bash
-pip install panelini[ai]
+```{image} /_static/media/ai/chat_min_overview.webp
+:alt: A panelini AI chat answering a question
+:class: docs-media
 ```
 
-This installs the required dependencies: `langchain`, `langchain-anthropic`, `langchain-openai`, `pyyaml`, and `python-dotenv`.
+The shortest working chat. Serving the *factory* rather than a single instance gives every browser session its own app, so conversations stay per user.
 
-## Quick Start
-
-```python
-from panelini import Panelini
-
-app = Panelini(title="My AI App", use_ai=True)
-app.servable()
+```{literalinclude} ../../examples/panels/ai/chat_min.py
+:language: python
+:pyobject: create_app
 ```
 
-That's it. The `use_ai=True` flag adds the chat interface to the main area and provider/model controls to the left sidebar.
+What that gives you:
 
-### Standalone Usage (without Panelini)
+- **Left sidebar** - two icon tabs: conversations (per-user history as a drag-and-drop folder tree with new chat, folders, import/export, search, inline rename, delete with undo, and a toggle to a date-grouped list view) and setup (provider/model pickers, temperature slider, tool toggles).
+- **Main area** - the chat window, filling the width. Add `ai_show_preview=True` for a markdown preview pane next to it that the `update_preview` tool can write to.
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_min.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_min.py)
+
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/ai/chat_min.html" title="Minimal AI chat" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/ai/chat_min.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
+## Standalone, without the Panelini shell
+
+`AiChat` never imports Panelini. Build it directly and place its widget lists wherever you like:
 
 ```python
 import panel as pn
 
 from panelini.panels.ai import AiChat
 
-chat = AiChat(
-    system_message="You are a helpful assistant.",
-)
+chat = AiChat(system_message="You are a helpful assistant.")
 
-# Use sidebar_objects and main_objects in any Panel layout
-app = pn.Row(*chat.main_objects)
-app.servable()
+pn.Row(*chat.main_objects).servable()
 ```
 
-### Configuration Parameters
+## Without preview or tools
 
-```python
-app = Panelini(
-    title="My AI App",
-    use_ai=True,
-    ai_system_message="You are a data analysis assistant.",
-    ai_welcome_message="Hello! How can I help you today?",
-    ai_config_path="/path/to/config.yml",
-)
+```{image} /_static/media/ai/chat_no_preview_no_tools_feature.webp
+:alt: AI chat filling the full main area with no preview pane
+:class: docs-media
 ```
 
-```{list-table}
-:header-rows: 1
-:widths: 25 15 60
+`AiChat(show_preview=False, show_tools=False)` strips the panel down to the conversation: the chat window fills the whole main area instead of sharing it with the preview, and the "Basic Tools" card is dropped from the sidebar. The provider, model, and temperature controls stay. Constructing `AiChat` by hand and stitching its two widget lists into the layout is what buys that control - `use_ai=True` is the convenience path, not the only one.
 
-* - Parameter
-  - Type
-  - Description
-* - `use_ai`
-  - `Boolean`
-  - Enable the AI chat panel (default: `False`).
-* - `ai_system_message`
-  - `String`
-  - System message for the AI backend (default: `"You are a helpful assistant."`).
-* - `ai_welcome_message`
-  - `String`
-  - Optional greeting posted into a new chat. `None` (the default) starts it empty.
-* - `ai_show_preview`
-  - `Boolean`
-  - Show the markdown preview pane next to the chat (default: `False`).
-* - `ai_config_path`
-  - `str | Path`
-  - Path to a custom `config.yml`. Auto-discovered if `None`.
+```{literalinclude} ../../examples/panels/ai/chat_no_preview_no_tools.py
+:language: python
+:pyobject: create_app
 ```
 
-## Provider Configuration
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_no_preview_no_tools.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_no_preview_no_tools.py)
 
-Providers and models are defined in a YAML configuration file. The panel searches for configuration in this order:
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/ai/chat_no_preview_no_tools.html" title="AI chat without preview or tools" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/ai/chat_no_preview_no_tools.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 
-1. `PANELINI_AI_CONFIG_PATH` environment variable
-2. Walk upward from the working directory looking for `config.yml` or `config.yaml`
-3. Fall back to the bundled default configuration
+## Custom tools
 
-### Configuration Format
+```{image} /_static/media/ai/chat_custom_tool_feature.webp
+:alt: chat custom tool feature
+:class: docs-media
+```
+
+Any LangChain `BaseTool` passed to `tools=` shows up as an extra checkbox in the sidebar and becomes callable by the model once ticked. The example gives the model an in-memory key-value store with `get` / `set` / `update` / `delete` / `list`.
+
+A tool is an input schema plus a `_run` / `_arun` pair:
+
+```{literalinclude} ../../examples/panels/ai/chat_custom_tool.py
+:language: python
+:pyobject: LocalStorageInput
+```
+
+````{dropdown} The full tool implementation
+```{literalinclude} ../../examples/panels/ai/chat_custom_tool.py
+:language: python
+:pyobject: LocalStorageTool
+```
+````
+
+Wiring it in is the same hand-composed layout as above, with the tool handed to the constructor:
+
+```{literalinclude} ../../examples/panels/ai/chat_custom_tool.py
+:language: python
+:pyobject: create_app
+```
+
+The checkbox label comes from `tool.name` and its tooltip from `tool.description`. Ticking it posts a system message into the chat:
+
+> **Tools updated** - 2 tool(s) now available
+
+Toggling routes through `AiBackend.update_tools()`, which rebinds the tools on the underlying `AiInterface` without clearing history. Anything that subclasses `BaseTool` works: HTTP fetchers, database lookups, vector-store retrievers, your own domain APIs. See the [LangChain tool authoring docs](https://python.langchain.com/docs/concepts/tools/) for the full contract.
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_custom_tool.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_custom_tool.py)
+
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/ai/chat_custom_tool.html" title="AI chat with a custom tool" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/ai/chat_custom_tool.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
+## Two chats in synced tabs
+
+```{image} /_static/media/ai/chat_multi_tab_feature.webp
+:alt: chat multi tab feature
+:class: docs-media
+```
+
+Each `AiChat` carries its own conversation history, provider/model/temperature selection, tool set, and preview pane, which is exactly the isolation you want for domain-specialised assistants: the *Ingest* bot's conversation cannot leak into *Digest*'s context. Two `pn.Tabs` (one in the sidebar, one in the main area) are kept in step with `jslink`, which syncs the `active` index **purely in the browser** with no Python round trip per click.
+
+```{literalinclude} ../../examples/panels/ai/chat_multi_tab.py
+:language: python
+:pyobject: create_app
+```
+
+```{tip}
+Need more than two? Add more tabs - `jslink` scales trivially. Give each chat its own `history_store` as shown, or the assistants will list one another's conversations, since the default store is shared per process.
+```
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_multi_tab.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_multi_tab.py) - [Panel `jslink` docs](https://panel.holoviz.org/how_to/links/examples/jslink_async.html)
+
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/ai/chat_multi_tab.html" title="Multi-tab AI chats" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/ai/chat_multi_tab.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
+## History backends
+
+Conversations are owned by the resolved user id and, by default, live in memory for the lifetime of the process. Two other backends need no more than a constructor argument.
+
+### Browser localStorage
+
+`ai_history_store="browser"` keeps each user's conversations in their own browser: history survives reloads and server restarts with no server-side database. The trade-off is localStorage semantics - per browser only (no cross-device history) and a quota of roughly 5MB.
+
+```{literalinclude} ../../examples/panels/ai/chat_local_storage.py
+:language: python
+:pyobject: create_app
+```
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_local_storage.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_local_storage.py)
+
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/ai/chat_local_storage.html" title="AI chat with browser-stored history" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/ai/chat_local_storage.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
+### SQLite
+
+One `SqliteHistoryStore` is created at module level and handed to every session, so all sessions share the file while each user still only sees their own conversations - tenancy is by user id, not by store.
+
+```{literalinclude} ../../examples/panels/ai/chat_sqlite_history.py
+:language: python
+:start-at: DB_PATH = Path(
+:end-at: STORE = SqliteHistoryStore(DB_PATH)
+```
+
+```{literalinclude} ../../examples/panels/ai/chat_sqlite_history.py
+:language: python
+:pyobject: create_app
+```
+
+Setting `PANELINI_HISTORY_DB` alone gives the [minimal chat](#minimal-chat) the same persistence without any code change; the explicit store is for when you want to choose the path yourself or swap in a different backend.
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/chat_sqlite_history.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_chat_sqlite_history.py)
+
+## Plot tool
+
+An agent that draws. `PlotPanel` sits beside the chat and five `BaseTool` wrappers (`plot_by_code`, `run_code`, `load_data_from_csv`, `attach_current_plot_to_osw_page`, `document_current_evaluation`) let the model write matplotlib code, run it inside a throwaway `python:3.12-slim` Docker container, and hand the resulting figure back to the panel. The right sidebar keeps the last plot's source, a model picker, and a *Regenerate plot* button for free-text revisions.
+
+When the OSW environment variables are set, `make_osw_tools()` adds eight connector tools on top; without them it returns an empty list and the example still runs.
+
+```{literalinclude} ../../examples/panels/ai/plot_by_code.py
+:language: python
+:start-at: plot_panel = PlotPanel()
+:end-at: app.main_set(objects=[pn.Row(chat_card, plot_card, sizing_mode="stretch_both")])
+```
+
+```{note}
+This example needs a running Docker daemon and the extra sandbox dependencies:
+`uv sync --extra ai --extra ai-llm-sandbox` (add `--extra ai-osw` for the OSW connector). There is no live demo - Pyodide has no Docker.
+```
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/plot_by_code.py)
+
+## DrawAI: a drawio beautifier
+
+```{image} /_static/media/ai/drawai_beautify_feature.png
+:alt: DrawAI before and after compare of a drawio diagram
+:class: docs-media
+```
+
+DrawAI turns the chat into a focused tool. Upload a `.drawio` or `.drawio.png`, chat a beautification intent ("tighter spacing", "align on grid", "recolor to a blue theme"), and the model rewrites the diagram's XML in place. The result is a before/after compare rendered through the drawio web viewer, with a Download button for the cleaned-up file.
+
+The tool calls Claude through the `anthropic` SDK directly, with prompt caching on both the system prompt and the diagram XML. Credentials come from the same `anthropic` provider block in `config.yml` that the chat backend reads, so DrawAI honours whatever endpoint or key the rest of the app is configured with.
+
+```{literalinclude} ../../examples/panels/ai/drawai_beautify.py
+:language: python
+:start-at: class BeautifyDrawioTool(BaseTool):
+:end-at: args_schema: type[BaseModel] = BeautifyDrawioInput
+```
+
+````{dropdown} The full tool implementation
+```{literalinclude} ../../examples/panels/ai/drawai_beautify.py
+:language: python
+:pyobject: BeautifyDrawioTool
+```
+````
+
+The tool is registered like any other, then pre-enabled so the model can reach it from the first message:
+
+```{literalinclude} ../../examples/panels/ai/drawai_beautify.py
+:language: python
+:start-at: api_key, base_url = _anthropic_credentials_from_config()
+:end-at: chat.tool_checkboxes[tool.name]["checkbox"].value = True
+:dedent: 4
+```
+
+```{note}
+Shown as a screen capture rather than a live demo: the chat stack cannot be installed under Pyodide, and a real run needs provider credentials. Install with `pip install "panelini[ai,ai-drawio]"` and run it locally to try it.
+```
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/ai/drawai_beautify.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/ai/examples/test_drawai_media.py)
+
+## Providers
+
+Providers and models come from a YAML file. The panel looks for one in this order:
+
+1. the `PANELINI_AI_CONFIG_PATH` environment variable
+2. walking upward from the working directory for `config.yml` or `config.yaml`
+3. the bundled [`default_config.yml`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/default_config.yml)
+
+### Configuration format
 
 ```yaml
 providers:
@@ -171,11 +370,11 @@ providers:
         value: "azure_openai/gpt-4o-2024-11-20"
 ```
 
-Model values use the [LiteLLM naming convention](https://docs.litellm.ai/docs/providers): `provider_prefix/model-id`. The prefix is stripped before passing the model name to LangChain. When `client_type` is omitted, it is derived directly from the first model's prefix. Bare model names (without a prefix) still work when `client_type` is set explicitly.
+Model values use the [LiteLLM naming convention](https://docs.litellm.ai/docs/providers): `provider_prefix/model-id`. The prefix is stripped before the model name reaches LangChain. When `client_type` is omitted it is derived from the first model's prefix; bare model names still work when `client_type` is set explicitly.
 
-Environment variables referenced with `${VAR_NAME}` are resolved at load time. A `ValueError` is raised if a referenced variable is not set.
+Variables referenced as `${VAR_NAME}` are resolved at load time, and a `ValueError` is raised if one is unset.
 
-### Supported Providers
+### Supported providers
 
 ```{list-table}
 :header-rows: 1
@@ -183,7 +382,7 @@ Environment variables referenced with `${VAR_NAME}` are resolved at load time. A
 
 * - Provider
   - `client_type`
-  - Required Environment Variables
+  - Required environment variables
 * - Anthropic
   - `anthropic`
   - `ANTHROPIC_API_KEY`, `ANTHROPIC_ENDPOINT`
@@ -192,72 +391,34 @@ Environment variables referenced with `${VAR_NAME}` are resolved at load time. A
   - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`
 ```
 
-## UI Layout
+## UI layout
 
-When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
+### Sidebar
 
-### Sidebar Controls
+The left sidebar receives two icon tabs. The conversations tab (💬, active by default) holds a single card:
 
-The left sidebar receives two icon tabs. The conversations tab (💬, active by
-default) holds a single card:
-
-- **Conversations** -- New chat, new folder, import/export chat as JSON,
-  a tree/list view toggle, search over titles and messages, and the
-  user's conversations in a drag-and-drop folder tree (inline rename,
-  delete with undo); the list view groups them by date instead
+- **Conversations** - new chat, new folder, import/export chat as JSON, a tree/list view toggle, search over titles and messages, and the user's conversations in a drag-and-drop folder tree (inline rename, delete with undo); the list view groups them by date instead
 
 The setup tab (⚙️) holds the model controls:
 
-- **Provider Settings** -- Select the LLM provider
-- **Model Settings** -- Select the model and adjust temperature
-- **Basic Tools** -- Toggle available tools on/off
+- **Provider Settings** - select the LLM provider
+- **Model Settings** - select the model and adjust temperature
+- **Basic Tools** - toggle available tools on and off
 
-### Main Content
+### Main area
 
-The main area receives the chat interface with streaming responses. With
-`ai_show_preview=True` (`show_preview=True` on `AiChat`) it turns into a
-two-column layout:
+The main area receives the chat interface with streaming responses. With `ai_show_preview=True` (`show_preview=True` on `AiChat`) it becomes a two-column layout:
 
-- **Chat** (left) -- The chat interface with streaming responses
-- **Preview** (right) -- A markdown preview pane updated by the `update_preview` tool
+- **Chat** (left) - the conversation
+- **Preview** (right) - a markdown pane written to by the `update_preview` tool
 
-### Conversation History
+### Conversation document model
 
-Every chat keeps its conversations per user. Without configuration they live
-in memory for the lifetime of the process; set `PANELINI_HISTORY_DB` to a file
-path to persist them in SQLite, pass your own store as `ai_history_store`, or
-pass `ai_history_store="browser"` to keep each user's history in their
-browser's localStorage (per-browser persistence across reloads and restarts,
-no server-side database, ~5MB quota).
-`ai_history_view` picks the initial sidebar style: `"tree"` (a
-drag-and-drop folder tree, the default: organize chats like a filesystem)
-or `"list"` (date-grouped); an icon in the New Chat row switches between
-the two at runtime (per session; a reload starts from `ai_history_view`
-again, and a typed search filter carries over the switch). Conversations
-are owned by the resolved user id (see `user_resolver`); anonymous
-visitors get a cookie-backed id.
+Each conversation is stored as one JSON document with embedded messages, defined by the bundled [`chat_history_schema_v2.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema_v2.json). The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: plain JSON Schema carrying a JSON-LD `@context` that maps properties to vocabulary terms (schema.org where a term exists). The same document is the import/export format behind the sidebar icons, so a downloaded chat re-imports losslessly here or into any other store.
 
-#### Document model
+All backends implement the shared `DocumentHistoryStore` contract: SQLite keeps one `documents` row per conversation or folder, the in-memory store keeps plain dicts, and the shape maps 1:1 onto a Postgres JSONB column or a browser object store.
 
-Each conversation is stored as one JSON document with embedded messages,
-defined by the bundled
-[`chat_history_schema_v2.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema_v2.json).
-The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: a
-plain JSON-Schema carrying a JSON-LD `@context` that maps properties to
-vocabulary terms (schema.org where a term exists). The same document is the
-import/export format of the sidebar icons, so a downloaded chat re-imports
-losslessly here or in any other store.
-
-All backends implement a shared document contract
-(`DocumentHistoryStore`): SQLite keeps one `documents` row per conversation
-or folder, the in-memory store keeps plain dicts, and the shape maps 1:1
-onto a Postgres JSONB column or a browser object store.
-
-## Tools
-
-The panel includes a tool system based on LangChain's `BaseTool`. Tools are toggled via sidebar checkboxes.
-
-### Built-in Tools
+## Built-in tools
 
 ```{list-table}
 :header-rows: 1
@@ -271,190 +432,52 @@ The panel includes a tool system based on LangChain's `BaseTool`. Tools are togg
   - Renders markdown content in the preview pane. Supports headers, tables, code blocks, and images.
 ```
 
-### Streaming vs Tool Mode
+**Streaming vs tool mode.** With no tools selected, responses stream token by token inside a collapsible `<details>` block that expands when complete. With tools selected, the model runs a tool execution loop (up to 10 iterations) and the final text is displayed once every call has returned.
 
-- **No tools selected** -- Responses stream token-by-token inside a collapsible `<details>` block, then expand when complete.
-- **Tools selected** -- The model runs a tool execution loop (up to 10 iterations). The final text response is displayed after all tool calls complete.
+## Panelini parameters
 
-### Adding Custom Tools
-
-Custom tools can be passed directly to `AiChat` via the `tools` parameter. They appear as additional checkboxes in the sidebar alongside the built-in tools:
-
-```python
-from panelini.panels.ai import AiChat
-
-chat = AiChat(tools=[MyTool()])
-```
-
-To create a custom tool, subclass LangChain's `BaseTool`:
-
-```python
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-
-
-class MyToolInput(BaseModel):
-    query: str = Field(description="The search query")
-
-
-class MyTool(BaseTool):
-    name: str = "my_tool"
-    description: str = "Describe what this tool does."
-    args_schema: type[BaseModel] = MyToolInput
-
-    def _run(self, query: str) -> str:
-        return f"Result for: {query}"
-
-    async def _arun(self, query: str) -> str:
-        return self._run(query=query)
-```
-
-See ``examples/panels/ai/ai_chat_custom_tool.py`` for a complete working example with a LocalStorage tool.
-
-## Module Structure
-
-```text
-panelini/panels/ai/
-├── __init__.py
-├── frontend.py          # UI layer (AiChat class)
-├── backend.py           # Business logic (AiBackend class)
-├── default_config.yml   # Bundled default provider config
-├── history/
-│   ├── __init__.py
-│   ├── store.py                      # Records + ChatHistoryStore interface
-│   ├── document.py                   # Document layer + in-memory backend
-│   ├── sqlite_store.py               # SQLite backend
-│   ├── local_storage_store.py        # Browser localStorage backend
-│   ├── default.py                    # Shared default store
-│   ├── panel.py                      # Date-grouped sidebar list
-│   ├── tree.py                       # Wunderbaum folder tree
-│   ├── chat_history_schema_v2.json   # Conversation document schema (OO-LD)
-│   └── chat_history_schema_v2.sql    # SQLite document table DDL
-├── tools/
-│   ├── __init__.py
-│   └── basic_tools.py   # Built-in tools
-└── utils/
-    ├── __init__.py
-    ├── ai_interface.py   # Provider-agnostic LLM interface
-    └── config.py         # YAML config loader
-```
-
-## API Reference
-
-### `AiChat`
-
-Standalone AI chat panel. Can be used independently in any Panel app or integrated into Panelini. Exposes widget lists for integration.
+These `Panelini` parameters configure the embedded chat. Everything else is available on `AiChat` directly.
 
 ```{list-table}
 :header-rows: 1
-:widths: 35 65
+:widths: 25 15 60
 
-* - Property / Method
+* - Parameter
+  - Type
   - Description
-* - `AiChat(system_message, welcome_message, config_path, tools)`
-  - Constructor. All parameters are optional. Pass custom ``BaseTool`` instances via ``tools``.
-* - `sidebar_objects`
-  - Property returning a list of Panel viewables for the sidebar.
-* - `main_objects`
-  - Property returning a list of Panel viewables for the main area.
+* - `use_ai`
+  - `Boolean`
+  - Enable the AI chat panel (default: `False`).
+* - `ai_system_message`
+  - `String`
+  - System message for the AI backend (default: `"You are a helpful assistant."`).
+* - `ai_welcome_message`
+  - `String`
+  - Optional greeting posted into a new chat. `None` (the default) starts it empty.
+* - `ai_show_preview`
+  - `Boolean`
+  - Show the markdown preview pane next to the chat (default: `False`).
+* - `ai_config_path`
+  - `str | Path`
+  - Path to a custom `config.yml`. Auto-discovered when `None`.
+* - `ai_history_store`
+  - `ChatHistoryStore | str`
+  - History backend. `None` uses the shared default (SQLite at `PANELINI_HISTORY_DB`, else in memory); `"browser"` uses localStorage.
+* - `ai_history_view`
+  - `Selector`
+  - Initial history sidebar style: `"tree"` (default) or `"list"`. A toggle switches at runtime; a reload starts from this value again.
+* - `show_user`
+  - `Boolean`
+  - Show the resolved user as a chip in the header (default: `False`).
+* - `user_resolver`
+  - `Callable`
+  - Resolves the application user id that owns the history. Defaults to the Panel auth user, falling back to an anonymous browser cookie.
 ```
 
-### `AiBackend`
+## API reference
 
-Business logic layer managing providers, models, tools, and message processing.
-
-```{list-table}
-:header-rows: 1
-:widths: 35 65
-
-* - Method
-  - Description
-* - `AiBackend(system_message, config_path)`
-  - Constructor. Loads config and creates the initial AI interface.
-* - `get_available_providers()`
-  - Returns `{display_name: ProviderConfig}` dict.
-* - `get_available_models(provider)`
-  - Returns `{display_name: ModelConfig}` dict for a given provider.
-* - `update_provider(provider)`
-  - Switch provider, reset model, clear history.
-* - `update_model(model)`
-  - Switch model, preserve history.
-* - `update_temperature(temperature)`
-  - Update sampling temperature, preserve history.
-* - `update_tools(tools)`
-  - Update available tools, preserve history.
-* - `process_message(message, use_tools)`
-  - Process a user message. Returns `{"response": str, "preview_updates": list}`.
-* - `stream_message(message)`
-  - Async generator yielding response token chunks.
-* - `clear_history()`
-  - Clear conversation history.
-* - `export_chat_data(provider, model, temperature)`
-  - Export the active conversation as a v2 conversation document.
-* - `restore_chat_data(chat_data)`
-  - Restore the model context from a v2 document (or legacy export).
-```
-
-### `AiInterface`
-
-Low-level provider-agnostic LLM interface built on LangChain.
-
-```{list-table}
-:header-rows: 1
-:widths: 35 65
-
-* - Method
-  - Description
-* - `AiInterface(provider, model_name, temperature, max_tokens, tools, system_message)`
-  - Constructor. Initializes the LLM client and binds tools.
-* - `get_response(user_message, stream)`
-  - Get a response (streaming or non-streaming).
-* - `get_response_with_tools(user_message)`
-  - Get a response that may include tool calls.
-* - `add_tool(tool)`
-  - Dynamically add a tool to the interface.
-* - `clear_history()`
-  - Clear conversation history.
-```
-
-### Configuration Classes
-
-```{list-table}
-:header-rows: 1
-:widths: 30 70
-
-* - Class / Function
-  - Description
-* - `AppConfig`
-  - Top-level config dataclass. Contains a `providers` dict and a `default_provider` property.
-* - `ProviderConfig`
-  - Frozen dataclass for a provider (key, display_name, client_type, env_vars, models).
-* - `ModelConfig`
-  - Frozen dataclass for a model (name, value).
-* - `load_config(path=None)`
-  - Load and validate a YAML config file. Auto-discovers if path is `None`.
-```
-
-### Data Flow
-
-```{mermaid}
-sequenceDiagram
-    participant User as User
-    participant Chat as ChatInterface
-    participant FE as AiChat
-    participant BE as AiBackend
-    participant AI as AiInterface
-    participant LLM as LLM Provider
-
-    User->>Chat: Type message
-    Chat->>FE: _handle_message()
-    FE->>BE: process_message() or stream_message()
-    BE->>AI: get_response() or get_response_with_tools()
-    AI->>LLM: ainvoke() / astream()
-    LLM-->>AI: Response / chunks
-    AI-->>BE: Text + tool_calls
-    BE->>BE: Execute tools (if any)
-    BE-->>FE: {"response", "preview_updates"}
-    FE-->>Chat: Yield response
-    Chat-->>User: Display message
-```
+- {py:class}`panelini.panels.ai.frontend.AiChat` - the panel itself
+- {py:class}`panelini.panels.ai.backend.AiBackend` - providers, tools, message routing
+- {py:class}`panelini.panels.ai.utils.ai_interface.AiInterface` - the LangChain wrapper
+- {py:func}`panelini.panels.ai.utils.config.load_config` - YAML config loading
+- {py:class}`panelini.main.Panelini` - the full parameter list of the shell

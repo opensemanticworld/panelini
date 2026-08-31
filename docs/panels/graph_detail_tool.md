@@ -1,15 +1,11 @@
 # GraphDetailTool
 
 ```{image} /_static/media/visnetwork/graph_detail_tool_overview.webp
-:alt: graph detail tool overview
+:alt: a graph on the left, a node detail editor on the right
 :class: docs-media
 ```
 
-The `GraphDetailTool` is a complete UI wrapper around `VisNetwork` that adds node detail visualization, JSON editing, and multi-node selection capabilities.
-
-## Overview
-
-GraphDetailTool composes `VisNetwork` and `JsonEditor` into a full graph editing workspace:
+`GraphDetailTool` composes {doc}`visnetwork` and {doc}`jsoneditor` into a ready-made graph editing workspace: a graph on the left, edit-mode controls above it, and a detail pane on the right that follows the selection.
 
 ```{mermaid}
 graph LR
@@ -32,52 +28,88 @@ graph LR
     class details detailNode
 ```
 
-## Features
+## Quickstart
 
-- **Edit mode controls**: Toggle between view, add node, and add edge modes
-- **Node detail panel**: Click a node to see its properties in a JSON editor
-- **Content visualization**: Automatic rendering based on node data type:
-  - Images (PNG, JPG, SVG)
-  - CSV data (interactive table + Plotly charts)
-  - PDF documents
-  - Plain text
-- **Multi-node selection**: Select multiple nodes to see a comparison table with bulk editing
-- **Drag position tracking**: Node positions are automatically updated on drag
+Construct it exactly like a `VisNetwork`: it takes the same `nodes` and `edges`, and builds the rest of the workspace around them.
 
-## Usage
-
-```python
-from panelini.panels.visnetwork import GraphDetailTool
-
-nodes = [
-    {"id": 1, "label": "Image Node", "shape": "image", "image": "data:image/png;base64,..."},
-    {"id": 2, "label": "Data Node", "csv_data": "col1,col2\n1,2\n3,4"},
-    {"id": 3, "label": "Text Node", "text_content": "Hello World"},
-]
-
-edges = [
-    {"from": 1, "to": 2},
-    {"from": 2, "to": 3},
-]
-
-tool = GraphDetailTool(nodes=nodes, edges=edges)
-
-# Access the underlying VisNetwork
-tool.visnetwork.add_node({"id": 4, "label": "New"})
-
-# The tool provides a complete Panel layout
-tool.layout  # Use this in your Panel app
+```{literalinclude} ../../examples/panels/visnetwork/graph_detail_tool.py
+:language: python
+:start-at: nodes = [
+:end-at: tool = GraphDetailTool(nodes=nodes, edges=edges)
 ```
 
-## Detail Panel Tabs
+The underlying graph stays reachable as `tool.visnetwork`, so the whole [manipulation API](visnetwork.md#manipulation-api) is available:
 
-When a node is clicked, the detail panel shows two tabs:
+```python
+tool.visnetwork.add_node({"id": 4, "label": "New"})
+```
 
-1. **Visualization**: Renders the node's content based on its data type
-2. **Details**: Shows all node properties in a JsonEditor for direct editing
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/graph_detail_tool.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_graph_detail_tool.py)
 
-Changes made in the JSON editor are automatically synced back to the graph.
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/visnetwork/graph_detail_tool.html" title="GraphDetailTool workspace" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/visnetwork/graph_detail_tool.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
 
-## API Reference
+## The detail panel
 
-See the full API documentation: {py:class}`panelini.panels.visnetwork.graph_detail_tool.GraphDetailTool`
+Clicking a node opens two tabs:
+
+1. **Visualization** renders the node's content according to its data type.
+2. **Details** shows every node property in a `JsonEditor` for direct editing. Edits sync straight back to the graph.
+
+Content rendering is picked from two node keys, both holding a data URL. An `image` key renders as a picture; a `data` key is dispatched on its MIME type:
+
+| `data` starts with | Rendered as |
+| --- | --- |
+| `data:text/csv`, `data:application/vnd.ms-excel` | an interactive table plus a Plotly chart with column pickers |
+| `data:text/plain` | plain text |
+| `data:application/pdf` | an embedded document viewer |
+
+A node with neither key opens on the Details tab instead. That is the shape the [file drop](visnetwork.md#file-drop) handler produces, which is why dropped files render without extra wiring.
+
+Selecting several nodes swaps the pane for a Tabulator comparison table with bulk editing, and node positions are written back as you drag.
+
+## Growing a graph from dropped files
+
+```{image} /_static/media/visnetwork/graph_detail_tool_2_feature.png
+:alt: the workspace seeded with two file-drop prompt nodes
+:class: docs-media
+```
+
+Because the workspace embeds a `VisNetwork`, it inherits [file drop](visnetwork.md#file-drop). This variant seeds two prompt nodes; dropping an image or a CSV onto the canvas spawns a node from the file, which the detail pane then renders and lets you edit.
+
+```{literalinclude} ../../examples/panels/visnetwork/graph_detail_tool_2.py
+:language: python
+:start-at: nodes = [
+:end-before: if __name__
+```
+
+[Source](https://github.com/opensemanticworld/panelini/blob/main/examples/panels/visnetwork/graph_detail_tool_2.py) - [Test](https://github.com/opensemanticworld/panelini/blob/main/tests/panels/visnetwork/examples/test_graph_detail_tool_2.py)
+
+```{raw} html
+<iframe class="pf-live" src="../_static/portfolio/apps/visnetwork/graph_detail_tool_2.html" title="GraphDetailTool file-drop workspace" loading="lazy"></iframe>
+<p><a href="../_static/portfolio/apps/visnetwork/graph_detail_tool_2.html" target="_blank" rel="noopener">Open fullscreen</a></p>
+```
+
+## Edit modes
+
+The control row toggles the underlying graph between view, add-node, and add-edge modes, the same three states described under [edit modes](visnetwork.md#edit-modes).
+
+## Layout
+
+`GraphDetailTool` implements `__panel__`, so it drops into any Panel layout directly:
+
+```python
+app.main_set(objects=[pn.Card(title="Workspace", objects=[tool])])
+```
+
+```{note}
+It duck-types as a `Viewer` without subclassing `panel.viewable.Viewer`, so `pn.serve(tool)` does not satisfy the type checker. Both examples serve it with a `ty: ignore` comment.
+```
+
+## API reference
+
+- {py:class}`panelini.panels.visnetwork.graph_detail_tool.GraphDetailTool` - the workspace
+- {py:class}`panelini.panels.visnetwork.visnetwork.VisNetwork` - the graph it wraps
+- {py:class}`panelini.panels.jsoneditor.jsoneditor.JsonEditor` - the detail editor

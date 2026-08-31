@@ -71,6 +71,6 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 
 ## See also
 
-- {doc}`../jsoneditor/jsoneditor_pydantic` - deriving the form schema from a Pydantic model
-- {doc}`../visnetwork/visnetwork` - the standalone graph widget
+- [Pydantic models](../../panels/jsoneditor.md#pydantic-models) - deriving the form schema from a Pydantic model
+- {doc}`../../panels/visnetwork` - the standalone graph widget
 - {doc}`usecase_wunderbaum_visnetwork` - the tree + graph variant

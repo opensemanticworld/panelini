@@ -6,35 +6,35 @@ Walkthroughs of every example in [`examples/`](https://github.com/opensemanticwo
 :gutter: 3
 
 :::{grid-item-card} Chat
-:link: chat/index
+:link: ../panels/ai
 :link-type: doc
 :img-top: /_static/media/ai/chat_min_overview.webp
 LLM chat panels - drop-in, tool-augmented, and multi-tab.
 :::
 
 :::{grid-item-card} JSON Editor
-:link: jsoneditor/index
+:link: ../panels/jsoneditor
 :link-type: doc
 :img-top: /_static/media/jsoneditor/jsoneditor_pydantic_overview.png
 Schema-driven forms, including a Pydantic-backed variant.
 :::
 
 :::{grid-item-card} VisNetwork
-:link: visnetwork/index
+:link: ../panels/visnetwork
 :link-type: doc
 :img-top: /_static/media/visnetwork/visnetwork_context_menu_feature.webp
 Interactive network graphs with context menus and drag interactions.
 :::
 
 :::{grid-item-card} Wunderbaum
-:link: wunderbaum/index
+:link: ../panels/wunderbaum
 :link-type: doc
 :img-top: /_static/media/wunderbaum/virtual_filesystem_overview.webp
 Trees and tree-grids - columns, checkboxes, lazy loading, drag-and-drop, and more.
 :::
 
 :::{grid-item-card} Terminal Mirror
-:link: terminalmirror/index
+:link: ../panels/terminalmirror
 :link-type: doc
 :img-top: /_static/media/terminalmirror/terminalmirror_panelini_min_feature.webp
 Stream Python stdout and stderr into a live on-screen terminal.

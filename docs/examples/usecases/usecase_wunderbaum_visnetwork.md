@@ -75,5 +75,5 @@ This example runs entirely in your browser via Pyodide. The first load downloads
 ## See also
 
 - {doc}`usecase_jsoneditor_visnetwork` - the form + graph variant
-- {doc}`../wunderbaum/virtual_filesystem` - the full Wunderbaum feature demo (DnD, context menu, rename)
+- [Virtual filesystem](../../panels/wunderbaum.md#virtual-filesystem) - the full Wunderbaum feature demo (DnD, context menu, rename)
 - {doc}`../../panels/visnetwork` - the standalone graph widget

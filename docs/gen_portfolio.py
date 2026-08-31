@@ -1,13 +1,8 @@
-"""Generate the docs Pyodide portfolio: thumbnails, cards page, and Pyodide apps.
+"""Build the live Pyodide apps that the docs pages embed.
 
-What it does:
-- Discovers the example panels (excludes ``plot_by_code`` and, for now, the ``ai``
-  category - see the browser-native AI panel step).
-- Emits a placeholder thumbnail per panel and writes ``docs/portfolio/index.md`` as a
-  ``sphinx_design`` card grid grouped by category.
-- With ``--convert``, builds a standalone **Pyodide app** per panel via ``panel
-  convert`` (each app inlines the example source, so it is fully self-contained), and
-  links each card to its app.
+Discovers the example panels (minus ``_EXCLUDE_STEMS``) and runs ``panel convert`` on
+each, producing a standalone app under ``docs/_static/portfolio/apps/<category>/``.
+The panel pages iframe those apps as their "Run live" demos.
 
 Building & testing locally:
 
@@ -15,9 +10,6 @@ Building & testing locally:
     # Pyodide apps first; conversion is incremental, so the first run is slow (~10 MB
     # per app, gitignored build artifacts) and later runs only rebuild changed examples.
     make docs                     # builds apps, then sphinx-autobuild on :8000
-
-    # Then open the "Portfolio" page and click a card - the example runs in your
-    # browser via Pyodide (first load downloads packages, so give it a few seconds).
 
     # Strict build with the apps (reproduces the release/CI docs build):
     make docs-test
@@ -30,9 +22,7 @@ wrapper template, the wheel name, and panelini's Python sources; ``convert_panel
 skips an app whose signature is unchanged, so editing one example rebuilds only that
 app. Non-Python assets are not tracked - use ``--force`` / ``make portfolio-force``.
 
-The plain page + thumbnails are regenerated automatically on every Sphinx build (via
-a ``config-inited`` hook in conf.py), so ``docs/portfolio/index.md`` and
-``docs/_static/portfolio/`` are build artifacts and gitignored.
+Everything under ``docs/_static/portfolio/`` is a build artifact and gitignored.
 """
 
 from __future__ import annotations
@@ -45,23 +35,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
-
 _DOCS = Path(__file__).resolve().parent
 _REPO = _DOCS.parent
 _PANELS_DIR = _REPO / "examples" / "panels"
 # Multi-component highlights. They live outside ``examples/panels`` but are converted
 # too, under a ``usecases`` category that matches their docs media area.
 _USECASES_DIR = _REPO / "examples" / "usecases"
-_THUMB_DIR = _DOCS / "_static" / "portfolio" / "thumbs"
-# Committed docs media (recorded from the @pytest.mark.media tests). When a clip or
-# still exists for an example it is used as the card thumbnail instead of a placeholder.
-_MEDIA_DIR = _DOCS / "_static" / "media"
 # Converted Pyodide apps + the local panelini wheel live under _static so Sphinx
 # copies them verbatim.
 _APPS_DIR = _DOCS / "_static" / "portfolio" / "apps"
 _WHEELS_DIR = _DOCS / "_static" / "portfolio" / "wheels"
-_PAGE = _DOCS / "portfolio" / "index.md"
 
 # Extra packages installed in the browser (via micropip) that some examples need
 # beyond panel/param (which the base environment provides). panelini itself is
@@ -212,17 +195,6 @@ else:
 _EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify", "chat_sqlite_history"}
 _EXCLUDE_CATEGORIES: set[str] = set()
 
-# Per-category accent colour (background gradient base) + short human label.
-_CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
-    "ai": ((124, 58, 237), "AI"),
-    "jsoneditor": ((13, 148, 136), "JSON Editor"),
-    "visnetwork": ((37, 99, 235), "VisNetwork"),
-    "wunderbaum": ((217, 119, 6), "Wunderbaum"),
-    "usecases": ((190, 24, 93), "Use cases"),
-}
-
-_THUMB_SIZE = (480, 270)  # 16:9 preview
-
 
 def discover() -> dict[str, list[Path]]:
     """Discover example panels grouped by category, applying exclusions."""
@@ -243,77 +215,9 @@ def discover() -> dict[str, list[Path]]:
     return grouped
 
 
-def _title(stem: str) -> str:
-    """Human-friendly title from a file stem (``visnetwork_panel_min`` -> ...)."""
-    return stem.replace("_", " ").strip().title()
-
-
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    # load_default() is typed as FreeTypeFont | ImageFont, but passing a
-    # concrete size always takes the truetype() branch, which returns
-    # FreeTypeFont.
-    font = ImageFont.load_default(size=size)
-    if not isinstance(font, ImageFont.FreeTypeFont):
-        msg = "expected FreeTypeFont"
-        raise TypeError(msg)
-    return font
-
-
-def _make_thumbnail(path: Path, category: str) -> Path:
-    """Render a meaningful placeholder thumbnail PNG for one panel."""
-    color, label = _CATEGORY_META.get(category, ((71, 85, 105), category.title()))
-    w, h = _THUMB_SIZE
-    img = Image.new("RGB", (w, h), color)
-    draw = ImageDraw.Draw(img)
-
-    # Subtle darker band at the bottom + lighter top via a simple vertical gradient.
-    top = tuple(min(255, c + 38) for c in color)
-    for y in range(h):
-        t = y / h
-        row = tuple(int(top[i] * (1 - t) + color[i] * t) for i in range(3))
-        draw.line([(0, y), (w, y)], fill=row)
-
-    # Category chip (top-left).
-    chip_font = _font(22)
-    draw.text((24, 22), label.upper(), font=chip_font, fill=(255, 255, 255))
-
-    # Panel title (wrapped, centred-ish, lower area).
-    title = _title(path.stem)
-    title_font = _font(34)
-    words, lines, line = title.split(), [], ""
-    for wd in words:
-        trial = f"{line} {wd}".strip()
-        if draw.textlength(trial, font=title_font) <= w - 48:
-            line = trial
-        else:
-            lines.append(line)
-            line = wd
-    if line:
-        lines.append(line)
-    y = h - 28 - len(lines) * 40
-    for ln in lines:
-        draw.text((24, y), ln, font=title_font, fill=(255, 255, 255))
-        y += 40
-
-    _THUMB_DIR.mkdir(parents=True, exist_ok=True)
-    out = _THUMB_DIR / f"{category}__{path.stem}.png"
-    img.save(out)
-    return out
-
-
 def _app_html(path: Path, category: str) -> Path:
     """Path to the converted Pyodide app HTML for a panel (may not exist yet)."""
     return _APPS_DIR / category / f"{path.stem}.html"
-
-
-def _app_url_from_index(path: Path, category: str) -> str:
-    """URL to the standalone app HTML, relative to ``docs/portfolio/index.md``.
-
-    Used in a raw ``<a>`` (so the link opens in a new tab instead of being treated as a
-    downloadable file). Raw-HTML hrefs are not rewritten by Sphinx, so this must be a
-    path relative to the rendered page, not root-relative.
-    """
-    return f"../_static/portfolio/apps/{category}/{path.stem}.html"
 
 
 def _wheel_signature() -> str:
@@ -521,141 +425,17 @@ def convert_all(force: bool = False) -> None:
             convert_panel(path, category, wheel_name, panelini_sig=panelini_sig, force=force)
 
 
-def _embed_page(path: Path, category: str) -> Path:
-    """Path to the per-example docs page that embeds the app (may not exist yet)."""
-    return _PAGE.parent / category / f"{path.stem}.md"
-
-
-def _write_embed_page(path: Path, category: str) -> None:
-    """Write a docs page that embeds the converted app in an iframe (stays in-docs)."""
-    title = _title(path.stem)
-    # From docs/portfolio/<category>/<stem>.html to docs/_static/portfolio/apps/...
-    app_rel = f"../../_static/portfolio/apps/{category}/{path.stem}.html"
-    # In the browser the terminal panel cannot use xterm.js, so it renders an on-screen
-    # console mirror and also tees output to the browser developer console - call that out
-    # so developers know where to look.
-    note = ""
-    if category == "terminalmirror":
-        note = (
-            "```{note}\n"
-            "In the browser this example mirrors its output to the **developer console** "
-            "(open your browser's DevTools → Console) as well as the on-screen panel, so "
-            "developers can see what's happening.\n"
-            "```\n\n"
-        )
-    page = (
-        f"# {title}\n\n"
-        f"`{category}/{path.name}` - runs entirely in your browser via Pyodide. "
-        "The first load downloads packages, so give it a few seconds.\n\n"
-        f"{note}"
-        "```{raw} html\n"
-        f'<p><a class="pf-fullscreen" href="{app_rel}" target="_blank" '
-        'rel="noopener">Open fullscreen ↗</a></p>\n'
-        f'<iframe src="{app_rel}" title="{title}" loading="lazy" '
-        'style="width:100%;height:80vh;border:1px solid var(--color-background-border);'
-        'border-radius:8px;"></iframe>\n'
-        "```\n\n"
-        "{doc}`Back to the portfolio </portfolio/index>`\n"
-    )
-    target = _embed_page(path, category)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(page, encoding="utf-8")
-
-
-def _media_thumb(category: str, stem: str) -> str | None:
-    """Docs-root-relative URL of the committed clip/still for a panel, if recorded.
-
-    Prefers the richer ``overview`` role, then ``feature``; an animated WebP loops in
-    the card ``<img>``. Returns None when no media exists for this example, so the
-    card falls back to a generated placeholder.
-    """
-    # A few tests are renamed to avoid duplicate basenames (e.g. visnetwork's
-    # ``test_visnetwork_context_menu``), so also try the category-prefixed slug.
-    for slug in (stem, f"{category}_{stem}"):
-        for role in ("overview", "feature"):
-            for ext in ("webp", "gif", "png"):
-                if (_MEDIA_DIR / category / f"{slug}_{role}.{ext}").exists():
-                    return f"/_static/media/{category}/{slug}_{role}.{ext}"
-    return None
-
-
-def _card(path: Path, category: str) -> str:
-    """Emit one sphinx_design grid-item-card for a panel.
-
-    Links to the in-docs embed page when the app exists; otherwise renders without a
-    link (so the page is valid before/without conversion).
-    """
-    thumb = _media_thumb(category, path.stem) or f"/_static/portfolio/thumbs/{category}__{path.stem}.png"
-    link = ""
-    footer = ""
-    if _app_html(path, category).exists():
-        # Doc reference relative to docs/portfolio/index.md.
-        link = f":link: {category}/{path.stem}\n:link-type: doc\n"
-        # Footer action that opens the standalone app in a new tab (sits above the
-        # stretched card link via z-index - see custom.css). A raw <a> avoids MyST
-        # turning a local .html link into a download reference.
-        app_url = _app_url_from_index(path, category)
-        footer = (
-            f'+++\n<a class="pf-fullscreen" href="{app_url}" target="_blank" rel="noopener">Open fullscreen ↗</a>\n'
-        )
-    return (
-        f":::{{grid-item-card}} {_title(path.stem)}\n:img-top: {thumb}\n{link}\n`{category}/{path.name}`\n{footer}:::\n"
-    )
-
-
-def generate() -> None:
-    """Generate thumbnails for every included panel and write the portfolio page."""
-    grouped = discover()
-    total = 0
-    sections: list[str] = []
-    toctree_entries: list[str] = []
-    for category in sorted(grouped):
-        paths = grouped[category]
-        _, label = _CATEGORY_META.get(category, ((0, 0, 0), category.title()))
-        cards = []
-        for path in paths:
-            if _media_thumb(category, path.stem) is None:
-                _make_thumbnail(path, category)  # placeholder only when no real clip
-            cards.append(_card(path, category))
-            total += 1
-            # Embed page (+ toctree entry) only when the converted app exists.
-            if _app_html(path, category).exists():
-                _write_embed_page(path, category)
-                toctree_entries.append(f"{category}/{path.stem}")
-        sections.append(f"## {label}\n\n::::{{grid}} 1 2 2 3\n:gutter: 3\n\n" + "\n".join(cards) + "\n::::\n")
-
-    # Hidden toctree so the embed pages are not orphaned (would fail under -W).
-    toctree = ""
-    if toctree_entries:
-        toctree = "\n```{toctree}\n:hidden:\n\n" + "\n".join(sorted(toctree_entries)) + "\n```\n"
-
-    page = (
-        "# Portfolio\n\n"
-        "Interactive examples that run entirely in your browser via Pyodide - no server "
-        "required. Click a card to open the live example, embedded right here in the docs.\n\n"
-        "```{note}\n"
-        "Thumbnails are placeholders for now and will be replaced with real screenshots.\n"
-        "```\n\n" + "\n".join(sections) + toctree
-    )
-    _PAGE.parent.mkdir(parents=True, exist_ok=True)
-    _PAGE.write_text(page, encoding="utf-8")
-    print(f"Generated {total} thumbnails and {_PAGE.relative_to(_REPO)}")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate the docs Pyodide portfolio.")
+    parser = argparse.ArgumentParser(description="Build the docs Pyodide apps.")
     parser.add_argument(
         "--convert",
         action="store_true",
-        help="Also run `panel convert` to build the Pyodide apps (slower). Unchanged apps are skipped.",
+        help="Accepted for compatibility; conversion is all this script does.",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="With --convert, rebuild every app even if its source is unchanged.",
+        help="Rebuild every app even if its source is unchanged.",
     )
     args = parser.parse_args()
-    # Build the Pyodide apps that the example pages embed as live playgrounds. The
-    # standalone portfolio page has been merged into the per-component Examples
-    # section, so we no longer generate a separate page here.
     convert_all(force=args.force)

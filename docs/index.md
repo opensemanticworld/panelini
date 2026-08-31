@@ -166,11 +166,6 @@ panels/terminalmirror
 :hidden:
 
 Overview <examples/index>
-examples/chat/index
-examples/jsoneditor/index
-examples/visnetwork/index
-examples/wunderbaum/index
-examples/terminalmirror/index
 examples/usecases/index
 ```
 

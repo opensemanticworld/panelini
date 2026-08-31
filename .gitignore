@@ -157,6 +157,5 @@ data/bench/*
 # Raw Playwright recordings kept via `pytest --record-media --keep-video`
 docs/_static/media/_videos/
 
-# Generated docs portfolio (build artifacts)
-docs/portfolio/
+# Generated Pyodide apps + local wheel (build artifacts)
 docs/_static/portfolio/
