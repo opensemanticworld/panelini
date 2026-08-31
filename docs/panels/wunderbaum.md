@@ -253,7 +253,7 @@ The projection is pure Python: Wunderbaum only ever sees a plain nested `source`
 <p><a href="../_static/portfolio/apps/wunderbaum/dag_projection.html" target="_blank" rel="noopener">Open fullscreen</a></p>
 ```
 
-For the same graph shown as a tree *and* a network side by side, see {doc}`../examples/usecases/usecase_wunderbaum_visnetwork`.
+For the same graph shown as a tree *and* a network side by side, see {doc}`../usecases/wunderbaum_visnetwork`.
 
 ## Virtual filesystem
 
@@ -333,7 +333,7 @@ tree = Wunderbaum(
 
 Dropping a node onto another reparents it, and the Vue bridge reports the moved node's key together with its new parent, so Python can update `source` to match. Dropping a file from the desktop is a separate path: `file_drop_callback` receives the payload and decides what to insert.
 
-The [virtual filesystem](#virtual-filesystem) above wires up both, and {doc}`../examples/usecases/usecase_wunderbaum_visnetwork` keeps a dragged tree in sync with a graph.
+The [virtual filesystem](#virtual-filesystem) above wires up both, and {doc}`../usecases/wunderbaum_visnetwork` keeps a dragged tree in sync with a graph.
 
 ## API reference
 

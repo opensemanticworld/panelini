@@ -97,10 +97,10 @@ That's it - you now have a branded, responsive dashboard at `http://localhost:50
 Install, build your first app, learn the layout regions.
 :::
 
-:::{grid-item-card} 🧪 Examples
-:link: examples/index
+:::{grid-item-card} 🧩 Panels
+:link: panels/index
 :link-type: doc
-Walkthroughs of every example in `examples/panels/` - AI chat, JSON editor, network graphs.
+One guide per panel - AI chat, JSON editor, network graphs, trees - each feature shown with its runnable example.
 :::
 
 :::{grid-item-card} 🧭 Architecture
@@ -162,11 +162,11 @@ panels/terminalmirror
 
 ```{toctree}
 :maxdepth: 2
-:caption: Examples
+:caption: Use cases
 :hidden:
 
-Overview <examples/index>
-examples/usecases/index
+usecases/jsoneditor_visnetwork
+usecases/wunderbaum_visnetwork
 ```
 
 ```{toctree}

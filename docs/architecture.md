@@ -263,4 +263,4 @@ Features:
 
 - {doc}`modules` - API reference overview
 - {doc}`panels/index` - guide to each reusable panel
-- {doc}`examples/index` - runnable walkthroughs
+- {doc}`usecases/wunderbaum_visnetwork` - two panels sharing one data model
