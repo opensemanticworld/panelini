@@ -8,12 +8,14 @@ import importlib
 import os
 import time
 import warnings
+from collections.abc import Callable
 from unittest.mock import patch
 
 import panel as pn
 import pytest
 from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from panelini.ai_testing import StubChatModel
 from panelini.testing import stop_server, wait_until
@@ -76,6 +78,26 @@ def _send_message(page: Page, text: str) -> None:
 def _chat_rows(page: Page, title: str = "New Chat") -> int:
     # an empty tree renders one blank placeholder .wb-row; count real chats
     return page.locator(".wb-row", has_text=title).count()
+
+
+def _row_action(page: Page, title: str, action: str, applied: Callable[[], None]) -> None:
+    """Hover a conversation row and hit one of its icons, retrying a lost click.
+
+    A refresh rebuilds every row, so a click landing mid-rebuild misses the
+    icon, hits the row underneath and is dropped. ``applied`` must raise on a
+    bounded timeout; it is what tells the two cases apart.
+    """
+    for _ in range(5):
+        row = page.locator(".wb-row", has_text=title).first
+        row.hover()
+        row.locator(f"[data-action={action}]").click()
+        try:
+            applied()
+        except PlaywrightTimeoutError:
+            continue
+        return
+    msg = f"{action} on {title!r} never took effect"
+    raise AssertionError(msg)
 
 
 def test_chat_min_renders(ready_page: Page):
@@ -151,9 +173,12 @@ def test_trash_delete_offers_undo(ready_page: Page):
     time.sleep(0.3)
     assert page.locator(".wb-context-menu:visible").count() == 0
 
-    target = page.locator(".wb-row", has_text="New Chat").first
-    target.hover()
-    target.locator("[data-action=delete]").click()
+    _row_action(
+        page,
+        "New Chat",
+        "delete",
+        lambda: page.locator(".wb-row", has_text="New Chat").first.wait_for(state="detached", timeout=5000),
+    )
 
     wait_until(lambda: _chat_rows(page) == 0)
     # the trash click did not activate the row: the open chat is unchanged
@@ -271,21 +296,25 @@ def test_row_actions_rename_delete_and_empty_end_state(ready_page: Page):
     """
     page = ready_page
 
-    row = page.locator(".wb-row", has_text="Hello history").first
-    row.hover()
-    row.locator("[data-action=rename]").click()
+    _row_action(
+        page,
+        "Hello history",
+        "rename",
+        lambda: page.locator("input.wb-input-edit").first.wait_for(timeout=5000),
+    )
     edit = page.locator("input.wb-input-edit").first
-    edit.wait_for()
     edit.fill("Renamed via icon")
     edit.press("Enter")
     page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(timeout=10000)
 
     # delete the last (active) conversation: no "New Chat" row respawns,
     # the empty hint returns, and undo is still offered
-    row = page.locator(".wb-row", has_text="Renamed via icon").first
-    row.hover()
-    row.locator("[data-action=delete]").click()
-    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(state="detached")
+    _row_action(
+        page,
+        "Renamed via icon",
+        "delete",
+        lambda: page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(state="detached", timeout=5000),
+    )
     page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
     assert _chat_rows(page) == 0  # no ghost "New Chat" node
 
