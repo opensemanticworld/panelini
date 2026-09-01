@@ -90,6 +90,16 @@ def _widget(row: pn.Row, index: int) -> Any:
     return row.objects[index]
 
 
+def _row_for(panel: HistoryPanel, title: str) -> pn.Row:
+    """Locate a row by title. Conversations created in the same clock tick sort
+    by insertion order, which is coarse enough to tie on Windows."""
+    for row in _rows(panel):
+        if _widget(row, 0).name == title:
+            return row
+    msg = f"no history row titled {title!r}"
+    raise AssertionError(msg)
+
+
 def _group_labels(panel: HistoryPanel) -> list[str]:
     return [str(obj.object) for obj in panel._list.objects if "history-group" in obj.css_classes]
 
@@ -178,8 +188,8 @@ class TestHistoryPanel:
         active = store.create_conversation(USER, title="active")
         callbacks.active_id = active.id
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 2))  # newest (= active) first
-        _click(_widget(_rows(panel_under_test)[0], 2))
+        _click(_widget(_row_for(panel_under_test, "active"), 2))  # arm
+        _click(_widget(_row_for(panel_under_test, "active"), 2))  # confirm
         assert callbacks.opened == [remaining.id]
         assert callbacks.new_chats == 0
 
