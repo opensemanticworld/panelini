@@ -114,6 +114,20 @@ class TestEnsureAnonymousCookie:
         monkeypatch.setattr(sys, "platform", "emscripten")
         assert ensure_anonymous_cookie() == (LOCAL_USER_ID, None)
 
+    def test_pyodide_never_touches_panel_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``pn.state.user`` imports tornado, which WASM does not ship."""
+        state_cls = type(pn.state)
+
+        def _no_tornado(self: object) -> str:
+            msg = "No module named 'tornado'"
+            raise ModuleNotFoundError(msg)
+
+        monkeypatch.setattr(state_cls, "user", property(_no_tornado))
+        monkeypatch.setattr(state_cls, "cookies", property(_no_tornado))
+        monkeypatch.setattr(state_cls, "curdoc", property(lambda self: _FakeDoc()))
+        monkeypatch.setattr(sys, "platform", "emscripten")
+        assert ensure_anonymous_cookie() == (LOCAL_USER_ID, None)
+
 
 # ── default_user_resolver / resolve_user ──────────────────────────────────
 

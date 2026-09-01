@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 
 from .document import InMemoryHistoryStore
-from .sqlite_store import SqliteHistoryStore
 from .store import ChatHistoryStore
 
 ENV_VAR = "PANELINI_HISTORY_DB"
@@ -25,5 +24,11 @@ def default_history_store() -> ChatHistoryStore:
     db_path = os.environ.get(ENV_VAR)
     key = str(Path(db_path).resolve()) if db_path else ""
     if key not in _stores:
-        _stores[key] = SqliteHistoryStore(key) if key else InMemoryHistoryStore()
+        if key:
+            # Imported on demand: sqlite3 is missing under Pyodide.
+            from .sqlite_store import SqliteHistoryStore
+
+            _stores[key] = SqliteHistoryStore(key)
+        else:
+            _stores[key] = InMemoryHistoryStore()
     return _stores[key]

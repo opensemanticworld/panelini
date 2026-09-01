@@ -90,6 +90,11 @@ def ensure_anonymous_cookie() -> tuple[str, CookieSetterPane | None]:
         ``(user_id, cookie_pane)``; the pane is only returned the first time
         an id is generated for the session and must be embedded to persist it.
     """
+    # First, not last: WASM has neither Panel auth nor a request, and reading
+    # ``pn.state.user`` there raises, since Panel imports tornado to decode it.
+    if _is_pyodide():
+        return LOCAL_USER_ID, None
+
     user = _auth_user()
     if user:
         return user, None
@@ -97,9 +102,6 @@ def ensure_anonymous_cookie() -> tuple[str, CookieSetterPane | None]:
     cookie_user = _cookie_user()
     if cookie_user:
         return cookie_user, None
-
-    if _is_pyodide():
-        return LOCAL_USER_ID, None
 
     doc = _session_document()
     if doc is None:

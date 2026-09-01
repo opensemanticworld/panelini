@@ -6,8 +6,11 @@ all must honor the same tenant-safety and lifecycle semantics.
 
 from __future__ import annotations
 
+import builtins
+import importlib
 import json
 import sqlite3
+import sys
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -476,3 +479,26 @@ class TestRestoreConversation:
         assert store.get_conversation(USER, conv.id) is None
         adopted = store.get_conversation(OTHER, conv.id)
         assert adopted is not None and adopted.user_id == OTHER
+
+
+class TestWithoutSqlite3:
+    """Pyodide ships no ``sqlite3``; importing the package must not need it."""
+
+    def test_package_imports_and_defaults_to_memory(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in [m for m in sys.modules if m.startswith("panelini.panels.ai.history")]:
+            monkeypatch.delitem(sys.modules, name)
+        monkeypatch.delitem(sys.modules, "sqlite3", raising=False)
+        monkeypatch.delenv("PANELINI_HISTORY_DB", raising=False)
+
+        real_import = builtins.__import__
+
+        def _no_sqlite3(name: str, *args: object, **kwargs: object) -> object:
+            if name == "sqlite3":
+                msg = "No module named 'sqlite3'"
+                raise ModuleNotFoundError(msg)
+            return real_import(name, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+        monkeypatch.setattr(builtins, "__import__", _no_sqlite3)
+
+        module = importlib.import_module("panelini.panels.ai.history")
+        assert isinstance(module.default_history_store(), module.InMemoryHistoryStore)
