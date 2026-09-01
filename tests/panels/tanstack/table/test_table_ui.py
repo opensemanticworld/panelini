@@ -2629,3 +2629,269 @@ def test_a_paste_is_undone_in_one_step(page: Page, port):
     assert shape(table.source) == "a(a1,a2),b(b1)"
 
     server.stop()
+
+
+# --- the context menu ---------------------------------------------------------
+# Opt in, exactly as the toolbar is, and a second route to the same actions rather
+# than a second set of them. What is pinned down here is which gestures open it,
+# which rows it acts on, that a keyboard can reach and walk it, and that it stays
+# inside the window whichever corner it was opened in.
+
+
+def menu(page: Page):
+    return page.locator("[role='menu']")
+
+
+def menu_items(page: Page):
+    return page.locator(".pnl-tst-mitem")
+
+
+def menu_labels(page: Page) -> list[str]:
+    return [text.strip() for text in page.locator(".pnl-tst-mitem .pnl-tst-mlabel").all_text_contents()]
+
+
+def menu_item(page: Page, label: str):
+    return page.locator(f".pnl-tst-mitem:has(.pnl-tst-mlabel:text-is('{label}'))")
+
+
+def focused_menu_label(page: Page) -> str | None:
+    """Label of the focused menu item, through the shadow root."""
+    return page.evaluate(
+        """() => {
+            let element = document.activeElement
+            while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
+            return element?.querySelector('.pnl-tst-mlabel')?.textContent.trim() ?? null
+        }"""
+    )
+
+
+def test_no_context_menu_by_default(page: Page, port):
+    """A table that says nothing about `menu` gains neither a popup nor the promise of one."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    assert rows(page).first.get_attribute("aria-haspopup") is None
+
+    rows(page).nth(1).click()
+    page.wait_for_timeout(200)
+    assert menu(page).count() == 0
+
+    server.stop()
+
+
+def test_a_plain_click_opens_the_menu_with_its_roles(page: Page, port):
+    """Roles, names and shortcut hints are the menu's whole accessible contract."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    assert rows(page).first.get_attribute("aria-haspopup") == "menu"
+
+    rows(page).nth(1).click()  # File A1
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    assert menu(page).get_attribute("aria-label") == "Row actions"
+    assert menu(page).get_attribute("aria-orientation") == "vertical"
+    assert menu_labels(page) == [
+        "New folder",
+        "New file",
+        "Rename",
+        "Delete",
+        "Cut",
+        "Copy",
+        "Paste",
+    ]
+    assert menu_items(page).first.get_attribute("role") == "menuitem"
+    assert page.locator(".pnl-tst-menu [role='separator']").count() == 2
+    assert menu_item(page, "Delete").get_attribute("aria-keyshortcuts") == "Delete"
+    # Disabled is announced, never the disabled attribute: the item keeps its place
+    # in the roving tabindex so a reader can be told why it does nothing.
+    assert menu_item(page, "Paste").get_attribute("aria-disabled") == "true"
+    assert menu_item(page, "Delete").get_attribute("aria-disabled") == "false"
+
+    server.stop()
+
+
+def test_a_modified_click_never_opens_the_menu(page: Page, port):
+    """Ctrl and Shift clicks are how a selection is built, so a menu must stay out of them."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1, "Control")
+    page.wait_for_timeout(200)
+    assert menu(page).count() == 0
+
+    click_row(page, 2, "Shift")
+    page.wait_for_timeout(200)
+    assert menu(page).count() == 0
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    server.stop()
+
+
+def test_the_menu_acts_on_the_row_it_opened_on(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    menu_item(page, "Delete").click()
+
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1"])
+    assert shape(table.source) == "a(a2),b(b1)"
+    # Running an item closes the menu and hands focus back to the grid.
+    assert menu(page).count() == 0
+
+    server.stop()
+
+
+def test_a_right_click_keeps_a_selection_the_menu_opened_inside(page: Page, port):
+    """A menu opened on one of two selected rows still deletes two."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    # Ctrl clicks, so the selection is built without a menu ever opening over the
+    # rows still to be picked.
+    click_row(page, 1, "Control")  # File A1
+    click_row(page, 2, "Control")  # File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    rows(page).nth(2).click(button="right")
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    menu_item(page, "Delete").click()
+
+    wait_until(lambda: shape(table.source) == "a,b(b1)", timeout=10)
+    expect_titles(page, ["Folder A", "Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_a_right_click_outside_the_selection_takes_the_row_alone(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1, "Control")  # File A1, picked without opening a menu over it
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    rows(page).nth(4).click(button="right")  # File B1, which was not selected
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    wait_until(lambda: table.selected_keys == ["b1"], timeout=10)
+    menu_item(page, "Delete").click()
+
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b", timeout=10)
+
+    server.stop()
+
+
+def test_the_menu_opens_and_walks_from_the_keyboard(page: Page, port):
+    """Shift+F10 and the arrow keys, so the menu is not a pointer-only affordance."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    server = serve(table, page, port)
+
+    rows(page).first.click()  # Folder A, which opens the menu
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("Escape")
+    expect(menu(page)).to_have_count(0, timeout=10000)
+    # Escape hands focus back to the row it came from, so the grid carries on.
+    assert focused_title(page) == "Folder A"
+
+    page.keyboard.press("Shift+F10")
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    assert focused_menu_label(page) == "New folder"
+
+    page.keyboard.press("ArrowDown")
+    page.wait_for_timeout(150)
+    assert focused_menu_label(page) == "New file"
+    page.keyboard.press("End")
+    page.wait_for_timeout(150)
+    assert focused_menu_label(page) == "Paste"
+    page.keyboard.press("Home")
+    page.wait_for_timeout(150)
+    assert focused_menu_label(page) == "New folder"
+
+    page.keyboard.press("Escape")
+    expect(menu(page)).to_have_count(0, timeout=10000)
+    assert focused_title(page) == "Folder A"
+
+    server.stop()
+
+
+def test_the_menu_stays_inside_the_window(page: Page, port):
+    """Opened in the far corner it flips rather than running off the screen."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": True},
+    )
+    page.set_viewport_size({"width": 520, "height": 300})
+    server = serve(table, page, port)
+
+    box = rows(page).last.bounding_box()
+    assert box
+    page.mouse.click(box["x"] + box["width"] - 2, box["y"] + box["height"] - 2, button="right")
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    page.wait_for_timeout(200)
+
+    placed = menu(page).bounding_box()
+    viewport = page.viewport_size
+    assert placed and viewport
+    assert placed["x"] >= 0
+    assert placed["y"] >= 0
+    assert placed["x"] + placed["width"] <= viewport["width"] + 1
+    assert placed["y"] + placed["height"] <= viewport["height"] + 1
+
+    server.stop()
+
+
+def test_a_menu_only_action_still_answers_to_its_shortcut(page: Page, port):
+    """The two lists together are what a table may do, so a menu alone is a declaration."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "menu": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator("[role='toolbar']").count() == 0
+
+    rows(page).nth(1).click()  # File A1, which opens the menu
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    assert menu_labels(page) == ["Delete"]
+
+    page.keyboard.press("Escape")
+    expect(menu(page)).to_have_count(0, timeout=10000)
+    page.keyboard.press("Delete")
+
+    wait_until(lambda: shape(table.source) == "a(a2),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_the_menu_leaves_the_search_action_out(page: Page, port):
+    """A text field is not a command, so an entry naming it is dropped rather than drawn."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "menu": ["search", "delete"]},
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()
+    expect(menu(page)).to_have_count(1, timeout=10000)
+    assert menu_labels(page) == ["Delete"]
+    assert page.locator(".pnl-tst-menu input").count() == 0
+
+    server.stop()

@@ -411,3 +411,85 @@
 .pnl-tst-search input:focus-visible {
   outline: none;
 }
+
+/* The context menu. Fixed rather than absolute, so it is measured against the window
+   and not against the panel: a row near the bottom of a short table has to be able
+   to open a menu taller than the table itself. The z-index is above the dialog's
+   for the same reason, and the max-height is the window rather than the panel, so
+   a long menu scrolls inside itself instead of running off the screen. */
+
+.pnl-tst-menu {
+  position: fixed;
+  z-index: 3;
+  min-width: 168px;
+  max-width: 280px;
+  max-height: calc(100vh - 8px);
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--pnl-tst-border);
+  border-radius: 6px;
+  background: var(--pnl-tst-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+}
+
+.pnl-tst-mitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--pnl-tst-fg);
+  font: inherit;
+  line-height: 20px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.pnl-tst-mitem:hover {
+  background: var(--pnl-tst-hover);
+}
+
+/* :focus rather than :focus-visible: which item the arrow keys are on is the
+   menu's own state, not a hint about how it was reached. */
+.pnl-tst-mitem:focus {
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+  background: var(--pnl-tst-active);
+}
+
+.pnl-tst-mitem[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pnl-tst-mitem[aria-disabled='true']:hover {
+  background: none;
+}
+
+.pnl-tst-mitem .pnl-tst-icon {
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.pnl-tst-mlabel {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pnl-tst-mkeys {
+  flex: 0 0 auto;
+  color: var(--pnl-tst-muted);
+  white-space: nowrap;
+}
+
+.pnl-tst-msep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--pnl-tst-border);
+}

@@ -501,6 +501,13 @@ function onKeydown(event) {
       return
     }
   }
+  // The platform's own keys for a context menu, so it is not a thing only a
+  // pointer can reach. Neither key means anything else in a treegrid.
+  if (hasMenu.value && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
+    event.preventDefault()
+    openMenuForFocusedRow(row)
+    return
+  }
   // Insert creates, Shift+Insert creates the other kind, F2 renames, Delete removes
   // and Escape clears. A table that declared only some of these answers to only
   // those keys, and the rest fall through to the navigation switch below.
@@ -656,6 +663,10 @@ function onRowClick(row, event) {
   }
 
   props.emitEvent('activate', { key: row.id })
+
+  // The context menu, when the table asked for one. A modified click is building
+  // a selection and never opens it, so Ctrl and Shift keep meaning what they mean.
+  if (!modified) openContextMenu(row, event?.clientX ?? 0, event?.clientY ?? 0)
 }
 
 function onToggle(row) {
@@ -768,6 +779,22 @@ const DEFAULT_TOOLBAR = [
   SEARCH_ID,
 ]
 
+// The context menu is a second way to reach the same actions and never a second
+// vocabulary: it is declared exactly as the toolbar is, out of the same registry,
+// so nothing can be offered there that the toolbar could not offer. Off by
+// default, like the toolbar.
+const DEFAULT_MENU = [
+  'new-folder',
+  'new-file',
+  SEPARATOR_ID,
+  'rename',
+  'delete',
+  SEPARATOR_ID,
+  'cut',
+  'copy',
+  'paste',
+]
+
 // An entry is either an action id or an object overriding that action's label,
 // icon and node template. The object form is what lets one table offer "New note"
 // and "New task" from the same creation action, so the panel never has to learn a
@@ -776,9 +803,8 @@ const DEFAULT_TOOLBAR = [
 //
 // `uid` rather than the id is the identity here, because two entries may legally
 // share an id. A shortcut then runs the first of them.
-const toolbarItems = computed(() => {
-  const value = props.state.options.toolbar
-  const list = value === true ? DEFAULT_TOOLBAR : Array.isArray(value) ? value : []
+function buildItems(value, fallback) {
+  const list = value === true ? fallback : Array.isArray(value) ? value : []
   const items = []
   list.forEach((entry, index) => {
     const custom = typeof entry === 'string' ? {} : entry || {}
@@ -801,16 +827,31 @@ const toolbarItems = computed(() => {
     })
   })
   return items
-})
+}
+
+const toolbarItems = computed(() => buildItems(props.state.options.toolbar, DEFAULT_TOOLBAR))
+
+// The search box is a text field rather than a command, so it belongs in a
+// toolbar and not in a popup menu. An entry naming it is dropped instead of
+// rendering something unusable.
+const menuItems = computed(() =>
+  buildItems(props.state.options.menu, DEFAULT_MENU).filter((item) => item.id !== SEARCH_ID),
+)
 
 const hasToolbar = computed(() => toolbarItems.value.length > 0)
 const toolbarLabel = computed(() => props.state.options.toolbar_label ?? 'Tree actions')
 const searchLabel = computed(() => props.state.options.search_label ?? 'Search')
 
 // The single lookup behind both halves: a button is drawn and its shortcut fires
-// only when the table declared the action.
+// only when the table declared the action. Either declaration counts, so a table
+// offering `delete` in its menu alone still answers to the Delete key: the two
+// lists together are what the table may do.
 function itemFor(id) {
-  return toolbarItems.value.find((item) => item.id === id) ?? null
+  return (
+    toolbarItems.value.find((item) => item.id === id) ??
+    menuItems.value.find((item) => item.id === id) ??
+    null
+  )
 }
 
 function allows(id) {
@@ -1274,9 +1315,15 @@ function actionEnabled(item) {
   }
 }
 
+// `Control` is what aria-keyshortcuts has to spell, and `Ctrl` is what a keyboard
+// says, so the announced name and the printed one differ on purpose.
+function shortcutText(item) {
+  return item.keys ? item.keys.replace('Control', 'Ctrl') : ''
+}
+
 function actionTitle(item) {
   if (!item.keys) return item.label
-  return `${item.label} (${item.keys.replace('Control', 'Ctrl')})`
+  return `${item.label} (${shortcutText(item)})`
 }
 
 function runAction(item) {
@@ -1401,6 +1448,182 @@ function onToolbarKeydown(event) {
       break
   }
 }
+
+// The context menu. Opt in through `options.menu`, and a second route to the
+// actions rather than a second set of them, so what it can do is what the toolbar
+// could.
+//
+// It opens on a plain click, which is what was asked for, and on the platform's
+// own gestures too: a right click, and `ContextMenu` or `Shift+F10` from the
+// keyboard, because a menu only a mouse can open is the hole this panel exists to
+// avoid. A modified click never opens it: Ctrl and Shift clicks are how a
+// selection is built, and a menu in the middle of that is in the way.
+const MENU_MARGIN = 4
+
+const menuOpen = ref(false)
+const menuKey = ref(null)
+const menuAt = ref({ left: 0, top: 0 })
+const menuElement = ref(null)
+const menuFocusIndex = ref(0)
+const menuElements = new Map()
+
+const menuButtons = computed(() => menuItems.value.filter((item) => item.id in ACTIONS))
+// A list of nothing but separators is not a menu, so opening one is refused
+// rather than putting an empty box under the pointer.
+const hasMenu = computed(() => menuButtons.value.length > 0)
+const menuLabel = computed(() => props.state.options.menu_label ?? 'Row actions')
+
+function setMenuElement(uid, element) {
+  if (element) menuElements.set(uid, element)
+  else menuElements.delete(uid)
+}
+
+function menuIndexOf(item) {
+  return menuButtons.value.findIndex((candidate) => candidate.uid === item.uid)
+}
+
+// The row is activated first whatever opened the menu, because every action reads
+// the active row and running one against a row nobody pointed at would be worse
+// than not opening at all. A row already in the selection keeps it, so a menu
+// opened on one of five selected rows still deletes five.
+function openContextMenu(row, left, top) {
+  if (!hasMenu.value) return
+  // Only when it is not already the active row, so a menu opened by the very
+  // click that cleared the selection does not paint the row again.
+  if (activeKey.value !== row.id) setActive(row.id)
+  menuKey.value = row.id
+  menuAt.value = { left, top }
+  const first = menuButtons.value.findIndex((item) => actionEnabled(item))
+  menuFocusIndex.value = Math.max(0, first)
+  menuOpen.value = true
+  nextTick(placeMenu)
+}
+
+function onRowContextMenu(row, event) {
+  if (!hasMenu.value) return
+  event.preventDefault()
+  if (selectable.value && !row.getIsSelected()) selectOnly(row)
+  openContextMenu(row, event.clientX, event.clientY)
+}
+
+// From the keyboard there is no pointer to place it at, so it hangs off the row
+// itself, which is where a reader's attention already is.
+function openMenuForFocusedRow(row) {
+  const rect = rowElements.get(row.id)?.getBoundingClientRect()
+  openContextMenu(row, rect ? rect.left + indentPx.value : MENU_MARGIN, rect ? rect.bottom : MENU_MARGIN)
+}
+
+// Placed against the viewport rather than the panel, and `position: fixed` so the
+// grid's own scroll box cannot clip it: a row near the bottom of a small window
+// would otherwise open a menu nobody can read. It flips to the other side where
+// there is room, clamps to the edge where there is not, and scrolls inside itself
+// when it is taller than the window.
+function placeMenu() {
+  const element = menuElement.value
+  if (!element) return
+  const rect = element.getBoundingClientRect()
+  let { left, top } = menuAt.value
+  if (left + rect.width > window.innerWidth - MENU_MARGIN) {
+    left = Math.max(MENU_MARGIN, left - rect.width)
+  }
+  if (top + rect.height > window.innerHeight - MENU_MARGIN) {
+    top = Math.max(MENU_MARGIN, top - rect.height)
+  }
+  menuAt.value = { left, top }
+  focusMenu(menuFocusIndex.value)
+}
+
+function focusMenu(index) {
+  const list = menuButtons.value
+  if (list.length === 0) return
+  const next = Math.max(0, Math.min(index, list.length - 1))
+  menuFocusIndex.value = next
+  nextTick(() => menuElements.get(list[next].uid)?.focus())
+}
+
+// Focus goes back where it came from, because a menu that leaves focus on the
+// document body is a keyboard dead end. `preventScroll` is for the cases where
+// the menu is closing precisely because the view moved.
+function closeMenu(restore = true, focusOptions = undefined) {
+  if (!menuOpen.value) return
+  const key = menuKey.value
+  menuOpen.value = false
+  menuKey.value = null
+  // The row's own focus handler makes it active again, so closing does not have to
+  // say so itself and a row left quiet by a deselect stays quiet.
+  if (restore && key != null) nextTick(() => rowElements.get(key)?.focus(focusOptions))
+}
+
+function runMenuItem(item) {
+  if (!actionEnabled(item)) return
+  const key = menuKey.value
+  closeMenu(false)
+  // The row is focused before the action runs, so an action that moves focus of
+  // its own, the rename editor or the row a delete leaves behind, still has the
+  // last word on where it lands.
+  focusRowByKey(key)
+  runAction(item)
+}
+
+function onMenuKeydown(event) {
+  const index = menuFocusIndex.value
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusMenu(index + 1)
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      focusMenu(index - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      focusMenu(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusMenu(menuButtons.value.length - 1)
+      break
+    case 'Escape':
+    case 'Tab':
+      // Tab closes rather than tabbing through the items: the menu is one stop,
+      // and its own arrow keys are how it is walked.
+      event.preventDefault()
+      closeMenu()
+      break
+    default:
+      break
+  }
+}
+
+// `composedPath` rather than `contains`: the panel renders inside a shadow root,
+// so a plain target check would see the host and close the menu on its own click.
+function onDocumentPointerDown(event) {
+  if (menuElement.value && event.composedPath().includes(menuElement.value)) return
+  closeMenu(false)
+}
+
+function onViewportChange() {
+  closeMenu(true, { preventScroll: true })
+}
+
+watch(menuOpen, (open) => {
+  if (open) {
+    document.addEventListener('pointerdown', onDocumentPointerDown, true)
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
+  } else {
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+    window.removeEventListener('resize', onViewportChange)
+    window.removeEventListener('scroll', onViewportChange, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+  window.removeEventListener('resize', onViewportChange)
+  window.removeEventListener('scroll', onViewportChange, true)
+})
 
 // Drag and drop. A drop never mutates the tree here: it emits a `move` intent
 // and Python rewrites `source`. Blocking every instruction type is how an
@@ -1783,8 +2006,10 @@ function dropLineStyle(row) {
           :aria-rowindex="rowIndex + rowIndexOffset"
           :aria-expanded="canExpand(row) ? isExpanded(row) : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
+          :aria-haspopup="hasMenu ? 'menu' : undefined"
           :tabindex="row.id === focusKey ? 0 : -1"
           @click="onRowClick(row, $event)"
+          @contextmenu="onRowContextMenu(row, $event)"
           @focus="setActive(row.id)"
         >
           <!-- Decorative drop indicator. aria-hidden keeps the row's children a
@@ -1915,6 +2140,47 @@ function dropLineStyle(row) {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- The context menu. A sibling of the grid rather than a child of the row, and
+         placed against the viewport, so the grid's own scroll box cannot clip it
+         and it may run past the panel's edge when that is what keeps it readable.
+         It carries its own single tab stop, walked with the arrow keys. -->
+    <div
+      v-if="menuOpen"
+      ref="menuElement"
+      class="pnl-tst-menu"
+      role="menu"
+      aria-orientation="vertical"
+      :aria-label="menuLabel"
+      :style="{ left: `${menuAt.left}px`, top: `${menuAt.top}px` }"
+      @keydown="onMenuKeydown"
+    >
+      <template v-for="item in menuItems" :key="item.uid">
+        <div v-if="item.id === '|'" class="pnl-tst-msep" role="separator"></div>
+
+        <button
+          v-else
+          :ref="(element) => setMenuElement(item.uid, element)"
+          type="button"
+          class="pnl-tst-mitem"
+          role="menuitem"
+          :aria-keyshortcuts="item.keys"
+          :aria-disabled="!actionEnabled(item)"
+          :tabindex="menuIndexOf(item) === menuFocusIndex ? 0 : -1"
+          @click="runMenuItem(item)"
+          @focus="menuFocusIndex = menuIndexOf(item)"
+        >
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <span class="pnl-tst-icon" aria-hidden="true" v-html="item.icon"></span>
+          <span class="pnl-tst-mlabel">{{ item.label }}</span>
+          <!-- The shortcut is on aria-keyshortcuts already, so this is the
+               visible half of the same fact and nothing new to announce. -->
+          <span v-if="item.keys" class="pnl-tst-mkeys" aria-hidden="true">
+            {{ shortcutText(item) }}
+          </span>
+        </button>
+      </template>
     </div>
   </div>
 </template>

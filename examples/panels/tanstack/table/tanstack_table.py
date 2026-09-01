@@ -21,6 +21,20 @@ LOCKED_KEY = "archive"
 # in the browser and in Python.
 FOLDER = {"kind": "folder", "icon": "folder"}
 
+# A dict entry renames an action and gives it the node template a new node is
+# minted from, which is how this tree gets folders and files rather than bare
+# nodes. The label is also the new node's title. Shared by the toolbar and the
+# context menu, so both make the same two kinds.
+NEW_FOLDER = {"id": "new-folder", "label": "New folder", "node": {**FOLDER, "children": []}}
+NEW_FILE = {
+    "id": "new-file",
+    "label": "New file",
+    "node": {"kind": "file", "icon": "file", "allow_children": False},
+}
+
+# The context menu, offered as a second route to the actions the toolbar already has.
+MENU = [NEW_FOLDER, NEW_FILE, "|", "rename", "delete", "|", "cut", "copy", "paste"]
+
 
 def file_node(key: str, title: str) -> dict:
     """Build a leaf whose icon follows its extension, or the generic one."""
@@ -158,22 +172,19 @@ table = TanstackTable(
         "aria_label": "Documents",
         # Clicking the only selected row again clears the selection.
         "toggle_on_click": True,
+        # Both start off, and the checkboxes on the right turn them on.
+        "show_checkboxes": False,
+        "menu": [],
         # True would give the default action order. A list picks and orders them
         # instead, and it gates the keyboard shortcuts too, so an action left out
-        # here cannot be reached by pressing a key either. A dict entry renames an
-        # action and gives it the node template a new node is minted from, which
-        # is how this tree gets folders and files rather than bare nodes. The
-        # label is also the new node's title.
+        # of both the toolbar and the menu cannot be reached by pressing a key
+        # either.
         "toolbar": [
             "undo",
             "redo",
             "|",
-            {"id": "new-folder", "label": "New folder", "node": {**FOLDER, "children": []}},
-            {
-                "id": "new-file",
-                "label": "New file",
-                "node": {"kind": "file", "icon": "file", "allow_children": False},
-            },
+            NEW_FOLDER,
+            NEW_FILE,
             "rename",
             "delete",
             "|",
@@ -211,7 +222,8 @@ def on_selection_change(*events: object) -> None:
 
 table.param.watch(on_selection_change, ["selected_keys"])
 
-checkboxes = pn.widgets.Checkbox(name="Checkboxes", value=True)
+checkboxes = pn.widgets.Checkbox(name="Checkboxes", value=False)
+context_menu = pn.widgets.Checkbox(name="Context menu", value=False)
 
 
 def on_checkboxes(event: object) -> None:
@@ -223,7 +235,17 @@ def on_checkboxes(event: object) -> None:
     table.options = {**table.options, "show_checkboxes": checkboxes.value}
 
 
+def on_context_menu(event: object) -> None:
+    """Offer the context menu, or take it away again.
+
+    An empty list is the same as leaving the option out: no menu, and a click on a
+    row goes back to selecting it and nothing else.
+    """
+    table.options = {**table.options, "menu": MENU if context_menu.value else []}
+
+
 checkboxes.param.watch(on_checkboxes, "value")
+context_menu.param.watch(on_context_menu, "value")
 
 gestures = pn.pane.Markdown(
     """
@@ -237,7 +259,12 @@ gestures = pn.pane.Markdown(
 - Drop **into** a folder, or between rows to reorder. Files never take children.
 - `Archive (read only)` refuses drops, through a Python `move_callback`.
 - **Search** narrows to matches and the folders that lead to them.
-- **Checkboxes** off hides the column only. Click, Shift click and drag keep working.
+- **Checkboxes** adds the column. It is off to begin with, and selection works
+  without it: click, Shift click, Ctrl click and drag are unchanged either way.
+- **Context menu** puts the same actions on the rows. A plain click opens it, so does a
+  right click, `Shift+F10` and the menu key. It is placed against the window rather
+  than the panel, so a row at the bottom edge still opens a menu you can read, and
+  the arrow keys, `Home`, `End`, `Enter` and `Escape` walk it.
 - **Tab** reaches the toolbar, then the grid. In the toolbar the arrow keys move
   between buttons; in the grid `Ctrl+A` selects all, `Escape` clears and `Ctrl+F`
   jumps to the search box.
@@ -294,7 +321,7 @@ app.main_set(
                 margin=(0, 15, 0, 0),
             ),
             pn.Column(
-                checkboxes,
+                pn.Row(checkboxes, context_menu),
                 selected_display,
                 gestures,
                 log,
