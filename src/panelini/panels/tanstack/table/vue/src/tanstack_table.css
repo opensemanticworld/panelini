@@ -215,3 +215,94 @@
   color: var(--pnl-tst-muted);
   font-style: italic;
 }
+
+/* Toolbar. No new colours: the buttons borrow the row hover and focus tokens, so a
+   table restyled through the custom properties restyles its toolbar with it. */
+
+.pnl-tst-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--pnl-tst-border);
+}
+
+.pnl-tst-tsep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--pnl-tst-border);
+}
+
+.pnl-tst-tbtn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--pnl-tst-fg);
+  cursor: pointer;
+}
+
+.pnl-tst-tbtn:hover {
+  background: var(--pnl-tst-hover);
+}
+
+.pnl-tst-tbtn:focus-visible {
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+}
+
+/* aria-disabled rather than the disabled attribute, so the button keeps its place
+   in the toolbar's roving tabindex and can announce why it does nothing. */
+.pnl-tst-tbtn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pnl-tst-tbtn[aria-disabled='true']:hover {
+  background: none;
+}
+
+/* The toolbar glyphs are the button's own colour, unlike the muted file icons. */
+.pnl-tst-tbtn .pnl-tst-icon {
+  color: inherit;
+}
+
+.pnl-tst-search {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: 4px;
+  min-width: 90px;
+  margin-inline-start: auto;
+  padding: 0 6px;
+  border: 1px solid var(--pnl-tst-border);
+  border-radius: 4px;
+}
+
+.pnl-tst-search:focus-within {
+  border-color: var(--pnl-tst-focus);
+}
+
+.pnl-tst-search input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+}
+
+.pnl-tst-search input:focus-visible {
+  outline: none;
+}

@@ -962,3 +962,270 @@ def test_empty_source_renders_a_placeholder(page: Page, port):
     assert page.locator("[role='treegrid']").count() == 0
 
     server.stop()
+
+
+# Toolbar. It is opt in, so the first thing to pin down is that a table which says
+# nothing about it gains neither a button nor a shortcut.
+
+
+def toolbar_buttons(page: Page):
+    return page.locator(".pnl-tst-tbtn")
+
+
+def button(page: Page, label: str):
+    return page.locator(f".pnl-tst-tbtn[aria-label='{label}']")
+
+
+def focused_label(page: Page) -> str | None:
+    """aria-label of the element that currently has focus, through the shadow root."""
+    return page.evaluate(
+        """() => {
+            let element = document.activeElement
+            while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
+            return element?.getAttribute('aria-label') ?? null
+        }"""
+    )
+
+
+def test_no_toolbar_and_no_shortcuts_by_default(page: Page, port):
+    """Absent `toolbar` means no buttons and no key bindings, not hidden buttons."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi"},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator("[role='toolbar']").count() == 0
+    assert toolbar_buttons(page).count() == 0
+
+    rows(page).nth(0).click()
+    page.keyboard.press("Control+a")
+    page.wait_for_timeout(300)
+    assert table.selected_keys == ["a"]
+
+    server.stop()
+
+
+def test_toolbar_renders_the_default_actions(page: Page, port):
+    """Roles, names and shortcut hints are the toolbar's whole accessible contract."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={
+            "expand_all": True,
+            "select_mode": "multi",
+            "toolbar": True,
+            "toolbar_label": "Document actions",
+        },
+    )
+    server = serve(table, page, port)
+
+    bar = page.locator("[role='toolbar']")
+    assert bar.count() == 1
+    assert bar.get_attribute("aria-label") == "Document actions"
+    assert bar.get_attribute("aria-orientation") == "horizontal"
+
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(4)]
+    assert labels == ["Expand all", "Collapse all", "Select all", "Clear selection"]
+    assert button(page, "Select all").get_attribute("aria-keyshortcuts") == "Control+A"
+    assert button(page, "Clear selection").get_attribute("aria-keyshortcuts") == "Escape"
+    # The view-only actions have no binding, so they must not claim one.
+    assert button(page, "Expand all").get_attribute("aria-keyshortcuts") is None
+
+    assert page.locator(".pnl-tst-search input").count() == 1
+
+    server.stop()
+
+
+def test_toolbar_list_picks_and_orders_the_actions(page: Page, port):
+    """A list is the whole declaration: what it leaves out has no key binding either."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": ["collapse-all"]},
+    )
+    server = serve(table, page, port)
+
+    assert toolbar_buttons(page).count() == 1
+    assert toolbar_buttons(page).first.get_attribute("aria-label") == "Collapse all"
+    assert page.locator(".pnl-tst-search").count() == 0
+
+    rows(page).nth(0).click()
+    page.keyboard.press("Control+a")
+    page.wait_for_timeout(300)
+    assert table.selected_keys == ["a"]
+
+    server.stop()
+
+
+def test_toolbar_expands_and_collapses_every_branch(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"toolbar": True})
+    server = serve(table, page, port)
+
+    assert row_titles(page) == ["Folder A", "Folder B"]
+
+    button(page, "Expand all").click()
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+    wait_until(lambda: table.expanded_keys == ["a", "b"], timeout=10)
+
+    button(page, "Collapse all").click()
+    expect_titles(page, ["Folder A", "Folder B"])
+    wait_until(lambda: table.expanded_keys == [], timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_selects_all_and_clears(page: Page, port):
+    """Select all takes the rendered rows, which under a filter is what is on screen."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    button(page, "Select all").click()
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2", "b", "b1"], timeout=10)
+
+    button(page, "Clear selection").click()
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_marks_unavailable_actions_aria_disabled(page: Page, port):
+    """aria-disabled, never the disabled attribute, so the button keeps its tab stop."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    # Nothing is selected yet, so clearing would do nothing.
+    assert button(page, "Clear selection").get_attribute("aria-disabled") == "true"
+    assert button(page, "Clear selection").get_attribute("disabled") is None
+    assert button(page, "Select all").get_attribute("aria-disabled") == "false"
+
+    button(page, "Select all").click()
+    expect(button(page, "Clear selection")).to_have_attribute("aria-disabled", "false", timeout=10000)
+
+    # A filtered view is always shown open, so both branch actions go quiet.
+    table.filter_text = "A1"
+    expect(button(page, "Expand all")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    assert button(page, "Collapse all").get_attribute("aria-disabled") == "true"
+
+    server.stop()
+
+
+def test_toolbar_disabled_button_does_nothing_when_clicked(page: Page, port):
+    """The handler no-ops on its own, rather than leaning on the browser to stop it.
+
+    ``dispatch_event`` is used instead of ``click`` on purpose: Playwright reads
+    ``aria-disabled`` as unclickable and would refuse, which would leave the guard
+    in ``runAction`` untested. Assistive technology drives buttons this way too.
+    """
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    wait_until(lambda: table.expanded_keys == ["a", "b"], timeout=10)
+
+    table.filter_text = "A1"
+    expect(button(page, "Collapse all")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    button(page, "Collapse all").dispatch_event("click")
+    page.wait_for_timeout(500)
+
+    # Had the handler run, every branch would now be closed underneath the filter.
+    assert table.expanded_keys == ["a", "b"]
+
+    server.stop()
+
+
+def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
+    """The ARIA toolbar pattern: one tab stop, arrows between the buttons."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(4)]
+    assert tabbable == ["0", "-1", "-1", "-1"]
+
+    toolbar_buttons(page).first.focus()
+    page.keyboard.press("ArrowRight")
+    assert focused_label(page) == "Collapse all"
+    page.keyboard.press("End")
+    assert focused_label(page) == "Clear selection"
+    page.keyboard.press("Home")
+    assert focused_label(page) == "Expand all"
+    # Clamped rather than wrapping, exactly as Home and End behave in the grid.
+    page.keyboard.press("ArrowLeft")
+    assert focused_label(page) == "Expand all"
+
+    expect(toolbar_buttons(page).first).to_have_attribute("tabindex", "0")
+    assert toolbar_buttons(page).nth(1).get_attribute("tabindex") == "-1"
+
+    server.stop()
+
+
+def test_toolbar_search_box_drives_filter_text(page: Page, port):
+    """The box writes the param, so Python sees the search without owning the input."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True, "toolbar": True, "search_label": "Find"},
+    )
+    server = serve(table, page, port)
+
+    box = page.locator(".pnl-tst-search input")
+    assert box.get_attribute("aria-label") == "Find"
+
+    box.fill("A1")
+    expect_titles(page, ["Folder A", "File A1"])
+    wait_until(lambda: table.filter_text == "A1", timeout=10)
+    # A view concern only: the tree Python owns is untouched.
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    # And the param still pushes the other way.
+    table.filter_text = "B1"
+    expect_titles(page, ["Folder B", "File B1"])
+    expect(box).to_have_value("B1")
+
+    server.stop()
+
+
+def test_toolbar_shortcuts_work_from_the_grid(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()
+    page.keyboard.press("Control+a")
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2", "b", "b1"], timeout=10)
+
+    page.keyboard.press("Escape")
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+
+    page.keyboard.press("Control+f")
+    assert focused_label(page) == "Search"
+
+    server.stop()
+
+
+def test_toolbar_survives_an_empty_tree(page: Page, port):
+    """The empty state replaces the grid, not the toolbar, or a search could not be undone."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"toolbar": True})
+    server = serve(table, page, port)
+
+    page.locator(".pnl-tst-search input").fill("nothing here")
+    page.locator(".pnl-tst-empty").wait_for(state="visible", timeout=10000)
+
+    assert page.locator("[role='toolbar']").count() == 1
+    assert page.locator("[role='treegrid']").count() == 0
+
+    page.locator(".pnl-tst-search input").fill("")
+    expect_titles(page, ["Folder A", "Folder B"])
+
+    server.stop()

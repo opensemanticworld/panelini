@@ -57,7 +57,10 @@ class TanstackTable(AnyWidgetComponent):
             "and the space key. Clicking never cascades: selecting a folder selects the folder "
             "alone, and selecting every file in one leaves the folder out. Only the checkbox "
             "cascades, and only under hierarchy, where ticking a folder ticks its whole subtree "
-            "and a folder reads as ticked once all of its children are."
+            "and a folder reads as ticked once all of its children are. toolbar is an ordered list "
+            "of action ids, True for the default set and absent for no toolbar at all, and it "
+            "governs the keyboard shortcuts as well as the buttons. toolbar_label and search_label "
+            "name the toolbar and its search box for assistive technology."
         ),
     )
     icons = param.Dict(
@@ -70,13 +73,15 @@ class TanstackTable(AnyWidgetComponent):
         ),
     )
 
+    # Bidirectional, and safe for the same reason the key sets below are: the
+    # toolbar's search box is the only writer and a scalar echo is value-equal.
     filter_text = param.String(
         default="",
         doc=(
             "Search text. Rows whose cell values all miss it are hidden, and the ancestors of a "
             "match are kept so the path to it stays visible. Filtering is a view concern: source "
             "is untouched, so a move made while a filter is active is still a move on the whole "
-            "tree."
+            "tree. Written from the browser when the toolbar carries the search action."
         ),
     )
 

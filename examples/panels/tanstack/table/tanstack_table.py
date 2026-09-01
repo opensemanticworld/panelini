@@ -1,4 +1,4 @@
-"""TanstackTable: treegrid with search, columns, icons, multiselect and drag and drop.
+"""TanstackTable: treegrid with a toolbar, columns, icons, multiselect and drag and drop.
 
 Install and run:
 
@@ -107,6 +107,11 @@ table = TanstackTable(
         "enable_dnd": True,
         "expand_all": True,
         "aria_label": "Documents",
+        # True is the default action order. A list picks and orders them instead,
+        # and it gates the keyboard shortcuts too, so an action left out here
+        # cannot be reached by pressing a key either.
+        "toolbar": True,
+        "search_label": "Search name or kind",
     },
     event_callback=on_event,
     move_callback=allow_move,
@@ -122,24 +127,6 @@ def on_selection_change(*events: object) -> None:
 
 table.param.watch(on_selection_change, ["selected_keys"])
 
-search = pn.widgets.TextInput(
-    placeholder="Search name or kind ...",
-    sizing_mode="stretch_width",
-)
-
-
-def on_search(event: object) -> None:
-    """Push every keystroke into the panel's view filter.
-
-    ``value_input`` rather than ``value``, so the tree narrows as you type instead
-    of waiting for Enter. The filter hides rows only: ``source`` is untouched, so
-    dragging still moves nodes in the whole tree.
-    """
-    table.filter_text = search.value_input
-
-
-search.param.watch(on_search, "value_input")
-
 checkboxes = pn.widgets.Checkbox(name="Checkboxes", value=True)
 
 
@@ -154,15 +141,6 @@ def on_checkboxes(event: object) -> None:
 
 checkboxes.param.watch(on_checkboxes, "value")
 
-expand_all = pn.widgets.Button(label="Expand all", button_style="outline")
-expand_all.on_click(lambda event: table.expand_all())
-
-collapse_all = pn.widgets.Button(label="Collapse all", button_style="outline")
-collapse_all.on_click(lambda event: table.collapse_all())
-
-clear_selection = pn.widgets.Button(label="Clear selection", button_style="outline")
-clear_selection.on_click(lambda event: table.clear_selection())
-
 gestures = pn.pane.Markdown(
     """
 ### Try it
@@ -176,6 +154,9 @@ gestures = pn.pane.Markdown(
 - `Archive (read only)` refuses drops, through a Python `move_callback`.
 - **Search** narrows to matches and the folders that lead to them.
 - **Checkboxes** off hides the column only. Click, Shift click and drag keep working.
+- **Tab** reaches the toolbar, then the grid. In the toolbar the arrow keys move
+  between buttons; in the grid `Ctrl+A` selects all, `Escape` clears and `Ctrl+F`
+  jumps to the search box.
 """,
     sizing_mode="stretch_width",
 )
@@ -192,14 +173,13 @@ app.main_set(
     objects=[
         pn.Row(
             pn.Column(
-                search,
                 table,
                 styles=PANE_STYLES,
                 sizing_mode="stretch_both",
                 margin=(0, 15, 0, 0),
             ),
             pn.Column(
-                pn.Row(checkboxes, expand_all, collapse_all, clear_selection),
+                checkboxes,
                 selected_display,
                 gestures,
                 log,

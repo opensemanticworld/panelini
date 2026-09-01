@@ -58,7 +58,22 @@ export function render({ model, el }) {
   const setExpandedKeys = setKeys("expanded_keys");
   const setSelectedKeys = setKeys("selected_keys");
 
-  const app = createApp(TanstackTable, { state, emitEvent, setExpandedKeys, setSelectedKeys });
+  // `filter_text` is bidirectional for the same reason: a scalar echo is value
+  // equal and terminates. The toolbar's search box is the only writer, and a
+  // table without one leaves this unused.
+  const setFilterText = (value) => {
+    if ((model.get("filter_text") || "") === value) return;
+    model.set("filter_text", value);
+    model.save_changes();
+  };
+
+  const app = createApp(TanstackTable, {
+    state,
+    emitEvent,
+    setExpandedKeys,
+    setSelectedKeys,
+    setFilterText,
+  });
   app.mount(container);
 
   model.on("change:source", () => {

@@ -28,6 +28,14 @@ import imageIcon from 'material-icon-theme/icons/image.svg?raw'
 import markdownIcon from 'material-icon-theme/icons/markdown.svg?raw'
 import pdfIcon from 'material-icon-theme/icons/pdf.svg?raw'
 import pythonIcon from 'material-icon-theme/icons/python.svg?raw'
+// Lucide (ISC), the toolbar icon set. Same treatment as the file icons above:
+// named one file at a time so only these reach the bundle, and drawn with
+// `stroke="currentColor"`, so a button's own colour carries into the glyph.
+import chevronsDownIcon from 'lucide-static/icons/chevrons-down.svg?raw'
+import chevronsUpIcon from 'lucide-static/icons/chevrons-up.svg?raw'
+import searchIcon from 'lucide-static/icons/search.svg?raw'
+import squareIcon from 'lucide-static/icons/square.svg?raw'
+import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
 
 const props = defineProps({
   // Python-owned state. The component reads it and never writes it back.
@@ -38,6 +46,8 @@ const props = defineProps({
   setExpandedKeys: { type: Function, required: true },
   // Two-way, set-semantics sync of the selected key list.
   setSelectedKeys: { type: Function, required: true },
+  // Two-way sync of the view filter, written by the toolbar's search box.
+  setFilterText: { type: Function, required: true },
 })
 
 // Built once, outside the table instance: the adapter injects
@@ -242,6 +252,24 @@ watch(
 const filterText = computed(() => (props.state.filterText ?? '').trim().toLowerCase())
 const filtering = computed(() => filterText.value.length > 0)
 
+// What the toolbar's search box shows. The param stays the single source of truth,
+// so a filter set from Python still lands in the box, and the box is only a
+// mirror because binding it straight to the param would make every keystroke wait
+// on a round trip before it appeared.
+const searchText = ref(props.state.filterText ?? '')
+
+watch(
+  () => props.state.filterText,
+  (value) => {
+    searchText.value = value ?? ''
+  },
+)
+
+function onSearchInput(value) {
+  searchText.value = value
+  props.setFilterText(value)
+}
+
 // Any rendered column value counts, which is what makes this a global filter
 // rather than a title search. In tree-only mode the one column is the title.
 function rowMatches(row) {
@@ -368,6 +396,24 @@ function onKeydown(event) {
     list.findIndex((row) => row.id === focusKey.value),
   )
   const row = list[index]
+
+  // Toolbar shortcuts run ahead of the navigation keys, and only for the actions
+  // the table declared, so a panel without a toolbar answers to nothing new.
+  // Ctrl combinations are taken only while focus is inside the grid, which is
+  // what keeps Ctrl+F from stealing the browser's own find on the rest of a page.
+  if (event.ctrlKey || event.metaKey) {
+    const id = { a: 'select-all', f: SEARCH_ID }[event.key.toLowerCase()]
+    if (id && allows(id)) {
+      event.preventDefault()
+      runAction(id)
+      return
+    }
+  }
+  if (event.key === 'Escape' && allows('clear-selection')) {
+    event.preventDefault()
+    runAction('clear-selection')
+    return
+  }
 
   switch (event.key) {
     case 'ArrowDown':
@@ -508,6 +554,158 @@ function toggleCheck(row) {
 function onCheckboxClick(row) {
   toggleCheck(row)
   focusRowByKey(row.id)
+}
+
+// The toolbar. It is opt in and off by default, so a table that says nothing about
+// it renders exactly as it did before.
+//
+// `options.toolbar` is an ordered list of action ids, with `true` as shorthand for
+// the default order and `|` for a separator. It is the one declaration of what a
+// table may do, and it governs the keyboard shortcuts as well as the buttons: an
+// action the table did not ask for cannot be reached by pressing a key either.
+//
+// `Tab` and `Shift+Tab` are never bound. The grid carries a roving tabindex and
+// Tab has to stay the way out of it.
+const ACTIONS = {
+  'expand-all': { icon: chevronsDownIcon, label: 'Expand all' },
+  'collapse-all': { icon: chevronsUpIcon, label: 'Collapse all' },
+  'select-all': { icon: squareCheckIcon, label: 'Select all', keys: 'Control+A' },
+  'clear-selection': { icon: squareIcon, label: 'Clear selection', keys: 'Escape' },
+}
+
+// `search` is an action id like the others, but it renders the filter box rather
+// than a button, so it is deliberately not in ACTIONS.
+const SEARCH_ID = 'search'
+const SEPARATOR_ID = '|'
+const DEFAULT_TOOLBAR = [
+  'expand-all',
+  'collapse-all',
+  SEPARATOR_ID,
+  'select-all',
+  'clear-selection',
+  SEARCH_ID,
+]
+
+const toolbarItems = computed(() => {
+  const value = props.state.options.toolbar
+  const ids = value === true ? DEFAULT_TOOLBAR : Array.isArray(value) ? value : []
+  return ids.filter((id) => id === SEPARATOR_ID || id === SEARCH_ID || id in ACTIONS)
+})
+
+const hasToolbar = computed(() => toolbarItems.value.length > 0)
+const toolbarLabel = computed(() => props.state.options.toolbar_label ?? 'Tree actions')
+const searchLabel = computed(() => props.state.options.search_label ?? 'Search')
+
+// The single membership test behind both halves: a button is drawn and its
+// shortcut fires only when the id is in the list.
+function allows(id) {
+  return toolbarItems.value.includes(id)
+}
+
+// Disabled means `aria-disabled` and a handler that does nothing, never the
+// `disabled` attribute: a disabled button drops out of the toolbar's roving
+// tabindex, which is exactly the state a keyboard user needs to be told about.
+function actionEnabled(id) {
+  switch (id) {
+    case 'expand-all':
+    case 'collapse-all':
+      // A filtered view is shown open whatever the stored state is, so both of
+      // these would change nothing the user can see until the box is cleared.
+      return rows.value.length > 0 && !filtering.value
+    case 'select-all':
+      return rows.value.length > 0 && selectable.value && selectMode.value !== 'single'
+    case 'clear-selection':
+      return selectable.value && recordToKeys(rowSelection.value).length > 0
+    default:
+      return true
+  }
+}
+
+function actionTitle(id) {
+  const action = ACTIONS[id]
+  if (!action.keys) return action.label
+  return `${action.label} (${action.keys.replace('Control', 'Ctrl')})`
+}
+
+function runAction(id) {
+  if (!allows(id) || !actionEnabled(id)) return
+  switch (id) {
+    case 'expand-all':
+      table.toggleAllRowsExpanded(true)
+      break
+    case 'collapse-all':
+      table.toggleAllRowsExpanded(false)
+      break
+    case 'select-all':
+      rowSelection.value = Object.fromEntries(rows.value.map((row) => [row.id, true]))
+      rangeAnchorKey.value = rows.value[0]?.id ?? null
+      break
+    case 'clear-selection':
+      rowSelection.value = {}
+      rangeAnchorKey.value = null
+      break
+    case SEARCH_ID:
+      searchInput.value?.focus()
+      searchInput.value?.select()
+      break
+    default:
+      break
+  }
+}
+
+// The toolbar is its own tab stop with its own roving tabindex, so the panel has
+// two: the toolbar, then the grid. The search box keeps the tab stop a text field
+// needs, because arrow keys inside it have to move the caret rather than the
+// toolbar's focus.
+const searchInput = ref(null)
+const toolbarButtons = computed(() => toolbarItems.value.filter((id) => id in ACTIONS))
+const toolbarFocusId = ref(null)
+const toolbarElements = new Map()
+
+const toolbarFocusKey = computed(() => {
+  const list = toolbarButtons.value
+  if (list.length === 0) return null
+  return list.includes(toolbarFocusId.value) ? toolbarFocusId.value : list[0]
+})
+
+function setToolbarElement(id, element) {
+  if (element) toolbarElements.set(id, element)
+  else toolbarElements.delete(id)
+}
+
+function focusToolbar(index) {
+  const list = toolbarButtons.value
+  if (list.length === 0) return
+  const id = list[Math.max(0, Math.min(index, list.length - 1))]
+  toolbarFocusId.value = id
+  nextTick(() => toolbarElements.get(id)?.focus())
+}
+
+// Bound on the buttons rather than on the toolbar, so typing in the search box
+// keeps Home, End and the arrow keys for the caret.
+function onToolbarKeydown(event) {
+  const list = toolbarButtons.value
+  const index = Math.max(0, list.indexOf(toolbarFocusKey.value))
+  switch (event.key) {
+    case 'ArrowRight':
+      event.preventDefault()
+      focusToolbar(index + 1)
+      break
+    case 'ArrowLeft':
+      event.preventDefault()
+      focusToolbar(index - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      focusToolbar(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusToolbar(list.length - 1)
+      break
+    default:
+      break
+  }
 }
 
 // Drag and drop. A drop never mutates the tree here: it emits a `move` intent
@@ -797,6 +995,51 @@ function dropLineStyle(row) {
 
 <template>
   <div ref="rootElement" class="pnl-tst">
+    <!-- Above the empty state as well as the grid, so a tree with nothing in it
+         can still be searched and, once the structural actions land, filled. -->
+    <div
+      v-if="hasToolbar"
+      class="pnl-tst-toolbar"
+      role="toolbar"
+      aria-orientation="horizontal"
+      :aria-label="toolbarLabel"
+    >
+      <template v-for="(id, itemIndex) in toolbarItems" :key="`${id}-${itemIndex}`">
+        <span v-if="id === '|'" class="pnl-tst-tsep" aria-hidden="true"></span>
+
+        <label v-else-if="id === 'search'" class="pnl-tst-search">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <span class="pnl-tst-icon" aria-hidden="true" v-html="searchIcon"></span>
+          <input
+            :ref="(element) => (searchInput = element)"
+            type="search"
+            :value="searchText"
+            :aria-label="searchLabel"
+            :placeholder="searchLabel"
+            @input="onSearchInput($event.target.value)"
+          />
+        </label>
+
+        <button
+          v-else
+          :ref="(element) => setToolbarElement(id, element)"
+          type="button"
+          class="pnl-tst-tbtn"
+          :aria-label="ACTIONS[id].label"
+          :aria-keyshortcuts="ACTIONS[id].keys"
+          :aria-disabled="!actionEnabled(id)"
+          :title="actionTitle(id)"
+          :tabindex="id === toolbarFocusKey ? 0 : -1"
+          @click="runAction(id)"
+          @focus="toolbarFocusId = id"
+          @keydown="onToolbarKeydown"
+        >
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <span class="pnl-tst-icon" aria-hidden="true" v-html="ACTIONS[id].icon"></span>
+        </button>
+      </template>
+    </div>
+
     <div v-if="rows.length === 0" class="pnl-tst-empty">{{ emptyMessage }}</div>
 
     <div
