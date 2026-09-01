@@ -55,10 +55,12 @@ import folderPlusIcon from 'lucide-static/icons/folder-plus.svg?raw'
 import indentDecreaseIcon from 'lucide-static/icons/indent-decrease.svg?raw'
 import indentIncreaseIcon from 'lucide-static/icons/indent-increase.svg?raw'
 import pencilIcon from 'lucide-static/icons/pencil.svg?raw'
+import redoIcon from 'lucide-static/icons/redo-2.svg?raw'
 import searchIcon from 'lucide-static/icons/search.svg?raw'
 import squareIcon from 'lucide-static/icons/square.svg?raw'
 import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
 import trashIcon from 'lucide-static/icons/trash-2.svg?raw'
+import undoIcon from 'lucide-static/icons/undo-2.svg?raw'
 
 const props = defineProps({
   // Python-owned state. The component reads it and never writes it back.
@@ -463,8 +465,14 @@ function onKeydown(event) {
   // the table declared, so a panel without a toolbar answers to nothing new.
   // Ctrl combinations are taken only while focus is inside the grid, which is
   // what keeps Ctrl+F from stealing the browser's own find on the rest of a page.
+  // Ctrl+Z is the same bargain: the title editor stops its own keydowns, so
+  // undoing typing inside it stays the browser's.
   if (event.ctrlKey || event.metaKey) {
-    const id = { a: 'select-all', f: SEARCH_ID }[event.key.toLowerCase()]
+    const id = {
+      a: 'select-all',
+      f: SEARCH_ID,
+      z: event.shiftKey ? 'redo' : 'undo',
+    }[event.key.toLowerCase()]
     if (id && allows(id)) {
       event.preventDefault()
       runById(id)
@@ -708,6 +716,8 @@ const ACTIONS = {
   },
   rename: { icon: pencilIcon, label: 'Rename', keys: 'F2' },
   delete: { icon: trashIcon, label: 'Delete', keys: 'Delete' },
+  undo: { icon: undoIcon, label: 'Undo', keys: 'Control+Z' },
+  redo: { icon: redoIcon, label: 'Redo', keys: 'Control+Shift+Z' },
   'move-up': { icon: arrowUpIcon, label: 'Move up', keys: 'Alt+ArrowUp' },
   'move-down': { icon: arrowDownIcon, label: 'Move down', keys: 'Alt+ArrowDown' },
   outdent: { icon: indentDecreaseIcon, label: 'Outdent', keys: 'Alt+ArrowLeft' },
@@ -723,6 +733,9 @@ const ACTIONS = {
 const SEARCH_ID = 'search'
 const SEPARATOR_ID = '|'
 const DEFAULT_TOOLBAR = [
+  'undo',
+  'redo',
+  SEPARATOR_ID,
   'new-folder',
   'new-file',
   'rename',
@@ -1112,6 +1125,16 @@ function emitDelete() {
   props.emitEvent('delete', { key: activeRow.value?.id ?? null, keys })
 }
 
+// A step back may put rows back, take rows away or move them, and which of those
+// it was is Python's to know. Focus therefore follows the position the way it does
+// after a delete, which lands on a real row whatever the step turned out to be,
+// where following the key would leave the grid pointing at a node an undone add
+// has just taken back.
+function emitHistory(action) {
+  refocus = { index: rows.value.findIndex((row) => row.id === activeRow.value?.id) }
+  props.emitEvent(action, {})
+}
+
 // Disabled means `aria-disabled` and a handler that does nothing, never the
 // `disabled` attribute: a disabled button drops out of the toolbar's roving
 // tabindex, which is exactly the state a keyboard user needs to be told about.
@@ -1127,6 +1150,12 @@ function actionEnabled(item) {
       return activeRow.value !== null
     case 'delete':
       return selectionBatch().length > 0
+    case 'undo':
+      // Python holds the history, so what is available is something it reports
+      // rather than something the browser counts for itself.
+      return props.state.canUndo === true
+    case 'redo':
+      return props.state.canRedo === true
     case 'move-up':
       return reorderAnchor(-1) !== null
     case 'move-down':
@@ -1170,6 +1199,10 @@ function runAction(item) {
       break
     case 'delete':
       emitDelete()
+      break
+    case 'undo':
+    case 'redo':
+      emitHistory(item.id)
       break
     case 'move-up':
       emitMove(reorderAnchor(-1), 'before')

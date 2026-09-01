@@ -1051,3 +1051,177 @@ def test_clear_selection(table):
     table.select_node("b1")
     table.clear_selection()
     assert table.selected_keys == []
+
+
+# --- undo and redo ------------------------------------------------------------
+
+
+def test_history_starts_empty(table):
+    """The tree handed to the constructor is the starting point, not a step."""
+    assert table.can_undo is False
+    assert table.can_redo is False
+    assert table.undo() is False
+
+
+def test_undo_restores_the_tree_before_the_last_change(table):
+    table.remove_node("b")
+    assert shape(table.source) == "a(e),d(d1)"
+
+    assert table.undo() is True
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert table.can_undo is False
+    assert table.can_redo is True
+
+
+def test_redo_puts_the_change_back(table):
+    table.remove_node("b")
+    table.undo()
+
+    assert table.redo() is True
+    assert shape(table.source) == "a(e),d(d1)"
+    assert table.can_undo is True
+    assert table.can_redo is False
+
+
+def test_undo_and_redo_alternate_indefinitely(table):
+    table.rename_node("e", "Renamed")
+    for _ in range(3):
+        table.undo()
+        assert title_of(table, "e") == "E"
+        table.redo()
+        assert title_of(table, "e") == "Renamed"
+
+
+def test_each_step_is_one_change(table):
+    """A batch delete rewrites the tree once, so it is one step and not one per key."""
+    table.handle_event("delete", {"keys": ["b1", "b2", "e"]})
+    assert shape(table.source) == "a(b),d(d1)"
+
+    table.undo()
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert table.can_undo is False
+
+
+def test_a_new_change_drops_the_redo_states(table):
+    table.remove_node("e")
+    table.undo()
+    assert table.can_redo is True
+
+    table.rename_node("d", "Renamed")
+    assert table.can_redo is False
+    assert table.redo() is False
+
+
+def test_undo_covers_browser_intents_and_public_calls_alike(table):
+    table.handle_event("move", {"key": "b1", "targetKey": "d", "instruction": "make-child"})
+    table.add_node({"key": "z", "title": "Z"})
+    assert shape(table.source) == "a(b(b2),e),d(d1,b1),z"
+
+    table.undo()
+    assert shape(table.source) == "a(b(b2),e),d(d1,b1)"
+    table.undo()
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_undo_drops_keys_the_restored_tree_no_longer_has(table):
+    table.add_node({"key": "z", "title": "Z"})
+    table.expand_node("z")
+    table.select_node("z")
+    table.select_node("d")
+    table.editing_key = "z"
+
+    table.undo()
+    assert table.expanded_keys == []
+    assert table.selected_keys == ["d"]
+    assert table.editing_key == ""
+
+
+def test_undo_intent_reports_what_is_left(source, events):
+    table = TanstackTable(
+        source=source,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.remove_node("e")
+    table.handle_event("undo", {})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[-1] == ("undo", {"action": "undo", "applied": True, "can_undo": False, "can_redo": True})
+
+    table.handle_event("redo", {})
+    assert events[-1][1] == {"action": "redo", "applied": True, "can_undo": True, "can_redo": False}
+
+
+def test_an_undo_with_nothing_recorded_is_reported_as_not_applied(table, events):
+    table.handle_event("undo", {})
+    assert events[-1][1]["applied"] is False
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_action_callback_is_never_asked_about_a_step(source):
+    """It decides whether a change may happen, and a recorded state already passed it."""
+    seen: list[str] = []
+    table = TanstackTable(
+        source=source,
+        action_callback=lambda action, params: seen.append(action) is None,
+    )
+    table.handle_event("delete", {"keys": ["e"]})
+    table.handle_event("undo", {})
+    table.handle_event("redo", {})
+
+    assert seen == ["delete"]
+    assert shape(table.source) == "a(b(b1,b2)),d(d1)"
+
+
+def test_undo_depth_bounds_the_history(source):
+    table = TanstackTable(source=source, undo_depth=2)
+    for title in ("One", "Two", "Three"):
+        table.rename_node("e", title)
+
+    assert table.undo() is True
+    assert table.undo() is True
+    assert table.undo() is False
+    assert title_of(table, "e") == "One"
+
+
+def test_undo_depth_zero_turns_the_history_off(source):
+    table = TanstackTable(source=source, undo_depth=0)
+    table.rename_node("e", "Renamed")
+
+    assert table.can_undo is False
+    assert table.undo() is False
+
+
+def test_lowering_the_depth_keeps_the_most_recent_steps(table):
+    for title in ("One", "Two", "Three"):
+        table.rename_node("e", title)
+    table.undo_depth = 1
+
+    assert table.undo() is True
+    assert title_of(table, "e") == "Two"
+    assert table.can_undo is False
+
+
+def test_set_source_forgets_the_history(table):
+    table.remove_node("e")
+    table.set_source([{"key": "z", "title": "Z"}])
+
+    assert table.can_undo is False
+    assert table.undo() is False
+    assert shape(table.source) == "z"
+
+
+def test_clear_stays_undoable(table):
+    table.clear()
+    assert table.source == []
+
+    assert table.undo() is True
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_clear_history_forgets_both_directions(table):
+    table.remove_node("e")
+    table.undo()
+    table.clear_history()
+
+    assert table.can_undo is False
+    assert table.can_redo is False

@@ -1031,8 +1031,10 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert bar.get_attribute("aria-label") == "Document actions"
     assert bar.get_attribute("aria-orientation") == "horizontal"
 
-    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(12)]
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(14)]
     assert labels == [
+        "Undo",
+        "Redo",
         "New folder",
         "New file",
         "Rename",
@@ -1046,6 +1048,8 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
         "Select all",
         "Clear selection",
     ]
+    assert button(page, "Undo").get_attribute("aria-keyshortcuts") == "Control+Z"
+    assert button(page, "Redo").get_attribute("aria-keyshortcuts") == "Control+Shift+Z"
     assert button(page, "Select all").get_attribute("aria-keyshortcuts") == "Control+A"
     assert button(page, "Clear selection").get_attribute("aria-keyshortcuts") == "Escape"
     assert button(page, "New folder").get_attribute("aria-keyshortcuts") == "Insert"
@@ -1175,19 +1179,19 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     )
     server = serve(table, page, port)
 
-    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(12)]
-    assert tabbable == ["0"] + ["-1"] * 11
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(14)]
+    assert tabbable == ["0"] + ["-1"] * 13
 
     toolbar_buttons(page).first.focus()
     page.keyboard.press("ArrowRight")
-    assert focused_label(page) == "New file"
+    assert focused_label(page) == "Redo"
     page.keyboard.press("End")
     assert focused_label(page) == "Clear selection"
     page.keyboard.press("Home")
-    assert focused_label(page) == "New folder"
+    assert focused_label(page) == "Undo"
     # Clamped rather than wrapping, exactly as Home and End behave in the grid.
     page.keyboard.press("ArrowLeft")
-    assert focused_label(page) == "New folder"
+    assert focused_label(page) == "Undo"
 
     expect(toolbar_buttons(page).first).to_have_attribute("tabindex", "0")
     assert toolbar_buttons(page).nth(1).get_attribute("tabindex") == "-1"
@@ -2408,4 +2412,110 @@ def test_python_is_told_the_file_type_changed(page: Page, port):
     assert seen[0]["previous_title"] == "notes.md"
     assert seen[0]["applied"] is True
 
+    server.stop()
+
+
+# --- undo and redo ------------------------------------------------------------
+
+
+def test_undo_and_redo_buttons_step_the_tree(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Delete").click()
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1"])
+
+    button(page, "Undo").click()
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    button(page, "Redo").click()
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1"])
+    assert shape(table.source) == "a(a2),b(b1)"
+
+    server.stop()
+
+
+def test_undo_and_redo_shortcuts_work_from_the_grid(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(2).click()  # File A2
+    page.keyboard.press("Delete")
+    wait_until(lambda: shape(table.source) == "a(a1),b(b1)", timeout=10)
+    # Each step waits for the grid and not only for Python: focus is put back when
+    # the new tree renders, and a key pressed before that lands on the wrong row.
+    expect_titles(page, ["Folder A", "File A1", "Folder B", "File B1"])
+    wait_until(lambda: focused_title(page) == "Folder B", timeout=10)
+
+    page.keyboard.press("Control+z")
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+    # Focus follows the position a step leaves behind, the way it does after a
+    # delete, so the next shortcut is still the grid's to take.
+    wait_until(lambda: focused_title(page) == "File A2", timeout=10)
+
+    page.keyboard.press("Control+Shift+z")
+    wait_until(lambda: shape(table.source) == "a(a1),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_both_are_disabled_until_there_is_a_step_to_take(page: Page, port):
+    """Python holds the history, so the buttons read what it reports."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    assert button(page, "Undo").get_attribute("aria-disabled") == "true"
+    assert button(page, "Redo").get_attribute("aria-disabled") == "true"
+
+    # A change made in Python counts too: the history is the tree's, not the
+    # toolbar's, so an application that rewrites the tree leaves an undo behind.
+    table.rename_node("a1", "Renamed")
+    expect(button(page, "Undo")).to_have_attribute("aria-disabled", "false", timeout=10000)
+    assert button(page, "Redo").get_attribute("aria-disabled") == "true"
+
+    button(page, "Undo").click()
+    expect(button(page, "Redo")).to_have_attribute("aria-disabled", "false", timeout=10000)
+    expect(button(page, "Undo")).to_have_attribute("aria-disabled", "true", timeout=10000)
+
+    server.stop()
+
+
+def test_a_table_without_the_actions_ignores_the_shortcuts(page: Page, port):
+    """The toolbar list is the whole declaration, for the keys as much as the buttons."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("Delete")
+    wait_until(lambda: shape(table.source) == "a(a2),b(b1)", timeout=10)
+
+    page.keyboard.press("Control+z")
+    page.wait_for_timeout(300)
+    assert shape(table.source) == "a(a2),b(b1)"
+
+    server.stop()
+
+
+def test_the_open_title_editor_keeps_ctrl_z_for_itself(page: Page, port):
+    """Undoing typing is what Ctrl+Z means inside a text field, so the grid never sees it."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    table.rename_node("b1", "Renamed")
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "Renamed"])
+
+    open_editor(page, 1, "typed")
+    page.keyboard.press("Control+z")
+    page.wait_for_timeout(300)
+    # The rename is still the last step the tree took: the editor swallowed the key
+    # rather than letting it undo something the user was not looking at.
+    assert title_of(table, "b1") == "Renamed"
+    assert editor(page).count() == 1
+
+    page.keyboard.press("Escape")
     server.stop()

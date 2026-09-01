@@ -1,5 +1,6 @@
 """Entrypoint of the TanstackTable panel."""
 
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional
 
@@ -114,6 +115,22 @@ class TanstackTable(AnyWidgetComponent):
         doc="Keys of the currently selected nodes. In hierarchy mode this includes cascaded children.",
     )
 
+    undo_depth = param.Integer(
+        default=20,
+        bounds=(0, None),
+        doc=(
+            "How many tree states to keep for undo. Every rewrite of source records the tree it "
+            "replaced, whether it came from a drop, a toolbar action or a public method, so undo "
+            "covers what an application did as well as what the user did. 0 turns the history off "
+            "entirely. Lowering it keeps the most recent steps and drops the oldest."
+        ),
+    )
+
+    # Python to JavaScript, like source: the browser asks for a step and does not
+    # decide whether one is there to take. They drive the toolbar's disabled state.
+    can_undo = param.Boolean(default=False, doc="Whether a tree state is recorded to step back to.")
+    can_redo = param.Boolean(default=False, doc="Whether an undone tree state is there to step forward to.")
+
     # JavaScript to Python. Carries intent, never a mutated tree.
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
@@ -133,6 +150,7 @@ class TanstackTable(AnyWidgetComponent):
         editing_key: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
+        undo_depth: Optional[int] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
         action_callback: Optional[Callable[[str, dict[str, Any]], bool]] = None,
@@ -151,6 +169,7 @@ class TanstackTable(AnyWidgetComponent):
             editing_key: Key of the node to open the inline title editor on.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
+            undo_depth: How many tree states to keep for undo, 0 for none.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
             move_callback: Veto hook for drag and drop. Receives
@@ -165,7 +184,8 @@ class TanstackTable(AnyWidgetComponent):
                 and returning False leaves ``source`` untouched. Called once for
                 the whole action rather than per node, because adding one node
                 and deleting a batch are each a single decision. Moves keep
-                going through ``move_callback``.
+                going through ``move_callback``, and undo and redo are not asked
+                at all: they replay states this hook already allowed.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -186,12 +206,20 @@ class TanstackTable(AnyWidgetComponent):
             self.expanded_keys = expanded_keys
         if selected_keys is not None:
             self.selected_keys = selected_keys
+        if undo_depth is not None:
+            self.undo_depth = undo_depth
+
+        # The tree handed in here is the starting point rather than a step, so both
+        # stacks open empty and the first change is what becomes undoable.
+        self._undo_stack: deque[list[dict[str, Any]]] = deque(maxlen=self.undo_depth)
+        self._redo_stack: deque[list[dict[str, Any]]] = deque(maxlen=self.undo_depth)
 
         self._event_callback = event_callback
         self._move_callback = move_callback
         self._action_callback = action_callback
 
         self.param.watch(self._on_event_data_change, ["_event_data"])
+        self.param.watch(self._on_undo_depth_change, ["undo_depth"])
 
     def _on_event_data_change(self, event: Any) -> None:
         """Dispatch event data coming from JavaScript.
@@ -221,12 +249,24 @@ class TanstackTable(AnyWidgetComponent):
             if event_name:
                 self.handle_event(event_name, item.get("event_params", {}))
 
+    def _on_undo_depth_change(self, event: Any) -> None:
+        """Resize both stacks, keeping the most recent steps.
+
+        ``deque(iterable, maxlen=n)`` keeps the last ``n`` items, so shrinking the
+        depth drops the oldest states rather than the ones a user is likeliest to
+        want back.
+        """
+        self._undo_stack = deque(self._undo_stack, maxlen=event.new)
+        self._redo_stack = deque(self._redo_stack, maxlen=event.new)
+        self._sync_history()
+
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        ``move``, ``add``, ``rename`` and ``delete`` are intercepted here: the
-        browser only reports what the user asked for, and this is where that intent
-        becomes a new tree. Every other event is forwarded untouched.
+        ``move``, ``add``, ``rename``, ``delete``, ``undo`` and ``redo`` are
+        intercepted here: the browser only reports what the user asked for, and this
+        is where that intent becomes a new tree. Every other event is forwarded
+        untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
@@ -240,9 +280,97 @@ class TanstackTable(AnyWidgetComponent):
             event_params = self._apply_rename_intent(event_params)
         elif event_name == "delete":
             event_params = self._apply_delete_intent(event_params)
+        elif event_name in ("undo", "redo"):
+            event_params = self._apply_history_intent(event_name)
 
         if self._event_callback:
             self._event_callback(event_name, event_params)
+
+    def _commit_source(self, updated: list[dict[str, Any]]) -> None:
+        """Replace ``source`` and record the tree it replaced as one undo step.
+
+        Every rewrite funnels through here, so one drop, one toolbar action or one
+        call to :meth:`add_node` is one step, and a batch delete that rewrites the
+        tree once is one step rather than one per key.
+
+        Redo is dropped, because a new change makes the states ahead of it a branch
+        of a history nobody can reach any more. That is the rule every editor
+        follows and the one users already expect.
+        """
+        self._undo_stack.append(self.get_source())
+        self._redo_stack.clear()
+        self.source = updated
+        self._sync_history()
+
+    def _sync_history(self) -> None:
+        """Publish whether a step is available in either direction.
+
+        Each flag is written only when it turns over, so a run of changes with
+        history already available is not also a run of param events.
+        """
+        can_undo = len(self._undo_stack) > 0
+        if can_undo != self.can_undo:
+            self.can_undo = can_undo
+        can_redo = len(self._redo_stack) > 0
+        if can_redo != self.can_redo:
+            self.can_redo = can_redo
+
+    def _step_history(self, action: str) -> bool:
+        """Step the tree one recorded state back or forward.
+
+        The two directions are one operation with the stacks swapped: whichever is
+        stepped away from receives the tree being left, so undo and redo can be
+        alternated indefinitely.
+
+        Args:
+            action: ``undo`` or ``redo``.
+
+        Returns:
+            True when a state was there to step to.
+        """
+        taken, given = (
+            (self._undo_stack, self._redo_stack) if action == "undo" else (self._redo_stack, self._undo_stack)
+        )
+        if not taken:
+            return False
+
+        given.append(self.get_source())
+        self.source = taken.pop()
+        # A restored tree need not contain everything the current one did: undoing an
+        # add takes back a node that is very likely selected, and it may be the one
+        # the editor is open on.
+        present = {node.get(tree.KEY) for node in tree.iter_nodes(self.source)}
+        stale = {
+            key for key in (*self.expanded_keys, *self.selected_keys, self.editing_key) if key and key not in present
+        }
+        if stale:
+            self._drop_stale_keys(stale)
+        self._sync_history()
+        return True
+
+    def _apply_history_intent(self, action: str) -> dict[str, Any]:
+        """Apply a browser undo or redo intent.
+
+        ``action_callback`` is deliberately not asked. It answers whether a change
+        to the tree may happen, and every recorded state is one it already allowed:
+        a delete it vetoed was never applied, so there is nothing of it to take
+        back. An application that wants no history at all sets ``undo_depth`` to 0
+        or leaves the two actions out of ``options["toolbar"]``.
+
+        Args:
+            action: ``undo`` or ``redo``.
+
+        Returns:
+            The payload, carrying whether a step was taken and what is left in
+            either direction afterwards.
+        """
+        applied = self._step_history(action)
+        return {
+            "action": action,
+            "applied": applied,
+            "can_undo": self.can_undo,
+            "can_redo": self.can_redo,
+        }
 
     def _apply_move_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Resolve a browser move intent and rewrite ``source``.
@@ -304,7 +432,7 @@ class TanstackTable(AnyWidgetComponent):
         if not moved:
             return params
 
-        self.source = updated
+        self._commit_source(updated)
         params["applied"] = True
         params["applied_keys"] = moved
         return params
@@ -367,9 +495,9 @@ class TanstackTable(AnyWidgetComponent):
             return params
 
         if anchor_key is None or position == "child":
-            self.source = tree.insert_child(self.source, anchor_key, node)
+            self._commit_source(tree.insert_child(self.source, anchor_key, node))
         else:
-            self.source = tree.insert_sibling(self.source, anchor_key, node)
+            self._commit_source(tree.insert_sibling(self.source, anchor_key, node))
 
         params["applied"] = True
         return params
@@ -425,7 +553,7 @@ class TanstackTable(AnyWidgetComponent):
         if updated is None:
             return params
 
-        self.source = updated
+        self._commit_source(updated)
         params["applied"] = True
         return params
 
@@ -501,7 +629,7 @@ class TanstackTable(AnyWidgetComponent):
         if not removed:
             return params
 
-        self.source = updated
+        self._commit_source(updated)
         self._drop_stale_keys(stale)
         params["applied"] = True
         params["applied_keys"] = removed
@@ -537,14 +665,44 @@ class TanstackTable(AnyWidgetComponent):
         return list(self.source)
 
     def set_source(self, source: list[dict[str, Any]]) -> None:
-        """Replace the tree source data."""
+        """Replace the tree source data and forget the undo history.
+
+        This is a new tree rather than a change to the current one, so the states
+        recorded against the old one go with it: their keys need not mean anything
+        here, and stepping back into one would restore a tree the application had
+        already replaced. :meth:`clear` is the other thing, an edit of the tree in
+        hand, so emptying it stays undoable.
+        """
         self.source = source
+        self.clear_history()
 
     def clear(self) -> None:
         """Remove all nodes from the tree."""
-        self.source = []
+        self._commit_source([])
         self.expanded_keys = []
         self.selected_keys = []
+
+    def undo(self) -> bool:
+        """Step the tree back to the state before the last change.
+
+        Returns:
+            True when a state was there to step back to.
+        """
+        return self._step_history("undo")
+
+    def redo(self) -> bool:
+        """Step the tree forward to the state the last undo left.
+
+        Returns:
+            True when a state was there to step forward to.
+        """
+        return self._step_history("redo")
+
+    def clear_history(self) -> None:
+        """Forget every recorded tree state in both directions."""
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._sync_history()
 
     def add_node(
         self,
@@ -559,7 +717,7 @@ class TanstackTable(AnyWidgetComponent):
             parent_key: Key of the parent, or None to add at root level.
             index: Position among the siblings. None appends.
         """
-        self.source = tree.insert_child(self.source, parent_key, node, index)
+        self._commit_source(tree.insert_child(self.source, parent_key, node, index))
 
     def remove_node(self, key: str) -> bool:
         """Remove a node and its subtree.
@@ -579,7 +737,7 @@ class TanstackTable(AnyWidgetComponent):
         if removed is None:
             return False
 
-        self.source = updated
+        self._commit_source(updated)
         self._drop_stale_keys(stale)
         return True
 
@@ -599,7 +757,7 @@ class TanstackTable(AnyWidgetComponent):
         updated = tree.apply_move(self.source, key, anchor_key, position)
         if updated is None:
             return False
-        self.source = updated
+        self._commit_source(updated)
         return True
 
     def move_nodes(self, keys: list[str], anchor_key: str, position: str = "child") -> list[str]:
@@ -617,7 +775,7 @@ class TanstackTable(AnyWidgetComponent):
         """
         updated, moved = tree.apply_moves(self.source, keys, anchor_key, position)
         if moved:
-            self.source = updated
+            self._commit_source(updated)
         return moved
 
     def update_node(self, key: str, values: dict[str, Any]) -> bool:
@@ -637,7 +795,7 @@ class TanstackTable(AnyWidgetComponent):
         updated = tree.update_node(self.source, key, values)
         if updated is None:
             return False
-        self.source = updated
+        self._commit_source(updated)
         return True
 
     def rename_node(self, key: str, title: str) -> bool:

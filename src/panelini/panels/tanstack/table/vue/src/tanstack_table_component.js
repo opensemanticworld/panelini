@@ -33,6 +33,10 @@ export function render({ model, el }) {
     editingKey: model.get("editing_key") || "",
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
+    // Python owns the history as it owns the tree. The toolbar asks for a step and
+    // reads these to know whether there is one, rather than counting its own.
+    canUndo: model.get("can_undo") || false,
+    canRedo: model.get("can_redo") || false,
   });
 
   // One gesture can produce two intents: the click that dismisses an open title
@@ -123,6 +127,12 @@ export function render({ model, el }) {
   });
   model.on("change:selected_keys", () => {
     state.selectedKeys = model.get("selected_keys") || [];
+  });
+  model.on("change:can_undo", () => {
+    state.canUndo = model.get("can_undo") || false;
+  });
+  model.on("change:can_redo", () => {
+    state.canRedo = model.get("can_redo") || false;
   });
 
   return () => {

@@ -153,6 +153,9 @@ table = TanstackTable(
         # is how this tree gets folders and files rather than bare nodes. The
         # label is also the new node's title.
         "toolbar": [
+            "undo",
+            "redo",
+            "|",
             {"id": "new-folder", "label": "New folder", "node": {**FOLDER, "children": []}},
             {
                 "id": "new-file",
@@ -238,6 +241,10 @@ gestures = pn.pane.Markdown(
   default. Naming a brand new file never asks: it had no type to lose.
 - The **icon follows the type**: call `notes.md` `notes.py` and it turns into a
   Python file. An icon you picked by hand is left where you put it.
+- **Ctrl+Z** takes back the last change to the tree and **Ctrl+Shift+Z** puts it
+  back, whether it was a drop, a toolbar action or a rename. The history is
+  Python's, so it covers what the app did as well, and a fresh change drops
+  whatever was ahead of it.
 - `Archive (read only)` refuses new nodes, renames and deletions too, through a
   Python `action_callback`.
 - Clicking the only selected row **again** clears the selection, and so does
