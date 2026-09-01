@@ -1031,10 +1031,11 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert bar.get_attribute("aria-label") == "Document actions"
     assert bar.get_attribute("aria-orientation") == "horizontal"
 
-    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(11)]
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(12)]
     assert labels == [
         "New folder",
         "New file",
+        "Rename",
         "Delete",
         "Move up",
         "Move down",
@@ -1049,6 +1050,7 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert button(page, "Clear selection").get_attribute("aria-keyshortcuts") == "Escape"
     assert button(page, "New folder").get_attribute("aria-keyshortcuts") == "Insert"
     assert button(page, "New file").get_attribute("aria-keyshortcuts") == "Shift+Insert"
+    assert button(page, "Rename").get_attribute("aria-keyshortcuts") == "F2"
     assert button(page, "Delete").get_attribute("aria-keyshortcuts") == "Delete"
     # Alt, never Tab: Tab has to stay the way out of the grid's roving tabindex.
     assert button(page, "Indent").get_attribute("aria-keyshortcuts") == "Alt+ArrowRight"
@@ -1173,8 +1175,8 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     )
     server = serve(table, page, port)
 
-    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(11)]
-    assert tabbable == ["0"] + ["-1"] * 10
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(12)]
+    assert tabbable == ["0"] + ["-1"] * 11
 
     toolbar_buttons(page).first.focus()
     page.keyboard.press("ArrowRight")
@@ -1457,6 +1459,21 @@ def test_toolbar_move_goes_through_the_move_callback(page: Page, port):
 # delete takes with it, and where focus goes once the new source arrives.
 
 
+def commit_name(page: Page) -> None:
+    """Close the editor an add opened, keeping the name the button gave the node.
+
+    A default toolbar carries `rename`, so creating a node opens the editor on it
+    the way an explorer does. Committing is what puts the title back in the cell.
+
+    Waiting for the editor first, because Python having the new source says nothing
+    about the browser having rendered it: an Enter sent early would land on the
+    button that was clicked and add a second node.
+    """
+    expect(page.locator(".pnl-tst-edit")).to_have_count(1, timeout=10000)
+    page.keyboard.press("Enter")
+    expect(page.locator(".pnl-tst-edit")).to_have_count(0, timeout=10000)
+
+
 def test_toolbar_new_folder_lands_inside_the_active_row(page: Page, port):
     """Explorer placement: a row that takes children takes the new node too."""
     table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
@@ -1465,6 +1482,7 @@ def test_toolbar_new_folder_lands_inside_the_active_row(page: Page, port):
     rows(page).nth(0).click()  # Folder A
     button(page, "New folder").click()
     wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+    commit_name(page)
     # The button's label is also the new node's title, so a renamed action names
     # what it creates.
     expect_titles(page, ["Folder A", "File A1", "File A2", "New folder", "Folder B", "File B1"])
@@ -1487,6 +1505,7 @@ def test_toolbar_new_file_lands_next_to_a_leaf(page: Page, port):
     rows(page).nth(1).click()  # File A1
     button(page, "New file").click()
     wait_until(lambda: shape(table.source) == "a(a1,node-1)", timeout=10)
+    commit_name(page)
     expect_titles(page, ["Folder A", "File A1", "New file"])
 
     # The default template for this action refuses children in turn, so the rule
@@ -1509,6 +1528,7 @@ def test_toolbar_fills_a_tree_that_starts_out_empty(page: Page, port):
 
     button(page, "New folder").click()
     wait_until(lambda: shape(table.source) == "node-1", timeout=10)
+    commit_name(page)
     expect_titles(page, ["New folder"])
 
     server.stop()
@@ -1553,6 +1573,7 @@ def test_toolbar_add_focuses_and_selects_the_new_row(page: Page, port):
 
     button(page, "New folder").click()
     wait_until(lambda: shape(table.source) == "a(a1(node-1),a2),b(b1)", timeout=10)
+    commit_name(page)
     wait_until(lambda: focused_title(page) == "New folder", timeout=10)
     # The new node replaces the selection rather than joining it, so the next
     # action applies to it alone.
@@ -1568,6 +1589,7 @@ def test_toolbar_add_shortcuts_work_from_the_grid(page: Page, port):
     rows(page).nth(0).click()  # Folder A
     page.keyboard.press("Insert")
     wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+    commit_name(page)
 
     # Focus followed the new folder, and a folder takes children, so the file that
     # Shift+Insert makes lands inside it rather than beside it.
@@ -1788,5 +1810,253 @@ def test_a_second_click_keeps_the_row_selected_by_default(page: Page, port):
     click_row(page, 1)
     page.wait_for_timeout(500)
     assert table.selected_keys == ["a1"]
+
+    server.stop()
+
+
+# Inline rename. Typing stays in the browser until it commits, so what is pinned
+# down here is when the editor opens, what closes it, and that Python is the one
+# that retitles the node.
+
+
+def editor(page: Page):
+    return page.locator(".pnl-tst-edit")
+
+
+def title_of(table: TanstackTable, key: str) -> str:
+    return node_at(table.source, key)["title"]
+
+
+def test_rename_button_opens_the_editor_on_the_active_row(page: Page, port):
+    """The editor sits inside the tree gridcell, so the treegrid is unchanged."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Rename").click()
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).input_value() == "File A1"
+    # Named for the node, so the editor announces what is being renamed.
+    assert editor(page).get_attribute("aria-label") == "Rename File A1"
+    # The row is still a row at the level it was, with its cells still gridcells.
+    assert rows(page).nth(1).get_attribute("aria-level") == "2"
+    assert rows(page).nth(1).locator("[role='gridcell']").count() == 1
+    # Python is told which row is open, so an application can follow along.
+    wait_until(lambda: table.editing_key == "a1", timeout=10)
+
+    server.stop()
+
+
+def test_rename_commits_on_enter(page: Page, port):
+    """Python retitles the node: the browser only ever asks."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    editor(page).fill("Renamed")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: title_of(table, "a1") == "Renamed", timeout=10)
+    expect(editor(page)).to_have_count(0)
+    wait_until(lambda: table.editing_key == "", timeout=10)
+    # Focus comes back to the row, so the next key press acts on it rather than
+    # landing nowhere.
+    wait_until(lambda: focused_title(page) == "Renamed", timeout=10)
+
+    server.stop()
+
+
+def test_rename_commits_on_blur(page: Page, port):
+    """Clicking away is the same answer as Enter, which is what an explorer does."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    editor(page).fill("Renamed")
+    # The row element rather than its title, which the open editor has replaced.
+    rows(page).nth(2).click()  # File A2
+
+    wait_until(lambda: title_of(table, "a1") == "Renamed", timeout=10)
+    expect(editor(page)).to_have_count(0)
+
+    server.stop()
+
+
+def test_escape_cancels_a_rename_on_an_existing_row(page: Page, port):
+    """Escape closes the editor and leaves the node exactly as it was."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    editor(page).fill("Renamed")
+    page.keyboard.press("Escape")
+
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    page.wait_for_timeout(500)
+    assert title_of(table, "a1") == "File A1"
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    server.stop()
+
+
+def test_an_emptied_editor_is_a_cancel_rather_than_a_blank_title(page: Page, port):
+    """A row with nothing to click on has no way back to being named."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    editor(page).fill("   ")
+    page.keyboard.press("Enter")
+
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    page.wait_for_timeout(500)
+    assert title_of(table, "a1") == "File A1"
+
+    server.stop()
+
+
+def test_adding_a_node_opens_the_editor_on_it(page: Page, port):
+    """Naming a new node straight away, with the label as the text to replace."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()  # Folder A
+    page.keyboard.press("Insert")
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).input_value() == "New folder"
+
+    editor(page).fill("Reports")
+    page.keyboard.press("Enter")
+    wait_until(lambda: title_of(table, "node-1") == "Reports", timeout=10)
+
+    server.stop()
+
+
+def test_escape_on_a_freshly_added_node_removes_it(page: Page, port):
+    """One key press undoes the whole of what opening the editor was part of."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()  # Folder A
+    page.keyboard.press("Insert")
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+
+    # The editor first: an early Escape would reach the grid and clear the selection.
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("Escape")
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b(b1)", timeout=10)
+    expect(editor(page)).to_have_count(0)
+
+    # A second edit of an existing row is an ordinary one: Escape closes it and
+    # keeps the row, so the removal never becomes a property of the editor itself.
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(500)
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    server.stop()
+
+
+def test_a_table_without_rename_never_opens_an_editor(page: Page, port):
+    """The toolbar list gates the editor as it gates every other action."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": ["new-folder"]},
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()  # Folder A
+    page.keyboard.press("F2")
+    page.wait_for_timeout(300)
+    assert editor(page).count() == 0
+
+    # And an add leaves the node with the label the button gave it.
+    page.keyboard.press("Insert")
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+    page.wait_for_timeout(300)
+    assert editor(page).count() == 0
+    expect_titles(page, ["Folder A", "File A1", "File A2", "New folder", "Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_python_can_open_the_editor_by_writing_editing_key(page: Page, port):
+    """An application starting a rename of its own, with no toolbar in sight."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True})
+    server = serve(table, page, port)
+
+    table.editing_key = "a1"
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).input_value() == "File A1"
+
+    editor(page).fill("Renamed")
+    page.keyboard.press("Enter")
+    wait_until(lambda: title_of(table, "a1") == "Renamed", timeout=10)
+    # The browser clears the param when the editor closes, so the next write of the
+    # same key opens it again.
+    wait_until(lambda: table.editing_key == "", timeout=10)
+
+    server.stop()
+
+
+def test_rename_goes_through_the_action_callback(page: Page, port):
+    """The veto add and delete answer to is the veto a rename answers to."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": True},
+        action_callback=lambda action, params: action != "rename",
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("F2")
+    editor(page).fill("Renamed")
+    page.keyboard.press("Enter")
+
+    page.wait_for_timeout(700)
+    assert title_of(table, "a1") == "File A1"
+
+    server.stop()
+
+
+def test_rename_is_disabled_with_nothing_to_rename(page: Page, port):
+    table = TanstackTable(source=[], options={"toolbar": True})
+    server = start(table, page, port)
+    page.locator("[role='toolbar']").wait_for(state="visible", timeout=15000)
+
+    expect(button(page, "Rename")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    page.keyboard.press("F2")
+    page.wait_for_timeout(300)
+    assert editor(page).count() == 0
+
+    server.stop()
+
+
+def test_clicking_inside_the_editor_leaves_the_selection_alone(page: Page, port):
+    """The editor is a row control, so placing the caret is not a row gesture."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # and File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    button(page, "Rename").click()
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    editor(page).click()
+    page.wait_for_timeout(500)
+    # A plain click on a row would have narrowed this to one.
+    assert table.selected_keys == ["a1", "a2"]
 
     server.stop()

@@ -54,6 +54,7 @@ import filePlusIcon from 'lucide-static/icons/file-plus.svg?raw'
 import folderPlusIcon from 'lucide-static/icons/folder-plus.svg?raw'
 import indentDecreaseIcon from 'lucide-static/icons/indent-decrease.svg?raw'
 import indentIncreaseIcon from 'lucide-static/icons/indent-increase.svg?raw'
+import pencilIcon from 'lucide-static/icons/pencil.svg?raw'
 import searchIcon from 'lucide-static/icons/search.svg?raw'
 import squareIcon from 'lucide-static/icons/square.svg?raw'
 import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
@@ -70,6 +71,8 @@ const props = defineProps({
   setSelectedKeys: { type: Function, required: true },
   // Two-way sync of the view filter, written by the toolbar's search box.
   setFilterText: { type: Function, required: true },
+  // Two-way sync of the row the inline title editor is open on.
+  setEditingKey: { type: Function, required: true },
 })
 
 // Built once, outside the table instance: the adapter injects
@@ -483,22 +486,19 @@ function onKeydown(event) {
       return
     }
   }
-  // Insert creates, Shift+Insert creates the other kind, and a table that declared
-  // only one of them answers to only that one key.
-  if (event.key === 'Insert' || event.key === 'Delete' || event.key === 'Escape') {
-    const id =
-      event.key === 'Insert'
-        ? event.shiftKey
-          ? 'new-file'
-          : 'new-folder'
-        : event.key === 'Delete'
-          ? 'delete'
-          : 'clear-selection'
-    if (allows(id)) {
-      event.preventDefault()
-      runById(id)
-      return
-    }
+  // Insert creates, Shift+Insert creates the other kind, F2 renames, Delete removes
+  // and Escape clears. A table that declared only some of these answers to only
+  // those keys, and the rest fall through to the navigation switch below.
+  const direct = {
+    Insert: event.shiftKey ? 'new-file' : 'new-folder',
+    F2: 'rename',
+    Delete: 'delete',
+    Escape: 'clear-selection',
+  }[event.key]
+  if (direct && allows(direct)) {
+    event.preventDefault()
+    runById(direct)
+    return
   }
 
   switch (event.key) {
@@ -706,6 +706,7 @@ const ACTIONS = {
     keys: 'Shift+Insert',
     node: { allow_children: false },
   },
+  rename: { icon: pencilIcon, label: 'Rename', keys: 'F2' },
   delete: { icon: trashIcon, label: 'Delete', keys: 'Delete' },
   'move-up': { icon: arrowUpIcon, label: 'Move up', keys: 'Alt+ArrowUp' },
   'move-down': { icon: arrowDownIcon, label: 'Move down', keys: 'Alt+ArrowDown' },
@@ -724,6 +725,7 @@ const SEPARATOR_ID = '|'
 const DEFAULT_TOOLBAR = [
   'new-folder',
   'new-file',
+  'rename',
   'delete',
   SEPARATOR_ID,
   'move-up',
@@ -876,17 +878,123 @@ watch(
   },
 )
 
-// Selecting the new node as well as focusing it is what makes typing a name next
-// (P9d) land on the thing that was just created, and it matches an explorer.
+// Selecting the new node as well as focusing it makes typing a name next land on
+// the thing that was just created, and it matches an explorer.
 function focusAdded(before) {
   const fresh = table.getCoreRowModel().flatRows.find((row) => !before.has(row.id))
   if (!fresh) return
   focusRowByKey(fresh.id)
-  if (!selectable.value) return
-  rowSelection.value = {}
-  rangeAnchorKey.value = fresh.id
-  fresh.toggleSelected(true, { selectChildren: false })
+  if (selectable.value) {
+    rowSelection.value = {}
+    rangeAnchorKey.value = fresh.id
+    fresh.toggleSelected(true, { selectChildren: false })
+  }
+  // Naming a new node straight away is what an explorer does. Opening the editor is
+  // a view decision, so it is taken here rather than by Python, exactly as opening
+  // the new parent is: a table that did not ask for `rename` gets no editor at all
+  // and the node simply keeps the button's label as its title.
+  if (allows('rename')) nextTick(() => startEdit(fresh.id, true))
 }
+
+// The inline title editor. `editing_key` names the row it is open on and is
+// bidirectional for the same reason `filter_text` is: an application may open the
+// editor by writing a key, and the browser writes "" back when it closes. What is
+// typed stays local until it commits, so a rename is one intent and not one per
+// keystroke.
+const editingKey = ref(null)
+const editText = ref('')
+const editInput = ref(null)
+
+// The key of a node this browser created a moment ago, which is what lets Escape
+// remove it again: cancelling the name of a node that only exists because the
+// editor opened should leave no "New folder" behind. Cleared whenever the editor
+// closes, so a later edit of the same row is an ordinary one.
+let freshKey = null
+
+// A key naming no rendered row is ignored rather than opening an editor nobody can
+// see. Revealing the row would mean expanding branches or clearing the filter, and
+// neither is something a rename should decide on the application's behalf.
+function startEdit(key, fresh = false) {
+  const row = rowByKey(key)
+  if (!row) return
+  freshKey = fresh ? key : null
+  editText.value = row.original.title ?? ''
+  editingKey.value = key
+  props.setEditingKey(key)
+  nextTick(() => {
+    editInput.value?.focus()
+    editInput.value?.select()
+  })
+}
+
+function closeEdit() {
+  freshKey = null
+  editingKey.value = null
+  props.setEditingKey('')
+}
+
+// Committing is a `rename` intent like any other: Python decides, rewrites `source`
+// and pushes it back. A title that did not change is not worth a round trip, and an
+// empty one is a cancel rather than a blank rename, which is how Python reads it too
+// if it arrives anyway.
+//
+// Both of these guard on the editor still being open, because closing it unmounts a
+// focused input and the blur that follows would otherwise commit a second time.
+function commitEdit(row) {
+  if (editingKey.value !== row.id) return
+  const title = editText.value.trim()
+  const changed = title.length > 0 && title !== (row.original.title ?? '')
+  closeEdit()
+  if (!changed) {
+    focusRowByKey(row.id)
+    return
+  }
+  refocus = { key: row.id }
+  props.emitEvent('rename', { key: row.id, title })
+}
+
+// Escape on an existing row just closes the editor. On a row created a moment ago it
+// deletes the row as well, so one keypress undoes the whole of what opening the
+// editor was part of.
+function cancelEdit(row) {
+  if (editingKey.value !== row.id) return
+  const fresh = freshKey === row.id
+  closeEdit()
+  if (!fresh) {
+    focusRowByKey(row.id)
+    return
+  }
+  refocus = { index: rows.value.findIndex((candidate) => candidate.id === row.id) }
+  props.emitEvent('delete', { key: row.id, keys: [row.id] })
+}
+
+// Bound on the input rather than left to the grid, and stopped there, so Escape,
+// Enter and the arrow keys mean what they mean in a text field while it is open.
+function onEditKeydown(row, event) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commitEdit(row)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEdit(row)
+  }
+}
+
+// Python writing the key is an application asking for the editor outright, so it is
+// honoured whether or not the toolbar declared `rename`, the same way `set_source`
+// is not gated by what the toolbar offers.
+watch(
+  () => props.state.editingKey,
+  (key) => {
+    if ((key || '') === (editingKey.value || '')) return
+    if (key) startEdit(key)
+    else closeEdit()
+  },
+)
+
+onMounted(() => {
+  if (props.state.editingKey) startEdit(props.state.editingKey)
+})
 
 // The same `move` event a drop emits, with an explicit position in place of a
 // hitbox instruction. Python applies both through `tree.apply_moves`, so a toolbar
@@ -932,6 +1040,9 @@ function actionEnabled(item) {
       // Always available: with no active row the node lands at root level, which
       // is the only way to fill a tree that starts out empty.
       return true
+    case 'rename':
+      // One row at a time, so it follows the active row rather than the selection.
+      return activeRow.value !== null
     case 'delete':
       return selectionBatch().length > 0
     case 'move-up':
@@ -971,6 +1082,9 @@ function runAction(item) {
     case 'new-folder':
     case 'new-file':
       emitAdd(item)
+      break
+    case 'rename':
+      startEdit(activeRow.value.id)
       break
     case 'delete':
       emitDelete()
@@ -1213,12 +1327,14 @@ function rowAt(input) {
   return null
 }
 
-// The checkbox and the twisty are the two controls inside a row. `draggable` is
-// registered on the host, so without this a press on either one starts a drag and
-// the click that would have toggled it never lands, which is what made checkbox
-// selection and drag and drop mutually exclusive.
+// The checkbox, the twisty and the open title editor are the controls inside a row.
+// `draggable` is registered on the host, so without this a press on any of them
+// starts a drag and the click that would have toggled it never lands, which is what
+// made checkbox selection and drag and drop mutually exclusive. For the editor it is
+// what lets the caret be placed with the mouse.
 function onRowControl(hit, input) {
-  for (const control of hit.element.querySelectorAll('.pnl-tst-check, .pnl-tst-twisty')) {
+  const selector = '.pnl-tst-check, .pnl-tst-twisty, .pnl-tst-edit'
+  for (const control of hit.element.querySelectorAll(selector)) {
     const rect = control.getBoundingClientRect()
     if (
       input.clientX >= rect.left &&
@@ -1518,7 +1634,22 @@ function dropLineStyle(row) {
                 v-html="iconMarkup(row)"
               ></span>
             </template>
-            <span class="pnl-tst-value">{{ cell.getValue() }}</span>
+            <!-- The editor sits inside the tree gridcell, so the treegrid structure
+                 is exactly what it was while a title is being typed. Blur commits,
+                 which is what makes clicking away the same answer as Enter. -->
+            <input
+              v-if="cellIndex === 0 && editingKey === row.id"
+              :ref="(element) => (editInput = element)"
+              class="pnl-tst-edit"
+              type="text"
+              :value="editText"
+              :aria-label="`Rename ${row.original.title ?? row.id}`"
+              @input="editText = $event.target.value"
+              @click.stop
+              @keydown.stop="onEditKeydown(row, $event)"
+              @blur="commitEdit(row)"
+            />
+            <span v-else class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>
         </div>
       </div>

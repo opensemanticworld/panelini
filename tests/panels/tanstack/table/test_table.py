@@ -9,12 +9,19 @@ import copy
 
 import pytest
 
-from panelini.panels.tanstack.table import TanstackTable
+from panelini.panels.tanstack.table import TanstackTable, tree
 
 
 def shape(nodes):
     """Render a tree compactly, for example ``a(b(b1,b2),e),d(d1)``."""
     return ",".join(node["key"] + (f"({shape(node['children'])})" if node.get("children") else "") for node in nodes)
+
+
+def title_of(table, key):
+    """Title of a node, asserting it is still there so the type stays narrow."""
+    node = tree.find_node(table.source, key)
+    assert node is not None
+    return node["title"]
 
 
 SOURCE = [
@@ -70,6 +77,7 @@ def test_defaults_are_empty():
     assert table.columns == []
     assert table.options == {}
     assert table.filter_text == ""
+    assert table.editing_key == ""
     assert table.expanded_keys == []
     assert table.selected_keys == []
 
@@ -82,6 +90,7 @@ def test_init_arguments_land_on_the_params(source):
         columns=columns,
         options=options,
         filter_text="note",
+        editing_key="b",
         expanded_keys=["a"],
         selected_keys=["b1"],
     )
@@ -90,6 +99,7 @@ def test_init_arguments_land_on_the_params(source):
     assert table.columns == columns
     assert table.options == options
     assert table.filter_text == "note"
+    assert table.editing_key == "b"
     assert table.expanded_keys == ["a"]
     assert table.selected_keys == ["b1"]
 
@@ -114,9 +124,37 @@ def test_event_data_param_dispatches_to_the_callback(table, events):
     assert events == [("activate", {"key": "e"})]
 
 
+def test_event_data_dispatches_a_batch_in_order(table, events):
+    """One gesture can carry two intents, so the payload is a list, not an event."""
+    table._event_data = {
+        "events": [
+            {"seq": 1, "event_name": "rename", "event_params": {"key": "e", "title": "Renamed"}},
+            {"seq": 2, "event_name": "activate", "event_params": {"key": "b1"}},
+        ]
+    }
+
+    assert [name for name, _ in events] == ["rename", "activate"]
+    assert title_of(table, "e") == "Renamed"
+
+
+def test_event_data_skips_what_it_has_already_handled(table, events):
+    """The tail is re-sent until it is known to have arrived, so it repeats."""
+    table._event_data = {"events": [{"seq": 1, "event_name": "activate", "event_params": {"key": "e"}}]}
+    table._event_data = {
+        "events": [
+            {"seq": 1, "event_name": "activate", "event_params": {"key": "e"}},
+            {"seq": 2, "event_name": "activate", "event_params": {"key": "d"}},
+        ]
+    }
+
+    assert events == [("activate", {"key": "e"}), ("activate", {"key": "d"})]
+
+
 def test_empty_event_data_is_ignored(table, events):
     table._event_data = {}
     table._event_data = {"event_params": {"key": "e"}}
+    table._event_data = {"events": []}
+    table._event_data = {"events": [{"seq": 9, "event_params": {"key": "e"}}]}
     assert events == []
 
 
@@ -416,6 +454,109 @@ def test_action_callback_sees_the_add_it_is_deciding_on(source):
     assert params["anchor_key"] == "b"
     assert params["position"] == "child"
     assert params["node"]["title"] == "New"
+
+
+# --- rename intent --------------------------------------------------------------
+
+
+def test_rename_intent_retitles_the_node(table):
+    table.handle_event("rename", {"key": "b", "title": "Renamed"})
+    assert title_of(table, "b") == "Renamed"
+
+
+def test_rename_intent_leaves_the_tree_shape_alone(table):
+    """A rename touches one field, so nothing moves and nothing is reparented."""
+    table.handle_event("rename", {"key": "b", "title": "Renamed"})
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_rename_intent_strips_surrounding_whitespace(table):
+    table.handle_event("rename", {"key": "b", "title": "  Renamed  "})
+    assert title_of(table, "b") == "Renamed"
+
+
+def test_rename_intent_reports_the_previous_title(table, events):
+    table.handle_event("rename", {"key": "b", "title": "Renamed"})
+
+    name, params = events[0]
+    assert name == "rename"
+    assert params["key"] == "b"
+    assert params["title"] == "Renamed"
+    assert params["previous_title"] == "B"
+    assert params["applied"] is True
+
+
+@pytest.mark.parametrize("title", ["", "   ", None])
+def test_rename_intent_with_a_blank_title_is_a_cancel(table, events, title):
+    """An editor emptied by accident must not leave a row with nothing to click."""
+    table.handle_event("rename", {"key": "b", "title": title})
+
+    assert title_of(table, "b") == "B"
+    assert events[0][1]["applied"] is False
+
+
+def test_rename_intent_to_the_same_title_pushes_nothing(table, events):
+    """No round trip is worth a rewrite that would render identically."""
+    pushes = []
+    table.param.watch(lambda event: pushes.append(event.new), ["source"])
+    table.handle_event("rename", {"key": "b", "title": "B"})
+
+    assert pushes == []
+    assert events[0][1]["applied"] is False
+
+
+@pytest.mark.parametrize("params", [{"title": "Renamed"}, {"key": "nope", "title": "Renamed"}, {}])
+def test_unusable_rename_intents_leave_the_source_alone(table, events, params):
+    table.handle_event("rename", params)
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+    assert events[0][1]["previous_title"] is None
+
+
+def test_rename_intent_is_vetoed_by_action_callback(source, events):
+    table = TanstackTable(
+        source=source,
+        action_callback=lambda action, params: action != "rename",
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("rename", {"key": "b", "title": "Renamed"})
+
+    assert title_of(table, "b") == "B"
+    assert events[0][1]["applied"] is False
+
+
+def test_action_callback_sees_the_rename_it_is_deciding_on(source):
+    """The old and the new title together, so a veto can compare them."""
+    seen = []
+
+    def record(action, params):
+        seen.append((action, params))
+        return True
+
+    table = TanstackTable(source=source, action_callback=record)
+    table.handle_event("rename", {"key": "b", "title": "Renamed"})
+
+    action, params = seen[0]
+    assert action == "rename"
+    assert params["key"] == "b"
+    assert params["title"] == "Renamed"
+    assert params["previous_title"] == "B"
+
+
+def test_deleting_the_edited_node_closes_the_editor(source):
+    """An editor left open on a node that is gone would commit against nothing."""
+    table = TanstackTable(source=source, editing_key="b")
+    table.handle_event("delete", {"keys": ["b"]})
+
+    assert table.editing_key == ""
+
+
+def test_deleting_another_node_leaves_the_editor_open(source):
+    table = TanstackTable(source=source, editing_key="b")
+    table.handle_event("delete", {"keys": ["d"]})
+
+    assert table.editing_key == "b"
 
 
 # --- delete intent ------------------------------------------------------------

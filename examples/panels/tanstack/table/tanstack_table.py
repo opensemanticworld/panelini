@@ -97,8 +97,13 @@ def locked(key: str | None) -> bool:
 
 
 def allow_action(action: str, params: dict[str, Any]) -> bool:
-    """Veto adding to or deleting from the read-only branch."""
-    keys = [params["anchor_key"]] if action == "add" else params["keys"]
+    """Veto adding to, renaming in, or deleting from the read-only branch."""
+    if action == "add":
+        keys = [params["anchor_key"]]
+    elif action == "rename":
+        keys = [params["key"]]
+    else:
+        keys = params["keys"]
     return not any(locked(key) for key in keys)
 
 
@@ -116,6 +121,9 @@ def on_event(name: str, params: dict) -> None:
         where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
         verb = f"added `{params['key']}`" if params["applied"] else "refused to add"
         messages.append(f"{verb} {where}")
+    elif name == "rename":
+        verb = "renamed" if params["applied"] else "refused to rename"
+        messages.append(f"{verb} `{params['key']}` from {params['previous_title']} to {params['title']}")
     elif name == "delete":
         verb = "deleted" if params["applied"] else "refused to delete"
         gone = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
@@ -148,6 +156,7 @@ table = TanstackTable(
                 "label": "New file",
                 "node": {"kind": "file", "icon": "file", "allow_children": False},
             },
+            "rename",
             "delete",
             "|",
             "move-up",
@@ -216,8 +225,13 @@ gestures = pn.pane.Markdown(
 - **Insert** makes a folder and **Shift+Insert** a file: inside the row you are on
   when it takes children, next to it when it does not, and at root level when the
   tree is empty. **Delete** removes the whole selection.
-- `Archive (read only)` refuses new nodes and deletions too, through a Python
-  `action_callback`.
+- A new node opens its name editor straight away. **Enter** or clicking away keeps
+  the name, **Escape** removes the node again, so a folder made by accident leaves
+  nothing behind.
+- **F2** renames an existing row. There **Escape** only closes the editor, and an
+  emptied box is a cancel rather than a blank name.
+- `Archive (read only)` refuses new nodes, renames and deletions too, through a
+  Python `action_callback`.
 - Clicking the only selected row **again** clears the selection, and so does
   `Escape` or the clear button: an emptied selection leaves no colour behind.
 - **Icons** come from `icon_for`, which maps a file extension onto one of the

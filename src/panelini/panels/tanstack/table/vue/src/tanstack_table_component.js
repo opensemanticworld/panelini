@@ -30,16 +30,31 @@ export function render({ model, el }) {
     options: model.get("options") || {},
     icons: model.get("icons") || {},
     filterText: model.get("filter_text") || "",
+    editingKey: model.get("editing_key") || "",
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
   });
 
+  // One gesture can produce two intents: the click that dismisses an open title
+  // editor commits a `rename` and then activates the row it landed on. `_event_data`
+  // is a single param, and two writes inside one animation frame reach Python as the
+  // second one only, so the payload carries a list and a sequence number rather than
+  // one event.
+  //
+  // The list is a bounded tail rather than a queue drained on write, because there is
+  // no acknowledgement to drain it against: a write that was overtaken is still in
+  // the list the next one carries, and Python skips the sequence numbers it has
+  // already handled. Re-sending a handled event is therefore free, while losing one
+  // would silently drop a rename.
+  const RECENT_EVENTS = 16;
+  const recent = [];
+  let sequence = 0;
+
   const emitEvent = (eventName, eventParams) => {
-    model.set("_event_data", {
-      event_name: eventName,
-      event_params: eventParams,
-      timestamp: Date.now(),
-    });
+    sequence += 1;
+    recent.push({ seq: sequence, event_name: eventName, event_params: eventParams });
+    if (recent.length > RECENT_EVENTS) recent.shift();
+    model.set("_event_data", { events: [...recent], timestamp: Date.now() });
     model.save_changes();
   };
 
@@ -67,12 +82,21 @@ export function render({ model, el }) {
     model.save_changes();
   };
 
+  // `editing_key` is bidirectional for the same reason: Python may open the
+  // editor by writing a key, and the browser writes "" back when it closes.
+  const setEditingKey = (value) => {
+    if ((model.get("editing_key") || "") === value) return;
+    model.set("editing_key", value);
+    model.save_changes();
+  };
+
   const app = createApp(TanstackTable, {
     state,
     emitEvent,
     setExpandedKeys,
     setSelectedKeys,
     setFilterText,
+    setEditingKey,
   });
   app.mount(container);
 
@@ -90,6 +114,9 @@ export function render({ model, el }) {
   });
   model.on("change:filter_text", () => {
     state.filterText = model.get("filter_text") || "";
+  });
+  model.on("change:editing_key", () => {
+    state.editingKey = model.get("editing_key") || "";
   });
   model.on("change:expanded_keys", () => {
     state.expandedKeys = model.get("expanded_keys") || [];

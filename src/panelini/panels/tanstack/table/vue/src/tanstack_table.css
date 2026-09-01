@@ -105,6 +105,25 @@
   white-space: nowrap;
 }
 
+/* The inline title editor. It takes the width the title had rather than the whole
+   cell, so opening it does not shift the row, and it inherits the row's font so the
+   text does not jump as the editor appears. */
+.pnl-tst-edit {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 2px;
+  border: 1px solid var(--pnl-tst-focus);
+  border-radius: 3px;
+  background: var(--pnl-tst-bg);
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+}
+
+.pnl-tst-edit:focus-visible {
+  outline: none;
+}
+
 .pnl-tst-twisty {
   display: inline-flex;
   flex: 0 0 auto;

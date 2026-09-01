@@ -89,6 +89,17 @@ class TanstackTable(AnyWidgetComponent):
         ),
     )
 
+    # Bidirectional for the same reason filter_text is. Python may open the editor
+    # by writing a key, and the browser writes back "" when it closes.
+    editing_key = param.String(
+        default="",
+        doc=(
+            "Key of the node whose title is in the inline editor, empty for none. Setting it opens "
+            "the editor on that row, which is how an application can start a rename of its own. The "
+            "browser clears it when the editor commits or is cancelled."
+        ),
+    )
+
     # Bidirectional, but safe: sorted key sets, so an echo is value-equal and stops.
     expanded_keys = param.List(
         default=[],
@@ -102,6 +113,12 @@ class TanstackTable(AnyWidgetComponent):
     # JavaScript to Python. Carries intent, never a mutated tree.
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
+    # Highest sequence number already dispatched. The browser sends a bounded tail of
+    # recent events rather than one, because two writes to this one param inside a
+    # single animation frame arrive as the second one only, and one gesture can
+    # produce two intents. Everything at or below this has been handled.
+    _last_sequence = 0
+
     def __init__(
         self,
         source: Optional[list[dict[str, Any]]] = None,
@@ -109,6 +126,7 @@ class TanstackTable(AnyWidgetComponent):
         options: Optional[dict[str, Any]] = None,
         icons: Optional[dict[str, str]] = None,
         filter_text: Optional[str] = None,
+        editing_key: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
@@ -126,6 +144,7 @@ class TanstackTable(AnyWidgetComponent):
                 bundled set and referenced by a node's ``icon``.
             filter_text: Search text. Hides every row that neither matches nor
                 leads to a match.
+            editing_key: Key of the node to open the inline title editor on.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
             event_callback: Callback for events emitted by the browser. Receives
@@ -137,7 +156,8 @@ class TanstackTable(AnyWidgetComponent):
                 of several rows can be vetoed for some of them and allowed for
                 the rest.
             action_callback: Veto hook for the toolbar's structural actions.
-                Receives ``(action, params)`` with action in ``add | delete``,
+                Receives ``(action, params)`` with action in ``add | rename |
+                delete``,
                 and returning False leaves ``source`` untouched. Called once for
                 the whole action rather than per node, because adding one node
                 and deleting a batch are each a single decision. Moves keep
@@ -156,6 +176,8 @@ class TanstackTable(AnyWidgetComponent):
             self.icons = icons
         if filter_text is not None:
             self.filter_text = filter_text
+        if editing_key is not None:
+            self.editing_key = editing_key
         if expanded_keys is not None:
             self.expanded_keys = expanded_keys
         if selected_keys is not None:
@@ -168,23 +190,39 @@ class TanstackTable(AnyWidgetComponent):
         self.param.watch(self._on_event_data_change, ["_event_data"])
 
     def _on_event_data_change(self, event: Any) -> None:
-        """Dispatch event data coming from JavaScript."""
+        """Dispatch event data coming from JavaScript.
+
+        The payload is a list of recent events with sequence numbers, re-sent until
+        they are known to have arrived, so anything already dispatched is skipped
+        here. A payload naming a single event is accepted too, which is the shape a
+        test or another front end is likeliest to write by hand.
+        """
         event_data = event.new
         if not event_data:
             return
 
-        event_name = event_data.get("event_name")
-        if not event_name:
+        events = event_data.get("events")
+        if events is None:
+            event_name = event_data.get("event_name")
+            if event_name:
+                self.handle_event(event_name, event_data.get("event_params", {}))
             return
 
-        self.handle_event(event_name, event_data.get("event_params", {}))
+        for item in events:
+            sequence = item.get("seq", 0)
+            if sequence <= self._last_sequence:
+                continue
+            self._last_sequence = sequence
+            event_name = item.get("event_name")
+            if event_name:
+                self.handle_event(event_name, item.get("event_params", {}))
 
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        ``move``, ``add`` and ``delete`` are intercepted here: the browser only
-        reports what the user asked for, and this is where that intent becomes a
-        new tree. Every other event is forwarded untouched.
+        ``move``, ``add``, ``rename`` and ``delete`` are intercepted here: the
+        browser only reports what the user asked for, and this is where that intent
+        becomes a new tree. Every other event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
@@ -194,6 +232,8 @@ class TanstackTable(AnyWidgetComponent):
             event_params = self._apply_move_intent(event_params)
         elif event_name == "add":
             event_params = self._apply_add_intent(event_params)
+        elif event_name == "rename":
+            event_params = self._apply_rename_intent(event_params)
         elif event_name == "delete":
             event_params = self._apply_delete_intent(event_params)
 
@@ -323,6 +363,45 @@ class TanstackTable(AnyWidgetComponent):
         params["applied"] = True
         return params
 
+    def _apply_rename_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Retitle the node a browser rename intent names and rewrite ``source``.
+
+        A blank title is a cancel rather than a blank rename: an editor emptied and
+        committed by accident would otherwise leave a row with nothing to click on
+        and no way to name it again. Surrounding whitespace goes the same way it
+        does in a file manager, silently.
+
+        Args:
+            event_params: Raw payload with ``key`` and the new ``title``.
+
+        Returns:
+            The normalised payload, with ``title`` stripped and ``previous_title``
+            naming what the node was called.
+        """
+        key = event_params.get("key")
+        title = str(event_params.get("title") or "").strip()
+        node = tree.find_node(self.source, key) if key else None
+
+        params: dict[str, Any] = {
+            "key": key,
+            "title": title,
+            "previous_title": node.get("title") if node else None,
+            "applied": False,
+        }
+
+        if node is None or not title or title == node.get("title"):
+            return params
+        if not self._allows_action("rename", params):
+            return params
+
+        updated = tree.update_node(self.source, str(key), {"title": title})
+        if updated is None:
+            return params
+
+        self.source = updated
+        params["applied"] = True
+        return params
+
     def _apply_delete_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Remove the nodes a browser delete intent names and rewrite ``source``.
 
@@ -385,10 +464,10 @@ class TanstackTable(AnyWidgetComponent):
         return not self._action_callback or bool(self._action_callback(action, params))
 
     def _drop_stale_keys(self, stale: set[str]) -> None:
-        """Drop removed keys from the expanded and selected sets.
+        """Drop removed keys from the expanded, selected and editing state.
 
-        Both are rewritten only when they actually change, so removing a node
-        nobody had expanded or selected stays a single param event.
+        Each is rewritten only when it actually changes, so removing a node nobody
+        had expanded or selected stays a single param event.
         """
         remaining_expanded = [key for key in self.expanded_keys if key not in stale]
         if remaining_expanded != list(self.expanded_keys):
@@ -396,6 +475,10 @@ class TanstackTable(AnyWidgetComponent):
         remaining_selected = [key for key in self.selected_keys if key not in stale]
         if remaining_selected != list(self.selected_keys):
             self.selected_keys = remaining_selected
+        # An editor left open on a node that no longer exists would commit a
+        # rename against nothing when it closed.
+        if self.editing_key in stale:
+            self.editing_key = ""
 
     def get_source(self) -> list[dict[str, Any]]:
         """Return a shallow copy of the current tree source data."""
