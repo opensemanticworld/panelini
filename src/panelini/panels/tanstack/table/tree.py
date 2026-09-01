@@ -20,6 +20,8 @@ Tree = list[Node]
 
 KEY = "key"
 CHILDREN = "children"
+#: Node field naming an entry of the ``icons`` param.
+ICON = "icon"
 #: Node flag. Set it to False to make a node a leaf that can never gain children,
 #: which is how a file is told apart from an empty folder.
 ALLOW_CHILDREN = "allow_children"

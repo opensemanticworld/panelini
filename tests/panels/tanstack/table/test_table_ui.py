@@ -2060,3 +2060,352 @@ def test_clicking_inside_the_editor_leaves_the_selection_alone(page: Page, port)
     assert table.selected_keys == ["a1", "a2"]
 
     server.stop()
+
+
+# File type. Renaming a file to another extension asks first, in the wording a file
+# manager uses, and the icon follows the type the name now says it is.
+
+FILE_SOURCE = [
+    {
+        "key": "docs",
+        "title": "Docs",
+        "icon": "folder",
+        "children": [
+            {"key": "md", "title": "notes.md", "icon": "markdown", "allow_children": False},
+            {"key": "img", "title": "logo.png", "icon": "image", "allow_children": False},
+        ],
+    },
+]
+
+WARNING = "If you change a file name extension, the file might become unusable."
+
+
+def dialog(page: Page):
+    return page.locator("[role='alertdialog']")
+
+
+def dialog_button(page: Page, label: str):
+    return page.locator(".pnl-tst-dbtn", has_text=label)
+
+
+def row_icon(page: Page, index: int) -> str:
+    """The SVG a row draws, which is how a change of icon is visible from here."""
+    return rows(page).nth(index).locator(".pnl-tst-icon").inner_html()
+
+
+def file_table(event_callback=None, **options) -> TanstackTable:
+    return TanstackTable(
+        source=copy.deepcopy(FILE_SOURCE),
+        options={"expand_all": True, "toolbar": True, **options},
+        event_callback=event_callback,
+    )
+
+
+def open_editor(page: Page, index: int, title: str) -> None:
+    """Select a row, open its editor and type a new name into it."""
+    rows(page).nth(index).click()
+    page.keyboard.press("F2")
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    editor(page).fill(title)
+
+
+def test_changing_a_file_type_asks_before_it_happens(page: Page, port):
+    """An alertdialog, because the answer decides whether the rename is sent."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    message = dialog(page).inner_text()
+    assert WARNING in message
+    # Both names, so the reader does not have to remember what they typed.
+    assert "notes.md" in message
+    assert "notes.py" in message
+    assert dialog(page).get_attribute("aria-modal") == "true"
+    assert dialog(page).get_attribute("aria-label") == "Rename"
+    # A warning defaults to the answer that changes nothing.
+    expect(dialog_button(page, "No")).to_be_focused()
+    # Nothing has been sent yet, so the tree is exactly as it was.
+    assert title_of(table, "md") == "notes.md"
+
+    server.stop()
+
+
+def test_yes_applies_the_rename_and_moves_the_icon_with_it(page: Page, port):
+    table = file_table()
+    server = serve(table, page, port)
+
+    markdown_icon = row_icon(page, 1)
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    dialog_button(page, "Yes").click()
+
+    wait_until(lambda: title_of(table, "md") == "notes.py", timeout=10)
+    assert node_at(table.source, "md")["icon"] == "python"
+    expect(dialog(page)).to_have_count(0)
+    # And the row draws the new glyph rather than keeping the old one.
+    wait_until(lambda: row_icon(page, 1) != markdown_icon, timeout=10)
+
+    server.stop()
+
+
+def test_no_returns_to_the_editor_with_what_was_typed(page: Page, port):
+    """A mistyped extension is corrected rather than retyped from scratch."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    dialog_button(page, "No").click()
+
+    expect(dialog(page)).to_have_count(0, timeout=10000)
+    expect(editor(page)).to_be_focused()
+    assert editor(page).input_value() == "notes.py"
+    page.wait_for_timeout(500)
+    assert title_of(table, "md") == "notes.md"
+
+    server.stop()
+
+
+def test_escape_in_the_warning_is_a_no(page: Page, port):
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("Escape")
+
+    expect(dialog(page)).to_have_count(0, timeout=10000)
+    # Back to the editor, not out of it: a second Escape is what closes that.
+    expect(editor(page)).to_have_count(1)
+    assert editor(page).input_value() == "notes.py"
+    page.wait_for_timeout(500)
+    assert title_of(table, "md") == "notes.md"
+
+    server.stop()
+
+
+@pytest.mark.parametrize("key", ["Tab", "ArrowLeft", "ArrowRight"])
+def test_the_warning_keeps_focus_between_its_two_buttons(page: Page, port, key):
+    """A modal that Tab walks out of is a modal in name only, and the arrow keys
+    move between two answers the way they do anywhere else."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+
+    page.keyboard.press(key)
+    expect(dialog_button(page, "Yes")).to_be_focused()
+    page.keyboard.press(key)
+    expect(dialog_button(page, "No")).to_be_focused()
+
+    server.stop()
+
+
+def test_enter_takes_the_focused_answer(page: Page, port):
+    """Which is No on open, so a reflexive Enter keeps the file working."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("Enter")
+
+    expect(dialog(page)).to_have_count(0, timeout=10000)
+    expect(editor(page)).to_have_count(1)
+    page.wait_for_timeout(500)
+    assert title_of(table, "md") == "notes.md"
+
+    # Arrow across to Yes and the same key answers the other way.
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("ArrowLeft")
+    page.keyboard.press("Enter")
+    wait_until(lambda: title_of(table, "md") == "notes.py", timeout=10)
+
+    server.stop()
+
+
+def test_y_answers_the_warning_without_reaching_for_a_button(page: Page, port):
+    """The initial a file manager answers to, so neither hand has to move."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("y")
+
+    expect(dialog(page)).to_have_count(0, timeout=10000)
+    wait_until(lambda: title_of(table, "md") == "notes.py", timeout=10)
+
+    server.stop()
+
+
+def test_n_declines_the_warning_and_hands_the_editor_back(page: Page, port):
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    page.keyboard.press("n")
+
+    expect(dialog(page)).to_have_count(0, timeout=10000)
+    expect(editor(page)).to_be_focused()
+    assert editor(page).input_value() == "notes.py"
+    page.wait_for_timeout(500)
+    assert title_of(table, "md") == "notes.md"
+
+    server.stop()
+
+
+def test_the_warning_announces_and_shows_its_shortcuts(page: Page, port):
+    """Announced through aria-keyshortcuts and shown as an underlined initial, so
+    the shortcut is not a secret kept from either kind of user."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+
+    assert dialog_button(page, "Yes").get_attribute("aria-keyshortcuts") == "Y"
+    assert dialog_button(page, "No").get_attribute("aria-keyshortcuts") == "N"
+    assert dialog_button(page, "Yes").locator(".pnl-tst-dkey").inner_text() == "Y"
+    assert dialog_button(page, "No").locator(".pnl-tst-dkey").inner_text() == "N"
+
+    server.stop()
+
+
+def outlined(page: Page, label: str) -> bool:
+    """Whether an answer is drawn as the selected one.
+
+    Read off the computed style rather than the class list, because the point is
+    that the selection is visible: a rule that stopped applying would leave the
+    dialog looking like neither answer was chosen.
+    """
+    return dialog_button(page, label).evaluate("element => getComputedStyle(element).outlineStyle === 'solid'")
+
+
+def test_the_selected_answer_is_visible_and_moves_with_the_arrows(page: Page, port):
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+
+    # No on open, which is the answer that changes nothing.
+    assert outlined(page, "No")
+    assert not outlined(page, "Yes")
+
+    page.keyboard.press("ArrowLeft")
+    assert outlined(page, "Yes")
+    assert not outlined(page, "No")
+
+    server.stop()
+
+
+def test_renaming_within_one_type_never_asks(page: Page, port):
+    """The extension is what carries the risk, not the name in front of it."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "minutes.MD")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: title_of(table, "md") == "minutes.MD", timeout=10)
+    assert dialog(page).count() == 0
+    # Case is not a type, so the icon stays where it was.
+    assert node_at(table.source, "md")["icon"] == "markdown"
+
+    server.stop()
+
+
+def test_renaming_a_folder_never_asks(page: Page, port):
+    """A folder called notes.py is still a folder, so it has no type to lose."""
+    table = file_table()
+    server = serve(table, page, port)
+
+    open_editor(page, 0, "Docs.py")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: title_of(table, "docs") == "Docs.py", timeout=10)
+    assert dialog(page).count() == 0
+    assert node_at(table.source, "docs")["icon"] == "folder"
+
+    server.stop()
+
+
+def test_naming_a_new_file_for_the_first_time_never_asks(page: Page, port):
+    """It never had a type, so giving it one is not changing it."""
+    table = file_table(
+        new_key_prefix="doc",
+        # The default new-file template names no icon, because the panel infers
+        # none: a tree without icons must not gain one on the row it just made.
+        # A template that opts in is what gets the icon kept in step with the name.
+        toolbar=[{"id": "new-file", "node": {"icon": "file", "allow_children": False}}, "rename"],
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # notes.md, a leaf, so the new file lands beside it
+    page.keyboard.press("Shift+Insert")
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    editor(page).fill("script.py")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: title_of(table, "doc-1") == "script.py", timeout=10)
+    assert dialog(page).count() == 0
+    # And the new file carries the icon its name asks for.
+    assert node_at(table.source, "doc-1")["icon"] == "python"
+
+    server.stop()
+
+
+def test_the_warning_can_be_switched_off(page: Page, port):
+    """Some trees are not files on a disk, and some apps do their own asking."""
+    table = file_table(extension_warning=False)
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: title_of(table, "md") == "notes.py", timeout=10)
+    assert dialog(page).count() == 0
+    # The icon still follows the type: only the confirmation was switched off.
+    assert node_at(table.source, "md")["icon"] == "python"
+
+    server.stop()
+
+
+def test_python_is_told_the_file_type_changed(page: Page, port):
+    """So an application can react beyond the confirmation the browser asked for."""
+    seen: list[dict] = []
+
+    def record(name: str, params: dict) -> None:
+        if name == "rename":
+            seen.append(params)
+
+    table = file_table(event_callback=record)
+    server = serve(table, page, port)
+
+    open_editor(page, 1, "notes.py")
+    page.keyboard.press("Enter")
+    expect(dialog(page)).to_have_count(1, timeout=10000)
+    dialog_button(page, "Yes").click()
+
+    wait_until(lambda: bool(seen), timeout=10)
+    assert seen[0]["extension_changed"] is True
+    assert seen[0]["previous_title"] == "notes.md"
+    assert seen[0]["applied"] is True
+
+    server.stop()

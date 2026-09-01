@@ -12,6 +12,9 @@
   --pnl-tst-focus: #2563eb;
   --pnl-tst-blocked: rgba(220, 38, 38, 0.08);
 
+  /* The containing block for the rename warning, which is placed over the panel
+     rather than over the host page. */
+  position: relative;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -122,6 +125,72 @@
 
 .pnl-tst-edit:focus-visible {
   outline: none;
+}
+
+/* The file type warning. Borrows the toolbar's tokens, so a restyled table
+   restyles its dialog with it. */
+
+.pnl-tst-modal {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.pnl-tst-dialog {
+  max-width: 240px;
+  padding: 10px;
+  border: 1px solid var(--pnl-tst-border);
+  border-radius: 6px;
+  background: var(--pnl-tst-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+}
+
+.pnl-tst-dialog-message {
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.pnl-tst-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pnl-tst-dbtn {
+  min-width: 48px;
+  padding: 1px 8px;
+  border: 1px solid var(--pnl-tst-border);
+  border-radius: 4px;
+  background: var(--pnl-tst-bg);
+  color: inherit;
+  font: inherit;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.pnl-tst-dbtn:hover {
+  background: var(--pnl-tst-hover);
+}
+
+/* :focus rather than :focus-visible, because which answer is selected is the
+   dialog's own state and not a hint about how the button was reached. It opens on
+   No, and arrowing across has to be visible as the selection moving. */
+.pnl-tst-dbtn:focus {
+  border-color: var(--pnl-tst-focus);
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: 1px;
+  background: var(--pnl-tst-active);
+}
+
+/* The initial the button answers to. Underlined the way a mnemonic is, so the
+   shortcut is visible and not only announced through aria-keyshortcuts. */
+.pnl-tst-dkey {
+  text-decoration: underline;
 }
 
 .pnl-tst-twisty {

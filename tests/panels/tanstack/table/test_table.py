@@ -559,6 +559,160 @@ def test_deleting_another_node_leaves_the_editor_open(source):
     assert table.editing_key == "b"
 
 
+# --- file type and icon ---------------------------------------------------------
+#
+# A file is a node carrying ``allow_children: False``, which is the same flag that
+# stops anything being dropped into it. The panel still infers no icon: a node opts
+# in by naming one, and what happens on a rename is that an icon the panel would
+# have derived is *kept in step*, while one an application picked stays put.
+
+FILES = [
+    {"key": "md", "title": "notes.md", "icon": "markdown", "allow_children": False},
+    {"key": "generic", "title": "plain", "icon": "file", "allow_children": False},
+    {"key": "picked", "title": "logo.png", "icon": "hand-picked", "allow_children": False},
+    {"key": "bare", "title": "unadorned.md", "allow_children": False},
+    {"key": "dir", "title": "folder.md", "icon": "folder", "children": []},
+]
+
+
+@pytest.fixture
+def files(events):
+    """A table of files whose icons cover every case the rename rule has."""
+    return TanstackTable(
+        source=copy.deepcopy(FILES),
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+
+
+def icon_of(table, key):
+    """Icon a node carries, or None when it carries none."""
+    node = tree.find_node(table.source, key)
+    assert node is not None
+    return node.get("icon")
+
+
+def test_rename_moves_a_derived_icon_to_the_new_type(files):
+    files.handle_event("rename", {"key": "md", "title": "notes.py"})
+    assert icon_of(files, "md") == "python"
+
+
+def test_rename_gives_the_generic_icon_a_type(files):
+    """What a new file starts out as, so naming it is what gives it its icon."""
+    files.handle_event("rename", {"key": "generic", "title": "plain.py"})
+    assert icon_of(files, "generic") == "python"
+
+
+def test_rename_off_a_known_type_falls_back_to_the_generic_icon(files):
+    files.handle_event("rename", {"key": "md", "title": "notes"})
+    assert icon_of(files, "md") == "file"
+
+
+def test_rename_leaves_a_hand_picked_icon_alone(files):
+    """Naming an icon is a statement about the node, not about its extension."""
+    files.handle_event("rename", {"key": "picked", "title": "logo.pdf"})
+
+    assert title_of(files, "picked") == "logo.pdf"
+    assert icon_of(files, "picked") == "hand-picked"
+
+
+def test_rename_adds_no_icon_to_a_node_that_has_none(files):
+    """A node that opted out of icons stays opted out."""
+    files.handle_event("rename", {"key": "bare", "title": "unadorned.py"})
+    assert icon_of(files, "bare") is None
+
+
+def test_renaming_a_folder_never_touches_its_icon(files):
+    """A folder called notes.py is still a folder."""
+    files.handle_event("rename", {"key": "dir", "title": "folder.py"})
+    assert icon_of(files, "dir") == "folder"
+
+
+def test_file_icons_option_extends_the_mapping(events):
+    table = TanstackTable(
+        source=copy.deepcopy(FILES),
+        options={"file_icons": {"ipynb": "python"}},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("rename", {"key": "generic", "title": "study.ipynb"})
+    assert icon_of(table, "generic") == "python"
+
+
+@pytest.mark.parametrize(
+    ("key", "title", "expected"),
+    [
+        ("md", "notes.py", True),
+        ("md", "other.md", False),
+        # Case is not a type, so this one only changes what the row reads as.
+        ("md", "notes.MD", False),
+        ("md", "notes", True),
+        ("generic", "plain.py", True),
+        # A folder has no type to lose, whatever it is called.
+        ("dir", "folder.py", False),
+    ],
+)
+def test_rename_reports_whether_the_file_type_changed(files, events, key, title, expected):
+    files.handle_event("rename", {"key": key, "title": title})
+    assert events[0][1]["extension_changed"] is expected
+
+
+def test_a_cancelled_rename_reports_no_type_change(files, events):
+    """Nothing happened, so there is nothing for an application to react to."""
+    files.handle_event("rename", {"key": "md", "title": "   "})
+    assert events[0][1]["extension_changed"] is False
+
+
+def test_action_callback_sees_the_type_change_it_is_deciding_on():
+    """A veto can refuse the change of type specifically, not just the rename."""
+    seen = []
+
+    def refuse_a_type_change(action, params):
+        seen.append(params)
+        return not params["extension_changed"]
+
+    table = TanstackTable(source=copy.deepcopy(FILES), action_callback=refuse_a_type_change)
+    table.handle_event("rename", {"key": "md", "title": "notes.py"})
+
+    assert seen[0]["extension_changed"] is True
+    assert title_of(table, "md") == "notes.md"
+
+    # The same veto lets a rename inside one type through.
+    table.handle_event("rename", {"key": "md", "title": "minutes.md"})
+    assert title_of(table, "md") == "minutes.md"
+
+
+def test_add_derives_the_icon_from_a_template_title(table):
+    """A template that names a type in its title gets the icon for it."""
+    node = {"title": "untitled.md", "icon": "file", "allow_children": False}
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": node})
+
+    assert table.source[1]["children"][1]["icon"] == "markdown"
+
+
+def test_add_keeps_a_hand_picked_template_icon(table):
+    node = {"title": "untitled.md", "icon": "hand-picked", "allow_children": False}
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": node})
+
+    assert table.source[1]["children"][1]["icon"] == "hand-picked"
+
+
+def test_add_leaves_a_folder_template_alone(table):
+    """The toolbar's own new folder template, which must not become a file icon."""
+    node = {"title": "New folder.md", "icon": "folder", "children": []}
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": node})
+
+    assert table.source[1]["children"][1]["icon"] == "folder"
+
+
+def test_the_default_new_file_template_takes_its_icon_from_the_rename(table):
+    """The whole round trip: an untyped new file, then named, then typed."""
+    node = {"title": "New file", "icon": "file", "allow_children": False}
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": node})
+    assert table.source[1]["children"][1]["icon"] == "file"
+
+    table.handle_event("rename", {"key": "node-1", "title": "report.pdf"})
+    assert icon_of(table, "node-1") == "pdf"
+
+
 # --- delete intent ------------------------------------------------------------
 
 

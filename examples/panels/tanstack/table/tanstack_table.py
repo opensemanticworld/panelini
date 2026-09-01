@@ -123,7 +123,10 @@ def on_event(name: str, params: dict) -> None:
         messages.append(f"{verb} {where}")
     elif name == "rename":
         verb = "renamed" if params["applied"] else "refused to rename"
-        messages.append(f"{verb} `{params['key']}` from {params['previous_title']} to {params['title']}")
+        # The panel reports a file that changed type, so an app can react to it
+        # beyond the confirmation the browser already asked for.
+        note = ", file type changed" if params["extension_changed"] else ""
+        messages.append(f"{verb} `{params['key']}` from {params['previous_title']} to {params['title']}{note}")
     elif name == "delete":
         verb = "deleted" if params["applied"] else "refused to delete"
         gone = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
@@ -230,6 +233,11 @@ gestures = pn.pane.Markdown(
   nothing behind.
 - **F2** renames an existing row. There **Escape** only closes the editor, and an
   emptied box is a cancel rather than a blank name.
+- Renaming a file to another **extension** asks first, naming both the old and the
+  new name. Answer with `y`, `n`, the arrow keys or `Enter`, which takes the safe
+  default. Naming a brand new file never asks: it had no type to lose.
+- The **icon follows the type**: call `notes.md` `notes.py` and it turns into a
+  Python file. An icon you picked by hand is left where you put it.
 - `Archive (read only)` refuses new nodes, renames and deletions too, through a
   Python `action_callback`.
 - Clicking the only selected row **again** clears the selection, and so does

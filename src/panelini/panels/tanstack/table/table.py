@@ -8,6 +8,7 @@ import param  # type: ignore[import-untyped]
 from panel.custom import AnyWidgetComponent
 
 from . import tree
+from .icons import DEFAULT_FILE_ICON, extension_of, icon_for
 
 pn.extension()
 
@@ -64,7 +65,10 @@ class TanstackTable(AnyWidgetComponent):
             "{id, label, icon, node} that renames one action, gives it another bundled icon and "
             "sets the template a new node is minted from, so one table can offer several kinds. "
             "toolbar_label and search_label name the toolbar and its search box for assistive "
-            "technology, and new_key_prefix names the keys minted for added nodes."
+            "technology, and new_key_prefix names the keys minted for added nodes. file_icons is "
+            "an extra {extension: icon name} mapping used when a file is added or renamed, and "
+            "extension_warning=False drops the confirmation a rename that changes a file type "
+            "otherwise asks for."
         ),
     )
     icons = param.Dict(
@@ -346,6 +350,13 @@ class TanstackTable(AnyWidgetComponent):
         # The template wins over the default title but never over the key: a
         # browser that could name keys could collide with the tree it cannot see.
         node = {"title": "New node", **template, tree.KEY: key}
+        # A template that names a file type in its title gets the icon for it
+        # rather than the generic sheet of paper. There is no previous name to
+        # compare against, so only the generic icon is treated as the panel's to
+        # maintain and anything else the template picked is kept.
+        icon = self._typed_icon(node, str(node.get("title") or ""), "")
+        if icon is not None:
+            node[tree.ICON] = icon
 
         params["position"] = position
         params["key"] = key
@@ -371,36 +382,77 @@ class TanstackTable(AnyWidgetComponent):
         and no way to name it again. Surrounding whitespace goes the same way it
         does in a file manager, silently.
 
+        A file that gains, loses or swaps its extension takes the matching icon
+        with it, so what the row shows is what the name now says it is.
+
         Args:
             event_params: Raw payload with ``key`` and the new ``title``.
 
         Returns:
-            The normalised payload, with ``title`` stripped and ``previous_title``
-            naming what the node was called.
+            The normalised payload, with ``title`` stripped, ``previous_title``
+            naming what the node was called, and ``extension_changed`` telling an
+            application that a file just changed type.
         """
         key = event_params.get("key")
         title = str(event_params.get("title") or "").strip()
         node = tree.find_node(self.source, key) if key else None
+        previous = str(node.get("title") or "") if node else None
 
         params: dict[str, Any] = {
             "key": key,
             "title": title,
-            "previous_title": node.get("title") if node else None,
+            "previous_title": previous,
+            "extension_changed": False,
             "applied": False,
         }
 
-        if node is None or not title or title == node.get("title"):
+        if node is None or not title or title == previous:
             return params
+
+        # Only a file has a type to lose. A folder called `notes.md` is still a
+        # folder, so renaming it is never a change of type.
+        if node.get(tree.ALLOW_CHILDREN, True) is False:
+            params["extension_changed"] = extension_of(title) != extension_of(str(previous))
         if not self._allows_action("rename", params):
             return params
 
-        updated = tree.update_node(self.source, str(key), {"title": title})
+        changes: dict[str, Any] = {"title": title}
+        icon = self._typed_icon(node, title, str(previous))
+        if icon is not None:
+            changes[tree.ICON] = icon
+
+        updated = tree.update_node(self.source, str(key), changes)
         if updated is None:
             return params
 
         self.source = updated
         params["applied"] = True
         return params
+
+    def _typed_icon(self, node: dict[str, Any], title: str, previous_title: str) -> Optional[str]:
+        """Return the icon a file node should carry once it is called ``title``.
+
+        Only an icon the panel itself would have derived is maintained: the
+        generic one, or the one the previous name maps to. An icon an application
+        picked by hand survives a rename, because naming an icon is a statement
+        about the node rather than about the extension it happens to sit next to.
+
+        Args:
+            node: The node as it is now, before the rename is applied.
+            title: The name the node is taking.
+            previous_title: The name it is leaving, empty for a node being minted.
+
+        Returns:
+            The new icon name, or None to leave the node's icon exactly as it is.
+        """
+        current = node.get(tree.ICON)
+        if not isinstance(current, str) or node.get(tree.ALLOW_CHILDREN, True) is not False:
+            return None
+        extra = self.options.get("file_icons")
+        if current not in (DEFAULT_FILE_ICON, icon_for(previous_title, extra)):
+            return None
+        derived = icon_for(title, extra)
+        return derived if derived != current else None
 
     def _apply_delete_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Remove the nodes a browser delete intent names and rewrite ``source``.

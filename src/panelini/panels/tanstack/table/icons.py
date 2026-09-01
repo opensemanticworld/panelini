@@ -9,7 +9,9 @@ or replace an entry of it.
 
 Neither is applied by the panel. A node opts into an icon by naming one, and
 nothing is inferred from its shape, so a tree of things that are not files renders
-exactly as it did before.
+exactly as it did before. What the panel does do is *keep* an icon it recognises in
+step with the name: renaming ``notes.md`` to ``notes.py`` moves the icon with it,
+while an icon an application picked by hand is left where it was put.
 """
 
 from __future__ import annotations
@@ -81,6 +83,18 @@ FILE_ICONS: dict[str, str] = {
 DEFAULT_FILE_ICON = "file"
 
 
+def extension_of(name: str) -> str:
+    """Return the lowercased extension of a file name, empty when it has none.
+
+    Only the part after the last dot is read, and case is dropped, so ``notes.MD``
+    and ``notes.md`` are one type. A name with no dot has no extension at all,
+    which is itself a difference from one that has: renaming ``notes.md`` to
+    ``notes`` takes its type away.
+    """
+    _, dot, suffix = name.rpartition(".")
+    return suffix.lower() if dot else ""
+
+
 def icon_for(name: str, extra: Mapping[str, str] | None = None, default: str = DEFAULT_FILE_ICON) -> str:
     """Return the bundled icon name for a file name.
 
@@ -94,10 +108,10 @@ def icon_for(name: str, extra: Mapping[str, str] | None = None, default: str = D
     Returns:
         An icon name to put on a node, not the SVG markup itself.
     """
-    _, dot, suffix = name.rpartition(".")
-    if not dot:
+    suffix = extension_of(name)
+    if not suffix:
         return default
-    return {**FILE_ICONS, **(extra or {})}.get(suffix.lower(), default)
+    return {**FILE_ICONS, **(extra or {})}.get(suffix, default)
 
 
 def load_icons(directory: str | Path, names: Mapping[str, str] | None = None) -> dict[str, str]:

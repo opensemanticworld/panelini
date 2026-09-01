@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from panelini.panels.tanstack.table import icon_for, icons
+from panelini.panels.tanstack.table import extension_of, icon_for, icons
 
 COMPONENT = Path(icons.__file__).parent / "vue" / "src" / "TanstackTable.vue"
 DEFAULT_FILE_ICON = icons.DEFAULT_FILE_ICON
@@ -49,6 +49,23 @@ def test_icon_for_falls_back_rather_than_returning_nothing(name):
 
 def test_icon_for_takes_a_custom_default():
     assert icon_for("inbox.bak", default="document") == "document"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("notes.md", "md"),
+        ("notes.MD", "md"),
+        ("archive.tar.gz", "gz"),
+        ("Reports/2026/Q1.csv", "csv"),
+        ("README", ""),
+        ("", ""),
+        (".hidden", "hidden"),
+    ],
+)
+def test_extension_of_reads_the_last_dot(name, expected):
+    """Lowercased, so a rename that only changes case is not a change of type."""
+    assert extension_of(name) == expected
 
 
 def test_extra_extends_and_overrides_the_map():

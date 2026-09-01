@@ -905,6 +905,34 @@ const editingKey = ref(null)
 const editText = ref('')
 const editInput = ref(null)
 
+// The pending answer to the file type warning, `{key, title}` while the dialog is
+// up and null otherwise. Python decides the icon and applies the rename; this only
+// decides whether the intent is sent at all.
+const confirmRename = ref(null)
+const confirmYesButton = ref(null)
+const confirmNoButton = ref(null)
+const extensionWarning = computed(() => props.state.options.extension_warning !== false)
+
+// The part after the last dot, lowercased, so `notes.MD` and `notes.md` are one
+// type. A name with no dot has no extension, which is itself a difference from one
+// that has: renaming `notes.md` to `notes` takes its type away.
+function extensionOf(name) {
+  const text = String(name ?? '')
+  const dot = text.lastIndexOf('.')
+  return dot < 0 ? '' : text.slice(dot + 1).toLowerCase()
+}
+
+// Only a file has a type to lose, so a folder renamed to `notes.md` warns about
+// nothing. The same test runs again in Python, which reports `extension_changed`
+// to the application whether or not this dialog was shown.
+function warnsAboutExtension(node, title) {
+  return (
+    extensionWarning.value &&
+    node.allow_children === false &&
+    extensionOf(title) !== extensionOf(node.title ?? '')
+  )
+}
+
 // The key of a node this browser created a moment ago, which is what lets Escape
 // remove it again: cancelling the name of a node that only exists because the
 // editor opened should leave no "New folder" behind. Cleared whenever the editor
@@ -929,6 +957,7 @@ function startEdit(key, fresh = false) {
 
 function closeEdit() {
   freshKey = null
+  confirmRename.value = null
   editingKey.value = null
   props.setEditingKey('')
 }
@@ -940,10 +969,23 @@ function closeEdit() {
 //
 // Both of these guard on the editor still being open, because closing it unmounts a
 // focused input and the blur that follows would otherwise commit a second time.
+// The first guard is the dialog's: focusing one of its buttons blurs the input, so
+// the blur handler runs again on a rename that is already waiting for an answer.
 function commitEdit(row) {
+  if (confirmRename.value) return
   if (editingKey.value !== row.id) return
   const title = editText.value.trim()
   const changed = title.length > 0 && title !== (row.original.title ?? '')
+  // A node created a moment ago is exempt: naming it for the first time is not a
+  // change of type, because it never had one. Warning there would put a dialog in
+  // front of the ordinary way a file is made.
+  if (changed && freshKey !== row.id && warnsAboutExtension(row.original, title)) {
+    // The editor stays open behind the dialog, which is what lets `No` return to
+    // exactly what was typed instead of making the user start again.
+    confirmRename.value = { key: row.id, title, previous: row.original.title ?? row.id }
+    nextTick(() => confirmNoButton.value?.focus())
+    return
+  }
   closeEdit()
   if (!changed) {
     focusRowByKey(row.id)
@@ -951,6 +993,46 @@ function commitEdit(row) {
   }
   refocus = { key: row.id }
   props.emitEvent('rename', { key: row.id, title })
+}
+
+function acceptRename() {
+  const { key, title } = confirmRename.value
+  confirmRename.value = null
+  closeEdit()
+  refocus = { key }
+  props.emitEvent('rename', { key, title })
+}
+
+// Declining leaves `source` untouched and hands the caret back, so a mistyped
+// extension is corrected rather than retyped.
+function declineRename() {
+  confirmRename.value = null
+  nextTick(() => {
+    editInput.value?.focus()
+    editInput.value?.select()
+  })
+}
+
+// Answerable without ever reaching for the mouse. Escape and `n` decline, `y`
+// accepts, Enter and Space take whichever button is focused, and the arrows move
+// between them. Tab is trapped rather than let out of a modal; with two buttons a
+// trap and an arrow are the same swap.
+function onConfirmKeydown(event) {
+  const key = event.key
+  if (key === 'Escape' || key === 'n' || key === 'N') {
+    event.preventDefault()
+    declineRename()
+    return
+  }
+  if (key === 'y' || key === 'Y') {
+    event.preventDefault()
+    acceptRename()
+    return
+  }
+  if (key !== 'Tab' && key !== 'ArrowLeft' && key !== 'ArrowRight') return
+  event.preventDefault()
+  const other = event.target === confirmYesButton.value ? confirmNoButton : confirmYesButton
+  other.value?.focus()
 }
 
 // Escape on an existing row just closes the editor. On a row created a moment ago it
@@ -1651,6 +1733,53 @@ function dropLineStyle(row) {
             />
             <span v-else class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The file type warning, in the wording a file manager uses. An alertdialog
+         rather than a note beside the row, because the answer decides whether the
+         rename is sent at all, and it covers the panel rather than the page: a
+         table is a component in someone else's app and has no business putting a
+         dialog over the rest of it. -->
+    <div v-if="confirmRename" class="pnl-tst-modal">
+      <div
+        class="pnl-tst-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Rename"
+        aria-describedby="pnl-tst-confirm-message"
+        @keydown="onConfirmKeydown"
+      >
+        <!-- Both names, because a dialog that only says a file type changed leaves
+             the reader to remember what they typed. -->
+        <p id="pnl-tst-confirm-message" class="pnl-tst-dialog-message">
+          Rename {{ confirmRename.previous }} to {{ confirmRename.title }}? If you change a
+          file name extension, the file might become unusable.
+        </p>
+        <div class="pnl-tst-dialog-actions">
+          <button
+            ref="confirmYesButton"
+            type="button"
+            class="pnl-tst-dbtn"
+            aria-keyshortcuts="Y"
+            @click="acceptRename"
+          >
+            <!-- The initial is underlined rather than only announced, so the
+                 shortcut is visible to everyone who is not using a reader. -->
+            <span class="pnl-tst-dkey">Y</span>es
+          </button>
+          <!-- Focused on open. A warning defaults to the answer that changes
+               nothing, so a reflexive Enter keeps the file working. -->
+          <button
+            ref="confirmNoButton"
+            type="button"
+            class="pnl-tst-dbtn"
+            aria-keyshortcuts="N"
+            @click="declineRename"
+          >
+            <span class="pnl-tst-dkey">N</span>o
+          </button>
         </div>
       </div>
     </div>
