@@ -324,11 +324,17 @@
 /* Toolbar. No new colours: the buttons borrow the row hover and focus tokens, so a
    table restyled through the custom properties restyles its toolbar with it. */
 
+/* It wraps rather than clips. A narrow panel puts what does not fit on a line of
+   its own, because a button past the edge is a button the pointer cannot reach and
+   the grid, not the toolbar, is what should be given the room. The roving tabindex
+   is one linear list whatever the width, so wrapping costs the keyboard nothing. */
 .pnl-tst-toolbar {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
+  row-gap: 4px;
   padding: 4px 6px;
   border-bottom: 1px solid var(--pnl-tst-border);
 }
@@ -381,13 +387,15 @@
   color: inherit;
 }
 
+/* The one item that grows, so it takes whatever the buttons on its line leave and
+   fills the line outright once it has wrapped onto one of its own. It shrinks to
+   90px before anything wraps, which is still a usable box. */
 .pnl-tst-search {
   display: flex;
   flex: 1 1 140px;
   align-items: center;
   gap: 4px;
   min-width: 90px;
-  margin-inline-start: auto;
   padding: 0 6px;
   border: 1px solid var(--pnl-tst-border);
   border-radius: 4px;

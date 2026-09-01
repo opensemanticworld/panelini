@@ -663,10 +663,6 @@ function onRowClick(row, event) {
   }
 
   props.emitEvent('activate', { key: row.id })
-
-  // The context menu, when the table asked for one. A modified click is building
-  // a selection and never opens it, so Ctrl and Shift keep meaning what they mean.
-  if (!modified) openContextMenu(row, event?.clientX ?? 0, event?.clientY ?? 0)
 }
 
 function onToggle(row) {
@@ -1453,11 +1449,11 @@ function onToolbarKeydown(event) {
 // actions rather than a second set of them, so what it can do is what the toolbar
 // could.
 //
-// It opens on a plain click, which is what was asked for, and on the platform's
-// own gestures too: a right click, and `ContextMenu` or `Shift+F10` from the
-// keyboard, because a menu only a mouse can open is the hole this panel exists to
-// avoid. A modified click never opens it: Ctrl and Shift clicks are how a
-// selection is built, and a menu in the middle of that is in the way.
+// It opens on a right click, the gesture a file manager uses, and from the
+// keyboard on `ContextMenu` or `Shift+F10`, because a menu only a mouse can open
+// is the hole this panel exists to avoid. The left button opens nothing: it
+// selects and it drags, and a menu appearing in the middle of either is in the
+// way.
 const MENU_MARGIN = 4
 
 const menuOpen = ref(false)
@@ -1499,6 +1495,9 @@ function openContextMenu(row, left, top) {
   nextTick(placeMenu)
 }
 
+// The platform's own gesture. The row is taken alone when it was not selected,
+// and a right click inside a selection leaves that selection whole, which is what
+// makes a menu opened on one of five selected rows still delete five.
 function onRowContextMenu(row, event) {
   if (!hasMenu.value) return
   event.preventDefault()

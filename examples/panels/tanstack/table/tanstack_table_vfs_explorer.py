@@ -1,9 +1,9 @@
-"""TanstackTable: treegrid with a toolbar, columns, icons, multiselect and drag and drop.
+"""A virtual filesystem explorer: toolbar, context menu, icons, multiselect, drag and drop.
 
 Install and run:
 
     uv sync
-    uv run python examples/panels/tanstack/table/tanstack_table.py
+    uv run python examples/panels/tanstack/table/tanstack_table_vfs_explorer.py
 """
 
 from typing import Any
@@ -261,10 +261,11 @@ gestures = pn.pane.Markdown(
 - **Search** narrows to matches and the folders that lead to them.
 - **Checkboxes** adds the column. It is off to begin with, and selection works
   without it: click, Shift click, Ctrl click and drag are unchanged either way.
-- **Context menu** puts the same actions on the rows. A plain click opens it, so does a
-  right click, `Shift+F10` and the menu key. It is placed against the window rather
-  than the panel, so a row at the bottom edge still opens a menu you can read, and
-  the arrow keys, `Home`, `End`, `Enter` and `Escape` walk it.
+- **Context menu** puts the same actions on the rows. A **right click** opens it, and so
+  do `Shift+F10` and the menu key. The left button keeps selecting and dragging. It is
+  placed against the window rather than the panel, so a row at the bottom edge still
+  opens a menu you can read, and the arrow keys, `Home`, `End`, `Enter` and `Escape`
+  walk it.
 - **Tab** reaches the toolbar, then the grid. In the toolbar the arrow keys move
   between buttons; in the grid `Ctrl+A` selects all, `Escape` clears and `Ctrl+F`
   jumps to the search box.
@@ -310,7 +311,7 @@ PANE_STYLES = {
     "padding": "10px",
 }
 
-app = Panelini(title="TanstackTable", sidebar_visible=False)
+app = Panelini(title="TanstackTable VFS Explorer", sidebar_visible=False)
 app.main_set(
     objects=[
         pn.Row(

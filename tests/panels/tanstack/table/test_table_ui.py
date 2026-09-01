@@ -1205,6 +1205,43 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     server.stop()
 
 
+def toolbar_lines(page: Page) -> int:
+    """How many lines the toolbar buttons are laid out on."""
+    tops = []
+    for index in range(toolbar_buttons(page).count()):
+        box = toolbar_buttons(page).nth(index).bounding_box()
+        assert box
+        tops.append(round(box["y"]))
+    return len(set(tops))
+
+
+def test_toolbar_wraps_instead_of_clipping(page: Page, port):
+    """A window too narrow for every button gets a second line, not buttons off the edge."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": True},
+        sizing_mode="stretch_width",
+    )
+    page.set_viewport_size({"width": 1100, "height": 600})
+    server = serve(table, page, port)
+
+    assert toolbar_lines(page) == 1
+
+    page.set_viewport_size({"width": 420, "height": 600})
+    page.wait_for_timeout(400)
+    assert toolbar_lines(page) > 1
+
+    # Nothing is left hanging past the edge, which is what a clipped toolbar does.
+    bar = page.locator("[role='toolbar']").bounding_box()
+    assert bar
+    for index in range(toolbar_buttons(page).count()):
+        box = toolbar_buttons(page).nth(index).bounding_box()
+        assert box
+        assert box["x"] + box["width"] <= bar["x"] + bar["width"] + 1
+
+    server.stop()
+
+
 def test_toolbar_search_box_drives_filter_text(page: Page, port):
     """The box writes the param, so Python sees the search without owning the input."""
     table = TanstackTable(
@@ -2672,14 +2709,14 @@ def test_no_context_menu_by_default(page: Page, port):
 
     assert rows(page).first.get_attribute("aria-haspopup") is None
 
-    rows(page).nth(1).click()
+    rows(page).nth(1).click(button="right")
     page.wait_for_timeout(200)
     assert menu(page).count() == 0
 
     server.stop()
 
 
-def test_a_plain_click_opens_the_menu_with_its_roles(page: Page, port):
+def test_a_right_click_opens_the_menu_with_its_roles(page: Page, port):
     """Roles, names and shortcut hints are the menu's whole accessible contract."""
     table = TanstackTable(
         source=copy.deepcopy(SOURCE),
@@ -2689,7 +2726,7 @@ def test_a_plain_click_opens_the_menu_with_its_roles(page: Page, port):
 
     assert rows(page).first.get_attribute("aria-haspopup") == "menu"
 
-    rows(page).nth(1).click()  # File A1
+    rows(page).nth(1).click(button="right")  # File A1
     expect(menu(page)).to_have_count(1, timeout=10000)
     assert menu(page).get_attribute("aria-label") == "Row actions"
     assert menu(page).get_attribute("aria-orientation") == "vertical"
@@ -2713,22 +2750,27 @@ def test_a_plain_click_opens_the_menu_with_its_roles(page: Page, port):
     server.stop()
 
 
-def test_a_modified_click_never_opens_the_menu(page: Page, port):
-    """Ctrl and Shift clicks are how a selection is built, so a menu must stay out of them."""
+def test_a_left_click_never_opens_the_menu(page: Page, port):
+    """The left button selects and drags, so a menu appearing over either would be in the way."""
     table = TanstackTable(
         source=copy.deepcopy(SOURCE),
         options={"expand_all": True, "select_mode": "multi", "menu": True},
     )
     server = serve(table, page, port)
 
-    click_row(page, 1, "Control")
+    rows(page).nth(1).click()
     page.wait_for_timeout(200)
     assert menu(page).count() == 0
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
 
-    click_row(page, 2, "Shift")
+    click_row(page, 2, "Control")
     page.wait_for_timeout(200)
     assert menu(page).count() == 0
     wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    click_row(page, 3, "Shift")
+    page.wait_for_timeout(200)
+    assert menu(page).count() == 0
 
     server.stop()
 
@@ -2740,7 +2782,7 @@ def test_the_menu_acts_on_the_row_it_opened_on(page: Page, port):
     )
     server = serve(table, page, port)
 
-    rows(page).nth(1).click()  # File A1
+    rows(page).nth(1).click(button="right")  # File A1
     expect(menu(page)).to_have_count(1, timeout=10000)
     menu_item(page, "Delete").click()
 
@@ -2760,8 +2802,6 @@ def test_a_right_click_keeps_a_selection_the_menu_opened_inside(page: Page, port
     )
     server = serve(table, page, port)
 
-    # Ctrl clicks, so the selection is built without a menu ever opening over the
-    # rows still to be picked.
     click_row(page, 1, "Control")  # File A1
     click_row(page, 2, "Control")  # File A2
     wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
@@ -2783,7 +2823,7 @@ def test_a_right_click_outside_the_selection_takes_the_row_alone(page: Page, por
     )
     server = serve(table, page, port)
 
-    click_row(page, 1, "Control")  # File A1, picked without opening a menu over it
+    click_row(page, 1, "Control")  # File A1
     wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
 
     rows(page).nth(4).click(button="right")  # File B1, which was not selected
@@ -2804,7 +2844,7 @@ def test_the_menu_opens_and_walks_from_the_keyboard(page: Page, port):
     )
     server = serve(table, page, port)
 
-    rows(page).first.click()  # Folder A, which opens the menu
+    rows(page).first.click(button="right")  # Folder A, which opens the menu
     expect(menu(page)).to_have_count(1, timeout=10000)
     page.keyboard.press("Escape")
     expect(menu(page)).to_have_count(0, timeout=10000)
@@ -2868,7 +2908,7 @@ def test_a_menu_only_action_still_answers_to_its_shortcut(page: Page, port):
 
     assert page.locator("[role='toolbar']").count() == 0
 
-    rows(page).nth(1).click()  # File A1, which opens the menu
+    rows(page).nth(1).click(button="right")  # File A1, which opens the menu
     expect(menu(page)).to_have_count(1, timeout=10000)
     assert menu_labels(page) == ["Delete"]
 
@@ -2889,7 +2929,7 @@ def test_the_menu_leaves_the_search_action_out(page: Page, port):
     )
     server = serve(table, page, port)
 
-    rows(page).nth(1).click()
+    rows(page).nth(1).click(button="right")
     expect(menu(page)).to_have_count(1, timeout=10000)
     assert menu_labels(page) == ["Delete"]
     assert page.locator(".pnl-tst-menu input").count() == 0
