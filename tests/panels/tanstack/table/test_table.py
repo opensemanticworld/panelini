@@ -280,6 +280,234 @@ def test_unusable_explicit_positions_leave_the_source_alone(table, events, param
     assert events[0][1]["applied"] is False
 
 
+# --- add intent ---------------------------------------------------------------
+#
+# The browser decides where a node goes, following the rule an explorer does, and
+# never what it is called: keys have to be unique across a tree only Python holds.
+
+
+def test_add_intent_inserts_a_child(table):
+    table.handle_event("add", {"anchorKey": "b", "position": "child", "node": {"title": "New"}})
+    assert shape(table.source) == "a(b(b1,b2,node-1),e),d(d1)"
+
+
+def test_add_intent_inserts_a_sibling(table):
+    table.handle_event("add", {"anchorKey": "b1", "position": "after", "node": {}})
+    assert shape(table.source) == "a(b(b1,node-1,b2),e),d(d1)"
+
+
+def test_add_intent_without_an_anchor_lands_at_root(table):
+    """Nothing active means an empty tree or a click into thin air, so root it is."""
+    table.handle_event("add", {"anchorKey": None, "position": None, "node": {}})
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1),node-1"
+
+
+def test_add_intent_fills_an_empty_tree():
+    table = TanstackTable()
+    table.handle_event("add", {"anchorKey": None, "position": None, "node": {}})
+    assert shape(table.source) == "node-1"
+
+
+def test_add_intent_merges_the_node_template(table):
+    table.handle_event(
+        "add",
+        {"anchorKey": "d", "position": "child", "node": {"title": "New file", "allow_children": False}},
+    )
+
+    node = table.source[1]["children"][1]
+    assert node["title"] == "New file"
+    assert node["allow_children"] is False
+
+
+def test_add_intent_defaults_the_title_when_the_template_has_none(table):
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": {}})
+    assert table.source[1]["children"][1]["title"] == "New node"
+
+
+def test_add_intent_never_lets_the_template_choose_the_key(table):
+    """A browser that could name keys could collide with a tree it cannot see."""
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": {"key": "b1"}})
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1,node-1)"
+
+
+def test_add_intent_uses_the_configured_key_prefix(source):
+    table = TanstackTable(source=source, options={"new_key_prefix": "doc"})
+    table.handle_event("add", {"anchorKey": "d", "position": "child", "node": {}})
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1,doc-1)"
+
+
+def test_minted_keys_do_not_collide(table):
+    for _ in range(3):
+        table.handle_event("add", {"anchorKey": None, "position": None, "node": {}})
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1),node-1,node-2,node-3"
+
+
+def test_add_intent_accepts_snake_case(table):
+    table.handle_event("add", {"anchor_key": "e", "position": "after", "node": {}})
+    assert shape(table.source) == "a(b(b1,b2),e,node-1),d(d1)"
+
+
+def test_add_intent_reports_the_normalised_payload(table, events):
+    table.handle_event("add", {"anchorKey": "b", "position": "child", "node": {"title": "New"}})
+
+    name, params = events[0]
+    assert name == "add"
+    assert params["anchor_key"] == "b"
+    assert params["position"] == "child"
+    assert params["key"] == "node-1"
+    assert params["node"]["title"] == "New"
+    assert params["applied"] is True
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"anchorKey": "b", "position": "sideways", "node": {}},
+        {"anchorKey": "b", "position": None, "node": {}},
+        {"anchorKey": "nope", "position": "child", "node": {}},
+    ],
+)
+def test_unusable_add_intents_leave_the_source_alone(table, events, params):
+    table.handle_event("add", params)
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+    assert events[0][1]["key"] is None
+
+
+def test_add_intent_into_a_leaf_is_rejected(events):
+    """The same flag that refuses a drop into a file refuses a new child in it."""
+    table = TanstackTable(
+        source=[{"key": "a", "title": "A", "allow_children": False}],
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("add", {"anchorKey": "a", "position": "child", "node": {}})
+
+    assert shape(table.source) == "a"
+    assert events[0][1]["applied"] is False
+
+
+def test_add_intent_is_vetoed_by_action_callback(source, events):
+    table = TanstackTable(
+        source=source,
+        action_callback=lambda action, params: False,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("add", {"anchorKey": "b", "position": "child", "node": {}})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+    # A vetoed add never happened, so it must not claim a key it did not take.
+    assert events[0][1]["key"] is None
+
+
+def test_action_callback_sees_the_add_it_is_deciding_on(source):
+    seen = []
+
+    def record(action, params):
+        seen.append((action, params))
+        return True
+
+    table = TanstackTable(source=source, action_callback=record)
+    table.handle_event("add", {"anchorKey": "b", "position": "child", "node": {"title": "New"}})
+
+    action, params = seen[0]
+    assert action == "add"
+    assert params["anchor_key"] == "b"
+    assert params["position"] == "child"
+    assert params["node"]["title"] == "New"
+
+
+# --- delete intent ------------------------------------------------------------
+
+
+def test_delete_intent_removes_the_node(table):
+    table.handle_event("delete", {"keys": ["b"]})
+    assert shape(table.source) == "a(e),d(d1)"
+
+
+def test_delete_intent_accepts_a_single_key(table):
+    table.handle_event("delete", {"key": "e"})
+    assert shape(table.source) == "a(b(b1,b2)),d(d1)"
+
+
+def test_delete_intent_rewrites_the_source_once(table):
+    """A multi row delete is one push to the browser, not one per key."""
+    pushes = []
+    table.param.watch(lambda event: pushes.append(event.new), ["source"])
+    table.handle_event("delete", {"keys": ["b1", "e"]})
+
+    assert shape(table.source) == "a(b(b2)),d(d1)"
+    assert len(pushes) == 1
+
+
+def test_delete_intent_prunes_a_parent_and_its_own_child(table):
+    """Ticking a folder and a file in it deletes the folder once, not twice."""
+    table.handle_event("delete", {"keys": ["b", "b1"]})
+    assert shape(table.source) == "a(e),d(d1)"
+
+
+def test_delete_intent_reports_what_went(table, events):
+    table.handle_event("delete", {"keys": ["b", "b1", "e"]})
+
+    name, params = events[0]
+    assert name == "delete"
+    assert params["keys"] == ["b", "b1", "e"]
+    assert params["applied"] is True
+    # b1 travelled with b, so it is not reported as removed in its own right.
+    assert params["applied_keys"] == ["b", "e"]
+
+
+def test_delete_intent_drops_stale_expanded_and_selected_keys(source, events):
+    table = TanstackTable(
+        source=source,
+        expanded_keys=["a", "b"],
+        selected_keys=["b", "b1", "d"],
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("delete", {"keys": ["b"]})
+
+    assert table.expanded_keys == ["a"]
+    assert table.selected_keys == ["d"]
+
+
+@pytest.mark.parametrize("params", [{"keys": []}, {"keys": ["nope"]}, {}])
+def test_unusable_delete_intents_leave_the_source_alone(table, events, params):
+    table.handle_event("delete", params)
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+    assert events[0][1]["applied_keys"] == []
+
+
+def test_delete_intent_is_vetoed_by_action_callback(source, events):
+    """One decision for the batch: a half applied delete is nobody's intent."""
+    table = TanstackTable(
+        source=source,
+        action_callback=lambda action, params: action != "delete",
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("delete", {"keys": ["b", "e"]})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+
+
+def test_action_callback_is_not_called_for_moves(source):
+    """Moves keep answering to move_callback, which vetoes one node at a time."""
+    seen = []
+
+    def record(action, params):
+        seen.append(action)
+        return True
+
+    table = TanstackTable(source=source, action_callback=record)
+    table.handle_event("move", {"key": "e", "keys": ["e"], "position": "before", "anchorKey": "b"})
+
+    assert seen == []
+    assert shape(table.source) == "a(e,b(b1,b2)),d(d1)"
+
+
 # --- move veto ----------------------------------------------------------------
 
 

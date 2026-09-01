@@ -96,6 +96,13 @@ def shape(nodes) -> str:
     return ",".join(node["key"] + (f"({shape(node['children'])})" if node.get("children") else "") for node in nodes)
 
 
+def node_at(nodes, key):
+    """``find_node`` plus a presence assertion, so callers can subscript freely."""
+    found = tree.find_node(nodes, key)
+    assert found is not None, f"{key} is not in the tree"
+    return found
+
+
 def drag_row(
     page: Page,
     source_index: int,
@@ -1024,8 +1031,11 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert bar.get_attribute("aria-label") == "Document actions"
     assert bar.get_attribute("aria-orientation") == "horizontal"
 
-    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(8)]
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(11)]
     assert labels == [
+        "New folder",
+        "New file",
+        "Delete",
         "Move up",
         "Move down",
         "Outdent",
@@ -1037,6 +1047,9 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     ]
     assert button(page, "Select all").get_attribute("aria-keyshortcuts") == "Control+A"
     assert button(page, "Clear selection").get_attribute("aria-keyshortcuts") == "Escape"
+    assert button(page, "New folder").get_attribute("aria-keyshortcuts") == "Insert"
+    assert button(page, "New file").get_attribute("aria-keyshortcuts") == "Shift+Insert"
+    assert button(page, "Delete").get_attribute("aria-keyshortcuts") == "Delete"
     # Alt, never Tab: Tab has to stay the way out of the grid's roving tabindex.
     assert button(page, "Indent").get_attribute("aria-keyshortcuts") == "Alt+ArrowRight"
     assert button(page, "Outdent").get_attribute("aria-keyshortcuts") == "Alt+ArrowLeft"
@@ -1160,19 +1173,19 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     )
     server = serve(table, page, port)
 
-    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(8)]
-    assert tabbable == ["0"] + ["-1"] * 7
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(11)]
+    assert tabbable == ["0"] + ["-1"] * 10
 
     toolbar_buttons(page).first.focus()
     page.keyboard.press("ArrowRight")
-    assert focused_label(page) == "Move down"
+    assert focused_label(page) == "New file"
     page.keyboard.press("End")
     assert focused_label(page) == "Clear selection"
     page.keyboard.press("Home")
-    assert focused_label(page) == "Move up"
+    assert focused_label(page) == "New folder"
     # Clamped rather than wrapping, exactly as Home and End behave in the grid.
     page.keyboard.press("ArrowLeft")
-    assert focused_label(page) == "Move up"
+    assert focused_label(page) == "New folder"
 
     expect(toolbar_buttons(page).first).to_have_attribute("tabindex", "0")
     assert toolbar_buttons(page).nth(1).get_attribute("tabindex") == "-1"
@@ -1435,5 +1448,345 @@ def test_toolbar_move_goes_through_the_move_callback(page: Page, port):
     # Reordering is not a `child` move, so it still lands.
     button(page, "Move up").click()
     wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+
+    server.stop()
+
+
+# New folder, new file and delete. Python mints every key and rewrites the tree, so
+# what is pinned down here is where the browser asks a node to land, which rows a
+# delete takes with it, and where focus goes once the new source arrives.
+
+
+def test_toolbar_new_folder_lands_inside_the_active_row(page: Page, port):
+    """Explorer placement: a row that takes children takes the new node too."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()  # Folder A
+    button(page, "New folder").click()
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+    # The button's label is also the new node's title, so a renamed action names
+    # what it creates.
+    expect_titles(page, ["Folder A", "File A1", "File A2", "New folder", "Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_toolbar_new_file_lands_next_to_a_leaf(page: Page, port):
+    """A node that refuses children gets a sibling instead, never a child."""
+    source = [
+        {
+            "key": "a",
+            "title": "Folder A",
+            "children": [{"key": "a1", "title": "File A1", "allow_children": False}],
+        }
+    ]
+    table = TanstackTable(source=source, options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "New file").click()
+    wait_until(lambda: shape(table.source) == "a(a1,node-1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A1", "New file"])
+
+    # The default template for this action refuses children in turn, so the rule
+    # holds for what the toolbar itself creates.
+    assert node_at(table.source, "node-1")["allow_children"] is False
+
+    server.stop()
+
+
+def test_toolbar_fills_a_tree_that_starts_out_empty(page: Page, port):
+    """With no row to anchor to the node lands at root, which is the only way in."""
+    table = TanstackTable(source=[], options={"toolbar": True})
+    server = start(table, page, port)
+    page.locator("[role='toolbar']").wait_for(state="visible", timeout=15000)
+
+    assert page.locator("[role='treegrid']").count() == 0
+    # Nothing is active, so there is nothing to remove, but adding is still open.
+    expect(button(page, "Delete")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    assert button(page, "New folder").get_attribute("aria-disabled") == "false"
+
+    button(page, "New folder").click()
+    wait_until(lambda: shape(table.source) == "node-1", timeout=10)
+    expect_titles(page, ["New folder"])
+
+    server.stop()
+
+
+def test_toolbar_entry_renames_an_action_and_names_the_node(page: Page, port):
+    """A dict entry gives the button its label and the minted node its fields."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={
+            "expand_all": True,
+            "new_key_prefix": "doc",
+            "toolbar": [{"id": "new-folder", "label": "New section", "node": {"kind": "section"}}],
+        },
+    )
+    server = serve(table, page, port)
+
+    assert toolbar_buttons(page).count() == 1
+    assert button(page, "New section").get_attribute("title") == "New section (Insert)"
+
+    rows(page).nth(0).click()  # Folder A
+    button(page, "New section").click()
+    wait_until(lambda: shape(table.source) == "a(a1,a2,doc-1),b(b1)", timeout=10)
+
+    node = node_at(table.source, "doc-1")
+    assert node["title"] == "New section"
+    assert node["kind"] == "section"
+
+    server.stop()
+
+
+def test_toolbar_add_focuses_and_selects_the_new_row(page: Page, port):
+    """The browser cannot know a key Python has yet to mint, so it diffs for it."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    button(page, "New folder").click()
+    wait_until(lambda: shape(table.source) == "a(a1(node-1),a2),b(b1)", timeout=10)
+    wait_until(lambda: focused_title(page) == "New folder", timeout=10)
+    # The new node replaces the selection rather than joining it, so the next
+    # action applies to it alone.
+    wait_until(lambda: table.selected_keys == ["node-1"], timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_add_shortcuts_work_from_the_grid(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()  # Folder A
+    page.keyboard.press("Insert")
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1),b(b1)", timeout=10)
+
+    # Focus followed the new folder, and a folder takes children, so the file that
+    # Shift+Insert makes lands inside it rather than beside it.
+    wait_until(lambda: focused_title(page) == "New folder", timeout=10)
+    page.keyboard.press("Shift+Insert")
+    wait_until(lambda: shape(table.source) == "a(a1,a2,node-1(node-2)),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_deletes_the_active_row(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Delete").click()
+    wait_until(lambda: shape(table.source) == "a(a2),b(b1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1"])
+
+    # A folder goes with everything under it, and the key press is the same action.
+    rows(page).nth(2).click()  # Folder B
+    page.keyboard.press("Delete")
+    wait_until(lambda: shape(table.source) == "a(a2)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_delete_takes_the_whole_selection(page: Page, port):
+    """Unlike a move, a delete needs no shared parent, so it takes every row."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 4, "Control")  # and File B1, in the other folder
+    wait_until(lambda: table.selected_keys == ["a1", "b1"], timeout=10)
+
+    button(page, "Delete").click()
+    wait_until(lambda: shape(table.source) == "a(a2),b", timeout=10)
+    # Keys that no longer name a node are dropped rather than left dangling. Polled
+    # rather than read: the prune is the statement after the source rewrite, so a
+    # bare read can land between the two.
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_delete_focuses_what_moves_up_into_the_gap(page: Page, port):
+    """Focus follows the position, not the key, so a run of deletes stays put."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Delete").click()
+    wait_until(lambda: focused_title(page) == "File A2", timeout=10)
+
+    button(page, "Delete").click()
+    wait_until(lambda: shape(table.source) == "a,b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_actions_go_through_the_action_callback(page: Page, port):
+    """One veto for the whole action, where `move_callback` is asked per node."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": True},
+        action_callback=lambda action, params: action != "delete",
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Delete").click()
+    page.wait_for_timeout(700)
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    # Adding is a different action, so the same callback lets it through.
+    button(page, "New folder").click()
+    wait_until(lambda: shape(table.source) == "a(a1(node-1),a2),b(b1)", timeout=10)
+
+    server.stop()
+
+
+# Emptying the selection. However it is done, it has to leave the grid looking
+# untouched, or a clear would swap one background for another rather than clear.
+
+
+def test_clear_selection_leaves_no_mark_on_the_row(page: Page, port):
+    """The button and Escape both mute the active row, focus ring included."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(1)
+
+    button(page, "Clear selection").click()
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(0)
+    # Still the row the keyboard is on, so Tab comes back to it and the toolbar
+    # keeps acting on it.
+    assert rows(page).nth(1).get_attribute("tabindex") == "0"
+
+    rows(page).nth(1).click()
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    page.keyboard.press("Escape")
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(0)
+    # Escape is a key press, so the row would otherwise be left ringed.
+    assert page.locator(".pnl-tst-row--quiet").count() == 1
+
+    server.stop()
+
+
+def test_ctrl_click_that_empties_the_selection_leaves_no_mark(page: Page, port):
+    """Taking the last row out is a clear, whichever gesture got there."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi"},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # and File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    click_row(page, 2, "Control")  # back out, one row left
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(1)
+
+    click_row(page, 1, "Control")  # and now none
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(0)
+
+    server.stop()
+
+
+def test_select_all_paints_the_active_row_again(page: Page, port):
+    """The mute lasts until the next gesture, and is not a state to get stuck in."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    button(page, "Clear selection").click()
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(0)
+
+    button(page, "Select all").click()
+    wait_until(lambda: table.selected_keys == ["a", "a1", "a2", "b", "b1"], timeout=10)
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(1)
+
+    server.stop()
+
+
+def test_toggle_on_click_clears_the_only_selected_row(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toggle_on_click": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 1)
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+    # Nothing is painted, or clicking a selection away would swap one tint for
+    # another rather than clear it.
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(0)
+    # The row stays the active one underneath, so Tab still comes back to it.
+    assert rows(page).nth(1).get_attribute("tabindex") == "0"
+
+    # Anything that touches the row again paints it.
+    page.keyboard.press("ArrowDown")
+    expect(page.locator(".pnl-tst-row--active")).to_have_count(1)
+
+    server.stop()
+
+
+def test_toggle_on_click_narrows_a_multi_row_selection_first(page: Page, port):
+    """A plain click on one of several selected rows still means `only this one`."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toggle_on_click": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    click_row(page, 2, "Control")  # and File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    click_row(page, 1)
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    click_row(page, 1)
+    wait_until(lambda: table.selected_keys == [], timeout=10)
+
+    server.stop()
+
+
+def test_a_second_click_keeps_the_row_selected_by_default(page: Page, port):
+    """Without the option a click only ever selects, which is the old behaviour."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi"},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    click_row(page, 1)
+    page.wait_for_timeout(500)
+    assert table.selected_keys == ["a1"]
 
     server.stop()

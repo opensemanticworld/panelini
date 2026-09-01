@@ -6,10 +6,12 @@ Install and run:
     uv run python examples/panels/tanstack/table/tanstack_table.py
 """
 
+from typing import Any
+
 import panel as pn
 
 from panelini import Panelini
-from panelini.panels.tanstack.table import TanstackTable
+from panelini.panels.tanstack.table import TanstackTable, icon_for, tree
 
 LOCKED_KEY = "archive"
 
@@ -18,7 +20,6 @@ LOCKED_KEY = "archive"
 # can never gain children, so the panel refuses to drop anything into a file, both
 # in the browser and in Python.
 FOLDER = {"kind": "folder", "icon": "folder"}
-FILE_ICONS = {"md": "markdown", "txt": "document", "py": "python", "png": "image", "pdf": "pdf"}
 
 
 def file_node(key: str, title: str) -> dict:
@@ -27,7 +28,7 @@ def file_node(key: str, title: str) -> dict:
         "key": key,
         "title": title,
         "kind": "file",
-        "icon": FILE_ICONS.get(title.rsplit(".", 1)[-1], "file"),
+        "icon": icon_for(title),
         "allow_children": False,
     }
 
@@ -40,8 +41,10 @@ source = [
         "children": [
             file_node("invoice", "invoice.pdf"),
             file_node("logo", "logo.png"),
-            # No icon is mapped for .csv, so this one shows the generic fallback.
             file_node("budget", "budget.csv"),
+            file_node("minutes", "minutes.docx"),
+            # Nothing is mapped for .bak, so this one shows the generic fallback.
+            file_node("backup", "inbox.bak"),
         ],
     },
     {
@@ -56,6 +59,10 @@ source = [
                 "children": [
                     file_node("notes", "notes.md"),
                     file_node("table", "table.py"),
+                    file_node("component", "component.ts"),
+                    file_node("styles", "styles.css"),
+                    file_node("config", "pyproject.toml"),
+                    file_node("release", "release.zip"),
                 ],
             },
             {"key": "sketches", "title": "sketches", **FOLDER, "children": []},
@@ -84,8 +91,19 @@ def allow_move(key: str, anchor_key: str, position: str) -> bool:
     return not (position == "child" and anchor_key == LOCKED_KEY)
 
 
+def locked(key: str | None) -> bool:
+    """Return whether a key is the read-only branch or sits inside it."""
+    return bool(key) and (key == LOCKED_KEY or tree.is_descendant(table.source, str(key), LOCKED_KEY))
+
+
+def allow_action(action: str, params: dict[str, Any]) -> bool:
+    """Veto adding to or deleting from the read-only branch."""
+    keys = [params["anchor_key"]] if action == "add" else params["keys"]
+    return not any(locked(key) for key in keys)
+
+
 def on_event(name: str, params: dict) -> None:
-    """Report row activation, and what Python made of a drop."""
+    """Report row activation, and what Python made of a drop or a toolbar action."""
     if name == "activate":
         messages.append(f"activated `{params['key']}`")
     elif name == "move" and params["position"] is not None:
@@ -94,6 +112,14 @@ def on_event(name: str, params: dict) -> None:
         verb = "moved" if params["applied"] else "rejected"
         moved = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
         messages.append(f"{verb} {moved} {params['position']} `{params['anchor_key']}`")
+    elif name == "add":
+        where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
+        verb = f"added `{params['key']}`" if params["applied"] else "refused to add"
+        messages.append(f"{verb} {where}")
+    elif name == "delete":
+        verb = "deleted" if params["applied"] else "refused to delete"
+        gone = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
+        messages.append(f"{verb} {gone}")
     else:
         return
     log.object = "**Log:**\n\n" + "\n".join(f"- {line}" for line in messages[-12:])
@@ -107,14 +133,41 @@ table = TanstackTable(
         "enable_dnd": True,
         "expand_all": True,
         "aria_label": "Documents",
-        # True is the default action order. A list picks and orders them instead,
-        # and it gates the keyboard shortcuts too, so an action left out here
-        # cannot be reached by pressing a key either.
-        "toolbar": True,
+        # Clicking the only selected row again clears the selection.
+        "toggle_on_click": True,
+        # True would give the default action order. A list picks and orders them
+        # instead, and it gates the keyboard shortcuts too, so an action left out
+        # here cannot be reached by pressing a key either. A dict entry renames an
+        # action and gives it the node template a new node is minted from, which
+        # is how this tree gets folders and files rather than bare nodes. The
+        # label is also the new node's title.
+        "toolbar": [
+            {"id": "new-folder", "label": "New folder", "node": {**FOLDER, "children": []}},
+            {
+                "id": "new-file",
+                "label": "New file",
+                "node": {"kind": "file", "icon": "file", "allow_children": False},
+            },
+            "delete",
+            "|",
+            "move-up",
+            "move-down",
+            "outdent",
+            "indent",
+            "|",
+            "expand-all",
+            "collapse-all",
+            "|",
+            "select-all",
+            "clear-selection",
+            "search",
+        ],
         "search_label": "Search name or kind",
+        "new_key_prefix": "doc",
     },
     event_callback=on_event,
     move_callback=allow_move,
+    action_callback=allow_action,
     sizing_mode="stretch_both",
 )
 
@@ -160,6 +213,15 @@ gestures = pn.pane.Markdown(
 - **Alt+Arrow** reorders without the mouse: up and down among siblings, right to
   indent under the row above, left to outdent after the parent. Greyed out buttons
   say why a move is unavailable, and `Archive (read only)` refuses these too.
+- **Insert** makes a folder and **Shift+Insert** a file: inside the row you are on
+  when it takes children, next to it when it does not, and at root level when the
+  tree is empty. **Delete** removes the whole selection.
+- `Archive (read only)` refuses new nodes and deletions too, through a Python
+  `action_callback`.
+- Clicking the only selected row **again** clears the selection, and so does
+  `Escape` or the clear button: an emptied selection leaves no colour behind.
+- **Icons** come from `icon_for`, which maps a file extension onto one of the
+  bundled glyphs. `inbox.bak` is not mapped, so it shows the generic one.
 """,
     sizing_mode="stretch_width",
 )

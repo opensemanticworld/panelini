@@ -378,3 +378,28 @@ def test_expandable_keys(sample):
 
 def test_expandable_keys_ignores_empty_child_lists():
     assert tree.expandable_keys([{"key": "a", "children": []}]) == []
+
+
+# --- minted keys --------------------------------------------------------------
+
+
+def test_new_key_starts_at_one():
+    assert tree.new_key([]) == "node-1"
+
+
+def test_new_key_skips_what_is_taken():
+    taken = [{"key": "node-1"}, {"key": "node-2", "children": [{"key": "node-4"}]}]
+    assert tree.new_key(taken) == "node-3"
+
+
+def test_new_key_fills_the_gap_a_deletion_left():
+    """Reusing a number is safe: the key sets are pruned along with the node."""
+    assert tree.new_key([{"key": "node-1"}, {"key": "node-3"}]) == "node-2"
+
+
+def test_new_key_honours_the_prefix(sample):
+    assert tree.new_key(sample, "doc") == "doc-1"
+
+
+def test_new_key_is_deterministic(sample):
+    assert tree.new_key(sample) == tree.new_key(sample)

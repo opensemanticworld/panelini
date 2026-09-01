@@ -351,6 +351,28 @@ def apply_moves(tree: Tree, keys: Sequence[str], anchor_key: str, position: str)
     return current, moved
 
 
+def new_key(tree: Tree, prefix: str = "node") -> str:
+    """Mint a key that no node in the tree carries yet.
+
+    Deterministic and gap filling: the lowest free ``<prefix>-<n>`` wins, so the
+    key a given tree produces is the same on every run and tests do not have to
+    match a uuid. Reusing the number of a deleted node is safe because the key
+    sets are pruned with it.
+
+    Args:
+        tree: Tree the key has to be unique within.
+        prefix: Leading part of the key.
+
+    Returns:
+        A key of the form ``<prefix>-<n>`` with ``n`` starting at 1.
+    """
+    taken = {node.get(KEY) for node in iter_nodes(tree)}
+    index = 1
+    while f"{prefix}-{index}" in taken:
+        index += 1
+    return f"{prefix}-{index}"
+
+
 def subtree_keys(tree: Tree, key: str) -> list[str]:
     """Return ``key`` plus the keys of everything below it, or an empty list."""
     node = find_node(tree, key)

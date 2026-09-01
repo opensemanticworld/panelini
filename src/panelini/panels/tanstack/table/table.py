@@ -57,10 +57,14 @@ class TanstackTable(AnyWidgetComponent):
             "and the space key. Clicking never cascades: selecting a folder selects the folder "
             "alone, and selecting every file in one leaves the folder out. Only the checkbox "
             "cascades, and only under hierarchy, where ticking a folder ticks its whole subtree "
-            "and a folder reads as ticked once all of its children are. toolbar is an ordered list "
+            "and a folder reads as ticked once all of its children are. toggle_on_click lets a "
+            "plain click on the only selected row clear the selection. toolbar is an ordered list "
             "of action ids, True for the default set and absent for no toolbar at all, and it "
-            "governs the keyboard shortcuts as well as the buttons. toolbar_label and search_label "
-            "name the toolbar and its search box for assistive technology."
+            "governs the keyboard shortcuts as well as the buttons. An entry may also be a dict "
+            "{id, label, icon, node} that renames one action, gives it another bundled icon and "
+            "sets the template a new node is minted from, so one table can offer several kinds. "
+            "toolbar_label and search_label name the toolbar and its search box for assistive "
+            "technology, and new_key_prefix names the keys minted for added nodes."
         ),
     )
     icons = param.Dict(
@@ -109,6 +113,7 @@ class TanstackTable(AnyWidgetComponent):
         selected_keys: Optional[list[str]] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
+        action_callback: Optional[Callable[[str, dict[str, Any]], bool]] = None,
         **params: Any,
     ) -> None:
         """Initialize the TanstackTable component.
@@ -131,6 +136,12 @@ class TanstackTable(AnyWidgetComponent):
                 so ``source`` is left untouched. Called once per node, so a drag
                 of several rows can be vetoed for some of them and allowed for
                 the rest.
+            action_callback: Veto hook for the toolbar's structural actions.
+                Receives ``(action, params)`` with action in ``add | delete``,
+                and returning False leaves ``source`` untouched. Called once for
+                the whole action rather than per node, because adding one node
+                and deleting a batch are each a single decision. Moves keep
+                going through ``move_callback``.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -152,6 +163,7 @@ class TanstackTable(AnyWidgetComponent):
 
         self._event_callback = event_callback
         self._move_callback = move_callback
+        self._action_callback = action_callback
 
         self.param.watch(self._on_event_data_change, ["_event_data"])
 
@@ -170,9 +182,9 @@ class TanstackTable(AnyWidgetComponent):
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        ``move`` is intercepted here: the browser only reports where the pointer
-        let go, and this is where that intent becomes a new tree. Every other
-        event is forwarded untouched.
+        ``move``, ``add`` and ``delete`` are intercepted here: the browser only
+        reports what the user asked for, and this is where that intent becomes a
+        new tree. Every other event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
@@ -180,6 +192,10 @@ class TanstackTable(AnyWidgetComponent):
         """
         if event_name == "move":
             event_params = self._apply_move_intent(event_params)
+        elif event_name == "add":
+            event_params = self._apply_add_intent(event_params)
+        elif event_name == "delete":
+            event_params = self._apply_delete_intent(event_params)
 
         if self._event_callback:
             self._event_callback(event_name, event_params)
@@ -249,9 +265,137 @@ class TanstackTable(AnyWidgetComponent):
         params["applied_keys"] = moved
         return params
 
+    def _apply_add_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Mint a node from a browser add intent and rewrite ``source``.
+
+        The browser decides *where*, following the rule an explorer does: inside
+        the active row when it accepts children, next to it when it does not, and
+        at root level when nothing is active. It never decides *what the node is
+        called*, because a key has to be unique across a tree only Python holds.
+
+        Args:
+            event_params: Raw payload with ``anchor_key``, ``position`` in
+                ``after | child``, and a ``node`` template to merge.
+
+        Returns:
+            The normalised payload. ``key`` carries the minted key and ``node``
+            the inserted node, both None when nothing was added.
+        """
+        anchor_key = event_params.get("anchor_key", event_params.get("anchorKey"))
+        position = event_params.get("position")
+        template = {name: value for name, value in (event_params.get("node") or {}).items() if name != tree.KEY}
+
+        params: dict[str, Any] = {
+            "anchor_key": anchor_key,
+            "position": position,
+            "key": None,
+            "node": None,
+            "applied": False,
+        }
+
+        if anchor_key is None:
+            position = None
+        elif (
+            position not in ("after", "child")
+            or tree.find_node(self.source, anchor_key) is None
+            or (position == "child" and not tree.accepts_children(self.source, anchor_key))
+        ):
+            return params
+
+        key = tree.new_key(self.source, self.options.get("new_key_prefix", "node"))
+        # The template wins over the default title but never over the key: a
+        # browser that could name keys could collide with the tree it cannot see.
+        node = {"title": "New node", **template, tree.KEY: key}
+
+        params["position"] = position
+        params["key"] = key
+        params["node"] = node
+        if not self._allows_action("add", params):
+            params["key"] = None
+            params["node"] = None
+            return params
+
+        if anchor_key is None or position == "child":
+            self.source = tree.insert_child(self.source, anchor_key, node)
+        else:
+            self.source = tree.insert_sibling(self.source, anchor_key, node)
+
+        params["applied"] = True
+        return params
+
+    def _apply_delete_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Remove the nodes a browser delete intent names and rewrite ``source``.
+
+        The batch is pruned first, so selecting a folder and something inside it
+        removes the folder once rather than trying to remove a node that has
+        already travelled with its parent. The whole batch is one decision for
+        ``action_callback``: a half applied delete is not a state anyone asked for.
+
+        Args:
+            event_params: Raw payload with ``keys``, or a single ``key``.
+
+        Returns:
+            The normalised payload, with ``applied_keys`` naming the roots that
+            were actually removed.
+        """
+        key = event_params.get("key")
+        keys = event_params.get("keys") or ([key] if key else [])
+
+        params: dict[str, Any] = {
+            "key": key,
+            "keys": keys,
+            "applied": False,
+            "applied_keys": [],
+        }
+
+        ordered = [
+            candidate
+            for candidate in tree.prune_redundant_keys(self.source, keys)
+            if tree.find_node(self.source, candidate) is not None
+        ]
+        if not ordered or not self._allows_action("delete", params):
+            return params
+
+        # One rewrite for the batch rather than one per key, so a multi row delete
+        # is a single push to the browser instead of a visible cascade.
+        updated = self.source
+        stale: set[str] = set()
+        removed: list[str] = []
+        for candidate in ordered:
+            stale.update(tree.subtree_keys(updated, candidate))
+            updated, node = tree.remove_key(updated, candidate)
+            if node is not None:
+                removed.append(candidate)
+
+        if not removed:
+            return params
+
+        self.source = updated
+        self._drop_stale_keys(stale)
+        params["applied"] = True
+        params["applied_keys"] = removed
+        return params
+
     def _allows_move(self, key: str, anchor_key: str, position: str) -> bool:
         """Return whether ``move_callback`` permits this one node to move."""
         return not self._move_callback or bool(self._move_callback(key, anchor_key, position))
+
+    def _allows_action(self, action: str, params: dict[str, Any]) -> bool:
+        """Return whether ``action_callback`` permits this whole action."""
+        return not self._action_callback or bool(self._action_callback(action, params))
+
+    def _drop_stale_keys(self, stale: set[str]) -> None:
+        """Drop removed keys from the expanded and selected sets.
+
+        Both are rewritten only when they actually change, so removing a node
+        nobody had expanded or selected stays a single param event.
+        """
+        remaining_expanded = [key for key in self.expanded_keys if key not in stale]
+        if remaining_expanded != list(self.expanded_keys):
+            self.expanded_keys = remaining_expanded
+        remaining_selected = [key for key in self.selected_keys if key not in stale]
+        if remaining_selected != list(self.selected_keys):
+            self.selected_keys = remaining_selected
 
     def get_source(self) -> list[dict[str, Any]]:
         """Return a shallow copy of the current tree source data."""
@@ -301,12 +445,7 @@ class TanstackTable(AnyWidgetComponent):
             return False
 
         self.source = updated
-        remaining_expanded = [k for k in self.expanded_keys if k not in stale]
-        if remaining_expanded != list(self.expanded_keys):
-            self.expanded_keys = remaining_expanded
-        remaining_selected = [k for k in self.selected_keys if k not in stale]
-        if remaining_selected != list(self.selected_keys):
-            self.selected_keys = remaining_selected
+        self._drop_stale_keys(stale)
         return True
 
     def move_node(self, key: str, anchor_key: str, position: str = "child") -> bool:

@@ -20,14 +20,29 @@ import {
 // Material Icon Theme (MIT), the VS Code file icon set. Imported one file at a
 // time and inlined at build time, so the panel stays offline and only the icons
 // listed below reach the bundle rather than the set's thousand-odd SVGs.
+import audioIcon from 'material-icon-theme/icons/audio.svg?raw'
+import consoleIcon from 'material-icon-theme/icons/console.svg?raw'
+import cssIcon from 'material-icon-theme/icons/css.svg?raw'
+import databaseIcon from 'material-icon-theme/icons/database.svg?raw'
 import documentIcon from 'material-icon-theme/icons/document.svg?raw'
 import fileIcon from 'material-icon-theme/icons/file.svg?raw'
 import folderIcon from 'material-icon-theme/icons/folder.svg?raw'
 import folderOpenIcon from 'material-icon-theme/icons/folder-open.svg?raw'
+import htmlIcon from 'material-icon-theme/icons/html.svg?raw'
 import imageIcon from 'material-icon-theme/icons/image.svg?raw'
+import javascriptIcon from 'material-icon-theme/icons/javascript.svg?raw'
+import jsonIcon from 'material-icon-theme/icons/json.svg?raw'
 import markdownIcon from 'material-icon-theme/icons/markdown.svg?raw'
 import pdfIcon from 'material-icon-theme/icons/pdf.svg?raw'
+import powerpointIcon from 'material-icon-theme/icons/powerpoint.svg?raw'
 import pythonIcon from 'material-icon-theme/icons/python.svg?raw'
+import tableIcon from 'material-icon-theme/icons/table.svg?raw'
+import typescriptIcon from 'material-icon-theme/icons/typescript.svg?raw'
+import videoIcon from 'material-icon-theme/icons/video.svg?raw'
+import wordIcon from 'material-icon-theme/icons/word.svg?raw'
+import xmlIcon from 'material-icon-theme/icons/xml.svg?raw'
+import yamlIcon from 'material-icon-theme/icons/yaml.svg?raw'
+import zipIcon from 'material-icon-theme/icons/zip.svg?raw'
 // Lucide (ISC), the toolbar icon set. Same treatment as the file icons above:
 // named one file at a time so only these reach the bundle, and drawn with
 // `stroke="currentColor"`, so a button's own colour carries into the glyph.
@@ -35,11 +50,14 @@ import arrowDownIcon from 'lucide-static/icons/arrow-down.svg?raw'
 import arrowUpIcon from 'lucide-static/icons/arrow-up.svg?raw'
 import chevronsDownIcon from 'lucide-static/icons/chevrons-down.svg?raw'
 import chevronsUpIcon from 'lucide-static/icons/chevrons-up.svg?raw'
+import filePlusIcon from 'lucide-static/icons/file-plus.svg?raw'
+import folderPlusIcon from 'lucide-static/icons/folder-plus.svg?raw'
 import indentDecreaseIcon from 'lucide-static/icons/indent-decrease.svg?raw'
 import indentIncreaseIcon from 'lucide-static/icons/indent-increase.svg?raw'
 import searchIcon from 'lucide-static/icons/search.svg?raw'
 import squareIcon from 'lucide-static/icons/square.svg?raw'
 import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
+import trashIcon from 'lucide-static/icons/trash-2.svg?raw'
 
 const props = defineProps({
   // Python-owned state. The component reads it and never writes it back.
@@ -114,15 +132,43 @@ function recordToKeys(record) {
 
 // A node opts into an icon by naming one. Nothing is inferred from the node's
 // shape, so a tree without `icon` renders exactly as it did before.
+// Named by what they show rather than by an extension, because one glyph serves
+// many: `table` is every spreadsheet, `document` every plain text file. Mapping
+// extensions onto these names is the app's job, so a tree of things that are not
+// files can use the same set.
 const BUNDLED_ICONS = {
+  audio: audioIcon,
+  console: consoleIcon,
+  css: cssIcon,
+  database: databaseIcon,
   document: documentIcon,
   file: fileIcon,
   folder: folderIcon,
   'folder-open': folderOpenIcon,
+  html: htmlIcon,
   image: imageIcon,
+  javascript: javascriptIcon,
+  json: jsonIcon,
   markdown: markdownIcon,
   pdf: pdfIcon,
+  powerpoint: powerpointIcon,
   python: pythonIcon,
+  table: tableIcon,
+  typescript: typescriptIcon,
+  video: videoIcon,
+  word: wordIcon,
+  xml: xmlIcon,
+  yaml: yamlIcon,
+  zip: zipIcon,
+}
+
+// The `icons` param wins, so an app can restyle or replace the bundled set
+// without the panel having to grow a second way of naming things. One registry
+// serves the rows and the toolbar, so a "New note" button can carry the same
+// markdown glyph the notes in the tree do.
+function iconByName(name) {
+  if (!name) return null
+  return { ...BUNDLED_ICONS, ...(props.state.icons || {}) }[name] ?? null
 }
 
 // One convention, and only one: an expanded row prefers `<name>-open` when that
@@ -131,11 +177,7 @@ const BUNDLED_ICONS = {
 function iconMarkup(row) {
   const name = row.original.icon
   if (!name) return null
-  // The `icons` param wins, so an app can restyle or replace the bundled set
-  // without the panel having to grow a second way of naming things.
-  const icons = { ...BUNDLED_ICONS, ...(props.state.icons || {}) }
-  if (isExpanded(row) && icons[`${name}-open`]) return icons[`${name}-open`]
-  return icons[name] ?? null
+  return (isExpanded(row) ? iconByName(`${name}-open`) : null) ?? iconByName(name)
 }
 
 function sameKeys(a, b) {
@@ -355,7 +397,20 @@ function treeCellStyle(row, columnDef) {
 // would next receive, focus. Falls back to the first row when the active key is
 // gone (collapsed away, or removed by a Python source push).
 const activeKey = ref(null)
+
+// Whether the active row is painted. It always is, except straight after a
+// `toggle_on_click` deselect: that gesture has to leave the row looking exactly
+// like an unselected one, or clicking a selection away would swap one tint for
+// another rather than clear it. The row stays active underneath, so the keyboard
+// and the toolbar carry on from where they were, and the next thing to touch it
+// paints it again.
+const activeShown = ref(true)
 const rowElements = new Map()
+
+function setActive(key) {
+  activeKey.value = key
+  activeShown.value = true
+}
 
 function setRowElement(key, element) {
   if (element) rowElements.set(key, element)
@@ -370,7 +425,7 @@ const focusKey = computed(() => {
 
 function focusRowByKey(key) {
   if (key == null) return
-  activeKey.value = key
+  setActive(key)
   nextTick(() => rowElements.get(key)?.focus())
 }
 
@@ -409,7 +464,7 @@ function onKeydown(event) {
     const id = { a: 'select-all', f: SEARCH_ID }[event.key.toLowerCase()]
     if (id && allows(id)) {
       event.preventDefault()
-      runAction(id)
+      runById(id)
       return
     }
   }
@@ -424,14 +479,26 @@ function onKeydown(event) {
     }[event.key]
     if (id && allows(id)) {
       event.preventDefault()
-      runAction(id)
+      runById(id)
       return
     }
   }
-  if (event.key === 'Escape' && allows('clear-selection')) {
-    event.preventDefault()
-    runAction('clear-selection')
-    return
+  // Insert creates, Shift+Insert creates the other kind, and a table that declared
+  // only one of them answers to only that one key.
+  if (event.key === 'Insert' || event.key === 'Delete' || event.key === 'Escape') {
+    const id =
+      event.key === 'Insert'
+        ? event.shiftKey
+          ? 'new-file'
+          : 'new-folder'
+        : event.key === 'Delete'
+          ? 'delete'
+          : 'clear-selection'
+    if (allows(id)) {
+      event.preventDefault()
+      runById(id)
+      return
+    }
   }
 
   switch (event.key) {
@@ -520,10 +587,50 @@ function selectRange(row, additive) {
   }
 }
 
-function onRowClick(row, event) {
-  activeKey.value = row.id
+// Opt in, and deliberately narrow: only a plain click on a row that is the entire
+// selection clears it. Toggling any selected row off would break the explorer rule
+// that a plain click collapses a multi row selection down to the row clicked, and
+// it would fight press-to-drag on a selected row.
+const toggleOnClick = computed(() => props.state.options.toggle_on_click === true)
 
-  if (selectable.value && selectMode.value !== 'single') {
+function isSoleSelection(row) {
+  const keys = recordToKeys(rowSelection.value)
+  return keys.length === 1 && keys[0] === row.id
+}
+
+// Emptying the selection leaves the grid looking untouched, whichever gesture did
+// it: the toggle click, the clear button, Escape, a Ctrl click that takes the last
+// row out, or a checkbox unticked. Painting the active row instead would swap one
+// background for another rather than clear one.
+function clearSelection() {
+  rowSelection.value = {}
+  rangeAnchorKey.value = null
+  activeShown.value = false
+}
+
+// For the gestures that empty the selection as a side effect rather than on
+// purpose, so they read as a clear when that is what they turned out to be.
+function muteIfEmpty() {
+  if (recordToKeys(rowSelection.value).length === 0) activeShown.value = false
+}
+
+// Muting is explicit, unmuting is not: anything that puts rows back in the
+// selection paints the active row again, wherever it came from, so the mute stays
+// a moment rather than becoming a state the grid can get stuck in.
+watch(
+  () => recordToKeys(rowSelection.value).length > 0,
+  (filled) => {
+    if (filled) activeShown.value = true
+  },
+)
+
+function onRowClick(row, event) {
+  setActive(row.id)
+  const modified = Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey)
+
+  if (selectable.value && !modified && toggleOnClick.value && isSoleSelection(row)) {
+    clearSelection()
+  } else if (selectable.value && selectMode.value !== 'single') {
     if (event?.shiftKey) selectRange(row, event.ctrlKey || event.metaKey)
     else if (event?.ctrlKey || event?.metaKey) {
       rangeAnchorKey.value = row.id
@@ -537,7 +644,7 @@ function onRowClick(row, event) {
 }
 
 function onToggle(row) {
-  activeKey.value = row.id
+  setActive(row.id)
   // A filtered branch is shown open whatever its stored state is, so toggling it
   // would only change what the tree looks like once the search box is cleared.
   if (filtering.value) return
@@ -554,8 +661,9 @@ function isIndeterminate(row) {
 
 // The pointer half of a Ctrl click: one row in or out, subtree untouched.
 function toggleRow(row) {
-  activeKey.value = row.id
+  setActive(row.id)
   row.toggleSelected(undefined, { selectChildren: false })
+  muteIfEmpty()
 }
 
 // The checkbox half. The next state comes from what the box shows rather than
@@ -563,11 +671,12 @@ function toggleRow(row) {
 // its children are actually clears the children. `deselectParents` drops an
 // ancestor that was ticked explicitly once part of its subtree goes.
 function toggleCheck(row) {
-  activeKey.value = row.id
+  setActive(row.id)
   row.toggleSelected(!isChecked(row), {
     selectChildren: cascades.value,
     deselectParents: cascades.value,
   })
+  muteIfEmpty()
 }
 
 function onCheckboxClick(row) {
@@ -585,7 +694,19 @@ function onCheckboxClick(row) {
 //
 // `Tab` and `Shift+Tab` are never bound. The grid carries a roving tabindex and
 // Tab has to stay the way out of it.
+//
+// `node` is the template a minted node starts from. A folder is simply a node that
+// did not refuse children, so the two creation actions differ in that one flag and
+// in nothing else, which keeps "folder" and "file" out of the panel's vocabulary.
 const ACTIONS = {
+  'new-folder': { icon: folderPlusIcon, label: 'New folder', keys: 'Insert', node: {} },
+  'new-file': {
+    icon: filePlusIcon,
+    label: 'New file',
+    keys: 'Shift+Insert',
+    node: { allow_children: false },
+  },
+  delete: { icon: trashIcon, label: 'Delete', keys: 'Delete' },
   'move-up': { icon: arrowUpIcon, label: 'Move up', keys: 'Alt+ArrowUp' },
   'move-down': { icon: arrowDownIcon, label: 'Move down', keys: 'Alt+ArrowDown' },
   outdent: { icon: indentDecreaseIcon, label: 'Outdent', keys: 'Alt+ArrowLeft' },
@@ -601,6 +722,10 @@ const ACTIONS = {
 const SEARCH_ID = 'search'
 const SEPARATOR_ID = '|'
 const DEFAULT_TOOLBAR = [
+  'new-folder',
+  'new-file',
+  'delete',
+  SEPARATOR_ID,
   'move-up',
   'move-down',
   'outdent',
@@ -614,20 +739,58 @@ const DEFAULT_TOOLBAR = [
   SEARCH_ID,
 ]
 
+// An entry is either an action id or an object overriding that action's label,
+// icon and node template. The object form is what lets one table offer "New note"
+// and "New task" from the same creation action, so the panel never has to learn a
+// single application's node kinds. The label names what the button creates, so it
+// is also the new node's default title.
+//
+// `uid` rather than the id is the identity here, because two entries may legally
+// share an id. A shortcut then runs the first of them.
 const toolbarItems = computed(() => {
   const value = props.state.options.toolbar
-  const ids = value === true ? DEFAULT_TOOLBAR : Array.isArray(value) ? value : []
-  return ids.filter((id) => id === SEPARATOR_ID || id === SEARCH_ID || id in ACTIONS)
+  const list = value === true ? DEFAULT_TOOLBAR : Array.isArray(value) ? value : []
+  const items = []
+  list.forEach((entry, index) => {
+    const custom = typeof entry === 'string' ? {} : entry || {}
+    const id = typeof entry === 'string' ? entry : custom.id
+    const uid = `${id}#${index}`
+    if (id === SEPARATOR_ID || id === SEARCH_ID) {
+      items.push({ uid, id })
+      return
+    }
+    const action = ACTIONS[id]
+    if (!action) return
+    const label = custom.label ?? action.label
+    items.push({
+      uid,
+      id,
+      label,
+      icon: iconByName(custom.icon) ?? action.icon,
+      keys: action.keys,
+      node: { title: label, ...(action.node ?? {}), ...(custom.node ?? {}) },
+    })
+  })
+  return items
 })
 
 const hasToolbar = computed(() => toolbarItems.value.length > 0)
 const toolbarLabel = computed(() => props.state.options.toolbar_label ?? 'Tree actions')
 const searchLabel = computed(() => props.state.options.search_label ?? 'Search')
 
-// The single membership test behind both halves: a button is drawn and its
-// shortcut fires only when the id is in the list.
+// The single lookup behind both halves: a button is drawn and its shortcut fires
+// only when the table declared the action.
+function itemFor(id) {
+  return toolbarItems.value.find((item) => item.id === id) ?? null
+}
+
 function allows(id) {
-  return toolbarItems.value.includes(id)
+  return itemFor(id) !== null
+}
+
+function runById(id) {
+  const item = itemFor(id)
+  if (item) runAction(item)
 }
 
 // Every action works on the row the keyboard is on, which is also the row a click
@@ -655,6 +818,18 @@ function actionBatch() {
   return shared ? keys : [row.id]
 }
 
+// The rows a delete applies to. The drag rule is wrong here: it drops ancestors of
+// the grabbed row, which is right for a move (dragging a file out of a ticked
+// folder must not carry the folder along) and wrong for a delete, where ticking
+// the folder plainly means the folder goes too. Python prunes the redundant keys.
+function selectionBatch() {
+  const row = activeRow.value
+  if (!row) return []
+  if (!selectable.value || !row.getIsSelected()) return [row.id]
+  const keys = rows.value.filter((candidate) => candidate.getIsSelected()).map((candidate) => candidate.id)
+  return keys.length > 0 ? keys : [row.id]
+}
+
 // The nearest sibling outside the batch, in the given direction. Skipping the
 // batch is what makes moving three of five files up step them over the one above
 // rather than shuffle them among themselves.
@@ -673,21 +848,45 @@ function reorderAnchor(offset) {
   return siblings[index] ?? null
 }
 
-// A move applied by Python comes back as a fresh `source`, and Vue moving the row
-// element to its new position drops focus with it. The row that was acted on is
-// therefore focused again once the new tree arrives, so a run of Alt+Arrow presses
-// keeps working on the same node.
-let refocusKey = null
+// Every structural action is applied by Python and comes back as a fresh `source`,
+// and Vue moving or dropping the row element takes focus with it. Where focus
+// belongs afterwards depends on what was asked for, so the request is recorded
+// before the intent is emitted and honoured when the new tree arrives.
+//
+//   key    the row that was acted on, so a run of Alt+Arrow stays on it
+//   index  whatever now sits where a deleted row was, which is the next row down
+//   added  the one key the tree gained, found by diffing rather than guessed,
+//          because minting keys is Python's job and the browser cannot know them
+let refocus = null
 
 watch(
   () => props.state.source,
   () => {
-    if (refocusKey === null) return
-    const key = refocusKey
-    refocusKey = null
-    focusRowByKey(key)
+    const request = refocus
+    refocus = null
+    if (!request) return
+    if (request.key !== undefined) {
+      focusRowByKey(request.key)
+      return
+    }
+    nextTick(() => {
+      if (request.index !== undefined) focusRowByIndex(request.index)
+      else focusAdded(request.added)
+    })
   },
 )
+
+// Selecting the new node as well as focusing it is what makes typing a name next
+// (P9d) land on the thing that was just created, and it matches an explorer.
+function focusAdded(before) {
+  const fresh = table.getCoreRowModel().flatRows.find((row) => !before.has(row.id))
+  if (!fresh) return
+  focusRowByKey(fresh.id)
+  if (!selectable.value) return
+  rowSelection.value = {}
+  rangeAnchorKey.value = fresh.id
+  fresh.toggleSelected(true, { selectChildren: false })
+}
 
 // The same `move` event a drop emits, with an explicit position in place of a
 // hitbox instruction. Python applies both through `tree.apply_moves`, so a toolbar
@@ -695,7 +894,7 @@ watch(
 function emitMove(anchor, position) {
   const row = activeRow.value
   if (!row || !anchor) return
-  refocusKey = row.id
+  refocus = { key: row.id }
   props.emitEvent('move', {
     key: row.id,
     keys: actionBatch(),
@@ -704,11 +903,37 @@ function emitMove(anchor, position) {
   })
 }
 
+// Where a new node goes follows the explorer rule: inside the active row when it
+// takes children, next to it when it does not, and at root level when nothing is
+// active, which is how an empty tree is filled. Opening the new parent is a view
+// decision and stays here, exactly as it does for indent.
+function emitAdd(item) {
+  const row = activeRow.value
+  const position = row ? (row.original.allow_children === false ? 'after' : 'child') : null
+  if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
+  refocus = { added: new Set(table.getCoreRowModel().flatRows.map((candidate) => candidate.id)) }
+  props.emitEvent('add', { anchorKey: row?.id ?? null, position, node: item.node })
+}
+
+function emitDelete() {
+  const keys = selectionBatch()
+  if (keys.length === 0) return
+  refocus = { index: rows.value.findIndex((row) => row.id === activeRow.value?.id) }
+  props.emitEvent('delete', { key: activeRow.value?.id ?? null, keys })
+}
+
 // Disabled means `aria-disabled` and a handler that does nothing, never the
 // `disabled` attribute: a disabled button drops out of the toolbar's roving
 // tabindex, which is exactly the state a keyboard user needs to be told about.
-function actionEnabled(id) {
-  switch (id) {
+function actionEnabled(item) {
+  switch (item.id) {
+    case 'new-folder':
+    case 'new-file':
+      // Always available: with no active row the node lands at root level, which
+      // is the only way to fill a tree that starts out empty.
+      return true
+    case 'delete':
+      return selectionBatch().length > 0
     case 'move-up':
       return reorderAnchor(-1) !== null
     case 'move-down':
@@ -735,15 +960,21 @@ function actionEnabled(id) {
   }
 }
 
-function actionTitle(id) {
-  const action = ACTIONS[id]
-  if (!action.keys) return action.label
-  return `${action.label} (${action.keys.replace('Control', 'Ctrl')})`
+function actionTitle(item) {
+  if (!item.keys) return item.label
+  return `${item.label} (${item.keys.replace('Control', 'Ctrl')})`
 }
 
-function runAction(id) {
-  if (!allows(id) || !actionEnabled(id)) return
-  switch (id) {
+function runAction(item) {
+  if (!actionEnabled(item)) return
+  switch (item.id) {
+    case 'new-folder':
+    case 'new-file':
+      emitAdd(item)
+      break
+    case 'delete':
+      emitDelete()
+      break
     case 'move-up':
       emitMove(reorderAnchor(-1), 'before')
       break
@@ -772,8 +1003,7 @@ function runAction(id) {
       rangeAnchorKey.value = rows.value[0]?.id ?? null
       break
     case 'clear-selection':
-      rowSelection.value = {}
-      rangeAnchorKey.value = null
+      clearSelection()
       break
     case SEARCH_ID:
       searchInput.value?.focus()
@@ -789,34 +1019,39 @@ function runAction(id) {
 // needs, because arrow keys inside it have to move the caret rather than the
 // toolbar's focus.
 const searchInput = ref(null)
-const toolbarButtons = computed(() => toolbarItems.value.filter((id) => id in ACTIONS))
+const toolbarButtons = computed(() => toolbarItems.value.filter((item) => item.id in ACTIONS))
 const toolbarFocusId = ref(null)
 const toolbarElements = new Map()
 
+// Keyed by `uid`, not by id: two entries may share an action, and a Map keyed by
+// the id would hand both buttons the same element.
 const toolbarFocusKey = computed(() => {
   const list = toolbarButtons.value
   if (list.length === 0) return null
-  return list.includes(toolbarFocusId.value) ? toolbarFocusId.value : list[0]
+  return list.some((item) => item.uid === toolbarFocusId.value) ? toolbarFocusId.value : list[0].uid
 })
 
-function setToolbarElement(id, element) {
-  if (element) toolbarElements.set(id, element)
-  else toolbarElements.delete(id)
+function setToolbarElement(uid, element) {
+  if (element) toolbarElements.set(uid, element)
+  else toolbarElements.delete(uid)
 }
 
 function focusToolbar(index) {
   const list = toolbarButtons.value
   if (list.length === 0) return
-  const id = list[Math.max(0, Math.min(index, list.length - 1))]
-  toolbarFocusId.value = id
-  nextTick(() => toolbarElements.get(id)?.focus())
+  const uid = list[Math.max(0, Math.min(index, list.length - 1))].uid
+  toolbarFocusId.value = uid
+  nextTick(() => toolbarElements.get(uid)?.focus())
 }
 
 // Bound on the buttons rather than on the toolbar, so typing in the search box
 // keeps Home, End and the arrow keys for the caret.
 function onToolbarKeydown(event) {
   const list = toolbarButtons.value
-  const index = Math.max(0, list.indexOf(toolbarFocusKey.value))
+  const index = Math.max(
+    0,
+    list.findIndex((item) => item.uid === toolbarFocusKey.value),
+  )
   switch (event.key) {
     case 'ArrowRight':
       event.preventDefault()
@@ -1135,10 +1370,10 @@ function dropLineStyle(row) {
       aria-orientation="horizontal"
       :aria-label="toolbarLabel"
     >
-      <template v-for="(id, itemIndex) in toolbarItems" :key="`${id}-${itemIndex}`">
-        <span v-if="id === '|'" class="pnl-tst-tsep" aria-hidden="true"></span>
+      <template v-for="item in toolbarItems" :key="item.uid">
+        <span v-if="item.id === '|'" class="pnl-tst-tsep" aria-hidden="true"></span>
 
-        <label v-else-if="id === 'search'" class="pnl-tst-search">
+        <label v-else-if="item.id === 'search'" class="pnl-tst-search">
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span class="pnl-tst-icon" aria-hidden="true" v-html="searchIcon"></span>
           <input
@@ -1153,20 +1388,20 @@ function dropLineStyle(row) {
 
         <button
           v-else
-          :ref="(element) => setToolbarElement(id, element)"
+          :ref="(element) => setToolbarElement(item.uid, element)"
           type="button"
           class="pnl-tst-tbtn"
-          :aria-label="ACTIONS[id].label"
-          :aria-keyshortcuts="ACTIONS[id].keys"
-          :aria-disabled="!actionEnabled(id)"
-          :title="actionTitle(id)"
-          :tabindex="id === toolbarFocusKey ? 0 : -1"
-          @click="runAction(id)"
-          @focus="toolbarFocusId = id"
+          :aria-label="item.label"
+          :aria-keyshortcuts="item.keys"
+          :aria-disabled="!actionEnabled(item)"
+          :title="actionTitle(item)"
+          :tabindex="item.uid === toolbarFocusKey ? 0 : -1"
+          @click="runAction(item)"
+          @focus="toolbarFocusId = item.uid"
           @keydown="onToolbarKeydown"
         >
           <!-- eslint-disable-next-line vue/no-v-html -->
-          <span class="pnl-tst-icon" aria-hidden="true" v-html="ACTIONS[id].icon"></span>
+          <span class="pnl-tst-icon" aria-hidden="true" v-html="item.icon"></span>
         </button>
       </template>
     </div>
@@ -1203,7 +1438,13 @@ function dropLineStyle(row) {
           :key="row.id"
           :ref="(element) => setRowElement(row.id, element)"
           class="pnl-tst-row"
-          :class="[rowDndClass(row), { 'pnl-tst-row--active': row.id === activeKey }]"
+          :class="[
+            rowDndClass(row),
+            {
+              'pnl-tst-row--active': activeShown && row.id === activeKey,
+              'pnl-tst-row--quiet': !activeShown && row.id === activeKey,
+            },
+          ]"
           role="row"
           :aria-level="row.depth + 1"
           :aria-posinset="posInSet(row)"
@@ -1213,7 +1454,7 @@ function dropLineStyle(row) {
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :tabindex="row.id === focusKey ? 0 : -1"
           @click="onRowClick(row, $event)"
-          @focus="activeKey = row.id"
+          @focus="setActive(row.id)"
         >
           <!-- Decorative drop indicator. aria-hidden keeps the row's children a
                pure gridcell list as far as assistive technology is concerned. -->

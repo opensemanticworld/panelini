@@ -157,6 +157,15 @@
   background: var(--pnl-tst-active);
 }
 
+/* Straight after the selection is emptied the active row is drawn as nothing at
+   all, focus ring included, because a clear that leaves a mark behind is not a
+   clear. It is momentary rather than a state: the row is still the one the
+   keyboard and the toolbar act on, and the next arrow key, click or focus paints
+   it and its ring again. */
+.pnl-tst-row--quiet:focus-visible {
+  outline: none;
+}
+
 .pnl-tst-row[aria-selected='true'] {
   background: rgba(37, 99, 235, 0.08);
 }
