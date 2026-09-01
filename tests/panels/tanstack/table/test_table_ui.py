@@ -1024,10 +1024,22 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert bar.get_attribute("aria-label") == "Document actions"
     assert bar.get_attribute("aria-orientation") == "horizontal"
 
-    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(4)]
-    assert labels == ["Expand all", "Collapse all", "Select all", "Clear selection"]
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(8)]
+    assert labels == [
+        "Move up",
+        "Move down",
+        "Outdent",
+        "Indent",
+        "Expand all",
+        "Collapse all",
+        "Select all",
+        "Clear selection",
+    ]
     assert button(page, "Select all").get_attribute("aria-keyshortcuts") == "Control+A"
     assert button(page, "Clear selection").get_attribute("aria-keyshortcuts") == "Escape"
+    # Alt, never Tab: Tab has to stay the way out of the grid's roving tabindex.
+    assert button(page, "Indent").get_attribute("aria-keyshortcuts") == "Alt+ArrowRight"
+    assert button(page, "Outdent").get_attribute("aria-keyshortcuts") == "Alt+ArrowLeft"
     # The view-only actions have no binding, so they must not claim one.
     assert button(page, "Expand all").get_attribute("aria-keyshortcuts") is None
 
@@ -1148,19 +1160,19 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     )
     server = serve(table, page, port)
 
-    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(4)]
-    assert tabbable == ["0", "-1", "-1", "-1"]
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(8)]
+    assert tabbable == ["0"] + ["-1"] * 7
 
     toolbar_buttons(page).first.focus()
     page.keyboard.press("ArrowRight")
-    assert focused_label(page) == "Collapse all"
+    assert focused_label(page) == "Move down"
     page.keyboard.press("End")
     assert focused_label(page) == "Clear selection"
     page.keyboard.press("Home")
-    assert focused_label(page) == "Expand all"
+    assert focused_label(page) == "Move up"
     # Clamped rather than wrapping, exactly as Home and End behave in the grid.
     page.keyboard.press("ArrowLeft")
-    assert focused_label(page) == "Expand all"
+    assert focused_label(page) == "Move up"
 
     expect(toolbar_buttons(page).first).to_have_attribute("tabindex", "0")
     assert toolbar_buttons(page).nth(1).get_attribute("tabindex") == "-1"
@@ -1227,5 +1239,201 @@ def test_toolbar_survives_an_empty_tree(page: Page, port):
 
     page.locator(".pnl-tst-search input").fill("")
     expect_titles(page, ["Folder A", "Folder B"])
+
+    server.stop()
+
+
+# Reorder, indent and outdent. These are ordinary `move` intents with an explicit
+# position, so what is tested here is the anchor the browser picks and the edges
+# where the button has to go quiet, not the tree rewrite itself.
+
+
+def test_toolbar_moves_a_row_down_and_back_up(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Move down").click()
+    wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A2", "File A1", "Folder B", "File B1"])
+
+    # The row that was acted on keeps focus, so a run of presses stays on it. The
+    # refocus waits a tick for the rebuilt rows, so this is polled rather than read.
+    wait_until(lambda: focused_title(page) == "File A1", timeout=10)
+
+    button(page, "Move up").click()
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_indents_under_the_previous_sibling(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(2).click()  # File A2, under File A1
+    button(page, "Indent").click()
+    wait_until(lambda: shape(table.source) == "a(a1(a2)),b(b1)", timeout=10)
+
+    # An indent leaves the rendered order alone, so the depth is the only thing
+    # that says it arrived, and it has to be waited on rather than read.
+    expect(rows(page).nth(2)).to_have_attribute("aria-level", "3", timeout=10000)
+    # The new parent is opened by the browser, so the moved row stays on screen.
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+
+    server.stop()
+
+
+def test_toolbar_outdents_to_after_the_parent(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Outdent").click()
+    wait_until(lambda: shape(table.source) == "a(a2),a1,b(b1)", timeout=10)
+
+    # `to_have_attribute` rather than `get_attribute`: Python owns the tree, so it
+    # has the new shape a websocket round trip before the DOM does, and a plain
+    # read here would see the row that used to sit at this index.
+    expect(rows(page).nth(2)).to_have_attribute("aria-level", "1", timeout=10000)
+
+    server.stop()
+
+
+def test_toolbar_move_shortcuts_work_from_the_grid(page: Page, port):
+    """Alt plus arrow, so Tab stays the way out of the grid."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("Alt+ArrowDown")
+    wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+
+    page.keyboard.press("Alt+ArrowLeft")
+    wait_until(lambda: shape(table.source) == "a(a2),a1,b(b1)", timeout=10)
+
+    page.keyboard.press("Alt+ArrowRight")
+    wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+
+    page.keyboard.press("Alt+ArrowUp")
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_move_actions_are_disabled_at_the_edges(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    # First root: nothing above it and no parent to leave.
+    rows(page).nth(0).click()
+    expect(button(page, "Move up")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    assert button(page, "Indent").get_attribute("aria-disabled") == "true"
+    assert button(page, "Outdent").get_attribute("aria-disabled") == "true"
+    assert button(page, "Move down").get_attribute("aria-disabled") == "false"
+
+    # First child: a parent to leave, but no sibling above to move under.
+    rows(page).nth(1).click()
+    expect(button(page, "Outdent")).to_have_attribute("aria-disabled", "false", timeout=10000)
+    assert button(page, "Move up").get_attribute("aria-disabled") == "true"
+    assert button(page, "Indent").get_attribute("aria-disabled") == "true"
+
+    # Last child: nothing below it, and the row above takes children.
+    rows(page).nth(2).click()
+    expect(button(page, "Move down")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    assert button(page, "Indent").get_attribute("aria-disabled") == "false"
+
+    server.stop()
+
+
+def test_toolbar_indent_is_blocked_by_a_leaf_above(page: Page, port):
+    """A node that refuses children refuses this the same way it refuses a drop."""
+    source = [
+        {
+            "key": "a",
+            "title": "Folder A",
+            "children": [
+                {"key": "a1", "title": "File A1", "allow_children": False},
+                {"key": "a2", "title": "File A2"},
+            ],
+        },
+        {"key": "b", "title": "Folder B", "children": [{"key": "b1", "title": "File B1"}]},
+    ]
+    table = TanstackTable(source=source, options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(2).click()  # File A2, under a File A1 that takes no children
+    expect(button(page, "Indent")).to_have_attribute("aria-disabled", "true", timeout=10000)
+
+    page.keyboard.press("Alt+ArrowRight")
+    page.wait_for_timeout(500)
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    server.stop()
+
+
+def test_toolbar_moves_a_sibling_selection_as_one_batch(page: Page, port):
+    """Selected siblings step over the row outside the batch, not over each other."""
+    source = [
+        {
+            "key": "a",
+            "title": "Folder A",
+            "children": [
+                {"key": "a1", "title": "File A1"},
+                {"key": "a2", "title": "File A2"},
+                {"key": "a3", "title": "File A3"},
+            ],
+        }
+    ]
+    table = TanstackTable(source=source, options={"expand_all": True, "select_mode": "multi", "toolbar": True})
+    server = serve(table, page, port)
+
+    click_row(page, 2)  # File A2
+    click_row(page, 3, "Control")  # and File A3
+    wait_until(lambda: table.selected_keys == ["a2", "a3"], timeout=10)
+
+    button(page, "Move up").click()
+    wait_until(lambda: shape(table.source) == "a(a2,a3,a1)", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_move_falls_back_to_one_row_across_parents(page: Page, port):
+    """A selection spanning two folders has no shared row to reorder within."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 2)  # File A2
+    click_row(page, 4, "Control")  # and File B1, in the other folder
+    wait_until(lambda: table.selected_keys == ["a2", "b1"], timeout=10)
+
+    # File B1 is the active row, and it is alone in Folder B, so the only move
+    # left to it is out of that folder.
+    button(page, "Outdent").click()
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b,b1", timeout=10)
+
+    server.stop()
+
+
+def test_toolbar_move_goes_through_the_move_callback(page: Page, port):
+    """The veto a drop answers to is the veto the toolbar answers to."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "toolbar": True},
+        move_callback=lambda key, anchor_key, position: position != "child",
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(2).click()  # File A2
+    button(page, "Indent").click()
+    page.wait_for_timeout(700)
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    # Reordering is not a `child` move, so it still lands.
+    button(page, "Move up").click()
+    wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
 
     server.stop()

@@ -187,9 +187,12 @@ class TanstackTable(AnyWidgetComponent):
     def _apply_move_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Resolve a browser move intent and rewrite ``source``.
 
-        The browser speaks the pragmatic-drag-and-drop vocabulary in camelCase.
-        This normalises it to a snake_case payload with a resolved ``position``
-        and ``anchor_key``, which is what the callbacks see.
+        Two paths arrive here and both end as one move. A drop speaks the
+        pragmatic-drag-and-drop vocabulary in camelCase, and its ``instruction``
+        is resolved against the tree. A toolbar action names its ``position`` and
+        ``anchor_key`` outright, because reorder, indent and outdent already know
+        where the node is going. Either way the callbacks see the same normalised
+        snake_case payload, and the same ``move_callback`` gets its veto.
 
         Args:
             event_params: Raw payload from the browser.
@@ -203,11 +206,18 @@ class TanstackTable(AnyWidgetComponent):
         target_key = event_params.get("target_key", event_params.get("targetKey"))
         instruction = event_params.get("instruction")
         desired_level = event_params.get("desired_level", event_params.get("desiredLevel"))
+        position = event_params.get("position")
+        anchor_key = event_params.get("anchor_key", event_params.get("anchorKey"))
 
-        resolved = None
-        if keys and target_key and instruction:
-            resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
-        position, anchor_key = resolved if resolved else (None, None)
+        if instruction:
+            # A blocked or unresolvable instruction must not fall back to whatever
+            # position happened to be in the payload.
+            resolved = None
+            if keys and target_key:
+                resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
+            position, anchor_key = resolved if resolved else (None, None)
+        elif position not in tree.POSITIONS or not anchor_key:
+            position, anchor_key = None, None
 
         params: dict[str, Any] = {
             "key": key,

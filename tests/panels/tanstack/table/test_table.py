@@ -193,6 +193,93 @@ def test_no_op_move_intent_is_reported_as_not_applied(table, events):
     assert events[0][1]["applied"] is False
 
 
+# --- toolbar move intent ------------------------------------------------------
+#
+# Reorder, indent and outdent already know where the node is going, so they name a
+# position and an anchor outright instead of a hitbox instruction. It is the same
+# event and the same veto, only the resolution step is skipped.
+
+
+def test_explicit_position_move_intent_rewrites_the_source(table):
+    table.handle_event("move", {"key": "e", "keys": ["e"], "position": "before", "anchorKey": "b"})
+    assert shape(table.source) == "a(e,b(b1,b2)),d(d1)"
+
+
+def test_explicit_position_move_intent_accepts_snake_case(table):
+    table.handle_event("move", {"key": "b1", "keys": ["b1"], "position": "after", "anchor_key": "a"})
+    assert shape(table.source) == "a(b(b2),e),b1,d(d1)"
+
+
+def test_explicit_position_move_intent_reports_the_normalised_payload(table, events):
+    table.handle_event("move", {"key": "b", "keys": ["b"], "position": "after", "anchorKey": "a"})
+
+    name, params = events[0]
+    assert name == "move"
+    assert params["position"] == "after"
+    assert params["anchor_key"] == "a"
+    assert params["applied"] is True
+    assert params["applied_keys"] == ["b"]
+    # Nothing was dragged, so the hitbox half of the payload stays empty.
+    assert params["instruction"] is None
+    assert params["target_key"] is None
+
+
+def test_explicit_position_move_intent_keeps_the_batch_order(table):
+    """A multi-row reorder lands as one run, in the order the rows were listed."""
+    table.handle_event(
+        "move",
+        {"key": "b1", "keys": ["b1", "b2"], "position": "after", "anchorKey": "d"},
+    )
+    assert shape(table.source) == "a(b,e),d(d1),b1,b2"
+
+
+def test_explicit_position_move_intent_is_vetoed_by_move_callback(source, events):
+    """The toolbar goes through the same hook a drop does, not around it."""
+    table = TanstackTable(
+        source=source,
+        move_callback=lambda key, anchor_key, position: False,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("move", {"key": "e", "keys": ["e"], "position": "before", "anchorKey": "b"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+
+
+def test_a_blocked_instruction_never_falls_back_to_an_explicit_position(table, events):
+    """An instruction that resolves to nothing means no move, whatever else is sent."""
+    table.handle_event(
+        "move",
+        {
+            "key": "d",
+            "targetKey": "b1",
+            "instruction": "instruction-blocked",
+            "position": "child",
+            "anchorKey": "b1",
+        },
+    )
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["position"] is None
+    assert events[0][1]["applied"] is False
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"key": "e", "keys": ["e"], "position": "sideways", "anchorKey": "b"},
+        {"key": "e", "keys": ["e"], "position": "before"},
+        {"key": "e", "keys": ["e"], "anchorKey": "b"},
+        {"key": "e", "keys": ["e"], "position": "child", "anchorKey": "nope"},
+    ],
+)
+def test_unusable_explicit_positions_leave_the_source_alone(table, events, params):
+    table.handle_event("move", params)
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[0][1]["applied"] is False
+
+
 # --- move veto ----------------------------------------------------------------
 
 

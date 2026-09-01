@@ -31,8 +31,12 @@ import pythonIcon from 'material-icon-theme/icons/python.svg?raw'
 // Lucide (ISC), the toolbar icon set. Same treatment as the file icons above:
 // named one file at a time so only these reach the bundle, and drawn with
 // `stroke="currentColor"`, so a button's own colour carries into the glyph.
+import arrowDownIcon from 'lucide-static/icons/arrow-down.svg?raw'
+import arrowUpIcon from 'lucide-static/icons/arrow-up.svg?raw'
 import chevronsDownIcon from 'lucide-static/icons/chevrons-down.svg?raw'
 import chevronsUpIcon from 'lucide-static/icons/chevrons-up.svg?raw'
+import indentDecreaseIcon from 'lucide-static/icons/indent-decrease.svg?raw'
+import indentIncreaseIcon from 'lucide-static/icons/indent-increase.svg?raw'
 import searchIcon from 'lucide-static/icons/search.svg?raw'
 import squareIcon from 'lucide-static/icons/square.svg?raw'
 import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
@@ -409,6 +413,21 @@ function onKeydown(event) {
       return
     }
   }
+  // Alt rather than the text-editor convention of Tab and Shift+Tab, which have to
+  // stay the way out of the grid's roving tabindex.
+  if (event.altKey) {
+    const id = {
+      ArrowUp: 'move-up',
+      ArrowDown: 'move-down',
+      ArrowLeft: 'outdent',
+      ArrowRight: 'indent',
+    }[event.key]
+    if (id && allows(id)) {
+      event.preventDefault()
+      runAction(id)
+      return
+    }
+  }
   if (event.key === 'Escape' && allows('clear-selection')) {
     event.preventDefault()
     runAction('clear-selection')
@@ -567,6 +586,10 @@ function onCheckboxClick(row) {
 // `Tab` and `Shift+Tab` are never bound. The grid carries a roving tabindex and
 // Tab has to stay the way out of it.
 const ACTIONS = {
+  'move-up': { icon: arrowUpIcon, label: 'Move up', keys: 'Alt+ArrowUp' },
+  'move-down': { icon: arrowDownIcon, label: 'Move down', keys: 'Alt+ArrowDown' },
+  outdent: { icon: indentDecreaseIcon, label: 'Outdent', keys: 'Alt+ArrowLeft' },
+  indent: { icon: indentIncreaseIcon, label: 'Indent', keys: 'Alt+ArrowRight' },
   'expand-all': { icon: chevronsDownIcon, label: 'Expand all' },
   'collapse-all': { icon: chevronsUpIcon, label: 'Collapse all' },
   'select-all': { icon: squareCheckIcon, label: 'Select all', keys: 'Control+A' },
@@ -578,6 +601,11 @@ const ACTIONS = {
 const SEARCH_ID = 'search'
 const SEPARATOR_ID = '|'
 const DEFAULT_TOOLBAR = [
+  'move-up',
+  'move-down',
+  'outdent',
+  'indent',
+  SEPARATOR_ID,
   'expand-all',
   'collapse-all',
   SEPARATOR_ID,
@@ -602,11 +630,97 @@ function allows(id) {
   return toolbarItems.value.includes(id)
 }
 
+// Every action works on the row the keyboard is on, which is also the row a click
+// leaves marked, so the pointer and the keyboard aim at the same thing.
+const activeRow = computed(() => rows.value.find((row) => row.id === focusKey.value) ?? null)
+
+// Rows are laid out flat, so a sibling group is a filter rather than a walk. As
+// rendered, not as stored: under a filter the previous sibling is the previous
+// visible one, which is the same rule a drop already follows.
+function renderedSiblings(row) {
+  return rows.value.filter((candidate) => (candidate.parentId ?? '') === (row.parentId ?? ''))
+}
+
+// Structural actions reuse the drag rule, so one selection means the same thing to
+// the mouse and to the keyboard. Reordering is a move among siblings though, so
+// the batch is only taken whole when it is a set of siblings: a selection spanning
+// two folders has no shared row to reorder within, and quietly reparenting half of
+// it would be a worse answer than moving the one row the keyboard is on.
+function actionBatch() {
+  const row = activeRow.value
+  if (!row) return []
+  const keys = dragKeysFor(row)
+  const parent = row.parentId ?? ''
+  const shared = keys.every((key) => (rowByKey(key)?.parentId ?? '') === parent)
+  return shared ? keys : [row.id]
+}
+
+// The nearest sibling outside the batch, in the given direction. Skipping the
+// batch is what makes moving three of five files up step them over the one above
+// rather than shuffle them among themselves.
+function reorderAnchor(offset) {
+  const row = activeRow.value
+  if (!row) return null
+  const batch = new Set(actionBatch())
+  const siblings = renderedSiblings(row)
+  const taken = siblings
+    .map((candidate, index) => (batch.has(candidate.id) ? index : -1))
+    .filter((index) => index >= 0)
+  if (taken.length === 0) return null
+
+  let index = (offset < 0 ? Math.min(...taken) : Math.max(...taken)) + offset
+  while (index >= 0 && index < siblings.length && batch.has(siblings[index].id)) index += offset
+  return siblings[index] ?? null
+}
+
+// A move applied by Python comes back as a fresh `source`, and Vue moving the row
+// element to its new position drops focus with it. The row that was acted on is
+// therefore focused again once the new tree arrives, so a run of Alt+Arrow presses
+// keeps working on the same node.
+let refocusKey = null
+
+watch(
+  () => props.state.source,
+  () => {
+    if (refocusKey === null) return
+    const key = refocusKey
+    refocusKey = null
+    focusRowByKey(key)
+  },
+)
+
+// The same `move` event a drop emits, with an explicit position in place of a
+// hitbox instruction. Python applies both through `tree.apply_moves`, so a toolbar
+// move is vetoed by the same `move_callback` a drag is.
+function emitMove(anchor, position) {
+  const row = activeRow.value
+  if (!row || !anchor) return
+  refocusKey = row.id
+  props.emitEvent('move', {
+    key: row.id,
+    keys: actionBatch(),
+    position,
+    anchorKey: anchor.id,
+  })
+}
+
 // Disabled means `aria-disabled` and a handler that does nothing, never the
 // `disabled` attribute: a disabled button drops out of the toolbar's roving
 // tabindex, which is exactly the state a keyboard user needs to be told about.
 function actionEnabled(id) {
   switch (id) {
+    case 'move-up':
+      return reorderAnchor(-1) !== null
+    case 'move-down':
+      return reorderAnchor(1) !== null
+    case 'indent': {
+      // Indenting means becoming a child of the row above, so a leaf that refuses
+      // children blocks it exactly as it blocks a `make-child` drop.
+      const anchor = reorderAnchor(-1)
+      return anchor !== null && anchor.original.allow_children !== false
+    }
+    case 'outdent':
+      return Boolean(activeRow.value?.parentId)
     case 'expand-all':
     case 'collapse-all':
       // A filtered view is shown open whatever the stored state is, so both of
@@ -630,6 +744,23 @@ function actionTitle(id) {
 function runAction(id) {
   if (!allows(id) || !actionEnabled(id)) return
   switch (id) {
+    case 'move-up':
+      emitMove(reorderAnchor(-1), 'before')
+      break
+    case 'move-down':
+      emitMove(reorderAnchor(1), 'after')
+      break
+    case 'indent': {
+      const anchor = reorderAnchor(-1)
+      // Opening the new parent is a view decision, so it is taken here rather
+      // than asking Python to expand a branch on the browser's behalf.
+      if (anchor && !filtering.value) anchor.toggleExpanded(true)
+      emitMove(anchor, 'child')
+      break
+    }
+    case 'outdent':
+      emitMove(rowByKey(activeRow.value?.parentId), 'after')
+      break
     case 'expand-all':
       table.toggleAllRowsExpanded(true)
       break

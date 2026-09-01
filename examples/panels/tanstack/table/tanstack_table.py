@@ -157,6 +157,9 @@ gestures = pn.pane.Markdown(
 - **Tab** reaches the toolbar, then the grid. In the toolbar the arrow keys move
   between buttons; in the grid `Ctrl+A` selects all, `Escape` clears and `Ctrl+F`
   jumps to the search box.
+- **Alt+Arrow** reorders without the mouse: up and down among siblings, right to
+  indent under the row above, left to outdent after the parent. Greyed out buttons
+  say why a move is unavailable, and `Archive (read only)` refuses these too.
 """,
     sizing_mode="stretch_width",
 )
