@@ -375,6 +375,40 @@ def new_key(tree: Tree, prefix: str = "node") -> str:
     return f"{prefix}-{index}"
 
 
+def rekey_subtree(tree: Tree, node: Node, prefix: str = "node") -> Node:
+    """Deep copy ``node`` and give every node in it a key the tree does not carry.
+
+    A pasted copy is a new node rather than a second reference to an old one, so
+    the whole subtree is re-keyed. Keys are minted against the tree plus the ones
+    already handed out in this call, which is what lets a folder and its files be
+    copied in one go without two of them colliding.
+
+    Args:
+        tree: Tree the new keys have to be unique within.
+        node: Node to copy, along with everything below it.
+        prefix: Leading part of every minted key.
+
+    Returns:
+        A deep copy carrying fresh keys. Nothing else about the nodes changes, so
+        titles, icons and the ``allow_children`` flag travel with the copy.
+    """
+    taken = {key for key in (found.get(KEY) for found in iter_nodes(tree)) if key is not None}
+    index = 1
+
+    def mint() -> str:
+        nonlocal index
+        while f"{prefix}-{index}" in taken:
+            index += 1
+        key = f"{prefix}-{index}"
+        taken.add(key)
+        return key
+
+    result = copy.deepcopy(node)
+    for found in iter_nodes([result]):
+        found[KEY] = mint()
+    return result
+
+
 def subtree_keys(tree: Tree, key: str) -> list[str]:
     """Return ``key`` plus the keys of everything below it, or an empty list."""
     node = find_node(tree, key)

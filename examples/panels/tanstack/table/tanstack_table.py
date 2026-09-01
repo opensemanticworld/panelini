@@ -97,11 +97,15 @@ def locked(key: str | None) -> bool:
 
 
 def allow_action(action: str, params: dict[str, Any]) -> bool:
-    """Veto adding to, renaming in, or deleting from the read-only branch."""
+    """Veto adding to, renaming in, pasting into, or deleting from the read-only branch."""
     if action == "add":
         keys = [params["anchor_key"]]
     elif action == "rename":
         keys = [params["key"]]
+    elif action == "paste":
+        # Only where it lands matters. Copying something out of the branch is
+        # fine, and a paste of something cut is a move, so allow_move sees it.
+        keys = [params["anchor_key"]]
     else:
         keys = params["keys"]
     return not any(locked(key) for key in keys)
@@ -131,6 +135,14 @@ def on_event(name: str, params: dict) -> None:
         verb = "deleted" if params["applied"] else "refused to delete"
         gone = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
         messages.append(f"{verb} {gone}")
+    elif name in ("cut", "copy"):
+        held = ", ".join(f"`{key}`" for key in params["applied_keys"])
+        messages.append(f"{name} {held}" if held else f"{name} nothing")
+    elif name == "paste":
+        verb = f"pasted a {params['mode']}" if params["applied"] else "refused to paste"
+        landed = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
+        where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
+        messages.append(f"{verb}, {landed} {where}")
     else:
         return
     log.object = "**Log:**\n\n" + "\n".join(f"- {line}" for line in messages[-12:])
@@ -164,6 +176,10 @@ table = TanstackTable(
             },
             "rename",
             "delete",
+            "|",
+            "cut",
+            "copy",
+            "paste",
             "|",
             "move-up",
             "move-down",
@@ -241,6 +257,11 @@ gestures = pn.pane.Markdown(
   default. Naming a brand new file never asks: it had no type to lose.
 - The **icon follows the type**: call `notes.md` `notes.py` and it turns into a
   Python file. An icon you picked by hand is left where you put it.
+- **Ctrl+X** cuts the selection and **Ctrl+C** copies it, both faded until pasted.
+  **Ctrl+V** places it where a new node would go: inside the row you are on, next
+  to it when it takes no children, at root level when nothing is active. A cut is
+  a move, so `move_callback` sees it; a copy makes new nodes with new keys, so
+  `action_callback` does.
 - **Ctrl+Z** takes back the last change to the tree and **Ctrl+Shift+Z** puts it
   back, whether it was a drop, a toolbar action or a rename. The history is
   Python's, so it covers what the app did as well, and a fresh change drops

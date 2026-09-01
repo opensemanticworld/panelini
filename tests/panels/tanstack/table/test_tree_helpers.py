@@ -403,3 +403,38 @@ def test_new_key_honours_the_prefix(sample):
 
 def test_new_key_is_deterministic(sample):
     assert tree.new_key(sample) == tree.new_key(sample)
+
+
+# --- re-keyed copies ----------------------------------------------------------
+
+
+def test_rekey_subtree_renames_every_node_in_it(sample):
+    copied = tree.rekey_subtree(sample, node_at(sample, "b"))
+
+    assert shape([copied]) == "node-1(node-2,node-3)"
+    assert copied["title"] == "B"
+
+
+def test_rekey_subtree_avoids_keys_the_tree_already_has(sample):
+    sample.append({"key": "node-1", "title": "Taken"})
+    copied = tree.rekey_subtree(sample, node_at(sample, "e"))
+
+    assert copied["key"] == "node-2"
+
+
+def test_rekey_subtree_honours_the_prefix(sample):
+    assert tree.rekey_subtree(sample, node_at(sample, "e"), "doc")["key"] == "doc-1"
+
+
+def test_rekey_subtree_leaves_the_original_alone(sample):
+    before = shape(sample)
+    tree.rekey_subtree(sample, node_at(sample, "b"))
+
+    assert shape(sample) == before
+
+
+def test_rekey_subtree_copies_deeply(sample):
+    copied = tree.rekey_subtree(sample, node_at(sample, "b"))
+    copied["children"][0]["title"] = "Changed"
+
+    assert node_at(sample, "b1")["title"] == "B1"

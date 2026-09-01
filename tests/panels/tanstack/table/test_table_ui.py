@@ -1031,7 +1031,7 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert bar.get_attribute("aria-label") == "Document actions"
     assert bar.get_attribute("aria-orientation") == "horizontal"
 
-    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(14)]
+    labels = [toolbar_buttons(page).nth(i).get_attribute("aria-label") for i in range(17)]
     assert labels == [
         "Undo",
         "Redo",
@@ -1039,6 +1039,9 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
         "New file",
         "Rename",
         "Delete",
+        "Cut",
+        "Copy",
+        "Paste",
         "Move up",
         "Move down",
         "Outdent",
@@ -1056,6 +1059,9 @@ def test_toolbar_renders_the_default_actions(page: Page, port):
     assert button(page, "New file").get_attribute("aria-keyshortcuts") == "Shift+Insert"
     assert button(page, "Rename").get_attribute("aria-keyshortcuts") == "F2"
     assert button(page, "Delete").get_attribute("aria-keyshortcuts") == "Delete"
+    assert button(page, "Cut").get_attribute("aria-keyshortcuts") == "Control+X"
+    assert button(page, "Copy").get_attribute("aria-keyshortcuts") == "Control+C"
+    assert button(page, "Paste").get_attribute("aria-keyshortcuts") == "Control+V"
     # Alt, never Tab: Tab has to stay the way out of the grid's roving tabindex.
     assert button(page, "Indent").get_attribute("aria-keyshortcuts") == "Alt+ArrowRight"
     assert button(page, "Outdent").get_attribute("aria-keyshortcuts") == "Alt+ArrowLeft"
@@ -1179,8 +1185,8 @@ def test_toolbar_has_one_tab_stop_with_arrow_navigation(page: Page, port):
     )
     server = serve(table, page, port)
 
-    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(14)]
-    assert tabbable == ["0"] + ["-1"] * 13
+    tabbable = [toolbar_buttons(page).nth(i).get_attribute("tabindex") for i in range(17)]
+    assert tabbable == ["0"] + ["-1"] * 16
 
     toolbar_buttons(page).first.focus()
     page.keyboard.press("ArrowRight")
@@ -2518,4 +2524,108 @@ def test_the_open_title_editor_keeps_ctrl_z_for_itself(page: Page, port):
     assert editor(page).count() == 1
 
     page.keyboard.press("Escape")
+    server.stop()
+
+
+def test_cut_and_paste_move_a_row_with_the_buttons(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    assert button(page, "Paste").get_attribute("aria-disabled") == "true"
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Cut").click()
+    expect(button(page, "Paste")).to_have_attribute("aria-disabled", "false", timeout=10000)
+    # Nothing has moved yet: a cut is an intent, and the tree is untouched until
+    # the paste says where.
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    rows(page).nth(3).click()  # Folder B
+    button(page, "Paste").click()
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1", "File A1"])
+    assert shape(table.source) == "a(a2),b(b1,a1)"
+    # A cut is spent by its paste, where a copy would still be there.
+    expect(button(page, "Paste")).to_have_attribute("aria-disabled", "true", timeout=10000)
+
+    server.stop()
+
+
+def test_copy_and_paste_duplicate_a_row(page: Page, port):
+    """The copy keeps its own keys, so Python mints new ones for what arrives."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    button(page, "Copy").click()
+    expect(button(page, "Paste")).to_have_attribute("aria-disabled", "false", timeout=10000)
+
+    rows(page).nth(3).click()  # Folder B
+    button(page, "Paste").click()
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1", "File A1"])
+    assert shape(table.source) == "a(a1,a2),b(b1,node-1)"
+    # The copy survives, so the same branch can be dropped in several places.
+    assert button(page, "Paste").get_attribute("aria-disabled") == "false"
+
+    server.stop()
+
+
+def test_the_clipboard_shortcuts_work_from_the_grid(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()  # File A1
+    page.keyboard.press("Control+x")
+    wait_until(lambda: table.clipboard == {"keys": ["a1"], "mode": "cut"}, timeout=10)
+
+    rows(page).nth(3).click()  # Folder B
+    page.keyboard.press("Control+v")
+    wait_until(lambda: shape(table.source) == "a(a2),b(b1,a1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A2", "Folder B", "File B1", "File A1"])
+
+    server.stop()
+
+
+def test_a_whole_cut_branch_is_faded_until_it_is_pasted(page: Page, port):
+    """A folder waiting to move takes its contents, so its contents fade with it."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).first.click()  # Folder A
+    button(page, "Cut").click()
+    expect(page.locator(".pnl-tst-row--cut")).to_have_count(3, timeout=10000)
+
+    rows(page).nth(3).click()  # Folder B
+    button(page, "Paste").click()
+    expect(page.locator(".pnl-tst-row--cut")).to_have_count(0, timeout=10000)
+    assert shape(table.source) == "b(b1,a(a1,a2))"
+
+    server.stop()
+
+
+def test_a_copy_fades_nothing(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).first.click()  # Folder A
+    button(page, "Copy").click()
+    expect(button(page, "Paste")).to_have_attribute("aria-disabled", "false", timeout=10000)
+    assert page.locator(".pnl-tst-row--cut").count() == 0
+
+    server.stop()
+
+
+def test_a_paste_is_undone_in_one_step(page: Page, port):
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    server = serve(table, page, port)
+
+    rows(page).first.click()  # Folder A
+    button(page, "Copy").click()
+    rows(page).nth(3).click()  # Folder B
+    button(page, "Paste").click()
+    expect(page.locator(".pnl-tst-row")).to_have_count(8, timeout=10000)
+
+    button(page, "Undo").click()
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
     server.stop()

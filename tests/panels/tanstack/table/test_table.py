@@ -1225,3 +1225,236 @@ def test_clear_history_forgets_both_directions(table):
 
     assert table.can_undo is False
     assert table.can_redo is False
+
+
+# --- cut, copy and paste ------------------------------------------------------
+
+
+def test_cut_holds_the_keys_without_touching_the_tree(table):
+    table.handle_event("cut", {"key": "e", "keys": ["e"]})
+
+    assert table.clipboard == {"keys": ["e"], "mode": "cut"}
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_copy_holds_the_keys(table):
+    table.handle_event("copy", {"key": "b", "keys": ["b"]})
+
+    assert table.clipboard == {"keys": ["b"], "mode": "copy"}
+
+
+def test_neither_is_recorded_for_undo(table):
+    table.handle_event("cut", {"keys": ["e"]})
+
+    assert table.can_undo is False
+
+
+def test_a_key_inside_another_is_dropped_from_the_batch(table):
+    table.handle_event("cut", {"keys": ["b", "b1"]})
+
+    assert table.clipboard["keys"] == ["b"]
+
+
+def test_a_key_naming_nothing_is_dropped(table):
+    table.handle_event("cut", {"keys": ["nope"]})
+
+    assert table.clipboard == {}
+
+
+def test_pasting_a_cut_moves_the_nodes(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2)),d(d1,e)"
+
+
+def test_pasting_a_cut_empties_the_clipboard(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert table.clipboard == {}
+
+
+def test_pasting_a_copy_mints_new_keys_and_keeps_the_original(table):
+    table.handle_event("copy", {"keys": ["b"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1,node-1(node-2,node-3))"
+    assert title_of(table, "node-1") == "B"
+
+
+def test_a_copy_survives_its_paste(table):
+    table.handle_event("copy", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+    table.handle_event("paste", {"anchor_key": "b", "position": "child"})
+
+    assert table.clipboard == {"keys": ["e"], "mode": "copy"}
+    assert shape(table.source) == "a(b(b1,b2,node-2),e),d(d1,node-1)"
+
+
+def test_a_batch_paste_keeps_its_order(table):
+    table.handle_event("copy", {"keys": ["b1", "b2"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1,node-1,node-2)"
+    assert [title_of(table, key) for key in ("node-1", "node-2")] == ["B1", "B2"]
+
+
+def test_a_paste_next_to_a_node_lands_beside_it(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d1", "position": "after"})
+
+    assert shape(table.source) == "a(b(b1,b2)),d(d1,e)"
+
+
+def test_a_cut_pasted_with_no_anchor_lands_at_root_level(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": None, "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2)),d(d1),e"
+
+
+def test_a_copy_pasted_with_no_anchor_lands_at_root_level(table):
+    table.handle_event("copy", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": None, "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1),node-1"
+
+
+def test_pasting_into_a_node_that_takes_no_children_is_refused(table, events):
+    table.update_node("d1", {"allow_children": False})
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d1", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[-1][1]["applied"] is False
+    assert table.clipboard["keys"] == ["e"]
+
+
+def test_pasting_an_empty_clipboard_does_nothing(table, events):
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert events[-1][1] == {
+        "mode": "",
+        "keys": [],
+        "anchor_key": "d",
+        "position": "child",
+        "applied": False,
+        "applied_keys": [],
+    }
+
+
+def test_pasting_a_copy_answers_to_the_action_veto(source, events):
+    seen = []
+
+    def refuse(action, params):
+        seen.append(action)
+        return False
+
+    table = TanstackTable(source=source, action_callback=refuse, event_callback=lambda n, p: events.append((n, p)))
+    table.handle_event("copy", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert seen == ["paste"]
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_pasting_a_cut_answers_to_the_move_veto_instead(source):
+    moves = []
+    actions = []
+
+    def refuse_move(key, anchor_key, position):
+        moves.append((key, anchor_key, position))
+        return False
+
+    table = TanstackTable(
+        source=source,
+        move_callback=refuse_move,
+        action_callback=lambda name, params: actions.append(name) is None,
+    )
+    table.handle_event("cut", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert moves == [("e", "d", "child")]
+    # A cut paste is a move, so the structural hook is not the one asked.
+    assert actions == []
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    # A refused move leaves what was cut still cut, so it can be tried elsewhere.
+    assert table.clipboard == {"keys": ["e"], "mode": "cut"}
+
+
+def test_the_paste_payload_names_what_landed(table, events):
+    table.handle_event("copy", {"keys": ["e"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert events[-1] == (
+        "paste",
+        {
+            "mode": "copy",
+            "keys": ["e"],
+            "anchor_key": "d",
+            "position": "child",
+            "applied": True,
+            "applied_keys": ["node-1"],
+        },
+    )
+
+
+def test_a_paste_is_one_undo_step(table):
+    table.handle_event("copy", {"keys": ["b"]})
+    table.handle_event("paste", {"anchor_key": "d", "position": "child"})
+
+    assert table.undo() is True
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_deleting_a_cut_node_drops_it_from_the_clipboard(table):
+    table.handle_event("cut", {"keys": ["e", "d1"]})
+    table.remove_node("e")
+
+    assert table.clipboard == {"keys": ["d1"], "mode": "cut"}
+
+
+def test_a_clipboard_emptied_by_a_delete_is_cleared(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.remove_node("e")
+
+    assert table.clipboard == {}
+
+
+def test_a_key_deleted_behind_the_clipboard_is_skipped_at_paste(table):
+    table.handle_event("cut", {"keys": ["e", "d1"]})
+    # Written straight, so nothing prunes the clipboard on the way past.
+    table.source = tree.remove_key(table.source, "d1")[0]
+    table.handle_event("paste", {"anchor_key": "b", "position": "child"})
+
+    assert shape(table.source) == "a(b(b1,b2,e)),d"
+
+
+def test_set_source_forgets_the_clipboard(table):
+    table.handle_event("cut", {"keys": ["e"]})
+    table.set_source([{"key": "z", "title": "Z"}])
+
+    assert table.clipboard == {}
+
+
+def test_the_public_api_cuts_and_pastes(table):
+    assert table.cut_nodes(["e"]) == ["e"]
+    assert table.get_clipboard() == {"keys": ["e"], "mode": "cut"}
+    assert table.paste_nodes("d", "child") == ["e"]
+    assert shape(table.source) == "a(b(b1,b2)),d(d1,e)"
+
+
+def test_the_public_api_copies_and_pastes(table):
+    assert table.copy_nodes(["b"]) == ["b"]
+    assert table.paste_nodes("d") == ["node-1"]
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1,node-1(node-2,node-3))"
+
+
+def test_clear_clipboard_forgets_what_was_held(table):
+    table.copy_nodes(["e"])
+    table.clear_clipboard()
+
+    assert table.get_clipboard() == {}
+    assert table.paste_nodes("d") == []

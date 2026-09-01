@@ -37,6 +37,10 @@ export function render({ model, el }) {
     // reads these to know whether there is one, rather than counting its own.
     canUndo: model.get("can_undo") || false,
     canRedo: model.get("can_redo") || false,
+    // Python holds the clipboard for the same reason it holds the tree: the keys
+    // in it have to mean something there. The toolbar reads it to enable paste
+    // and the grid reads it to fade the rows waiting to be moved.
+    clipboard: model.get("clipboard") || {},
   });
 
   // One gesture can produce two intents: the click that dismisses an open title
@@ -133,6 +137,9 @@ export function render({ model, el }) {
   });
   model.on("change:can_redo", () => {
     state.canRedo = model.get("can_redo") || false;
+  });
+  model.on("change:clipboard", () => {
+    state.clipboard = model.get("clipboard") || {};
   });
 
   return () => {

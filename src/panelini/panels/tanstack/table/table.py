@@ -131,6 +131,17 @@ class TanstackTable(AnyWidgetComponent):
     can_undo = param.Boolean(default=False, doc="Whether a tree state is recorded to step back to.")
     can_redo = param.Boolean(default=False, doc="Whether an undone tree state is there to step forward to.")
 
+    # Python to JavaScript. Held here rather than in the browser for the same
+    # reason source is: the keys have to mean something in the tree Python owns.
+    clipboard = param.Dict(
+        default={},
+        doc=(
+            "What cut or copy last put aside, as {keys, mode} with mode in cut | copy, and empty for "
+            "nothing. Pasting a cut is a move and pasting a copy mints new keys for the whole "
+            "subtree. The browser reads it to enable paste and to fade the rows waiting to be moved."
+        ),
+    )
+
     # JavaScript to Python. Carries intent, never a mutated tree.
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
@@ -180,12 +191,12 @@ class TanstackTable(AnyWidgetComponent):
                 the rest.
             action_callback: Veto hook for the toolbar's structural actions.
                 Receives ``(action, params)`` with action in ``add | rename |
-                delete``,
-                and returning False leaves ``source`` untouched. Called once for
-                the whole action rather than per node, because adding one node
-                and deleting a batch are each a single decision. Moves keep
-                going through ``move_callback``, and undo and redo are not asked
-                at all: they replay states this hook already allowed.
+                delete | paste``, and returning False leaves ``source``
+                untouched. Called once for the whole action rather than per node,
+                because adding one node and deleting a batch are each a single
+                decision. Moves keep going through ``move_callback``, and so does
+                a paste of something cut, since that is a move. Undo and redo are
+                not asked at all: they replay states this hook already allowed.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -263,10 +274,10 @@ class TanstackTable(AnyWidgetComponent):
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        ``move``, ``add``, ``rename``, ``delete``, ``undo`` and ``redo`` are
-        intercepted here: the browser only reports what the user asked for, and this
-        is where that intent becomes a new tree. Every other event is forwarded
-        untouched.
+        ``move``, ``add``, ``rename``, ``delete``, ``cut``, ``copy``, ``paste``,
+        ``undo`` and ``redo`` are intercepted here: the browser only reports what
+        the user asked for, and this is where that intent becomes a new tree. Every
+        other event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
@@ -280,6 +291,10 @@ class TanstackTable(AnyWidgetComponent):
             event_params = self._apply_rename_intent(event_params)
         elif event_name == "delete":
             event_params = self._apply_delete_intent(event_params)
+        elif event_name in ("cut", "copy"):
+            event_params = self._apply_clipboard_intent(event_name, event_params)
+        elif event_name == "paste":
+            event_params = self._apply_paste_intent(event_params)
         elif event_name in ("undo", "redo"):
             event_params = self._apply_history_intent(event_name)
 
@@ -635,6 +650,201 @@ class TanstackTable(AnyWidgetComponent):
         params["applied_keys"] = removed
         return params
 
+    def _set_clipboard(self, mode: str, keys: list[str]) -> None:
+        """Hold ``keys`` for a paste, or empty the clipboard when none are left."""
+        self.clipboard = {"keys": list(keys), "mode": mode} if keys else {}
+
+    def _apply_clipboard_intent(self, action: str, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Put the nodes a browser cut or copy intent names aside.
+
+        Nothing about the tree changes here, so neither veto hook is asked and
+        nothing is recorded for undo. The decision belongs at the paste, which is
+        where nodes actually move or come into being.
+
+        The batch is pruned the way a delete's is: a folder taken together with one
+        of its own files would otherwise arrive twice, once inside its parent and
+        once beside it.
+
+        Args:
+            action: ``cut`` or ``copy``.
+            event_params: Raw payload with ``keys``, or a single ``key``.
+
+        Returns:
+            The normalised payload, with ``applied_keys`` naming what is now held.
+        """
+        key = event_params.get("key")
+        keys = event_params.get("keys") or ([key] if key else [])
+        held = [
+            candidate
+            for candidate in tree.prune_redundant_keys(self.source, keys)
+            if tree.find_node(self.source, candidate) is not None
+        ]
+        self._set_clipboard(action, held)
+        return {
+            "action": action,
+            "key": key,
+            "keys": keys,
+            "applied": bool(held),
+            "applied_keys": held,
+        }
+
+    def _apply_paste_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Place what cut or copy put aside and rewrite ``source``.
+
+        Placement follows the rule an add follows: inside the anchor row when it
+        takes children, next to it when it does not, and at root level when nothing
+        is active.
+
+        Which hook decides follows what the paste is. A cut paste is a move, so it
+        answers to ``move_callback`` per node exactly as a drop does. A copy paste
+        brings new nodes into being, so it answers to ``action_callback`` once,
+        exactly as an add does. ``mode`` is in the payload either way, so a hook
+        that wants to tell the two apart can.
+
+        Args:
+            event_params: Raw payload with ``anchor_key`` and ``position`` in
+                ``after | child``.
+
+        Returns:
+            The normalised payload. ``applied_keys`` names the nodes now sitting at
+            the paste site, which for a copy are the minted keys and not the ones
+            that were copied.
+        """
+        anchor_key = event_params.get("anchor_key", event_params.get("anchorKey"))
+        position = event_params.get("position")
+        mode = str(self.clipboard.get("mode") or "")
+        # A key that named a node when it was cut need not name one now: a delete,
+        # an undo or an application call may have taken it out from under us.
+        keys = [
+            candidate
+            for candidate in self.clipboard.get("keys") or []
+            if tree.find_node(self.source, candidate) is not None
+        ]
+
+        params: dict[str, Any] = {
+            "mode": mode,
+            "keys": keys,
+            "anchor_key": anchor_key,
+            "position": position,
+            "applied": False,
+            "applied_keys": [],
+        }
+
+        if not keys or mode not in ("cut", "copy"):
+            return params
+
+        if anchor_key is None:
+            position = "child"
+        elif (
+            position not in ("after", "child")
+            or tree.find_node(self.source, anchor_key) is None
+            or (position == "child" and not tree.accepts_children(self.source, anchor_key))
+        ):
+            return params
+        params["position"] = position
+
+        if mode == "cut":
+            return self._paste_move(params, keys, anchor_key, position)
+        return self._paste_copy(params, keys, anchor_key, position)
+
+    def _paste_move(
+        self,
+        params: dict[str, Any],
+        keys: list[str],
+        anchor_key: Optional[str],
+        position: Optional[str],
+    ) -> dict[str, Any]:
+        """Apply a cut paste as the move it is, then empty the clipboard.
+
+        The clipboard is emptied only once the move lands, so a paste refused by
+        ``move_callback`` leaves what was cut still cut and available to try
+        somewhere else. That is what a file manager does with a refused move.
+        """
+        if anchor_key is None:
+            anchor_key = self._root_anchor(keys)
+            position = "after"
+            if anchor_key is None:
+                # Every root node is in the batch, which after pruning means every
+                # node in the batch is already a root node. There is nowhere to go.
+                return params
+
+        allowed = [candidate for candidate in keys if self._allows_move(candidate, anchor_key, str(position))]
+        if not allowed:
+            return params
+
+        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, str(position))
+        if not moved:
+            return params
+
+        self._commit_source(updated)
+        self._set_clipboard("cut", [])
+        params["applied"] = True
+        params["applied_keys"] = moved
+        return params
+
+    def _paste_copy(
+        self,
+        params: dict[str, Any],
+        keys: list[str],
+        anchor_key: Optional[str],
+        position: Optional[str],
+    ) -> dict[str, Any]:
+        """Apply a copy paste as new nodes, leaving the clipboard as it is.
+
+        A copy survives its paste, so the same branch can be dropped into several
+        places without copying it again, and the nodes it came from are untouched
+        so the keys stay good.
+
+        Each copy is re-keyed across its whole subtree against the tree as it stands
+        at that point in the batch, so two copies of the same folder pasted side by
+        side cannot collide.
+        """
+        if not self._allows_action("paste", params):
+            return params
+
+        prefix = self.options.get("new_key_prefix", "node")
+        updated = self.source
+        anchor, pos = anchor_key, position
+        pasted: list[str] = []
+        for key in keys:
+            node = tree.find_node(updated, key)
+            if node is None:
+                continue
+            fresh = tree.rekey_subtree(updated, node, prefix)
+            fresh_key = str(fresh[tree.KEY])
+            if anchor is None:
+                updated = tree.insert_child(updated, None, fresh)
+            elif pos == "child":
+                updated = tree.insert_child(updated, anchor, fresh)
+            else:
+                updated = tree.insert_sibling(updated, anchor, fresh)
+            pasted.append(fresh_key)
+            # Each later copy lands after the previous one, so a batch arrives in
+            # the order it was copied rather than reversed.
+            anchor, pos = fresh_key, "after"
+
+        if not pasted:
+            return params
+
+        self._commit_source(updated)
+        params["applied"] = True
+        params["applied_keys"] = pasted
+        return params
+
+    def _root_anchor(self, keys: list[str]) -> Optional[str]:
+        """Return the last root node that is not itself in ``keys``.
+
+        A move needs something to land next to where an insert does not, so a cut
+        pasted at root level with nothing active anchors on the end of the tree. A
+        node in the batch cannot be that anchor, since a move into itself is no
+        move at all.
+        """
+        for node in reversed(self.source):
+            key = node.get(tree.KEY)
+            if key is not None and key not in keys:
+                return str(key)
+        return None
+
     def _allows_move(self, key: str, anchor_key: str, position: str) -> bool:
         """Return whether ``move_callback`` permits this one node to move."""
         return not self._move_callback or bool(self._move_callback(key, anchor_key, position))
@@ -659,22 +869,30 @@ class TanstackTable(AnyWidgetComponent):
         # rename against nothing when it closed.
         if self.editing_key in stale:
             self.editing_key = ""
+        # A cut node that has since been deleted cannot be pasted anywhere, and a
+        # clipboard holding nothing else should stop offering the button.
+        held = list(self.clipboard.get("keys") or [])
+        remaining_held = [key for key in held if key not in stale]
+        if remaining_held != held:
+            self._set_clipboard(str(self.clipboard.get("mode") or ""), remaining_held)
 
     def get_source(self) -> list[dict[str, Any]]:
         """Return a shallow copy of the current tree source data."""
         return list(self.source)
 
     def set_source(self, source: list[dict[str, Any]]) -> None:
-        """Replace the tree source data and forget the undo history.
+        """Replace the tree source data, forgetting the history and the clipboard.
 
         This is a new tree rather than a change to the current one, so the states
         recorded against the old one go with it: their keys need not mean anything
         here, and stepping back into one would restore a tree the application had
-        already replaced. :meth:`clear` is the other thing, an edit of the tree in
-        hand, so emptying it stays undoable.
+        already replaced. Anything cut or copied out of the old tree goes for the
+        same reason. :meth:`clear` is the other thing, an edit of the tree in hand,
+        so emptying it stays undoable.
         """
         self.source = source
         self.clear_history()
+        self.clear_clipboard()
 
     def clear(self) -> None:
         """Remove all nodes from the tree."""
@@ -703,6 +921,54 @@ class TanstackTable(AnyWidgetComponent):
         self._undo_stack.clear()
         self._redo_stack.clear()
         self._sync_history()
+
+    def get_clipboard(self) -> dict[str, Any]:
+        """Return what cut or copy is holding, as ``{keys, mode}`` or empty."""
+        return dict(self.clipboard)
+
+    def cut_nodes(self, keys: list[str]) -> list[str]:
+        """Hold nodes for a paste that moves them.
+
+        Args:
+            keys: Keys to hold. A key inside another one's subtree is dropped,
+                since it would travel with its parent anyway.
+
+        Returns:
+            The keys actually held.
+        """
+        return self._apply_clipboard_intent("cut", {"keys": keys})["applied_keys"]
+
+    def copy_nodes(self, keys: list[str]) -> list[str]:
+        """Hold nodes for a paste that duplicates them.
+
+        Args:
+            keys: Keys to hold, pruned as :meth:`cut_nodes` prunes them.
+
+        Returns:
+            The keys actually held.
+        """
+        return self._apply_clipboard_intent("copy", {"keys": keys})["applied_keys"]
+
+    def paste_nodes(self, anchor_key: Optional[str] = None, position: str = "child") -> list[str]:
+        """Place what the clipboard is holding.
+
+        Args:
+            anchor_key: Key the nodes land next to or inside, or None for root
+                level.
+            position: ``child`` to land inside the anchor, ``after`` to land next
+                to it.
+
+        Returns:
+            The keys now sitting at the paste site, which for a copy are the newly
+            minted ones. Empty when nothing was pasted.
+        """
+        params = self._apply_paste_intent({"anchor_key": anchor_key, "position": position})
+        return params["applied_keys"]
+
+    def clear_clipboard(self) -> None:
+        """Forget what cut or copy is holding."""
+        if self.clipboard:
+            self.clipboard = {}
 
     def add_node(
         self,

@@ -258,6 +258,14 @@
   background: rgba(37, 99, 235, 0.08);
 }
 
+/* A row waiting to be moved by a paste, faded the way a file manager fades one.
+   Presentational only: what is cut is in the `clipboard` param and the paste
+   button's state says whether there is anything to place. */
+
+.pnl-tst-row--cut {
+  opacity: 0.5;
+}
+
 /* Drag and drop feedback. All of it is presentational: the drop indicator is
    aria-hidden and the move itself is announced by Python replacing the tree. */
 

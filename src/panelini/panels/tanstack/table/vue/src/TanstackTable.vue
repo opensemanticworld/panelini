@@ -50,12 +50,15 @@ import arrowDownIcon from 'lucide-static/icons/arrow-down.svg?raw'
 import arrowUpIcon from 'lucide-static/icons/arrow-up.svg?raw'
 import chevronsDownIcon from 'lucide-static/icons/chevrons-down.svg?raw'
 import chevronsUpIcon from 'lucide-static/icons/chevrons-up.svg?raw'
+import clipboardPasteIcon from 'lucide-static/icons/clipboard-paste.svg?raw'
+import copyIcon from 'lucide-static/icons/copy.svg?raw'
 import filePlusIcon from 'lucide-static/icons/file-plus.svg?raw'
 import folderPlusIcon from 'lucide-static/icons/folder-plus.svg?raw'
 import indentDecreaseIcon from 'lucide-static/icons/indent-decrease.svg?raw'
 import indentIncreaseIcon from 'lucide-static/icons/indent-increase.svg?raw'
 import pencilIcon from 'lucide-static/icons/pencil.svg?raw'
 import redoIcon from 'lucide-static/icons/redo-2.svg?raw'
+import scissorsIcon from 'lucide-static/icons/scissors.svg?raw'
 import searchIcon from 'lucide-static/icons/search.svg?raw'
 import squareIcon from 'lucide-static/icons/square.svg?raw'
 import squareCheckIcon from 'lucide-static/icons/square-check.svg?raw'
@@ -466,11 +469,15 @@ function onKeydown(event) {
   // Ctrl combinations are taken only while focus is inside the grid, which is
   // what keeps Ctrl+F from stealing the browser's own find on the rest of a page.
   // Ctrl+Z is the same bargain: the title editor stops its own keydowns, so
-  // undoing typing inside it stays the browser's.
+  // undoing typing inside it stays the browser's, and so do Ctrl+C, Ctrl+X and
+  // Ctrl+V, which mean rows out here and text in there.
   if (event.ctrlKey || event.metaKey) {
     const id = {
       a: 'select-all',
+      c: 'copy',
       f: SEARCH_ID,
+      v: 'paste',
+      x: 'cut',
       z: event.shiftKey ? 'redo' : 'undo',
     }[event.key.toLowerCase()]
     if (id && allows(id)) {
@@ -718,6 +725,9 @@ const ACTIONS = {
   delete: { icon: trashIcon, label: 'Delete', keys: 'Delete' },
   undo: { icon: undoIcon, label: 'Undo', keys: 'Control+Z' },
   redo: { icon: redoIcon, label: 'Redo', keys: 'Control+Shift+Z' },
+  cut: { icon: scissorsIcon, label: 'Cut', keys: 'Control+X' },
+  copy: { icon: copyIcon, label: 'Copy', keys: 'Control+C' },
+  paste: { icon: clipboardPasteIcon, label: 'Paste', keys: 'Control+V' },
   'move-up': { icon: arrowUpIcon, label: 'Move up', keys: 'Alt+ArrowUp' },
   'move-down': { icon: arrowDownIcon, label: 'Move down', keys: 'Alt+ArrowDown' },
   outdent: { icon: indentDecreaseIcon, label: 'Outdent', keys: 'Alt+ArrowLeft' },
@@ -740,6 +750,10 @@ const DEFAULT_TOOLBAR = [
   'new-file',
   'rename',
   'delete',
+  SEPARATOR_ID,
+  'cut',
+  'copy',
+  'paste',
   SEPARATOR_ID,
   'move-up',
   'move-down',
@@ -845,6 +859,24 @@ function selectionBatch() {
   return keys.length > 0 ? keys : [row.id]
 }
 
+const clipboardKeys = computed(() => props.state.clipboard?.keys ?? [])
+
+// Every row inside a cut branch is faded, not only the row that was cut: a folder
+// waiting to be moved takes its contents with it, and showing it greyed while its
+// files look untouched would say the opposite. A copy fades nothing, because
+// nothing about those rows is about to change.
+//
+// Rows are flat in render order, so a parent is always seen before its children
+// and one pass down the list is enough to reach the whole subtree.
+const cutRowKeys = computed(() => {
+  const marked = new Set(props.state.clipboard?.mode === 'cut' ? clipboardKeys.value : [])
+  if (marked.size === 0) return marked
+  rows.value.forEach((row) => {
+    if (row.parentId && marked.has(row.parentId)) marked.add(row.id)
+  })
+  return marked
+})
+
 // The nearest sibling outside the batch, in the given direction. Skipping the
 // batch is what makes moving three of five files up step them over the one above
 // rather than shuffle them among themselves.
@@ -872,6 +904,8 @@ function reorderAnchor(offset) {
 //   index  whatever now sits where a deleted row was, which is the next row down
 //   added  the one key the tree gained, found by diffing rather than guessed,
 //          because minting keys is Python's job and the browser cannot know them
+//   pasted the keys a copy gained, diffed the same way, but landing on all of
+//          them and never opening the editor: a paste arrives already named
 let refocus = null
 
 watch(
@@ -886,6 +920,7 @@ watch(
     }
     nextTick(() => {
       if (request.index !== undefined) focusRowByIndex(request.index)
+      else if (request.pasted !== undefined) focusPasted(request.pasted)
       else focusAdded(request.added)
     })
   },
@@ -907,6 +942,26 @@ function focusAdded(before) {
   // the new parent is: a table that did not ask for `rename` gets no editor at all
   // and the node simply keeps the button's label as its title.
   if (allows('rename')) nextTick(() => startEdit(fresh.id, true))
+}
+
+// A pasted copy arrives named, so the editor stays shut where an add opens it, and
+// the whole batch is selected rather than one of it: pasting five files and leaving
+// four of them unselected would not be what was asked for.
+//
+// Only the roots of what arrived are taken. A copied folder brings its contents
+// with new keys too, and selecting those as well would mean a second paste
+// duplicated the contents twice over.
+function focusPasted(before) {
+  const fresh = table.getCoreRowModel().flatRows.filter((row) => !before.has(row.id))
+  const freshKeys = new Set(fresh.map((row) => row.id))
+  const roots = fresh.filter((row) => !freshKeys.has(row.parentId ?? ''))
+  if (roots.length === 0) return
+  focusRowByKey(roots[0].id)
+  if (selectable.value) {
+    rowSelection.value = {}
+    rangeAnchorKey.value = roots[0].id
+    roots.forEach((row) => row.toggleSelected(true, { selectChildren: false }))
+  }
 }
 
 // The inline title editor. `editing_key` names the row it is open on and is
@@ -1135,6 +1190,36 @@ function emitHistory(action) {
   props.emitEvent(action, {})
 }
 
+// The clipboard lives in Python, because the keys in it have to mean something in
+// the tree Python owns. Cut and copy change nothing, so there is no focus to
+// restore and no new tree to wait for: they hand over a set of keys and read the
+// answer back as `clipboard`. Which rows they take is the delete rule rather than
+// the drag rule, since ticking a folder plainly means the folder is cut too.
+function emitClipboard(action) {
+  const keys = selectionBatch()
+  if (keys.length === 0) return
+  props.emitEvent(action, { key: activeRow.value?.id ?? null, keys })
+}
+
+// Paste lands where an add would: inside the active row when it takes children,
+// next to it when it does not, and at root level when nothing is active.
+//
+// Focus afterwards depends on the mode, because only one of the two produces keys
+// the browser cannot know. A cut brings existing rows to a new place, so focus
+// follows the first of them. A copy mints keys in Python, so the new rows are
+// found by diffing the tree, exactly as an add's are.
+function emitPaste() {
+  const row = activeRow.value
+  const position = row ? (row.original.allow_children === false ? 'after' : 'child') : null
+  if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
+  const held = clipboardKeys.value
+  refocus =
+    props.state.clipboard?.mode === 'cut'
+      ? { key: held[0] }
+      : { pasted: new Set(table.getCoreRowModel().flatRows.map((candidate) => candidate.id)) }
+  props.emitEvent('paste', { anchorKey: row?.id ?? null, position })
+}
+
 // Disabled means `aria-disabled` and a handler that does nothing, never the
 // `disabled` attribute: a disabled button drops out of the toolbar's roving
 // tabindex, which is exactly the state a keyboard user needs to be told about.
@@ -1149,7 +1234,14 @@ function actionEnabled(item) {
       // One row at a time, so it follows the active row rather than the selection.
       return activeRow.value !== null
     case 'delete':
+    case 'cut':
+    case 'copy':
       return selectionBatch().length > 0
+    case 'paste':
+      // Whether there is anywhere to put it is never in doubt: a row that refuses
+      // children is pasted next to instead of into, and no active row at all means
+      // root level. Only an empty clipboard disables this.
+      return clipboardKeys.value.length > 0
     case 'undo':
       // Python holds the history, so what is available is something it reports
       // rather than something the browser counts for itself.
@@ -1203,6 +1295,13 @@ function runAction(item) {
     case 'undo':
     case 'redo':
       emitHistory(item.id)
+      break
+    case 'cut':
+    case 'copy':
+      emitClipboard(item.id)
+      break
+    case 'paste':
+      emitPaste()
       break
     case 'move-up':
       emitMove(reorderAnchor(-1), 'before')
@@ -1674,6 +1773,7 @@ function dropLineStyle(row) {
             {
               'pnl-tst-row--active': activeShown && row.id === activeKey,
               'pnl-tst-row--quiet': !activeShown && row.id === activeKey,
+              'pnl-tst-row--cut': cutRowKeys.has(row.id),
             },
           ]"
           role="row"
