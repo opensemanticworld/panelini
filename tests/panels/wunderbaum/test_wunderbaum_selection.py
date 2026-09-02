@@ -10,6 +10,7 @@ alone, which is why these run on ``selectMode: "multi"`` rather than ``"hier"``.
 """
 
 import copy
+import sys
 import time
 
 import panel as pn
@@ -20,6 +21,11 @@ from panelini.panels.wunderbaum import Wunderbaum
 from panelini.testing import drag, wait_until, wb_checkbox, wb_title_center, wb_wait
 
 _PORT = 6425
+
+# The toggle modifier, per platform. macOS turns Control+click into a secondary
+# click, so the primary click never reaches the panel; Cmd is the toggle there
+# anyway, both in Finder and in the panel, which reads `ctrlKey || metaKey`.
+_CTRL = "Meta" if sys.platform == "darwin" else "Control"
 
 SOURCE = [
     {
@@ -141,10 +147,10 @@ def test_ctrl_click_adds_and_removes(ready_page: Page):
     page = ready_page
 
     _click(page, "File 1")
-    _click(page, "File 3", "Control")
+    _click(page, "File 3", _CTRL)
     assert _selected(page) == ["File 1", "File 3"]
 
-    _click(page, "File 1", "Control")
+    _click(page, "File 1", _CTRL)
     assert _selected(page) == ["File 3"]
 
 
@@ -167,8 +173,8 @@ def test_ctrl_shift_click_extends_the_selection(ready_page: Page):
     page = ready_page
 
     _click(page, "File 4")
-    _click(page, "File 1", "Control")
-    _click(page, "File 3", "Control", "Shift")
+    _click(page, "File 1", _CTRL)
+    _click(page, "File 3", _CTRL, "Shift")
     assert _selected(page) == ["File 1", "File 2", "File 3", "File 4"]
 
     # Without ctrl the same gesture replaces instead, dropping File 4.
