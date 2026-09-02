@@ -8552,10 +8552,15 @@ const rf = (t, e) => {
 `)), c.event.dataTransfer.setData(Un, JSON.stringify(a)), c.event.dataTransfer.setData(go, this.treeId || ""), c.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: c.node.key, keys: a }), !0;
         },
         dragEnter: (c) => c.node === c.sourceNode ? !1 : ["before", "after", "over"],
-        dragOver: (c) => {
-          var a;
-          (a = c.event) != null && a.dataTransfer && (c.event.dataTransfer.dropEffect = "move");
-        },
+        // No dragOver callback on purpose. Wunderbaum sets
+        // dataTransfer.dropEffect from its own guessDropEffect right before
+        // calling us, and that guess is already platform-correct: Option
+        // copies on macOS, Ctrl elsewhere. Overwriting it here is what used
+        // to show a move badge during a copy. Nothing in the library cancels
+        // a drop over the value, so leaving it alone is safe.
+        //
+        // The copy decision itself still comes from our own key tracking,
+        // because modifier flags are not reliable on the drop event.
         drop: (c) => {
           var g, N;
           const a = c.sourceNode, f = c.node, b = this.effectiveRegion(c.suggestedDropMode, f), u = this._copyPressed || !!window.__wbForceCopy;
@@ -8667,7 +8672,7 @@ const rf = (t, e) => {
       }), t.addEventListener("dragleave", (i) => {
         t.style.border = "1px solid #ddd";
       }), t.addEventListener("dragover", (i) => {
-        n(i) && (i.preventDefault(), e(i) && (i.dataTransfer.dropEffect = "move"));
+        n(i) && (i.preventDefault(), e(i) && (i.dataTransfer.dropEffect = this._copyPressed ? "copy" : "move"));
       }), t.addEventListener("dragend", () => {
         var r, s;
         this._dragActive = !1, t.style.border = "1px solid #ddd";

@@ -347,13 +347,15 @@ export default {
             if (e.node === e.sourceNode) return false;
             return ['before', 'after', 'over'];
           },
-          dragOver: (e) => {
-            // Ctrl changes dropEffect to 'copy' on Windows, which wunderbaum
-            // rejects. Force 'move' so the drop fires; we track Ctrl separately.
-            if (e.event?.dataTransfer) {
-              e.event.dataTransfer.dropEffect = 'move';
-            }
-          },
+          // No dragOver callback on purpose. Wunderbaum sets
+          // dataTransfer.dropEffect from its own guessDropEffect right before
+          // calling us, and that guess is already platform-correct: Option
+          // copies on macOS, Ctrl elsewhere. Overwriting it here is what used
+          // to show a move badge during a copy. Nothing in the library cancels
+          // a drop over the value, so leaving it alone is safe.
+          //
+          // The copy decision itself still comes from our own key tracking,
+          // because modifier flags are not reliable on the drop event.
           drop: (e) => {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
@@ -584,9 +586,10 @@ export default {
         if (isAcceptable(e)) {
           e.preventDefault();
           if (isExternalNodeDrag(e)) {
-            // Ctrl changes dropEffect to 'copy' on Windows, which cancels the
-            // drop. Force 'move', matching the internal dragOver handler.
-            e.dataTransfer.dropEffect = 'move';
+            // A cross-tree drag never enters wunderbaum's dnd extension, so
+            // nothing sets the badge for us here. Mirror what wunderbaum would
+            // show for a same-tree drag.
+            e.dataTransfer.dropEffect = this._copyPressed ? 'copy' : 'move';
           }
         }
       });
