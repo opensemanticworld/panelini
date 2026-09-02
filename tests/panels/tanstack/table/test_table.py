@@ -1747,3 +1747,183 @@ def test_the_public_api_reports_nothing_when_the_panes_are_unrelated(left):
     stranger = make_pane(OTHER, group="other")
 
     assert stranger.transfer_nodes(left, ["e"], "x", "child") == []
+
+
+# --- batch mutations ----------------------------------------------------------
+
+
+@pytest.fixture
+def pushes(table):
+    """Every tree that crossed to the browser, in order."""
+    seen = []
+    table.param.watch(lambda event: seen.append(shape(event.new)), ["source"])
+    return seen
+
+
+def test_a_batch_pushes_the_tree_once(table, pushes):
+    with table.batch():
+        for index in range(5):
+            table.add_node({"key": f"n{index}", "title": str(index)})
+
+    assert pushes == ["a(b(b1,b2),e),d(d1),n0,n1,n2,n3,n4"]
+
+
+def test_the_same_calls_without_a_batch_push_once_each(table, pushes):
+    for index in range(5):
+        table.add_node({"key": f"n{index}", "title": str(index)})
+
+    assert len(pushes) == 5
+
+
+def test_a_batch_is_one_undo_step(table):
+    with table.batch():
+        table.add_node({"key": "n0", "title": "0"})
+        table.rename_node("b1", "renamed")
+        table.remove_node("e")
+
+    assert table.undo() is True
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert title_of(table, "b1") == "B1"
+    assert table.can_undo is False
+
+
+def test_a_batch_reads_what_the_call_before_it_left(table):
+    with table.batch():
+        table.add_node({"key": "n0", "title": "0"}, parent_key="a")
+        # Reading `source` mid batch has to see `n0`, or a method that works out
+        # the next tree from the current one would drop the change before it.
+        table.add_node({"key": "n1", "title": "1"}, parent_key="n0")
+
+    assert shape(table.source) == "a(b(b1,b2),e,n0(n1)),d(d1)"
+
+
+def test_an_empty_batch_records_nothing(table, pushes):
+    with table.batch():
+        pass
+
+    assert pushes == []
+    assert table.can_undo is False
+
+
+def test_a_batch_yields_the_table(table):
+    with table.batch() as batched:
+        assert batched is table
+
+
+def test_a_batch_that_raises_leaves_the_tree_as_it_was(table, pushes):
+    with pytest.raises(ValueError, match="halfway"), table.batch():
+        table.add_node({"key": "n0", "title": "0"})
+        table.remove_node("e")
+        raise ValueError("halfway")
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert table.can_undo is False
+    # The browser is told the tree it already had, rather than being left holding
+    # the half rewritten one param published on the way out.
+    assert pushes == ["a(b(b1,b2),e),d(d1)"]
+
+
+def test_a_batch_that_raises_before_changing_anything_pushes_nothing(table, pushes):
+    with pytest.raises(ValueError), table.batch():
+        raise ValueError("early")
+
+    assert pushes == []
+    assert table.can_undo is False
+
+
+def test_a_nested_batch_joins_the_outer_one(table, pushes):
+    with table.batch():
+        with table.batch():
+            table.add_node({"key": "n0", "title": "0"})
+        table.add_node({"key": "n1", "title": "1"})
+
+    assert pushes == ["a(b(b1,b2),e),d(d1),n0,n1"]
+    assert len(table._undo_stack) == 1
+
+
+def test_a_nested_batch_that_raises_rolls_the_whole_thing_back(table):
+    with pytest.raises(ValueError), table.batch():
+        table.add_node({"key": "n0", "title": "0"})
+        with table.batch():
+            table.add_node({"key": "n1", "title": "1"})
+            raise ValueError("inside")
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+    assert table.can_undo is False
+
+
+def test_a_batch_closes_even_when_it_raises(table):
+    with pytest.raises(ValueError), table.batch():
+        raise ValueError("halfway")
+
+    # A batch left open would swallow every later change, so this is the test that
+    # the guard is a `finally` rather than a hopeful line at the end.
+    table.add_node({"key": "n0", "title": "0"})
+    assert table.can_undo is True
+
+
+def test_a_batch_around_intents_is_still_one_step(table):
+    with table.batch():
+        table.handle_event("move", {"key": "b1", "targetKey": "d", "instruction": "make-child"})
+        table.handle_event("delete", {"keys": ["e"]})
+
+    assert shape(table.source) == "a(b(b2)),d(d1,b1)"
+    assert len(table._undo_stack) == 1
+
+
+def test_setting_the_source_inside_a_batch_forgets_the_step(table):
+    table.add_node({"key": "n0", "title": "0"})
+    with table.batch():
+        table.remove_node("e")
+        table.set_source([{"key": "fresh", "title": "Fresh"}])
+
+    assert shape(table.source) == "fresh"
+    assert table.can_undo is False
+
+
+def test_an_undo_is_refused_inside_a_batch(table):
+    table.add_node({"key": "n0", "title": "0"})
+
+    with pytest.raises(RuntimeError, match="undo cannot be done inside a batch"), table.batch():
+        table.undo()
+
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1),n0"
+
+
+def test_a_redo_is_refused_inside_a_batch(table):
+    table.add_node({"key": "n0", "title": "0"})
+    table.undo()
+
+    with pytest.raises(RuntimeError, match="redo cannot be done inside a batch"), table.batch():
+        table.redo()
+
+
+def test_a_transfer_into_a_batching_pane_is_refused(left, right):
+    with pytest.raises(RuntimeError, match="transfer cannot be done inside a batch"), right.batch():
+        right.transfer_nodes(left, ["e"], "x", "child")
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_a_transfer_out_of_a_batching_pane_is_refused(left, right):
+    # The pane the nodes leave is checked too, and before either tree is written:
+    # its half of the step would be the deferred one, and a pair whose halves are
+    # recorded differently is what loses a node on undo.
+    with pytest.raises(RuntimeError, match="transfer cannot be done inside a batch"), left.batch():
+        right.transfer_nodes(left, ["e"], "x", "child")
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y"
+    assert right.can_undo is False
+
+
+def test_a_batch_still_reports_history_once(table):
+    flags = []
+    table.param.watch(lambda event: flags.append(event.new), ["can_undo"])
+
+    with table.batch():
+        for index in range(5):
+            table.add_node({"key": f"n{index}", "title": str(index)})
+
+    assert flags == [True]

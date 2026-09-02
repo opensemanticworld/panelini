@@ -1,6 +1,8 @@
 """Entrypoint of the TanstackTable panel."""
 
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional
@@ -10,6 +12,7 @@ from weakref import WeakValueDictionary, ref
 import panel as pn
 import param  # type: ignore[import-untyped]
 from panel.custom import AnyWidgetComponent
+from param.parameterized import batch_call_watchers  # type: ignore[import-untyped]
 
 from . import tree
 from .icons import DEFAULT_FILE_ICON, extension_of, icon_for
@@ -291,6 +294,12 @@ class TanstackTable(AnyWidgetComponent):
         self._undo_stack: deque[_Step] = deque(maxlen=self.undo_depth)
         self._redo_stack: deque[_Step] = deque(maxlen=self.undo_depth)
 
+        # How many :meth:`batch` blocks are open, and the tree the outermost one
+        # started from. None means nothing in the batch has changed the tree yet,
+        # which is what keeps an empty batch from recording a step.
+        self._batch_depth = 0
+        self._batch_start: Optional[list[dict[str, Any]]] = None
+
         self._event_callback = event_callback
         self._move_callback = move_callback
         self._action_callback = action_callback
@@ -386,12 +395,24 @@ class TanstackTable(AnyWidgetComponent):
         of a history nobody can reach any more. That is the rule every editor
         follows and the one users already expect.
 
+        Inside a :meth:`batch` the step is held back rather than recorded: the tree
+        the batch started from is kept once and every rewrite after it is an
+        intermediate state nobody can reach, so a hundred calls are one step. The
+        write itself still happens, so a method that reads ``source`` to work out
+        the next tree sees the one the call before it left.
+
         Args:
             updated: The new tree.
             token: Names the gesture this step is half of, for a cross-pane
                 transfer. Absent for every change that touches one tree only.
             partner: The other table that gesture changed.
         """
+        if self._batch_depth:
+            if self._batch_start is None:
+                self._batch_start = self.get_source()
+            self.source = updated
+            return
+
         self._undo_stack.append(_Step(self.get_source(), token, partner))
         self._redo_stack.clear()
         self.source = updated
@@ -409,6 +430,26 @@ class TanstackTable(AnyWidgetComponent):
         can_redo = len(self._redo_stack) > 0
         if can_redo != self.can_redo:
             self.can_redo = can_redo
+
+    def _close_batch(self) -> None:
+        """Record everything a batch changed as the one step it is.
+
+        The step carries no token, because a cross-pane transfer is refused inside
+        a batch: it is one gesture over two histories, and collapsing one side of
+        that pair into a single step while the other records one per transfer is
+        what loses a node on undo.
+        """
+        if self._batch_start is None:
+            return
+        self._undo_stack.append(_Step(self._batch_start, None, None))
+        self._redo_stack.clear()
+        self._sync_history()
+
+    def _refuse_in_batch(self, what: str) -> None:
+        """Raise when ``what`` cannot be done with a batch open."""
+        if self._batch_depth:
+            msg = f"{what} cannot be done inside a batch"
+            raise RuntimeError(msg)
 
     def _step_history(self, action: str, token: Optional[str] = None) -> bool:
         """Step the tree one recorded state back or forward.
@@ -1024,7 +1065,12 @@ class TanstackTable(AnyWidgetComponent):
             The normalised payload. ``applied_keys`` names the nodes now sitting
             in this tree, and ``handled`` records that ``transfer_callback`` took
             the transfer instead.
+
+        Raises:
+            RuntimeError: When either pane has a :meth:`batch` open. Both halves
+                are checked before either tree is written.
         """
+        self._refuse_in_batch("a transfer")
         key = event_params.get("key")
         keys = event_params.get("keys") or ([key] if key else [])
         source_id = event_params.get("source_id", event_params.get("sourceId"))
@@ -1055,6 +1101,7 @@ class TanstackTable(AnyWidgetComponent):
         origin = self._transfer_source(source_id)
         if origin is None:
             return params
+        origin._refuse_in_batch("a transfer")
 
         # Pruned the way a cut is: a folder taken together with one of its own
         # files would otherwise arrive twice, once inside its parent and once
@@ -1208,12 +1255,73 @@ class TanstackTable(AnyWidgetComponent):
         self.expanded_keys = []
         self.selected_keys = []
 
+    @contextmanager
+    def batch(self) -> Iterator["TanstackTable"]:
+        """Defer everything changed inside the block to one push and one step.
+
+        Every mutation funnels through one writer, so a batch delete or a multi
+        row drop is already one push and one undo step. Each *public* call is its
+        own write, though, which is what makes a hundred :meth:`add_node` calls a
+        hundred pushes of the whole tree. Inside this block they are one.
+
+        The deferral sits next to the writer in Python rather than in the browser,
+        which is what lets a block that raises leave the tree exactly as it was
+        instead of half rewritten. A browser side deferred render cannot do that:
+        by the time it is asked to redraw, the mutations have already happened.
+
+        Nested blocks join the outer one and nothing is published until the
+        outermost exits, so a helper that batches internally stays callable from
+        inside a caller's batch. That is the only way batching composes across an
+        application's own functions.
+
+        A cross-pane transfer, an undo and a redo are refused with a block open.
+        All three step a history rather than change a tree, and a batch is one
+        step being built.
+
+        Yields:
+            The table, so ``with table.batch() as t:`` reads naturally.
+
+        Raises:
+            RuntimeError: Propagated from a refused call, or from the block
+                itself. Either way the tree is put back before it leaves here.
+        """
+        if self._batch_depth:
+            self._batch_depth += 1
+            try:
+                yield self
+            finally:
+                self._batch_depth -= 1
+            return
+
+        self._batch_depth = 1
+        self._batch_start = None
+        try:
+            # param collapses the writes into one watcher call, so `source` and
+            # every flag beside it cross to the browser once. It publishes what it
+            # collected even when the block raises, which is why the rollback is
+            # written back inside the block rather than after it.
+            with batch_call_watchers(self):
+                try:
+                    yield self
+                except BaseException:
+                    if self._batch_start is not None:
+                        self.source = self._batch_start
+                    raise
+                self._close_batch()
+        finally:
+            self._batch_depth = 0
+            self._batch_start = None
+
     def undo(self) -> bool:
         """Step the tree back to the state before the last change.
 
         Returns:
             True when a state was there to step back to.
+
+        Raises:
+            RuntimeError: When a :meth:`batch` is open.
         """
+        self._refuse_in_batch("an undo")
         return self._step_history("undo")
 
     def redo(self) -> bool:
@@ -1221,13 +1329,22 @@ class TanstackTable(AnyWidgetComponent):
 
         Returns:
             True when a state was there to step forward to.
+
+        Raises:
+            RuntimeError: When a :meth:`batch` is open.
         """
+        self._refuse_in_batch("a redo")
         return self._step_history("redo")
 
     def clear_history(self) -> None:
-        """Forget every recorded tree state in both directions."""
+        """Forget every recorded tree state in both directions.
+
+        A batch in flight is forgotten with them, so :meth:`set_source` inside one
+        replaces the tree without leaving a step pointing at the tree it replaced.
+        """
         self._undo_stack.clear()
         self._redo_stack.clear()
+        self._batch_start = None
         self._sync_history()
 
     def get_clipboard(self) -> dict[str, Any]:
@@ -1300,6 +1417,9 @@ class TanstackTable(AnyWidgetComponent):
             The keys now sitting at the arrival site. They are the keys taken,
             unless this tree already held one, in which case that subtree arrives
             re-keyed. Empty when nothing was transferred.
+
+        Raises:
+            RuntimeError: When either table has a :meth:`batch` open.
         """
         params = self._apply_transfer_intent({
             "keys": keys,
