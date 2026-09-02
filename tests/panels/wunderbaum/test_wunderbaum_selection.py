@@ -225,7 +225,7 @@ def test_drag_of_a_selected_parent_moves_the_folder(ready_page: Page):
     assert _selected(page) == ["Folder A", "File 1", "File 2", "File 3"]
 
     drag(page, wb_title_center(page, "File 1"), wb_title_center(page, "Folder B"), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _drops()[0]["sourceKeys"] == ["a"]
     assert _root_keys(tree.source) == ["b"]
@@ -241,7 +241,7 @@ def test_drag_of_selected_children_moves_them_all(ready_page: Page):
     _click(page, "File 3", "Shift")
 
     drag(page, wb_title_center(page, "File 1"), wb_title_center(page, "Folder B"), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _drops()[0]["sourceKeys"] == ["a/1", "a/2", "a/3"]
     assert _child_keys(tree.source, "a") == []
@@ -254,7 +254,7 @@ def test_drag_of_an_unselected_row_selects_it_first(ready_page: Page):
 
     _click(page, "File 2")
     drag(page, wb_title_center(page, "File 1"), wb_title_center(page, "Folder B"), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _drops()[0]["sourceKeys"] == ["a/1"]
     assert _child_keys(tree.source, "a") == ["a/2", "a/3"]

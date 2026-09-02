@@ -138,7 +138,7 @@ def test_below_an_expanded_parent_inserts_as_first_child(ready_page: Page):
     page = ready_page
 
     drag(page, wb_title_center(page, "File 4"), _band(page, "Folder A", 0.86), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _root_keys(tree.source) == ["a", "b"]
     assert _child_keys(tree.source, "a") == ["b/4", "a/1", "a/2", "a/3"]
@@ -155,7 +155,7 @@ def test_below_a_collapsed_parent_inserts_as_a_sibling(ready_page: Page):
     _collapse(page, "Folder A")
 
     drag(page, wb_title_center(page, "File 4"), _band(page, "Folder A", 0.86), steps=6)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _root_keys(tree.source) == ["a", "b/4", "b"]
     assert _child_keys(tree.source, "a") == ["a/1", "a/2", "a/3"]
@@ -171,7 +171,7 @@ def test_above_own_parent_moves_the_node_up_a_level(ready_page: Page):
     page = ready_page
 
     drag(page, wb_title_center(page, "File 1"), _band(page, "Folder A", 0.12), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _root_keys(tree.source) == ["a/1", "a", "b"]
     assert _child_keys(tree.source, "a") == ["a/2", "a/3"]
@@ -210,7 +210,7 @@ def test_multi_drop_below_an_expanded_parent_keeps_order(ready_page: Page):
     _click(page, "File 5", "Shift")
 
     drag(page, wb_title_center(page, "File 4"), _band(page, "Folder A", 0.86), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     assert _child_keys(tree.source, "a") == ["b/4", "b/5", "a/1", "a/2", "a/3"]
     assert _child_keys(tree.source, "b") == []

@@ -125,7 +125,7 @@ def test_cross_tree_drop_reports_source_tree(ready_page: Page):
     page = ready_page
 
     drag(page, _title_center(page, "Left 1"), _title_center(page, "Right Folder"), steps=8)
-    wait_until(lambda: _external_drops(_right_events))
+    wait_until(lambda: bool(_external_drops(_right_events)))
 
     drops = _external_drops(_right_events)
     assert len(drops) == 1
@@ -151,7 +151,7 @@ def test_cross_tree_drop_leaves_source_tree_intact(ready_page: Page):
     page = ready_page
 
     drag(page, _title_center(page, "Left 1"), _title_center(page, "Right Folder"), steps=8)
-    wait_until(lambda: _external_drops(_right_events))
+    wait_until(lambda: bool(_external_drops(_right_events)))
 
     left_keys = [c["key"] for c in left_tree.source[0]["children"]]
     assert left_keys == ["l/1", "l/2"]
@@ -162,7 +162,7 @@ def test_same_tree_drag_emits_drop_not_external_drop(ready_page: Page):
     page = ready_page
 
     drag(page, _title_center(page, "Left 1"), _title_center(page, "Left 2"), steps=8)
-    wait_until(lambda: [e for e in _left_events if e["name"] == "drop"])
+    wait_until(lambda: any(e["name"] == "drop" for e in _left_events))
 
     assert not _external_drops(_left_events)
     assert not _external_drops(_right_events)
@@ -179,7 +179,7 @@ def test_cross_tree_multi_select_sends_all_keys(ready_page: Page):
     wait_until(lambda: page.locator(".wb-row.wb-selected").count() >= 2)
 
     drag(page, _title_center(page, "Left 1"), _title_center(page, "Right Folder"), steps=8)
-    wait_until(lambda: _external_drops(_right_events))
+    wait_until(lambda: bool(_external_drops(_right_events)))
 
     d = _external_drops(_right_events)[0]
     assert sorted(d["source_keys"]) == ["l/1", "l/2"]

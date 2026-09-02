@@ -96,7 +96,7 @@ def test_filter_nodes_hides_non_matching_rows(ready_page: Page):
     page = ready_page
 
     tree.filter_nodes("Invoice", {"mode": "hide", "autoExpand": True})
-    wait_until(lambda: _filter_events())
+    wait_until(lambda: bool(_filter_events()))
 
     titles = _visible_titles(page)
     assert "Invoice 2024" in titles
@@ -109,7 +109,7 @@ def test_filter_nodes_reports_match_count(ready_page: Page):
     page = ready_page  # noqa: F841 - the page must be open for the event to fire
 
     tree.filter_nodes("Report")
-    wait_until(lambda: _filter_events())
+    wait_until(lambda: bool(_filter_events()))
 
     ev = _filter_events()[-1]
     assert ev["filter"] == "Report"
@@ -122,7 +122,7 @@ def test_clear_filter_restores_all_rows(ready_page: Page):
     page = ready_page
 
     tree.filter_nodes("Invoice", {"mode": "hide"})
-    wait_until(lambda: _filter_events())
+    wait_until(lambda: bool(_filter_events()))
     assert "Annual Report" not in _visible_titles(page)
 
     tree.clear_filter()

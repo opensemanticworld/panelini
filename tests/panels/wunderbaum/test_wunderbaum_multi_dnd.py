@@ -118,7 +118,7 @@ def test_multi_select_drag_moves_whole_selection(ready_page: Page):
     wait_until(lambda: page.locator(".wb-row.wb-selected").count() >= 2)
 
     drag(page, wb_title_center(page, "File 1"), wb_title_center(page, "Folder B"), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     drops = _drops()
     assert len(drops) == 1
@@ -148,7 +148,7 @@ def test_dragging_unselected_node_moves_only_that_node(ready_page: Page):
     wait_until(lambda: page.locator(".wb-row.wb-selected").count() >= 1)
 
     drag(page, wb_title_center(page, "File 3"), wb_title_center(page, "Folder B"), steps=8)
-    wait_until(lambda: _drops())
+    wait_until(lambda: bool(_drops()))
 
     d = _drops()[0]
     assert d["sourceKey"] == "a/3"
