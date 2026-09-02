@@ -1458,3 +1458,292 @@ def test_clear_clipboard_forgets_what_was_held(table):
 
     assert table.get_clipboard() == {}
     assert table.paste_nodes("d") == []
+
+
+# --- cross-pane transfer ------------------------------------------------------
+
+
+OTHER = [
+    {"key": "x", "title": "X", "children": [{"key": "x1", "title": "X1"}]},
+    {"key": "y", "title": "Y"},
+]
+
+
+def make_pane(source, group="vfs", **kwargs):
+    """A table in a transfer group, holding its own copy of a tree."""
+    return TanstackTable(source=copy.deepcopy(source), options={"transfer_group": group}, **kwargs)
+
+
+@pytest.fixture
+def left():
+    """The pane nodes are dragged out of, holding the sample tree."""
+    return make_pane(SOURCE)
+
+
+@pytest.fixture
+def right(events):
+    """The pane nodes are dragged into, holding a tree of its own."""
+    return make_pane(OTHER, event_callback=lambda name, params: events.append((name, params)))
+
+
+def transfer(target, origin, keys, **params):
+    """Feed ``target`` the payload a drop from ``origin`` sends."""
+    target.handle_event("transfer", {"keys": keys, "sourceId": origin._table_id, **params})
+
+
+def test_a_transfer_moves_the_nodes_between_the_panes(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    assert shape(left.source) == "a(b(b1,b2)),d(d1)"
+    assert shape(right.source) == "x(x1,e),y"
+
+
+def test_a_transfer_resolves_a_hitbox_instruction(left, right):
+    transfer(right, left, ["e"], targetKey="y", instruction="reorder-above")
+
+    assert shape(right.source) == "x(x1),e,y"
+
+
+def test_a_transfer_without_an_anchor_lands_at_root_level(left, right):
+    transfer(right, left, ["b"])
+
+    assert shape(right.source) == "x(x1),y,b(b1,b2)"
+
+
+def test_a_batch_arrives_in_the_order_it_was_dragged(left, right):
+    transfer(right, left, ["e", "d"], anchor_key="x", position="child")
+
+    assert shape(right.source) == "x(x1,e,d(d1)),y"
+
+
+def test_a_key_inside_another_travels_with_its_parent_only(left, right):
+    transfer(right, left, ["b", "b1"], anchor_key="y", position="after")
+
+    assert shape(right.source) == "x(x1),y,b(b1,b2)"
+
+
+def test_a_copy_leaves_the_nodes_where_they_were(left, right):
+    transfer(right, left, ["b"], anchor_key="y", position="after", copy=True)
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y,b(b1,b2)"
+
+
+def test_a_key_the_target_already_holds_is_re_keyed(left, right):
+    right.set_source([{"key": "e", "title": "Other E"}])
+
+    transfer(right, left, ["e"], anchor_key="e", position="after")
+
+    assert shape(right.source) == "e,node-1"
+    assert title_of(right, "e") == "Other E"
+    assert title_of(right, "node-1") == "E"
+
+
+def test_an_arrival_reports_the_keys_it_landed_under(right, left, events):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    name, params = events[-1]
+    assert name == "transfer"
+    assert params["applied"] is True
+    assert params["applied_keys"] == ["e"]
+    assert params["source_id"] == left._table_id
+    assert params["target_id"] == right._table_id
+
+
+def test_a_transfer_drops_the_stale_keys_from_the_pane_it_left(left, right):
+    left.expanded_keys = ["a", "b"]
+    left.selected_keys = ["b1"]
+
+    transfer(right, left, ["b"], anchor_key="x", position="child")
+
+    assert left.expanded_keys == ["a"]
+    assert left.selected_keys == []
+
+
+# --- cross-pane transfer, what is refused -------------------------------------
+
+
+def test_a_pane_outside_the_group_is_refused(left):
+    stranger = make_pane(OTHER, group="other")
+
+    transfer(stranger, left, ["e"], anchor_key="x", position="child")
+
+    assert shape(stranger.source) == "x(x1),y"
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_a_pane_that_opted_into_nothing_is_refused(left):
+    stranger = TanstackTable(source=copy.deepcopy(OTHER))
+
+    transfer(stranger, left, ["e"], anchor_key="x", position="child")
+
+    assert shape(stranger.source) == "x(x1),y"
+
+
+def test_a_source_id_naming_no_live_table_is_refused(right):
+    right.handle_event("transfer", {"keys": ["e"], "sourceId": "tst-gone", "anchor_key": "x", "position": "child"})
+
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_a_pane_cannot_transfer_to_itself(right):
+    transfer(right, right, ["y"], anchor_key="x", position="child")
+
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_an_anchor_that_refuses_children_is_refused(left, right):
+    right.update_node("y", {"allow_children": False})
+
+    transfer(right, left, ["e"], anchor_key="y", position="child")
+
+    assert shape(right.source) == "x(x1),y"
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_an_anchor_this_tree_does_not_hold_is_refused(left, right):
+    transfer(right, left, ["e"], anchor_key="b", position="child")
+
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_the_pane_the_nodes_leave_may_veto_the_whole_transfer(right):
+    seen = []
+    origin = make_pane(SOURCE, action_callback=lambda action, params: seen.append((action, params)) or False)
+
+    transfer(right, origin, ["e"], anchor_key="x", position="child")
+
+    assert seen[0][0] == "transfer"
+    assert seen[0][1]["keys"] == ["e"]
+    assert shape(origin.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_the_pane_the_nodes_arrive_in_may_veto_per_node(left, events):
+    target = make_pane(OTHER, move_callback=lambda key, anchor_key, position: key != "d")
+
+    transfer(target, left, ["e", "d"], anchor_key="x", position="child")
+
+    assert shape(target.source) == "x(x1,e),y"
+    assert shape(left.source) == "a(b(b1,b2)),d(d1)"
+
+
+def test_a_veto_leaves_both_trees_alone_rather_than_putting_nodes_back(left):
+    target = make_pane(OTHER, move_callback=lambda key, anchor_key, position: False)
+
+    transfer(target, left, ["e"], anchor_key="x", position="child")
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert target.can_undo is False
+    assert left.can_undo is False
+
+
+def test_the_escape_hatch_takes_the_transfer_instead(left, right, events):
+    handled = []
+    right._transfer_callback = lambda params: handled.append(params) or True
+
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    assert handled[0]["keys"] == ["e"]
+    assert events[-1][1]["handled"] is True
+    assert shape(right.source) == "x(x1),y"
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_the_escape_hatch_declining_lets_the_registry_run(left, right):
+    right._transfer_callback = lambda params: False
+
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    assert shape(right.source) == "x(x1,e),y"
+
+
+# --- cross-pane transfer, paired history --------------------------------------
+
+
+def test_undo_in_the_pane_the_nodes_arrived_in_steps_both(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    assert right.undo() is True
+
+    assert shape(right.source) == "x(x1),y"
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_undo_in_the_pane_the_nodes_left_steps_both(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+
+    assert left.undo() is True
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y"
+
+
+def test_redo_replays_both_halves(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+    right.undo()
+
+    assert right.redo() is True
+
+    assert shape(right.source) == "x(x1,e),y"
+    assert shape(left.source) == "a(b(b1,b2)),d(d1)"
+    assert left.can_undo is True
+
+
+def test_a_copy_pairs_nothing(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child", copy=True)
+
+    assert left.can_undo is False
+    assert right.undo() is True
+    assert shape(right.source) == "x(x1),y"
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_a_pane_changed_since_the_transfer_keeps_its_own_history(left, right):
+    """Diverged halves duplicate the node rather than losing it.
+
+    Stepping past the change made afterwards would silently discard it, so the
+    two halves part company instead. The node is then in both trees, which is a
+    thing a user can see and undo again.
+    """
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+    right.rename_node("y", "Y renamed")
+
+    assert left.undo() is True
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1,e),y"
+    assert title_of(right, "y") == "Y renamed"
+
+
+def test_an_ordinary_change_still_undoes_alone(left, right):
+    transfer(right, left, ["e"], anchor_key="x", position="child")
+    right.rename_node("y", "Y renamed")
+
+    assert right.undo() is True
+
+    assert title_of(right, "y") == "Y"
+    assert shape(left.source) == "a(b(b1,b2)),d(d1)"
+
+
+# --- cross-pane transfer, public API ------------------------------------------
+
+
+def test_the_public_api_transfers_nodes(left, right):
+    assert right.transfer_nodes(left, ["e"], "x", "child") == ["e"]
+
+    assert shape(right.source) == "x(x1,e),y"
+    assert shape(left.source) == "a(b(b1,b2)),d(d1)"
+
+
+def test_the_public_api_copies_nodes(left, right):
+    assert right.transfer_nodes(left, ["b"], "y", "after", copy=True) == ["b"]
+
+    assert shape(left.source) == "a(b(b1,b2),e),d(d1)"
+    assert shape(right.source) == "x(x1),y,b(b1,b2)"
+
+
+def test_the_public_api_reports_nothing_when_the_panes_are_unrelated(left):
+    stranger = make_pane(OTHER, group="other")
+
+    assert stranger.transfer_nodes(left, ["e"], "x", "child") == []

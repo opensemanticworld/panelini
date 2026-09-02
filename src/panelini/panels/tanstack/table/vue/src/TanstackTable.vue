@@ -8,15 +8,8 @@ import {
   tableFeatures,
   useTable,
 } from '@tanstack/vue-table'
-import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
-import {
-  draggable,
-  dropTargetForElements,
-} from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
-import {
-  attachInstruction,
-  extractInstruction,
-} from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
+import { attachInstruction } from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
+import { DND_TYPE, joinDndHost } from '@/dnd_host.js'
 // Material Icon Theme (MIT), the VS Code file icon set. Imported one file at a
 // time and inlined at build time, so the panel stays offline and only the icons
 // listed below reach the bundle rather than the set's thousand-odd SVGs.
@@ -1630,19 +1623,25 @@ onBeforeUnmount(() => {
 // the hitbox turns a blocked type into `instruction-blocked` and that renders as
 // a no-drop state instead of silently doing nothing.
 //
-// Both pdnd adapters resolve their element from `event.target` of listeners
-// bound on `document`: the draggable adapter looks the target up in a WeakMap,
-// the drop target adapter runs `target.closest('[data-drop-target-for-element]')`
-// and then walks up `parentElement`. Panel renders every component into a Bokeh
-// shadow root, and shadow retargeting rewrites that target to the shadow host,
-// so a registration on a row is something pdnd can never see. Exactly one
-// draggable and one drop target are therefore registered, on the host, and the
-// row under the pointer is resolved from the pointer position instead.
-const DND_TYPE = 'pnl-tst-row'
+// pdnd only ever sees the outermost shadow host, for the reasons `dnd_host.js`
+// sets out, so a row is not something it can be told about and neither is this
+// table once a second one shares the layout. One registration per host lives
+// there and dispatches to whichever pane the pointer is over; everything below
+// is this pane's half of that, with the row resolved from the pointer position.
 const AUTO_EXPAND_MS = 500
 const ALL_INSTRUCTIONS = ['reorder-above', 'reorder-below', 'make-child', 'reparent']
 
 const dndEnabled = computed(() => props.state.options.enable_dnd === true)
+
+// Cross-pane drag and drop. Two tables naming the same group accept each other's
+// rows; a table naming none accepts nothing from outside itself, which is what
+// keeps two unrelated tables on one page unrelated. The drag carries the group,
+// the pane it started in and the keys, and never the nodes: Python reads those
+// out of the other table, because a browser that could hand Python a node could
+// hand it any node.
+const transferGroup = computed(() => String(props.state.options.transfer_group || ''))
+const tableId = computed(() => String(props.state.tableId || ''))
+
 const draggingKeys = ref([])
 // The one row currently under the pointer, plus the instruction it resolved to.
 const dropTarget = ref(null)
@@ -1683,8 +1682,12 @@ function dragKeysFor(row) {
 // apart from an empty folder. Blocking only `make-child` keeps reordering next to
 // such a node available, and Python enforces the same rule on the drop it is sent,
 // so the browser is showing the outcome rather than deciding it.
-function blockedInstructions(row, sourceKeys) {
-  if (isSelfOrDescendant(row, sourceKeys)) return ALL_INSTRUCTIONS
+//
+// A foreign drag is never dropped into itself, because the keys it carries name
+// nodes in another tree. Two panes may well both hold an `a1`, so testing them
+// against these rows would block a perfectly good drop.
+function blockedInstructions(row, sourceKeys, foreign) {
+  if (!foreign && isSelfOrDescendant(row, sourceKeys)) return ALL_INSTRUCTIONS
   return row.original.allow_children === false ? ['make-child'] : []
 }
 
@@ -1784,88 +1787,111 @@ function onRowControl(hit, input) {
   return false
 }
 
+// This pane's half of the host registration in `dnd_host.js`. Every method
+// answers for this table alone, and the ones taking an `input` return null when
+// the pointer is somewhere else, which is how the host picks the pane to ask.
+const dndPane = {
+  id: () => tableId.value,
+
+  // Anything outside a row (the header, the empty space below the last row) is
+  // not a drag handle, and neither is a row control.
+  canDragFrom(input) {
+    const hit = rowAt(input)
+    return hit !== null && !onRowControl(hit, input)
+  },
+
+  dragData(input) {
+    const hit = rowAt(input)
+    if (!hit) return null
+    return {
+      type: DND_TYPE,
+      group: transferGroup.value,
+      sourceId: tableId.value,
+      key: hit.row.id,
+      keys: dragKeysFor(hit.row),
+    }
+  },
+
+  // The registered element is the host, so the default preview would be a
+  // snapshot of the whole layout. Point it at the row being dragged, offset so
+  // the preview stays under the cursor where it was grabbed.
+  preview(input, nativeSetDragImage) {
+    const hit = rowAt(input)
+    if (!hit) return false
+    nativeSetDragImage(hit.element, input.clientX - hit.rect.left, input.clientY - hit.rect.top)
+    return true
+  },
+
+  setDragging(keys) {
+    draggingKeys.value = keys
+  },
+
+  // Our own rows always. Another pane's only when both name the same group, so a
+  // table that opted into nothing shows no drop state at all rather than
+  // accepting a drag Python is bound to reject.
+  dropData(input, drag) {
+    const hit = rowAt(input)
+    if (!hit) return null
+    const foreign = drag.sourceId !== tableId.value
+    if (foreign && !(transferGroup.value && drag.group === transferGroup.value)) {
+      return { type: DND_TYPE, key: null, paneId: tableId.value }
+    }
+    const data = { type: DND_TYPE, key: hit.row.id, paneId: tableId.value }
+    return attachInstruction(data, {
+      element: hit.element,
+      input,
+      currentLevel: hit.row.depth,
+      indentPerLevel: indentPx.value,
+      mode: itemMode(hit.row),
+      block: blockedInstructions(hit.row, drag.keys ?? [], foreign),
+    })
+  },
+
+  showDrop(key, instruction) {
+    dropTarget.value = { key, instruction }
+    scheduleAutoExpand(key, instruction)
+  },
+
+  clearDrop: clearDropTarget,
+
+  drop(drag, key, instruction, input) {
+    const keys = drag.keys ?? []
+    if (keys.length === 0) return
+    const placement = {
+      targetKey: key,
+      instruction: instruction.type,
+      desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
+    }
+    if (drag.sourceId === tableId.value) {
+      if (keys.includes(key)) return
+      props.emitEvent('move', { key: drag.key, keys, ...placement })
+      return
+    }
+    // The rows are in another pane, so their keys mean nothing here and the
+    // arrivals are found by diffing the tree, exactly as a pasted copy's are.
+    // Ctrl or Alt held at the drop copies rather than moves, which is the
+    // modifier a file manager uses on each platform.
+    refocus = { pasted: new Set(table.getCoreRowModel().flatRows.map((row) => row.id)) }
+    props.emitEvent('transfer', {
+      keys,
+      sourceId: drag.sourceId,
+      copy: Boolean(input?.ctrlKey || input?.altKey),
+      ...placement,
+    })
+  },
+}
+
 let dndCleanup = null
 
-// Registered on mount and re-registered when `enable_dnd` flips, so a disabled
-// table never carries `draggable="true"` on the host at all.
+// Joined on mount and rejoined when `enable_dnd` flips, so a disabled table takes
+// no part in a drag over the layout it shares.
 function registerDnd() {
   dndCleanup?.()
   dndCleanup = null
 
   const host = dndHost()
   if (!host || !dndEnabled.value) return
-
-  dndCleanup = combine(
-    draggable({
-      element: host,
-      // Anything outside a row (the header, the empty space below the last row)
-      // is not a drag handle, and returning false cancels the native drag.
-      canDrag: ({ input }) => {
-        const hit = rowAt(input)
-        return hit !== null && !onRowControl(hit, input)
-      },
-      getInitialData: ({ input }) => {
-        const hit = rowAt(input)
-        if (!hit) return { type: DND_TYPE, key: null, keys: [] }
-        return { type: DND_TYPE, key: hit.row.id, keys: dragKeysFor(hit.row) }
-      },
-      onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
-        // The registered element is the host, so the default preview would be a
-        // snapshot of the entire table. Point it at the row being dragged, offset
-        // so the preview stays under the cursor where it was grabbed.
-        const input = location.current.input
-        const hit = rowAt(input)
-        if (!hit || !nativeSetDragImage) return
-        nativeSetDragImage(hit.element, input.clientX - hit.rect.left, input.clientY - hit.rect.top)
-      },
-      onDragStart: ({ source }) => {
-        draggingKeys.value = source.data.keys ?? []
-      },
-      onDrop: () => {
-        draggingKeys.value = []
-        clearDropTarget()
-      },
-    }),
-    dropTargetForElements({
-      element: host,
-      canDrop: ({ source }) => source.data.type === DND_TYPE,
-      getData: ({ input, source }) => {
-        const hit = rowAt(input)
-        if (!hit) return { type: DND_TYPE, key: null }
-        const data = { type: DND_TYPE, key: hit.row.id }
-        return attachInstruction(data, {
-          element: hit.element,
-          input,
-          currentLevel: hit.row.depth,
-          indentPerLevel: indentPx.value,
-          mode: itemMode(hit.row),
-          block: blockedInstructions(hit.row, source.data.keys ?? []),
-        })
-      },
-      onDrag: ({ self }) => {
-        const key = self.data.key
-        const instruction = extractInstruction(self.data)
-        dropTarget.value = key && instruction ? { key, instruction } : null
-        scheduleAutoExpand(key ?? null, instruction)
-      },
-      onDragLeave: clearDropTarget,
-      onDrop: ({ self, source }) => {
-        clearDropTarget()
-        const key = self.data.key
-        const instruction = extractInstruction(self.data)
-        if (!key || !instruction || instruction.type === 'instruction-blocked') return
-        const keys = source.data.keys ?? []
-        if (keys.includes(key)) return
-        props.emitEvent('move', {
-          key: source.data.key,
-          keys,
-          targetKey: key,
-          instruction: instruction.type,
-          desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
-        })
-      },
-    }),
-  )
+  dndCleanup = joinDndHost(host, dndPane)
 }
 
 onMounted(registerDnd)

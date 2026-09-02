@@ -41,6 +41,10 @@ export function render({ model, el }) {
     // in it have to mean something there. The toolbar reads it to enable paste
     // and the grid reads it to fade the rows waiting to be moved.
     clipboard: model.get("clipboard") || {},
+    // Minted once in Python and constant for the life of the table, so there is
+    // nothing to listen for. A cross-pane drag carries it, which is how the pane a
+    // drop lands in can name the pane the rows came from.
+    tableId: model.get("_table_id") || "",
   });
 
   // One gesture can produce two intents: the click that dismisses an open title

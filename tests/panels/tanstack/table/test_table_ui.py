@@ -2935,3 +2935,118 @@ def test_the_menu_leaves_the_search_action_out(page: Page, port):
     assert page.locator(".pnl-tst-menu input").count() == 0
 
     server.stop()
+
+
+# --- cross-pane transfer ------------------------------------------------------
+
+
+OTHER = [
+    {"key": "x", "title": "Folder X", "children": [{"key": "x1", "title": "File X1"}]},
+    {"key": "y", "title": "Folder Y"},
+]
+
+
+def panes(page: Page):
+    """The grids on the page, in layout order."""
+    return page.locator(".pnl-tst-root")
+
+
+def pane_rows(page: Page, index: int):
+    """Rows of one pane. Each table renders into its own shadow root."""
+    return panes(page).nth(index).locator(".pnl-tst-row")
+
+
+def serve_panes(left: TanstackTable, right: TanstackTable, page: Page, port: int):
+    """Serve two tables side by side and wait for both to render."""
+    server = start(pn.Row(left, right), page, port)
+    expect(panes(page)).to_have_count(2, timeout=15000)
+    pane_rows(page, 1).first.wait_for(state="visible", timeout=15000)
+    return server
+
+
+def drag_across(page: Page, src_row, dst_row, modifier: str = "") -> None:
+    """Drag a row of one pane onto a row of another.
+
+    This cannot reuse ``drag_row``: its indices address one grid, and the two
+    panes here are two pdnd hosts in two shadow roots. ``modifier`` is held down
+    over the drop, which is what turns the transfer into a copy.
+    """
+    src = src_row.bounding_box()
+    dst = dst_row.bounding_box()
+    assert src and dst
+
+    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2 + 6, steps=2)
+    expect(page.locator(".pnl-tst-row--dragging")).to_have_count(1, timeout=2000)
+    page.mouse.move(dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2, steps=12)
+    page.wait_for_timeout(120)
+    if modifier:
+        page.keyboard.down(modifier)
+    page.mouse.up()
+    if modifier:
+        page.keyboard.up(modifier)
+
+
+def test_a_drag_into_the_other_pane_transfers_the_node(page: Page, port):
+    """The node leaves one tree and arrives in the other, both rewritten by Python."""
+    events = []
+    left = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"enable_dnd": True, "expand_all": True, "transfer_group": "vfs"},
+    )
+    right = TanstackTable(
+        source=copy.deepcopy(OTHER),
+        options={"enable_dnd": True, "expand_all": True, "transfer_group": "vfs"},
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    server = serve_panes(left, right, page, port)
+
+    drag_across(page, pane_rows(page, 0).nth(1), pane_rows(page, 1).nth(0))  # File A1 onto Folder X
+
+    wait_until(lambda: any(name == "transfer" for name, _ in events), timeout=10)
+    assert shape(left.source) == "a(a2),b(b1)"
+    assert shape(right.source) == "x(x1,a1),y"
+    params = next(params for name, params in events if name == "transfer")
+    assert params["applied_keys"] == ["a1"]
+    assert params["source_id"] and params["source_id"] != params["target_id"]
+
+    server.stop()
+
+
+def test_a_pane_outside_the_group_refuses_the_drag(page: Page, port):
+    """Opting into nothing accepts nothing, so two unrelated tables stay unrelated."""
+    left = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"enable_dnd": True, "expand_all": True, "transfer_group": "vfs"},
+    )
+    right = TanstackTable(source=copy.deepcopy(OTHER), options={"enable_dnd": True, "expand_all": True})
+    server = serve_panes(left, right, page, port)
+
+    drag_across(page, pane_rows(page, 0).nth(1), pane_rows(page, 1).nth(0))
+
+    page.wait_for_timeout(400)
+    assert shape(left.source) == "a(a1,a2),b(b1)"
+    assert shape(right.source) == "x(x1),y"
+
+    server.stop()
+
+
+def test_holding_control_copies_across_the_panes(page: Page, port):
+    """The file manager gesture: the node stays where it was and arrives as well."""
+    left = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"enable_dnd": True, "expand_all": True, "transfer_group": "vfs"},
+    )
+    right = TanstackTable(
+        source=copy.deepcopy(OTHER),
+        options={"enable_dnd": True, "expand_all": True, "transfer_group": "vfs"},
+    )
+    server = serve_panes(left, right, page, port)
+
+    drag_across(page, pane_rows(page, 0).nth(1), pane_rows(page, 1).nth(0), modifier="Control")
+
+    wait_until(lambda: shape(right.source) == "x(x1,a1),y", timeout=10)
+    assert shape(left.source) == "a(a1,a2),b(b1)"
+
+    server.stop()

@@ -1,11 +1,13 @@
 """A virtual filesystem explorer: toolbar, context menu, icons, multiselect, drag and drop.
 
-Install and run:
+Two panes side by side share one ``transfer_group``, so a row dragged out of either
+one lands in the other. Install and run:
 
     uv sync
     uv run python examples/panels/tanstack/table/tanstack_table_vfs_explorer.py
 """
 
+from functools import partial
 from typing import Any
 
 import panel as pn
@@ -14,6 +16,11 @@ from panelini import Panelini
 from panelini.panels.tanstack.table import TanstackTable, icon_for, tree
 
 LOCKED_KEY = "archive"
+
+# Two tables naming one group accept rows dragged from each other. A table naming
+# none accepts nothing from outside itself, which is what keeps two unrelated
+# tables on one page unrelated.
+TRANSFER_GROUP = "vfs"
 
 # `icon` names one of the panel's bundled Material Icon Theme icons, and the folder
 # one follows the row's own open state. `allow_children: False` marks a leaf that
@@ -90,6 +97,22 @@ source = [
     },
 ]
 
+# The second pane's tree. Deliberately shallow and half empty, so there is
+# somewhere obvious to drop a row and somewhere obvious to drag one back from.
+staging_source = [
+    {
+        "key": "outbox",
+        "title": "Outbox",
+        **FOLDER,
+        "children": [
+            file_node("draft", "draft.md"),
+            file_node("cover", "cover.jpg"),
+        ],
+    },
+    {"key": "scratch", "title": "Scratch", **FOLDER, "children": []},
+    file_node("readme", "README.md"),
+]
+
 columns = [
     {"id": "title", "header": "Name"},
     {"id": "kind", "header": "Kind", "width": 90},
@@ -125,41 +148,67 @@ def allow_action(action: str, params: dict[str, Any]) -> bool:
     return not any(locked(key) for key in keys)
 
 
-def on_event(name: str, params: dict) -> None:
-    """Report row activation, and what Python made of a drop or a toolbar action."""
+def describe_transfer(params: dict) -> str:
+    """Phrase one cross-pane arrival for the log.
+
+    ``keys`` are the other pane's and ``applied_keys`` are this one's, which differ
+    whenever a copy, or a key this tree already held, made new ones.
+    """
+    asked = ", ".join(f"`{key}`" for key in params["keys"])
+    if not params["applied"]:
+        return f"refused {asked} from the other pane"
+    verb = "copied" if params["copy"] else "took"
+    landed = ", ".join(f"`{key}`" for key in params["applied_keys"])
+    renamed = "" if params["applied_keys"] == params["keys"] else f" as {landed}"
+    where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
+    return f"{verb} {asked} from the other pane{renamed}, {where}"
+
+
+def say(pane: str, text: str) -> None:
+    """Add one line to the shared log, named for the pane it came from."""
+    messages.append(f"**{pane}** {text}")
+    log.object = "**Log:**\n\n" + "\n".join(f"- {line}" for line in messages[-12:])
+
+
+def on_event(pane: str, name: str, params: dict) -> None:
+    """Report row activation, and what Python made of a drop or a toolbar action.
+
+    Both panes report into one log, so every line names where it happened. A
+    transfer is reported by the pane the nodes arrive in, because that is the pane
+    that decided the placement, and its line names the other one.
+    """
     if name == "activate":
-        messages.append(f"activated `{params['key']}`")
+        say(pane, f"activated `{params['key']}`")
     elif name == "move" and params["position"] is not None:
         # A drop carries the whole selection, so the log names every key it asked
         # for and every key that actually landed.
         verb = "moved" if params["applied"] else "rejected"
         moved = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
-        messages.append(f"{verb} {moved} {params['position']} `{params['anchor_key']}`")
+        say(pane, f"{verb} {moved} {params['position']} `{params['anchor_key']}`")
+    elif name == "transfer":
+        say(pane, describe_transfer(params))
     elif name == "add":
         where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
         verb = f"added `{params['key']}`" if params["applied"] else "refused to add"
-        messages.append(f"{verb} {where}")
+        say(pane, f"{verb} {where}")
     elif name == "rename":
         verb = "renamed" if params["applied"] else "refused to rename"
         # The panel reports a file that changed type, so an app can react to it
         # beyond the confirmation the browser already asked for.
         note = ", file type changed" if params["extension_changed"] else ""
-        messages.append(f"{verb} `{params['key']}` from {params['previous_title']} to {params['title']}{note}")
+        say(pane, f"{verb} `{params['key']}` from {params['previous_title']} to {params['title']}{note}")
     elif name == "delete":
         verb = "deleted" if params["applied"] else "refused to delete"
         gone = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
-        messages.append(f"{verb} {gone}")
+        say(pane, f"{verb} {gone}")
     elif name in ("cut", "copy"):
         held = ", ".join(f"`{key}`" for key in params["applied_keys"])
-        messages.append(f"{name} {held}" if held else f"{name} nothing")
+        say(pane, f"{name} {held}" if held else f"{name} nothing")
     elif name == "paste":
         verb = f"pasted a {params['mode']}" if params["applied"] else "refused to paste"
         landed = ", ".join(f"`{key}`" for key in params["applied_keys"] or params["keys"])
         where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
-        messages.append(f"{verb}, {landed} {where}")
-    else:
-        return
-    log.object = "**Log:**\n\n" + "\n".join(f"- {line}" for line in messages[-12:])
+        say(pane, f"{verb}, {landed} {where}")
 
 
 table = TanstackTable(
@@ -170,6 +219,7 @@ table = TanstackTable(
         "enable_dnd": True,
         "expand_all": True,
         "aria_label": "Documents",
+        "transfer_group": TRANSFER_GROUP,
         # Clicking the only selected row again clears the selection.
         "toggle_on_click": True,
         # Both start off, and the checkboxes on the right turn them on.
@@ -207,15 +257,54 @@ table = TanstackTable(
         "search_label": "Search name or kind",
         "new_key_prefix": "doc",
     },
-    event_callback=on_event,
+    event_callback=partial(on_event, "explorer"),
     move_callback=allow_move,
     action_callback=allow_action,
     sizing_mode="stretch_both",
 )
 
+# The second pane. Same group, so rows drag between the two, and a lighter toolbar
+# because everything a transfer needs is already in the gesture. It has no
+# `move_callback` and no `action_callback`, which is what makes it the plain side
+# of the pair: it takes whatever the explorer will let go of, and the explorer's
+# own vetoes still decide what may leave it and where a row coming back may land.
+staging = TanstackTable(
+    source=staging_source,
+    columns=columns,
+    options={
+        "select_mode": "hierarchy",
+        "enable_dnd": True,
+        "expand_all": True,
+        "aria_label": "Staging",
+        "transfer_group": TRANSFER_GROUP,
+        "toggle_on_click": True,
+        "show_checkboxes": False,
+        "menu": [],
+        "toolbar": [
+            "undo",
+            "redo",
+            "|",
+            NEW_FOLDER,
+            NEW_FILE,
+            "rename",
+            "delete",
+            "|",
+            "expand-all",
+            "collapse-all",
+            "|",
+            "clear-selection",
+            "search",
+        ],
+        "search_label": "Search staging",
+        "new_key_prefix": "stg",
+    },
+    event_callback=partial(on_event, "staging"),
+    sizing_mode="stretch_both",
+)
+
 
 def on_selection_change(*events: object) -> None:
-    """Mirror ``selected_keys`` into the readout on the right."""
+    """Mirror the explorer's ``selected_keys`` into the readout on the right."""
     keys = table.get_selected()
     selected_display.object = f"**Selected:** {', '.join(keys)}" if keys else "**Selected:** (none)"
 
@@ -227,21 +316,23 @@ context_menu = pn.widgets.Checkbox(name="Context menu", value=False)
 
 
 def on_checkboxes(event: object) -> None:
-    """Show or hide the checkbox column.
+    """Show or hide the checkbox column in both panes.
 
     Selection is untouched: with the column gone, rows are still picked by click,
     Ctrl click, Shift click and the space key, and a selection still drags.
     """
-    table.options = {**table.options, "show_checkboxes": checkboxes.value}
+    for pane in (table, staging):
+        pane.options = {**pane.options, "show_checkboxes": checkboxes.value}
 
 
 def on_context_menu(event: object) -> None:
-    """Offer the context menu, or take it away again.
+    """Offer the context menu in both panes, or take it away again.
 
     An empty list is the same as leaving the option out: no menu, and a click on a
     row goes back to selecting it and nothing else.
     """
-    table.options = {**table.options, "menu": MENU if context_menu.value else []}
+    for pane in (table, staging):
+        pane.options = {**pane.options, "menu": MENU if context_menu.value else []}
 
 
 checkboxes.param.watch(on_checkboxes, "value")
@@ -290,10 +381,26 @@ gestures = pn.pane.Markdown(
   to it when it takes no children, at root level when nothing is active. A cut is
   a move, so `move_callback` sees it; a copy makes new nodes with new keys, so
   `action_callback` does.
+- **Drag across the panes** to move a row from one tree into the other. Both name the
+  same `transfer_group`, so each accepts the other's rows and neither accepts anything
+  from a table outside it. Drop into a folder or between rows, exactly as within one
+  tree, and a whole selection travels in one gesture.
+- **Ctrl** or **Alt** held at the drop **copies** across instead of moving, and the
+  copy arrives with new keys, so the log shows one set of keys asked for and another
+  set landed.
+- Nodes never travel through the browser. The drag carries the group, the pane it
+  came from and the keys, and the receiving table reads the nodes out of the other
+  one in Python.
+- `Archive (read only)` refuses to let its rows leave, through the same
+  `action_callback`, and refuses to take rows from staging, through `move_callback`.
 - **Ctrl+Z** takes back the last change to the tree and **Ctrl+Shift+Z** puts it
   back, whether it was a drop, a toolbar action or a rename. The history is
   Python's, so it covers what the app did as well, and a fresh change drops
   whatever was ahead of it.
+- A transfer is **one gesture over two histories**, so `Ctrl+Z` in either pane takes
+  the whole thing back: the row leaves the tree it landed in and returns to the one
+  it came from. Change one pane on its own afterwards and the halves part company,
+  which the panel resolves by keeping the node rather than losing it.
 - `Archive (read only)` refuses new nodes, renames and deletions too, through a
   Python `action_callback`.
 - Clicking the only selected row **again** clears the selection, and so does
@@ -304,28 +411,34 @@ gestures = pn.pane.Markdown(
     sizing_mode="stretch_width",
 )
 
-# Both halves float on the app background rather than sitting on a card frame.
+# Every part floats on the app background rather than sitting on a card frame.
 PANE_STYLES = {
     "background": "rgba(255, 255, 255, 0.5)",
     "border-radius": "8px",
     "padding": "10px",
 }
 
+
+def framed(*objects: object) -> pn.Column:
+    """Put one pane on its own floating panel, with room beside it for the next."""
+    return pn.Column(*objects, styles=PANE_STYLES, sizing_mode="stretch_both", margin=(0, 15, 0, 0))
+
+
 app = Panelini(title="TanstackTable VFS Explorer", sidebar_visible=False)
 app.main_set(
     objects=[
         pn.Row(
-            pn.Column(
-                table,
-                styles=PANE_STYLES,
-                sizing_mode="stretch_both",
-                margin=(0, 15, 0, 0),
-            ),
+            # Two panes, one group. Each is a table in its own right, and dragging a
+            # row out of either drops it into the other.
+            framed(pn.pane.Markdown("#### Documents", margin=(0, 0, 5, 5)), table),
+            framed(pn.pane.Markdown("#### Staging", margin=(0, 0, 5, 5)), staging),
+            # The log sits above the notes rather than below them, so what a
+            # gesture did is on screen without scrolling past the whole list.
             pn.Column(
                 pn.Row(checkboxes, context_menu),
                 selected_display,
-                gestures,
                 log,
+                gestures,
                 styles=PANE_STYLES,
                 scroll=True,
                 sizing_mode="stretch_both",

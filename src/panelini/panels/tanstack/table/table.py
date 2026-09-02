@@ -1,8 +1,11 @@
 """Entrypoint of the TanstackTable panel."""
 
 from collections import deque
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional
+from uuid import uuid4
+from weakref import WeakValueDictionary, ref
 
 import panel as pn
 import param  # type: ignore[import-untyped]
@@ -14,6 +17,41 @@ from .icons import DEFAULT_FILE_ICON, extension_of, icon_for
 pn.extension()
 
 bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
+
+#: Every live table by id, so a pane receiving a cross-pane drag can find the pane
+#: the nodes came from and take them out of it in Python. The browser names the
+#: source, it never carries the nodes: a browser that could hand Python a node
+#: could hand it any node, and ``source`` has been Python's to write since P1.
+#:
+#: Weak, so a table that goes out of scope leaves nothing behind here.
+_LIVE_TABLES: "WeakValueDictionary[str, TanstackTable]" = WeakValueDictionary()
+
+
+class _Step:
+    """One recorded tree state, and the other half of the gesture that made it.
+
+    Most steps stand alone: a drop, a toolbar action or a call to
+    :meth:`TanstackTable.add_node` changes one tree and is taken back by itself.
+    A cross-pane transfer changes two, and the halves have to travel together.
+    Stepping only the pane a node arrived in would take the node out of that tree
+    without putting it back in the one it came from, so a single ``Ctrl+Z`` would
+    destroy it.
+
+    ``token`` is what makes the two halves recognisable to each other, and
+    ``partner`` is a weak reference, so a history cannot keep a table alive.
+    """
+
+    __slots__ = ("partner", "token", "tree")
+
+    def __init__(
+        self,
+        tree_state: list[dict[str, Any]],
+        token: Optional[str] = None,
+        partner: Optional["TanstackTable"] = None,
+    ) -> None:
+        self.tree = tree_state
+        self.token = token
+        self.partner = ref(partner) if partner is not None else None
 
 
 class TanstackTable(AnyWidgetComponent):
@@ -74,7 +112,10 @@ class TanstackTable(AnyWidgetComponent):
             "and new_key_prefix names the keys minted for added nodes. file_icons is "
             "an extra {extension: icon name} mapping used when a file is added or renamed, and "
             "extension_warning=False drops the confirmation a rename that changes a file type "
-            "otherwise asks for."
+            "otherwise asks for. transfer_group opts a table into cross-pane drag and drop: two "
+            "tables naming the same group accept rows dragged from each other, a table naming none "
+            "accepts nothing from outside itself, and holding Ctrl or Alt on the drop copies rather "
+            "than moves."
         ),
     )
     icons = param.Dict(
@@ -147,6 +188,11 @@ class TanstackTable(AnyWidgetComponent):
         ),
     )
 
+    # Python to JavaScript, minted once per table and constant for its life. A
+    # cross-pane drag carries it, so the pane a drop lands in can name the pane the
+    # nodes came from and ask Python for them.
+    _table_id = param.String(default="", doc="Identity of this table among the live ones.")
+
     # JavaScript to Python. Carries intent, never a mutated tree.
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
@@ -170,6 +216,7 @@ class TanstackTable(AnyWidgetComponent):
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
         action_callback: Optional[Callable[[str, dict[str, Any]], bool]] = None,
+        transfer_callback: Optional[Callable[[dict[str, Any]], bool]] = None,
         **params: Any,
     ) -> None:
         """Initialize the TanstackTable component.
@@ -202,9 +249,23 @@ class TanstackTable(AnyWidgetComponent):
                 decision. Moves keep going through ``move_callback``, and so does
                 a paste of something cut, since that is a move. Undo and redo are
                 not asked at all: they replay states this hook already allowed.
+                A cross-pane ``transfer`` asks the table the nodes are leaving,
+                not the one they arrive in, which decides through
+                ``move_callback`` per node exactly as a drop does.
+            transfer_callback: Escape hatch for a cross-pane drag whose partner is
+                not another ``TanstackTable``. Receives the transfer payload on the
+                receiving table, and returning True means the application handled
+                it, so the panel does nothing further. Returning False, or leaving
+                it unset, takes the ordinary path through the registry of live
+                tables.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
+
+        # Minted here rather than derived from anything a browser can see, and
+        # registered so a pane receiving one of this table's rows can find it.
+        self._table_id = f"tst-{uuid4().hex}"
+        _LIVE_TABLES[self._table_id] = self
 
         if source is not None:
             self.source = source
@@ -227,12 +288,13 @@ class TanstackTable(AnyWidgetComponent):
 
         # The tree handed in here is the starting point rather than a step, so both
         # stacks open empty and the first change is what becomes undoable.
-        self._undo_stack: deque[list[dict[str, Any]]] = deque(maxlen=self.undo_depth)
-        self._redo_stack: deque[list[dict[str, Any]]] = deque(maxlen=self.undo_depth)
+        self._undo_stack: deque[_Step] = deque(maxlen=self.undo_depth)
+        self._redo_stack: deque[_Step] = deque(maxlen=self.undo_depth)
 
         self._event_callback = event_callback
         self._move_callback = move_callback
         self._action_callback = action_callback
+        self._transfer_callback = transfer_callback
 
         self.param.watch(self._on_event_data_change, ["_event_data"])
         self.param.watch(self._on_undo_depth_change, ["undo_depth"])
@@ -280,9 +342,9 @@ class TanstackTable(AnyWidgetComponent):
         """Handle a single event from the browser.
 
         ``move``, ``add``, ``rename``, ``delete``, ``cut``, ``copy``, ``paste``,
-        ``undo`` and ``redo`` are intercepted here: the browser only reports what
-        the user asked for, and this is where that intent becomes a new tree. Every
-        other event is forwarded untouched.
+        ``transfer``, ``undo`` and ``redo`` are intercepted here: the browser only
+        reports what the user asked for, and this is where that intent becomes a
+        new tree. Every other event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
@@ -300,13 +362,20 @@ class TanstackTable(AnyWidgetComponent):
             event_params = self._apply_clipboard_intent(event_name, event_params)
         elif event_name == "paste":
             event_params = self._apply_paste_intent(event_params)
+        elif event_name == "transfer":
+            event_params = self._apply_transfer_intent(event_params)
         elif event_name in ("undo", "redo"):
             event_params = self._apply_history_intent(event_name)
 
         if self._event_callback:
             self._event_callback(event_name, event_params)
 
-    def _commit_source(self, updated: list[dict[str, Any]]) -> None:
+    def _commit_source(
+        self,
+        updated: list[dict[str, Any]],
+        token: Optional[str] = None,
+        partner: Optional["TanstackTable"] = None,
+    ) -> None:
         """Replace ``source`` and record the tree it replaced as one undo step.
 
         Every rewrite funnels through here, so one drop, one toolbar action or one
@@ -316,8 +385,14 @@ class TanstackTable(AnyWidgetComponent):
         Redo is dropped, because a new change makes the states ahead of it a branch
         of a history nobody can reach any more. That is the rule every editor
         follows and the one users already expect.
+
+        Args:
+            updated: The new tree.
+            token: Names the gesture this step is half of, for a cross-pane
+                transfer. Absent for every change that touches one tree only.
+            partner: The other table that gesture changed.
         """
-        self._undo_stack.append(self.get_source())
+        self._undo_stack.append(_Step(self.get_source(), token, partner))
         self._redo_stack.clear()
         self.source = updated
         self._sync_history()
@@ -335,15 +410,28 @@ class TanstackTable(AnyWidgetComponent):
         if can_redo != self.can_redo:
             self.can_redo = can_redo
 
-    def _step_history(self, action: str) -> bool:
+    def _step_history(self, action: str, token: Optional[str] = None) -> bool:
         """Step the tree one recorded state back or forward.
 
         The two directions are one operation with the stacks swapped: whichever is
         stepped away from receives the tree being left, so undo and redo can be
         alternated indefinitely.
 
+        A step recorded as half of a cross-pane transfer steps its partner with it,
+        which is the whole reason a step carries a token: taking back the arrival
+        alone would remove the node from the tree it landed in without putting it
+        back in the one it came from, and the node would then exist nowhere. The
+        partner is only stepped when the state waiting at the top of its own stack
+        is the other half of this gesture. If the panes have diverged, because that
+        pane was changed again afterwards, the halves part company and the node ends
+        up in both trees rather than in neither, which is the failure a user can see
+        and undo again.
+
         Args:
             action: ``undo`` or ``redo``.
+            token: Set only when this call is the partner half of a step already
+                under way, which both identifies the gesture and stops the pair
+                from stepping each other back and forth.
 
         Returns:
             True when a state was there to step to.
@@ -351,11 +439,13 @@ class TanstackTable(AnyWidgetComponent):
         taken, given = (
             (self._undo_stack, self._redo_stack) if action == "undo" else (self._redo_stack, self._undo_stack)
         )
-        if not taken:
+        if not taken or (token is not None and taken[-1].token != token):
             return False
 
-        given.append(self.get_source())
-        self.source = taken.pop()
+        step = taken.pop()
+        partner = step.partner() if step.partner is not None else None
+        given.append(_Step(self.get_source(), step.token, partner))
+        self.source = step.tree
         # A restored tree need not contain everything the current one did: undoing an
         # add takes back a node that is very likely selected, and it may be the one
         # the editor is open on.
@@ -366,6 +456,8 @@ class TanstackTable(AnyWidgetComponent):
         if stale:
             self._drop_stale_keys(stale)
         self._sync_history()
+        if token is None and step.token and partner is not None:
+            partner._step_history(action, step.token)
         return True
 
     def _apply_history_intent(self, action: str) -> dict[str, Any]:
@@ -392,6 +484,35 @@ class TanstackTable(AnyWidgetComponent):
             "can_redo": self.can_redo,
         }
 
+    def _resolve_placement(self, event_params: dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        """Return the ``(position, anchor_key)`` a payload asks for, against this tree.
+
+        Two vocabularies arrive here. A drop speaks the pragmatic-drag-and-drop
+        one in camelCase and its ``instruction`` is resolved against the tree; a
+        toolbar action or an application call names its ``position`` and
+        ``anchor_key`` outright. A blocked or unresolvable instruction resolves to
+        nothing rather than falling back to whatever position happened to also be
+        in the payload.
+
+        The tree it resolves against is always this table's own, which is what
+        makes it right for a cross-pane transfer too: the row a drop landed on is
+        in the receiving tree even when the nodes are not.
+        """
+        instruction = event_params.get("instruction")
+        if instruction:
+            target_key = event_params.get("target_key", event_params.get("targetKey"))
+            if not target_key:
+                return None, None
+            desired_level = event_params.get("desired_level", event_params.get("desiredLevel"))
+            resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
+            return resolved if resolved else (None, None)
+
+        position = event_params.get("position")
+        anchor_key = event_params.get("anchor_key", event_params.get("anchorKey"))
+        if position not in tree.POSITIONS or not anchor_key:
+            return None, None
+        return position, anchor_key
+
     def _apply_move_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Resolve a browser move intent and rewrite ``source``.
 
@@ -414,18 +535,7 @@ class TanstackTable(AnyWidgetComponent):
         target_key = event_params.get("target_key", event_params.get("targetKey"))
         instruction = event_params.get("instruction")
         desired_level = event_params.get("desired_level", event_params.get("desiredLevel"))
-        position = event_params.get("position")
-        anchor_key = event_params.get("anchor_key", event_params.get("anchorKey"))
-
-        if instruction:
-            # A blocked or unresolvable instruction must not fall back to whatever
-            # position happened to be in the payload.
-            resolved = None
-            if keys and target_key:
-                resolved = tree.resolve_instruction(self.source, target_key, instruction, desired_level)
-            position, anchor_key = resolved if resolved else (None, None)
-        elif position not in tree.POSITIONS or not anchor_key:
-            position, anchor_key = None, None
+        position, anchor_key = self._resolve_placement(event_params) if keys else (None, None)
 
         params: dict[str, Any] = {
             "key": key,
@@ -850,6 +960,199 @@ class TanstackTable(AnyWidgetComponent):
                 return str(key)
         return None
 
+    def _transfer_group(self) -> str:
+        """Return the cross-pane group this table is in, empty string for none."""
+        return str(self.options.get("transfer_group") or "")
+
+    def _transfer_source(self, source_id: Any) -> Optional["TanstackTable"]:
+        """Return the live table a transfer names, when it may hand nodes to us.
+
+        Both tables have to name the same non-empty group, so two unrelated tables
+        on one page stay unrelated and a table that opted into nothing accepts
+        nothing from outside itself.
+        """
+        group = self._transfer_group()
+        if not group or not source_id:
+            return None
+        origin = _LIVE_TABLES.get(str(source_id))
+        if origin is None or origin is self or origin._transfer_group() != group:
+            return None
+        return origin
+
+    def _transfer_placement(self, event_params: dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        """Return where an arrival lands, or ``(None, None)`` when nowhere valid.
+
+        A drop always names the row it landed on, so the anchor comes from the
+        hitbox instruction. A call that names no anchor at all means root level,
+        which is the only way to fill a pane that starts out empty.
+        """
+        if (
+            not event_params.get("instruction")
+            and event_params.get("anchor_key", event_params.get("anchorKey")) is None
+        ):
+            return "child", None
+
+        position, anchor_key = self._resolve_placement(event_params)
+        if position is None or anchor_key is None or tree.find_node(self.source, anchor_key) is None:
+            return None, None
+        if position == "child" and not tree.accepts_children(self.source, anchor_key):
+            return None, None
+        return position, anchor_key
+
+    def _apply_transfer_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Take nodes out of another table and put them in this one.
+
+        The browser names the pane the drag came from and the keys it was
+        carrying, never the nodes: a browser that could hand Python a node could
+        hand it any node, and ``source`` has been Python's to write since P1. The
+        nodes are read out of the other table here, in Python, which is also what
+        makes the ordinary two pane case need no application code at all.
+
+        Both vetoes are asked, each of the table it belongs to. The pane the nodes
+        leave answers ``action_callback("transfer", params)`` once, because letting
+        them go is one decision. The pane they arrive in answers ``move_callback``
+        per node, exactly as it does for a drop that never left it, with an empty
+        anchor standing for root level.
+
+        Args:
+            event_params: Raw payload with ``keys``, the ``source_id`` naming the
+                pane they came from, a hitbox instruction or an explicit
+                ``anchor_key`` and ``position``, and ``copy`` to duplicate rather
+                than move.
+
+        Returns:
+            The normalised payload. ``applied_keys`` names the nodes now sitting
+            in this tree, and ``handled`` records that ``transfer_callback`` took
+            the transfer instead.
+        """
+        key = event_params.get("key")
+        keys = event_params.get("keys") or ([key] if key else [])
+        source_id = event_params.get("source_id", event_params.get("sourceId"))
+        copying = bool(event_params.get("copy"))
+        position, anchor_key = self._transfer_placement(event_params)
+
+        params: dict[str, Any] = {
+            "keys": keys,
+            "source_id": source_id,
+            "target_id": self._table_id,
+            "anchor_key": anchor_key,
+            "position": position,
+            "copy": copying,
+            "handled": False,
+            "applied": False,
+            "applied_keys": [],
+        }
+
+        if not keys or position is None:
+            return params
+
+        # The escape hatch is asked first, because a partner that is not a
+        # TanstackTable is not in the registry and never will be.
+        if self._transfer_callback and self._transfer_callback(params):
+            params["handled"] = True
+            return params
+
+        origin = self._transfer_source(source_id)
+        if origin is None:
+            return params
+
+        # Pruned the way a cut is: a folder taken together with one of its own
+        # files would otherwise arrive twice, once inside its parent and once
+        # beside it.
+        held = [
+            candidate
+            for candidate in tree.prune_redundant_keys(origin.source, keys)
+            if tree.find_node(origin.source, candidate) is not None
+        ]
+        if not held or not origin._allows_action("transfer", params):
+            return params
+
+        allowed = [candidate for candidate in held if self._allows_move(candidate, str(anchor_key or ""), position)]
+        if not allowed:
+            return params
+
+        remaining, nodes = self._take_transfer(origin, allowed, copying)
+        updated, arrived = self._receive_transfer(nodes, anchor_key, position)
+        if not arrived:
+            return params
+
+        # Two trees, two histories, one gesture: each table records its own half
+        # through the writer it already has, and the shared token is what makes the
+        # halves recognise each other, so a step back in either pane takes the whole
+        # transfer with it. Without it, undoing the arrival would take the node out
+        # of this tree while the other has already let it go. The pane they leave
+        # goes first, in the order the gesture happened.
+        #
+        # A copy pairs nothing, because it left the other tree untouched and there
+        # is no half over there to take back.
+        token = None if copying else uuid4().hex
+        if not copying:
+            stale = {sub for candidate in allowed for sub in tree.subtree_keys(origin.source, candidate)}
+            origin._commit_source(remaining, token=token, partner=self)
+            origin._drop_stale_keys(stale)
+        self._commit_source(updated, token=token, partner=origin if token else None)
+        params["applied"] = True
+        params["applied_keys"] = arrived
+        return params
+
+    def _take_transfer(
+        self,
+        origin: "TanstackTable",
+        keys: list[str],
+        copying: bool,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Return the origin's tree without ``keys``, and the nodes themselves.
+
+        A copy leaves the origin exactly as it was, so nothing is removed and the
+        tree that comes back is the one that went in.
+        """
+        remaining = origin.get_source()
+        taken: list[dict[str, Any]] = []
+        for key in keys:
+            if copying:
+                node = tree.find_node(remaining, key)
+                if node is not None:
+                    taken.append(deepcopy(node))
+                continue
+            remaining, node = tree.remove_key(remaining, key)
+            if node is not None:
+                taken.append(node)
+        return remaining, taken
+
+    def _receive_transfer(
+        self,
+        nodes: list[dict[str, Any]],
+        anchor_key: Optional[str],
+        position: str,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Insert arriving nodes, re-keying only the ones this tree already holds.
+
+        A key is kept where it can be, so the browser can follow a row it already
+        knows by name, and re-keyed when this tree carries it: a node dragged out
+        of a pane and dragged back later must not collide with whatever replaced
+        it. That is the copy paste rule again.
+        """
+        prefix = self.options.get("new_key_prefix", "node")
+        updated = self.get_source()
+        anchor, pos = anchor_key, position
+        arrived: list[str] = []
+        for node in nodes:
+            present = {found.get(tree.KEY) for found in tree.iter_nodes(updated)}
+            incoming = {found.get(tree.KEY) for found in tree.iter_nodes([node])}
+            payload = tree.rekey_subtree(updated, node, prefix) if present & incoming else node
+            arrived_key = str(payload[tree.KEY])
+            if anchor is None:
+                updated = tree.insert_child(updated, None, payload)
+            elif pos == "child":
+                updated = tree.insert_child(updated, anchor, payload)
+            else:
+                updated = tree.insert_sibling(updated, anchor, payload, before=pos == "before")
+            arrived.append(arrived_key)
+            # Each later node lands after the previous one, so a batch arrives in
+            # the order it was dragged rather than reversed.
+            anchor, pos = arrived_key, "after"
+        return updated, arrived
+
     def _allows_move(self, key: str, anchor_key: str, position: str) -> bool:
         """Return whether ``move_callback`` permits this one node to move."""
         return not self._move_callback or bool(self._move_callback(key, anchor_key, position))
@@ -968,6 +1271,43 @@ class TanstackTable(AnyWidgetComponent):
             minted ones. Empty when nothing was pasted.
         """
         params = self._apply_paste_intent({"anchor_key": anchor_key, "position": position})
+        return params["applied_keys"]
+
+    def transfer_nodes(
+        self,
+        source: "TanstackTable",
+        keys: list[str],
+        anchor_key: Optional[str] = None,
+        position: str = "child",
+        copy: bool = False,
+    ) -> list[str]:
+        """Take nodes out of another table and put them in this one.
+
+        Both tables have to name the same ``options["transfer_group"]``, which is
+        the rule a cross-pane drag follows too: opting in is a decision an
+        application makes once about a pair of tables rather than per call.
+
+        Args:
+            source: The table the nodes leave.
+            keys: Keys in that table. A key inside another one's subtree is
+                dropped, since it would travel with its parent anyway.
+            anchor_key: Key in this table the nodes land next to or inside, or
+                None for root level.
+            position: ``child``, ``after`` or ``before``.
+            copy: True to leave the nodes where they are and duplicate them here.
+
+        Returns:
+            The keys now sitting at the arrival site. They are the keys taken,
+            unless this tree already held one, in which case that subtree arrives
+            re-keyed. Empty when nothing was transferred.
+        """
+        params = self._apply_transfer_intent({
+            "keys": keys,
+            "source_id": source._table_id,
+            "anchor_key": anchor_key,
+            "position": position,
+            "copy": copy,
+        })
         return params["applied_keys"]
 
     def clear_clipboard(self) -> None:
