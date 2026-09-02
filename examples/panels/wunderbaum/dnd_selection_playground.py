@@ -18,7 +18,7 @@ Three treegrids side by side, same source, different selection setup:
 
 Every tree event is appended to the log at the bottom with its full key
 payload, so single vs. multi drags and same-tree vs. cross-tree drops can be
-told apart. Ctrl+drag copies instead of moving.
+told apart. Ctrl+drag copies instead of moving (Option on macOS).
 """
 
 import copy

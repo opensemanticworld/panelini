@@ -95,11 +95,12 @@ itself. It carries the same selection under `sourceKeys`, next to the scalar
 ```
 
 Ctrl+drag sends `copy: True` with `copiedNodeId`/`copiedNodeIds` instead, and
-moves nothing - the copy is the callback's job. Nodes that cannot be moved are
-dropped from the set: a node whose ancestor is dragged with it, any drop onto
-the selection itself, and any move that would change nothing (into the folder a
-node already sits in, or before its own next sibling). If that leaves nothing,
-no `drop` is emitted.
+moves nothing - the copy is the callback's job. macOS uses Option instead of
+Ctrl, following Finder, where Command means a forced move. Nodes that cannot
+be moved are dropped from the set: a node whose ancestor is dragged with it,
+any drop onto the selection itself, and any move that would change nothing
+(into the folder a node already sits in, or before its own next sibling). If
+that leaves nothing, no `drop` is emitted.
 
 ### Drop position
 
@@ -169,7 +170,8 @@ Tree actions are one-way, so the match count arrives as a `filter` event with
 
 - Tree and treegrid modes
 - Lazy loading, with sync or async Python callbacks
-- Drag and drop within a tree (move, and ctrl+drag to copy) and between trees
+- Drag and drop within a tree (move, and ctrl+drag to copy, option+drag on
+  macOS) and between trees
 - Drag and drop of external files onto the tree
 - Inline title editing
 - Windows Explorer selection (click, ctrl+click, shift+click, ctrl+shift+click),

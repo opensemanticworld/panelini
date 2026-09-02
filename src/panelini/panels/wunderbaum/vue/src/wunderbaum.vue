@@ -84,14 +84,21 @@ export default {
     initTree() {
       const container = this.$refs.treeContainer;
 
-      // Track Ctrl key globally - e.event.ctrlKey is unreliable in DnD events
-      this._ctrlPressed = false;
-      this._onKeyDown = (ev) => { if (ev.key === 'Control') this._ctrlPressed = true; };
-      this._onKeyUp = (ev) => { if (ev.key === 'Control') this._ctrlPressed = false; };
+      // Track the copy modifier globally - e.event.ctrlKey is unreliable in
+      // DnD events. Ctrl is the copy modifier on Windows and Linux. macOS
+      // Finder copies with Option and reserves Command for a forced move, so
+      // Option is the pendant there. Reading the flag off every key event
+      // rather than watching for one key's own keydown resyncs it on each
+      // keystroke.
+      const isMac = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
+      const copyHeld = (ev) => (isMac ? ev.altKey : ev.ctrlKey);
+      this._copyPressed = false;
+      this._onKeyDown = (ev) => { this._copyPressed = copyHeld(ev); };
+      this._onKeyUp = (ev) => { this._copyPressed = copyHeld(ev); };
       document.addEventListener('keydown', this._onKeyDown, true);
       document.addEventListener('keyup', this._onKeyUp, true);
-      // Also clear on window blur (user may release Ctrl outside window)
-      this._onBlur = () => { this._ctrlPressed = false; };
+      // Also clear on window blur (user may release the key outside the window)
+      this._onBlur = () => { this._copyPressed = false; };
       window.addEventListener('blur', this._onBlur);
       container.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
       container.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
@@ -351,7 +358,7 @@ export default {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
             const region = this.effectiveRegion(e.suggestedDropMode, targetNode);
-            const isCopy = this._ctrlPressed || !!window.__wbForceCopy;
+            const isCopy = this._copyPressed || !!window.__wbForceCopy;
 
             if (!sourceNode) return;
 
