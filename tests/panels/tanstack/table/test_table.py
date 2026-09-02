@@ -1927,3 +1927,88 @@ def test_a_batch_still_reports_history_once(table):
             table.add_node({"key": f"n{index}", "title": str(index)})
 
     assert flags == [True]
+
+
+# --- sorting ------------------------------------------------------------------
+
+
+def test_sorting_starts_empty(table):
+    assert table.sorting == []
+    assert table.get_sort() is None
+
+
+def test_sort_by_writes_one_entry(table):
+    table.sort_by("size")
+
+    assert table.sorting == [{"id": "size", "desc": False}]
+    assert table.get_sort() == {"id": "size", "desc": False}
+
+
+def test_sort_by_descending(table):
+    table.sort_by("size", desc=True)
+
+    assert table.sorting == [{"id": "size", "desc": True}]
+    assert table.get_sort() == {"id": "size", "desc": True}
+
+
+def test_sort_by_replaces_rather_than_appends(table):
+    # One column at a time, so the second call is not a second sort key.
+    table.sort_by("size")
+    table.sort_by("title")
+
+    assert table.sorting == [{"id": "title", "desc": False}]
+
+
+def test_clear_sort(table):
+    table.sort_by("size")
+    table.clear_sort()
+
+    assert table.sorting == []
+    assert table.get_sort() is None
+
+
+def test_get_sort_returns_a_copy(table):
+    table.sort_by("size")
+    got = table.get_sort()
+    assert got is not None
+    got["id"] = "other"
+
+    assert table.sorting == [{"id": "size", "desc": False}]
+
+
+def test_sorting_can_be_set_at_construction(source):
+    table = TanstackTable(source=source, sorting=[{"id": "size", "desc": True}])
+
+    assert table.sorting == [{"id": "size", "desc": True}]
+
+
+def test_sorting_leaves_the_tree_alone(table):
+    before = shape(table.source)
+    table.sort_by("title", desc=True)
+
+    assert shape(table.source) == before
+
+
+def test_sorting_records_no_history_step(table):
+    # A view concern, exactly like the filter: nothing about the tree changed, so
+    # there is nothing to take back.
+    table.sort_by("title")
+
+    assert table.can_undo is False
+
+
+def test_sorting_survives_a_new_tree(table):
+    # set_source forgets the history and the clipboard because their keys stop
+    # meaning anything. A sort names a column, which a new tree still has.
+    table.sort_by("title")
+    table.set_source([{"key": "z", "title": "Z"}])
+
+    assert table.sorting == [{"id": "title", "desc": False}]
+
+
+def test_a_sort_arriving_from_the_browser_is_kept(table):
+    # The browser is the usual writer, since the header is where the sort is
+    # asked for. Python reads it back off the param like any other view state.
+    table.sorting = [{"id": "title", "desc": True}]
+
+    assert table.get_sort() == {"id": "title", "desc": True}

@@ -3050,3 +3050,285 @@ def test_holding_control_copies_across_the_panes(page: Page, port):
     assert shape(left.source) == "a(a1,a2),b(b1)"
 
     server.stop()
+
+
+# --- column sorting -----------------------------------------------------------
+
+# Roots and leaves whose names disagree with the tree order, so a sort has
+# something to change and folders-first has something to hold on to.
+MIXED = [
+    {"key": "a", "title": "Apple", "children": [{"key": "a1", "title": "Yellow"}]},
+    {"key": "z", "title": "Zebra", "children": [{"key": "z2", "title": "Beta"}, {"key": "z1", "title": "Alpha"}]},
+    {"key": "m", "title": "Middle", "allow_children": False},
+]
+
+# Rendered with every branch open and no sort, which none of the three sorted
+# orders below happens to match.
+MIXED_TITLES = ["Apple", "Yellow", "Zebra", "Beta", "Alpha", "Middle"]
+
+
+def headers(page: Page):
+    return page.locator("[role='columnheader']")
+
+
+def header(page: Page, label: str):
+    return page.locator(f".pnl-tst-hcell:has(.pnl-tst-hlabel:text-is('{label}'))")
+
+
+def focused_header(page: Page) -> str:
+    """Label of the header cell that currently has focus, or None for a row."""
+    return page.evaluate(
+        """() => {
+            let element = document.activeElement
+            while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
+            if (!element?.classList.contains('pnl-tst-hcell')) return null
+            return element.querySelector('.pnl-tst-hlabel')?.textContent.trim() ?? null
+        }"""
+    )
+
+
+def test_sortable_headers_start_at_aria_sort_none(page: Page, port):
+    """Sortable columns say `none`, and a treegrid without a sort says it twice."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    assert headers(page).nth(0).get_attribute("aria-sort") == "none"
+    assert headers(page).nth(1).get_attribute("aria-sort") == "none"
+
+    server.stop()
+
+
+def test_clicking_a_header_cycles_the_sort(page: Page, port):
+    """Ascending, descending, then back to the order source holds."""
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    assert row_titles(page) == MIXED_TITLES
+
+    header(page, "Name").click()
+    expect_titles(page, ["Apple", "Yellow", "Middle", "Zebra", "Alpha", "Beta"])
+    assert header(page, "Name").get_attribute("aria-sort") == "ascending"
+    # Only ever one column at a time, which is what ARIA asks of aria-sort.
+    assert header(page, "Size").get_attribute("aria-sort") == "none"
+
+    header(page, "Name").click()
+    expect_titles(page, ["Zebra", "Beta", "Alpha", "Middle", "Apple", "Yellow"])
+    assert header(page, "Name").get_attribute("aria-sort") == "descending"
+
+    header(page, "Name").click()
+    expect_titles(page, MIXED_TITLES)
+    assert header(page, "Name").get_attribute("aria-sort") == "none"
+
+    server.stop()
+
+
+def test_sorting_reorders_inside_each_parent_only(page: Page, port):
+    """A child never climbs out of its branch, however it compares."""
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    header(page, "Name").click()
+
+    # Alpha sorts first of all, and still renders under Zebra where it lives.
+    expect_titles(page, ["Apple", "Yellow", "Middle", "Zebra", "Alpha", "Beta"])
+
+    server.stop()
+
+
+def test_sorting_leaves_the_tree_alone_and_reaches_python(page: Page, port):
+    """The row model reorders, source does not, and the sort lands in a param."""
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    header(page, "Name").click()
+
+    wait_until(lambda: table.sorting == [{"id": "title", "desc": False}], timeout=10)
+    assert shape(table.source) == "a(a1),z(z2,z1),m"
+
+    server.stop()
+
+
+def test_a_sort_set_from_python_reaches_the_browser(page: Page, port):
+    """Bidirectional, exactly as the filter is."""
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    table.sort_by("title", desc=True)
+
+    expect_titles(page, ["Zebra", "Beta", "Alpha", "Middle", "Apple", "Yellow"])
+    assert header(page, "Name").get_attribute("aria-sort") == "descending"
+
+    server.stop()
+
+
+def test_arrow_up_off_the_first_row_reaches_the_header(page: Page, port):
+    """The header is part of the grid, so it costs no extra tab stop."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    assert focused_header(page) == "Name"
+
+    page.keyboard.press("ArrowRight")
+    assert focused_header(page) == "Size"
+
+    page.keyboard.press("ArrowLeft")
+    assert focused_header(page) == "Name"
+
+    page.keyboard.press("ArrowDown")
+    assert focused_header(page) is None
+    assert focused_title(page) == "Folder A"
+
+    server.stop()
+
+
+def test_the_grid_keeps_one_tab_stop_with_the_header_focused(page: Page, port):
+    """Either a row is tabbable or a header cell is, never both."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    assert page.locator(".pnl-tst-grid [tabindex='0']").count() == 1
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+
+    assert page.locator(".pnl-tst-grid [tabindex='0']").count() == 1
+    assert page.locator(".pnl-tst-hcell[tabindex='0']").count() == 1
+
+    server.stop()
+
+
+def test_enter_and_space_sort_from_the_header(page: Page, port):
+    """A sort a pointer alone could reach is the gap this panel exists to close."""
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("Enter")
+
+    expect(header(page, "Name")).to_have_attribute("aria-sort", "ascending", timeout=10000)
+
+    page.keyboard.press(" ")
+    expect(header(page, "Name")).to_have_attribute("aria-sort", "descending", timeout=10000)
+
+    server.stop()
+
+
+def test_a_column_can_opt_out_of_sorting(page: Page, port):
+    """No aria-sort at all, because there is no sort control to describe."""
+    columns = [{"id": "title", "header": "Name"}, {"id": "size", "header": "Size", "sortable": False}]
+    table = TanstackTable(source=copy.deepcopy(MIXED), columns=columns, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    assert headers(page).nth(0).get_attribute("aria-sort") == "none"
+    assert headers(page).nth(1).get_attribute("aria-sort") is None
+
+    header(page, "Size").click()
+    page.wait_for_timeout(200)
+    assert table.sorting == []
+
+    server.stop()
+
+
+def test_sorting_can_be_turned_off_for_the_whole_table(page: Page, port):
+    """A view only treegrid keeps its header inert."""
+    table = TanstackTable(
+        source=copy.deepcopy(MIXED),
+        columns=COLUMNS,
+        options={"expand_all": True, "sortable": False},
+    )
+    server = serve(table, page, port)
+
+    assert headers(page).nth(0).get_attribute("aria-sort") is None
+
+    header(page, "Name").click()
+    page.wait_for_timeout(200)
+    assert table.sorting == []
+    assert row_titles(page) == MIXED_TITLES
+
+    server.stop()
+
+
+def test_folders_first_holds_through_a_descending_sort(page: Page, port):
+    """Branches above leaves whichever way the column itself is sorted."""
+    table = TanstackTable(
+        source=copy.deepcopy(MIXED),
+        columns=COLUMNS,
+        options={"expand_all": True, "sort_folders_first": True},
+    )
+    server = serve(table, page, port)
+
+    # Middle is the one node that refuses children, so it is the one leaf.
+    header(page, "Name").click()
+    expect_titles(page, ["Apple", "Yellow", "Zebra", "Alpha", "Beta", "Middle"])
+
+    header(page, "Name").click()
+    expect_titles(page, ["Zebra", "Beta", "Alpha", "Apple", "Yellow", "Middle"])
+
+    server.stop()
+
+
+def test_searching_a_sorted_table_stays_sorted(page: Page, port):
+    """The filter reads the sorted model, not the one upstream of the sort."""
+    table = TanstackTable(
+        source=copy.deepcopy(MIXED),
+        columns=COLUMNS,
+        options={"expand_all": True, "toolbar": ["search"]},
+    )
+    server = serve(table, page, port)
+
+    header(page, "Name").click()
+    expect_titles(page, ["Apple", "Yellow", "Middle", "Zebra", "Alpha", "Beta"])
+
+    # Apple, Yellow, Middle and Alpha match, and Zebra is kept as Alpha's path.
+    # Unsorted the same four would read Apple, Yellow, Zebra, Alpha, Middle.
+    page.locator(".pnl-tst-search input").fill("l")
+    expect_titles(page, ["Apple", "Yellow", "Middle", "Zebra", "Alpha"])
+
+    server.stop()
+
+
+def test_move_up_and_down_are_disabled_while_sorted(page: Page, port):
+    """Swapping two siblings changes nothing anyone can see under a sort."""
+    table = TanstackTable(
+        source=copy.deepcopy(MIXED),
+        columns=COLUMNS,
+        options={"expand_all": True, "toolbar": ["move-up", "move-down", "indent", "outdent"]},
+    )
+    server = serve(table, page, port)
+
+    # Beta, which has a sibling after it and a parent to step out of.
+    click_row(page, 3)
+    expect(button(page, "Move down")).to_have_attribute("aria-disabled", "false", timeout=10000)
+
+    header(page, "Name").click()
+
+    expect(button(page, "Move up")).to_have_attribute("aria-disabled", "true", timeout=10000)
+    assert button(page, "Move down").get_attribute("aria-disabled") == "true"
+    # Reparenting still means what it says, so these two stay available.
+    assert button(page, "Outdent").get_attribute("aria-disabled") == "false"
+
+    server.stop()
+
+
+def test_a_reorder_drop_is_blocked_while_sorted(page: Page, port):
+    """The row would land back where the sort puts it, so the drop says no."""
+    table = TanstackTable(
+        source=copy.deepcopy(MIXED),
+        columns=COLUMNS,
+        options={"expand_all": True, "enable_dnd": True},
+    )
+    server = serve(table, page, port)
+
+    header(page, "Name").click()
+    expect_titles(page, ["Apple", "Yellow", "Middle", "Zebra", "Alpha", "Beta"])
+
+    # Apple onto the top band of Zebra, which unsorted would be a reorder.
+    drag_row(page, 0, 3, y_frac=0.1, expect_blocked=True)
+
+    page.wait_for_timeout(400)
+    assert shape(table.source) == "a(a1),z(z2,z1),m"
+
+    server.stop()

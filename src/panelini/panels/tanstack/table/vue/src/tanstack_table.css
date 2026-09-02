@@ -71,10 +71,43 @@
 }
 
 .pnl-tst-hcell {
+  display: flex;
+  align-items: center;
   overflow: hidden;
+  gap: 4px;
   padding: 0 6px;
+}
+
+.pnl-tst-hcell:focus-visible {
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+}
+
+.pnl-tst-hcell--sortable {
+  cursor: pointer;
+}
+
+.pnl-tst-hcell--sortable:hover {
+  color: var(--pnl-tst-fg);
+}
+
+.pnl-tst-hlabel {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Sized down from the toolbar's, since it sits beside text rather than alone in
+   a button, and kept from shrinking when the label runs out of room. */
+.pnl-tst-sortind {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.pnl-tst-sortind svg {
+  width: 12px;
+  height: 12px;
 }
 
 .pnl-tst-row {

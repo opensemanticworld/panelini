@@ -33,6 +33,9 @@ export function render({ model, el }) {
     editingKey: model.get("editing_key") || "",
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
+    // A view concern like the filter, and bidirectional for the same reason: an
+    // application may set a default sort or read back the one the user chose.
+    sorting: model.get("sorting") || [],
     // Python owns the history as it owns the tree. The toolbar asks for a step and
     // reads these to know whether there is one, rather than counting its own.
     canUndo: model.get("can_undo") || false,
@@ -102,6 +105,18 @@ export function render({ model, el }) {
     model.save_changes();
   };
 
+  // `sorting` is a list of small flat dicts rather than a key set, so the guard
+  // compares them field by field instead of by sorted value. The list holds one
+  // entry at most, so this is a comparison of two things at worst.
+  const sameSorting = (a, b) =>
+    a.length === b.length && a.every((entry, i) => entry.id === b[i].id && !!entry.desc === !!b[i].desc);
+
+  const setSorting = (value) => {
+    if (sameSorting(model.get("sorting") || [], value)) return;
+    model.set("sorting", value);
+    model.save_changes();
+  };
+
   const app = createApp(TanstackTable, {
     state,
     emitEvent,
@@ -109,6 +124,7 @@ export function render({ model, el }) {
     setSelectedKeys,
     setFilterText,
     setEditingKey,
+    setSorting,
   });
   app.mount(container);
 
@@ -135,6 +151,9 @@ export function render({ model, el }) {
   });
   model.on("change:selected_keys", () => {
     state.selectedKeys = model.get("selected_keys") || [];
+  });
+  model.on("change:sorting", () => {
+    state.sorting = model.get("sorting") || [];
   });
   model.on("change:can_undo", () => {
     state.canUndo = model.get("can_undo") || false;

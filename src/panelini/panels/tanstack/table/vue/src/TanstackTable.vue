@@ -3,8 +3,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   createCoreRowModel,
   createExpandedRowModel,
+  createSortedRowModel,
   rowExpandingFeature,
   rowSelectionFeature,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_text,
   tableFeatures,
   useTable,
 } from '@tanstack/vue-table'
@@ -71,20 +75,38 @@ const props = defineProps({
   setFilterText: { type: Function, required: true },
   // Two-way sync of the row the inline title editor is open on.
   setEditingKey: { type: Function, required: true },
+  // Two-way sync of the sort, as a list of {id, desc}.
+  setSorting: { type: Function, required: true },
 })
 
 // Built once, outside the table instance: the adapter injects
 // `coreReactivityFeature` itself, so only the opt-in features are listed here.
+//
+// Sort comparators are registered by name rather than spread from the built-in
+// registry, so only the two that a treegrid of titles and values actually needs
+// reach the bundle. `alphanumeric` is what puts `file2` above `file10`, `text` is
+// the case-insensitive compare plain strings fall back to, and anything else
+// (numbers, booleans) lands on `sortFn_basic`, which table-core imports itself.
 const features = tableFeatures({
   rowExpandingFeature,
   rowSelectionFeature,
+  rowSortingFeature,
   coreRowModel: createCoreRowModel(),
   expandedRowModel: createExpandedRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 })
 
 const TREE_COLUMN_ID = 'title'
 
 const hasColumns = computed(() => (props.state.columns || []).length > 0)
+
+// Sorting is a view concern, exactly as the search box is: it reorders the row
+// model and never `source`, so Python goes on owning a tree that has one order of
+// its own. A table without columns has no header to sort from, so it is off there
+// whatever the option says.
+const sortingEnabled = computed(() => hasColumns.value && props.state.options.sortable !== false)
+const foldersFirst = computed(() => props.state.options.sort_folders_first === true)
 
 // Python column defs are {id, header, field, width}. The first column is the
 // tree column: it carries the indent and the expand twisty.
@@ -100,9 +122,34 @@ const columnDefs = computed(() => {
       header: column.header ?? column.id,
       accessorFn: (row) => row[field],
       meta: { width: column.width },
+      enableSorting: column.sortable !== false,
+      // Only set when asked for, so an ordinary table keeps TanStack's own
+      // detection of what a column holds rather than routing through ours.
+      ...(foldersFirst.value ? { sortFn: branchesFirst } : {}),
     }
   })
 })
+
+// A branch is a node that has children or one that has not said it cannot take
+// them, which is the rule `tree.accepts_children` applies in Python. A tree that
+// never declares `allow_children` therefore has no leaves, and asking for folders
+// first in one changes nothing rather than inventing a distinction.
+function isBranch(row) {
+  return row.subRows.length > 0 || row.original.allow_children !== false
+}
+
+// Folders above files at every level, whichever way the column itself is sorted.
+// TanStack inverts a comparator's whole result for a descending sort, so the
+// grouping half is pre-inverted here to survive that; without it, asking for
+// descending names would also turn the tree inside out.
+function branchesFirst(rowA, rowB, columnId) {
+  const branchA = isBranch(rowA)
+  if (branchA !== isBranch(rowB)) {
+    const descending = sorting.value.some((entry) => entry.id === columnId && entry.desc)
+    return (branchA ? -1 : 1) * (descending ? -1 : 1)
+  }
+  return table.getColumn(columnId).getAutoSortFn()(rowA, rowB, columnId)
+}
 
 // Local mirror of TanStack's `expanded` state, kept as a record for the table
 // and projected back to a sorted key list for Python.
@@ -217,6 +264,22 @@ const showCheckboxes = computed(
 
 const rowSelection = ref(keysToRecord(props.state.selectedKeys))
 
+// Local mirror of TanStack's `sorting`, in the shape Python holds it: a list of
+// {id, desc}. One entry at most, for the reason `enableMultiSort: false` gives.
+const sorting = ref(cleanSorting(props.state.sorting))
+
+function cleanSorting(value) {
+  return (value || [])
+    .filter((entry) => entry && entry.id)
+    .map((entry) => ({ id: String(entry.id), desc: entry.desc === true }))
+}
+
+function sameSorting(a, b) {
+  return a.length === b.length && a.every((entry, i) => entry.id === b[i].id && entry.desc === b[i].desc)
+}
+
+const sorted = computed(() => sortingEnabled.value && sorting.value.length > 0)
+
 const table = useTable({
   features,
   data: computed(() => props.state.source || []),
@@ -227,15 +290,38 @@ const table = useTable({
   // whole tree after every move, so leaving that on would collapse the tree on
   // each drop and push an empty `expanded_keys` back. Expansion is owned here.
   autoResetExpanded: false,
+  // The same bargain for the sort: a tree Python rewrote is not a user asking
+  // for a different order, and dropping the sort on every move would undo the
+  // one thing the header was pressed for.
+  autoResetSorting: false,
   enableRowSelection: selectable,
   enableMultiRowSelection: computed(() => selectMode.value !== 'single'),
   enableSubRowSelection: cascades,
-  state: computed(() => ({ expanded: expanded.value, rowSelection: rowSelection.value })),
+  enableSorting: sortingEnabled,
+  // One column at a time. ARIA asks that `aria-sort` name a single column, and a
+  // treegrid sorted on two keys inside every parent is a thing no file manager
+  // does and no screen reader can narrate.
+  enableMultiSort: false,
+  // Third press clears the sort rather than going back to ascending, so the tree
+  // order stays reachable without a separate control.
+  enableSortingRemoval: true,
+  // Every column starts ascending. TanStack would otherwise start a numeric
+  // column descending, which makes the same gesture mean two different things
+  // depending on what a column happens to hold.
+  sortDescFirst: false,
+  state: computed(() => ({
+    expanded: expanded.value,
+    rowSelection: rowSelection.value,
+    sorting: sorting.value,
+  })),
   onExpandedChange: (updater) => {
     expanded.value = typeof updater === 'function' ? updater(expanded.value) : updater
   },
   onRowSelectionChange: (updater) => {
     rowSelection.value = typeof updater === 'function' ? updater(rowSelection.value) : updater
+  },
+  onSortingChange: (updater) => {
+    sorting.value = cleanSorting(typeof updater === 'function' ? updater(sorting.value) : updater)
   },
 })
 
@@ -279,6 +365,20 @@ watch(
   (keys) => {
     if (sameKeys(recordToKeys(rowSelection.value), [...(keys || [])].sort())) return
     rowSelection.value = keysToRecord(keys)
+  },
+)
+
+// The sort round trips for the same reason the filter does: it is state an
+// application may want to set, read back or keep, and a param is where the rest
+// of this panel's view state already lives.
+watch(() => sorting.value, props.setSorting, { flush: 'post' })
+
+watch(
+  () => props.state.sorting,
+  (value) => {
+    const next = cleanSorting(value)
+    if (sameSorting(sorting.value, next)) return
+    sorting.value = next
   },
 )
 
@@ -328,15 +428,21 @@ function rowMatches(row) {
 // Matches plus their ancestors, so a hit keeps the path that leads to it. The
 // filtered view deliberately ignores the expanded state: leaving a match hidden
 // inside a collapsed branch would make the search look broken.
+//
+// The sorted model rather than the core one, because the core model sits upstream
+// of the sort in TanStack's pipeline and reading it here would quietly unsort the
+// table the moment anything was typed into the search box. Its `flatRows` are
+// built depth first in sorted order, which is the order the rows render in.
 const rows = computed(() => {
   if (!filtering.value) return table.getRowModel().rows
+  const flat = table.getSortedRowModel().flatRows
   const keep = new Set()
-  for (const row of table.getCoreRowModel().flatRows) {
+  for (const row of flat) {
     if (!rowMatches(row)) continue
     keep.add(row.id)
     for (let cursor = row.getParentRow(); cursor; cursor = cursor.getParentRow()) keep.add(cursor.id)
   }
-  return table.getCoreRowModel().flatRows.filter((row) => keep.has(row.id))
+  return flat.filter((row) => keep.has(row.id))
 })
 
 const headers = computed(() => table.getHeaderGroups()[0]?.headers ?? [])
@@ -347,6 +453,117 @@ const emptyMessage = computed(() => (filtering.value ? 'No matches' : 'No data')
 // The header occupies aria row 1 when columns are shown, so body rows start at 2.
 const rowIndexOffset = computed(() => (hasColumns.value ? 2 : 1))
 const ariaRowCount = computed(() => rows.value.length + (hasColumns.value ? 1 : 0))
+
+// The header is part of the grid rather than a region of its own, so the panel
+// still has exactly two tab stops: the toolbar, then the grid. `headerActive`
+// says which half of the grid holds the one tabbable element, and ArrowUp off the
+// first row is what moves it, which is the first thing a grid user tries.
+const headerActive = ref(false)
+const headerFocusId = ref(null)
+const headerElements = new Map()
+
+function setHeaderElement(id, element) {
+  if (element) headerElements.set(id, element)
+  else headerElements.delete(id)
+}
+
+const headerFocusKey = computed(() => {
+  const list = headers.value
+  if (list.length === 0) return null
+  const current = list.some((header) => header.column.id === headerFocusId.value)
+  return current ? headerFocusId.value : list[0].column.id
+})
+
+function focusHeaderByIndex(index) {
+  const list = headers.value
+  if (list.length === 0) return
+  const next = list[Math.max(0, Math.min(index, list.length - 1))]
+  headerActive.value = true
+  headerFocusId.value = next.column.id
+  nextTick(() => headerElements.get(next.column.id)?.focus())
+}
+
+function focusHeader() {
+  const list = headers.value
+  focusHeaderByIndex(list.findIndex((header) => header.column.id === headerFocusKey.value))
+}
+
+function leaveHeader() {
+  headerActive.value = false
+  nextTick(() => rowElements.get(focusKey.value)?.focus())
+}
+
+function canSort(header) {
+  return sortingEnabled.value && header.column.getCanSort()
+}
+
+// `none` on the sortable columns that are not sorted, and nothing at all on the
+// ones that cannot be: a column with no sort control has no sort state to report,
+// and saying `none` there would offer an affordance that is not there.
+function ariaSort(header) {
+  if (!canSort(header)) return undefined
+  const direction = header.column.getIsSorted()
+  if (direction === 'asc') return 'ascending'
+  return direction === 'desc' ? 'descending' : 'none'
+}
+
+// Decorative: the direction is announced from the header's own aria-sort, so the
+// arrow is there for the eye and hidden from everything else. Reuses the two
+// toolbar arrows rather than adding a glyph, so the indicator costs no bundle.
+function sortIcon(header) {
+  if (!canSort(header)) return null
+  const direction = header.column.getIsSorted()
+  if (!direction) return null
+  return direction === 'asc' ? arrowUpIcon : arrowDownIcon
+}
+
+// Ascending, descending, then back to the tree's own order.
+function toggleSort(header) {
+  if (!canSort(header)) return
+  header.column.toggleSorting()
+}
+
+function onHeaderClick(header) {
+  focusHeaderByIndex(headers.value.indexOf(header))
+  toggleSort(header)
+}
+
+// The header's own keyboard region. Left and right walk the columns, down steps
+// into the rows, and Enter and Space sort, which are the meanings each key
+// already carries one row lower. Anything else bubbles to the grid, so the
+// toolbar shortcuts go on working from up here.
+function onHeaderKeydown(header, event) {
+  const list = headers.value
+  const index = Math.max(
+    0,
+    list.findIndex((entry) => entry.column.id === headerFocusKey.value),
+  )
+  switch (event.key) {
+    case 'ArrowLeft':
+      focusHeaderByIndex(index - 1)
+      break
+    case 'ArrowRight':
+      focusHeaderByIndex(index + 1)
+      break
+    case 'Home':
+      focusHeaderByIndex(0)
+      break
+    case 'End':
+      focusHeaderByIndex(list.length - 1)
+      break
+    case 'ArrowDown':
+      leaveHeader()
+      break
+    case 'Enter':
+    case ' ':
+      toggleSort(header)
+      break
+    default:
+      return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+}
 
 // Siblings as rendered, not as stored. A filter drops unmatched siblings from the
 // screen, and aria-posinset and aria-setsize describing a tree the user cannot see
@@ -411,6 +628,9 @@ const rowElements = new Map()
 function setActive(key) {
   activeKey.value = key
   activeShown.value = true
+  // The grid's one tabbable element is either a row or a header cell, never
+  // both, so touching a row hands it back from the header.
+  headerActive.value = false
 }
 
 function setRowElement(key, element) {
@@ -522,8 +742,12 @@ function onKeydown(event) {
       moveFocus(index + 1, event)
       break
     case 'ArrowUp':
+      // Off the top of the rows and into the header, which is where the sort and
+      // the resize live. Extending a selection stops at the first row, because
+      // there is nothing above it to take into one.
       event.preventDefault()
-      moveFocus(index - 1, event)
+      if (index === 0 && hasColumns.value && !event.shiftKey) focusHeader()
+      else moveFocus(index - 1, event)
       break
     case 'ArrowRight':
       // Expand a closed branch, otherwise step into it. Leaves do nothing.
@@ -1279,9 +1503,11 @@ function actionEnabled(item) {
     case 'redo':
       return props.state.canRedo === true
     case 'move-up':
-      return reorderAnchor(-1) !== null
     case 'move-down':
-      return reorderAnchor(1) !== null
+      // A sorted view computes the order inside every parent, so swapping two
+      // siblings in the tree changes nothing anyone can see. Reparenting still
+      // means what it says, which is why indent and outdent stay available.
+      return !sorted.value && reorderAnchor(item.id === 'move-up' ? -1 : 1) !== null
     case 'indent': {
       // Indenting means becoming a child of the row above, so a leaf that refuses
       // children blocks it exactly as it blocks a `make-child` drop.
@@ -1686,9 +1912,17 @@ function dragKeysFor(row) {
 // A foreign drag is never dropped into itself, because the keys it carries name
 // nodes in another tree. Two panes may well both hold an `a1`, so testing them
 // against these rows would block a perfectly good drop.
+//
+// A sorted view blocks the two reorder instructions for the reason move-up and
+// move-down are disabled with it: position inside a parent is computed, so "put
+// this after that" has no outcome the user can see and the row would land back
+// where the sort puts it. `reparent` survives, because changing the parent is a
+// real change whatever the order is.
 function blockedInstructions(row, sourceKeys, foreign) {
   if (!foreign && isSelfOrDescendant(row, sourceKeys)) return ALL_INSTRUCTIONS
-  return row.original.allow_children === false ? ['make-child'] : []
+  const blocked = sorted.value ? ['reorder-above', 'reorder-below'] : []
+  if (row.original.allow_children === false) blocked.push('make-child')
+  return blocked
 }
 
 // The hitbox needs to know where a row sits so it can offer `make-child` on an
@@ -2000,12 +2234,28 @@ function dropLineStyle(row) {
           <div
             v-for="(header, index) in headers"
             :key="header.id"
+            :ref="(element) => setHeaderElement(header.column.id, element)"
             class="pnl-tst-hcell"
+            :class="{ 'pnl-tst-hcell--sortable': canSort(header) }"
             role="columnheader"
             :aria-colindex="index + 1"
+            :aria-sort="ariaSort(header)"
+            :tabindex="headerActive && header.column.id === headerFocusKey ? 0 : -1"
             :style="cellStyle(header.column.columnDef)"
+            @click="onHeaderClick(header)"
+            @focus="headerFocusId = header.column.id"
+            @keydown="onHeaderKeydown(header, $event)"
           >
-            {{ header.column.columnDef.header }}
+            <span class="pnl-tst-hlabel">{{ header.column.columnDef.header }}</span>
+            <!-- Decorative: the direction is already on the header as aria-sort,
+                 so announcing it again here would say it twice. -->
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <span
+              v-if="sortIcon(header)"
+              class="pnl-tst-sortind"
+              aria-hidden="true"
+              v-html="sortIcon(header)"
+            ></span>
           </div>
         </div>
       </div>
@@ -2032,7 +2282,7 @@ function dropLineStyle(row) {
           :aria-expanded="canExpand(row) ? isExpanded(row) : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :aria-haspopup="hasMenu ? 'menu' : undefined"
-          :tabindex="row.id === focusKey ? 0 : -1"
+          :tabindex="!headerActive && row.id === focusKey ? 0 : -1"
           @click="onRowClick(row, $event)"
           @contextmenu="onRowContextMenu(row, $event)"
           @focus="setActive(row.id)"

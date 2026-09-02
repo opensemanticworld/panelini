@@ -89,7 +89,11 @@ class TanstackTable(AnyWidgetComponent):
     )
     columns = param.List(
         default=[],
-        doc="Column definitions for treegrid mode. Empty = tree-only mode.",
+        doc=(
+            "Column definitions for treegrid mode, as {id, header, field, width} dicts. Empty = "
+            "tree-only mode. Optional per column: sortable=False to leave one column out of the "
+            "sort while the rest stay in."
+        ),
     )
     options = param.Dict(
         default={},
@@ -118,7 +122,9 @@ class TanstackTable(AnyWidgetComponent):
             "otherwise asks for. transfer_group opts a table into cross-pane drag and drop: two "
             "tables naming the same group accept rows dragged from each other, a table naming none "
             "accepts nothing from outside itself, and holding Ctrl or Alt on the drop copies rather "
-            "than moves."
+            "than moves. sortable=False takes the sort off a table that has columns, and "
+            "sort_folders_first puts branches above leaves at every level whichever way a column "
+            "is sorted."
         ),
     )
     icons = param.Dict(
@@ -151,6 +157,22 @@ class TanstackTable(AnyWidgetComponent):
             "Key of the node whose title is in the inline editor, empty for none. Setting it opens "
             "the editor on that row, which is how an application can start a rename of its own. The "
             "browser clears it when the editor commits or is cancelled."
+        ),
+    )
+
+    # Bidirectional for the same reason filter_text is, and a view concern in the
+    # same way: it reorders what is rendered and never source.
+    sorting = param.List(
+        default=[],
+        doc=(
+            "The sort, as a list of {id, desc} dicts naming a column. One entry at most: sorting on "
+            "two keys inside every parent is a thing no file manager does and no screen reader can "
+            "narrate, so the header cycles ascending, descending, then back to the tree's own "
+            "order. Rows are sorted inside each parent and never across levels, and source keeps "
+            "the order it has, so a drop made while sorted is still a move on the real tree. "
+            "Reordering next to a sibling is refused while a sort is active, by drag and by the "
+            "toolbar alike, because position inside a parent is computed there and the row would "
+            "land back where the sort puts it."
         ),
     )
 
@@ -215,6 +237,7 @@ class TanstackTable(AnyWidgetComponent):
         editing_key: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
+        sorting: Optional[list[dict[str, Any]]] = None,
         undo_depth: Optional[int] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
@@ -235,6 +258,8 @@ class TanstackTable(AnyWidgetComponent):
             editing_key: Key of the node to open the inline title editor on.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
+            sorting: The sort to open with, as ``[{"id", "desc"}]``. One entry at
+                most, and a view concern only: ``source`` keeps its own order.
             undo_depth: How many tree states to keep for undo, 0 for none.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
@@ -270,24 +295,24 @@ class TanstackTable(AnyWidgetComponent):
         self._table_id = f"tst-{uuid4().hex}"
         _LIVE_TABLES[self._table_id] = self
 
-        if source is not None:
-            self.source = source
-        if columns is not None:
-            self.columns = columns
-        if options is not None:
-            self.options = options
-        if icons is not None:
-            self.icons = icons
-        if filter_text is not None:
-            self.filter_text = filter_text
-        if editing_key is not None:
-            self.editing_key = editing_key
-        if expanded_keys is not None:
-            self.expanded_keys = expanded_keys
-        if selected_keys is not None:
-            self.selected_keys = selected_keys
-        if undo_depth is not None:
-            self.undo_depth = undo_depth
+        # Named arguments exist so the signature documents itself, but each one is
+        # a plain param underneath. Applying them in a loop rather than as a run of
+        # `if` statements keeps adding the next one from growing the branch count.
+        # None means "not given", which is why an explicit empty list still lands.
+        for name, value in (
+            ("source", source),
+            ("columns", columns),
+            ("options", options),
+            ("icons", icons),
+            ("filter_text", filter_text),
+            ("editing_key", editing_key),
+            ("expanded_keys", expanded_keys),
+            ("selected_keys", selected_keys),
+            ("sorting", sorting),
+            ("undo_depth", undo_depth),
+        ):
+            if value is not None:
+                setattr(self, name, value)
 
         # The tree handed in here is the starting point rather than a step, so both
         # stacks open empty and the first change is what becomes undoable.
@@ -1597,3 +1622,27 @@ class TanstackTable(AnyWidgetComponent):
     def clear_selection(self) -> None:
         """Deselect every node."""
         self.selected_keys = []
+
+    def get_sort(self) -> Optional[dict[str, Any]]:
+        """Return the current sort as ``{"id", "desc"}``, or None for none."""
+        return dict(self.sorting[0]) if self.sorting else None
+
+    def sort_by(self, column_id: str, desc: bool = False) -> None:
+        """Sort the view by one column.
+
+        Sorting is a view concern, exactly as the search box is: rows are
+        reordered inside each parent and never across levels, and ``source``
+        keeps the order it has. Nothing is recorded for undo, because nothing
+        about the tree changed.
+
+        Args:
+            column_id: Id of the column to sort by. A column that named
+                ``sortable=False``, or a table whose options turned sorting off,
+                ignores this in the browser.
+            desc: True to sort descending.
+        """
+        self.sorting = [{"id": column_id, "desc": bool(desc)}]
+
+    def clear_sort(self) -> None:
+        """Drop the sort and show the tree in the order ``source`` holds it."""
+        self.sorting = []
