@@ -8546,16 +8546,21 @@ const rf = (t, e) => {
         preventVoidMoves: !1,
         dragStart: (c) => {
           var f;
-          this._dragOrigParent = c.node.parent, this._dragActive = !0, this._selectAfterDrag = c.node.isSelected() ? null : c.node.key;
+          this._dragOrigParent = c.node.parent, this._dragOrigNext = c.node.getNextSibling(), this._dragActive = !0, this._selectAfterDrag = c.node.isSelected() ? null : c.node.key;
           const a = this.getDragKeys(c.node);
           return (f = c.event) != null && f.dataTransfer && (c.event.dataTransfer.setData("text/plain", a.join(`
 `)), c.event.dataTransfer.setData(Un, JSON.stringify(a)), c.event.dataTransfer.setData(go, this.treeId || ""), c.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: c.node.key, keys: a }), !0;
         },
         dragEnter: (c) => c.node === c.sourceNode ? !1 : ["before", "after", "over"],
-        dragOver: (c) => {
-          var a;
-          (a = c.event) != null && a.dataTransfer && (c.event.dataTransfer.dropEffect = "move");
-        },
+        // No dragOver callback on purpose. Wunderbaum sets
+        // dataTransfer.dropEffect from its own guessDropEffect right before
+        // calling us, and that guess is already platform-correct: Option
+        // copies on macOS, Ctrl elsewhere. Overwriting it here is what used
+        // to show a move badge during a copy. Nothing in the library cancels
+        // a drop over the value, so leaving it alone is safe.
+        //
+        // The copy decision itself still comes from our own key tracking,
+        // because modifier flags are not reliable on the drop event.
         drop: (c) => {
           var g, N;
           const a = c.sourceNode, f = c.node, b = this.effectiveRegion(c.suggestedDropMode, f), u = this._copyPressed || !!window.__wbForceCopy;
@@ -8570,7 +8575,7 @@ const rf = (t, e) => {
             const V = b === "over" || b === "appendChild" || b === "prependChild" ? f : f.parent;
             this.sendEvent("drop", {
               sourceKey: a.key,
-              sourceKeys: p.map((I) => I.key),
+              sourceKeys: p.map((W) => W.key),
               targetKey: f.key,
               region: b,
               copy: !0,
@@ -8578,8 +8583,8 @@ const rf = (t, e) => {
               copiedNodeIds: p.map(m),
               newParentNodeId: ((g = V == null ? void 0 : V.data) == null ? void 0 : g.node_id) || (V == null ? void 0 : V.key) || null
             });
-            const M = this._dragOrigParent;
-            M && a.parent !== M && a.moveTo(M, "appendChild"), this.emitSource();
+            const M = this._dragOrigParent, I = this._dragOrigNext;
+            M && (I && I.parent === M ? a.moveTo(I, "before") : a.moveTo(M, "appendChild"));
           } else {
             let T = f, V = b;
             for (const I of p)
@@ -8667,7 +8672,7 @@ const rf = (t, e) => {
       }), t.addEventListener("dragleave", (i) => {
         t.style.border = "1px solid #ddd";
       }), t.addEventListener("dragover", (i) => {
-        n(i) && (i.preventDefault(), e(i) && (i.dataTransfer.dropEffect = "move"));
+        n(i) && (i.preventDefault(), e(i) && (i.dataTransfer.dropEffect = this._copyPressed ? "copy" : "move"));
       }), t.addEventListener("dragend", () => {
         var r, s;
         this._dragActive = !1, t.style.border = "1px solid #ddd";

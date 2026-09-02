@@ -310,8 +310,11 @@ export default {
           // the moves that genuinely change nothing instead.
           preventVoidMoves: false,
           dragStart: (e) => {
-            // Save original parent - needed to undo auto-move on Ctrl+copy
+            // Save the original slot - needed to undo auto-move on Ctrl+copy.
+            // The next sibling pins the index, so the undo can put the node
+            // back exactly where it was instead of appending it last.
             this._dragOrigParent = e.node.parent;
+            this._dragOrigNext = e.node.getNextSibling();
             // Mark this tree as the drag origin so its own container-level
             // listeners can tell a same-tree drag from a cross-tree one.
             // dataTransfer is in protected mode during dragover, so the
@@ -347,13 +350,15 @@ export default {
             if (e.node === e.sourceNode) return false;
             return ['before', 'after', 'over'];
           },
-          dragOver: (e) => {
-            // Ctrl changes dropEffect to 'copy' on Windows, which wunderbaum
-            // rejects. Force 'move' so the drop fires; we track Ctrl separately.
-            if (e.event?.dataTransfer) {
-              e.event.dataTransfer.dropEffect = 'move';
-            }
-          },
+          // No dragOver callback on purpose. Wunderbaum sets
+          // dataTransfer.dropEffect from its own guessDropEffect right before
+          // calling us, and that guess is already platform-correct: Option
+          // copies on macOS, Ctrl elsewhere. Overwriting it here is what used
+          // to show a move badge during a copy. Nothing in the library cancels
+          // a drop over the value, so leaving it alone is safe.
+          //
+          // The copy decision itself still comes from our own key tracking,
+          // because modifier flags are not reliable on the drop event.
           drop: (e) => {
             const sourceNode = e.sourceNode;
             const targetNode = e.node;
@@ -386,14 +391,25 @@ export default {
                 copiedNodeIds: dragNodes.map(nodeId),
                 newParentNodeId: dropParent?.data?.node_id || dropParent?.key || null,
               });
-              // Undo wunderbaum's auto-move: source must stay in original
-              // place. Only e.sourceNode is auto-moved, the rest of the
-              // selection was never touched.
+              // Undo wunderbaum's auto-move: the source must stay in its
+              // original slot. Only e.sourceNode is auto-moved, the rest of
+              // the selection was never touched.
+              //
+              // Restore the index, not just the parent - a drop inside the
+              // node's own parent reorders it without reparenting it. Once the
+              // node is back, the client tree is identical to the one Python
+              // already holds, so there is nothing to emit. Emitting here
+              // would race the drop event above and overwrite whatever copy
+              // the application inserted in its callback.
               const origParent = this._dragOrigParent;
-              if (origParent && sourceNode.parent !== origParent) {
-                sourceNode.moveTo(origParent, 'appendChild');
+              const origNext = this._dragOrigNext;
+              if (origParent) {
+                if (origNext && origNext.parent === origParent) {
+                  sourceNode.moveTo(origNext, 'before');
+                } else {
+                  sourceNode.moveTo(origParent, 'appendChild');
+                }
               }
-              this.emitSource();
             } else {
               // 'after' and 'prependChild' have to re-anchor on the node just
               // moved, or a multi-node drop lands in reverse order. 'before'
@@ -584,9 +600,10 @@ export default {
         if (isAcceptable(e)) {
           e.preventDefault();
           if (isExternalNodeDrag(e)) {
-            // Ctrl changes dropEffect to 'copy' on Windows, which cancels the
-            // drop. Force 'move', matching the internal dragOver handler.
-            e.dataTransfer.dropEffect = 'move';
+            // A cross-tree drag never enters wunderbaum's dnd extension, so
+            // nothing sets the badge for us here. Mirror what wunderbaum would
+            // show for a same-tree drag.
+            e.dataTransfer.dropEffect = this._copyPressed ? 'copy' : 'move';
           }
         }
       });
