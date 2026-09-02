@@ -18,10 +18,14 @@ Three treegrids side by side, same source, different selection setup:
 
 Every tree event is appended to the log at the bottom with its full key
 payload, so single vs. multi drags and same-tree vs. cross-tree drops can be
-told apart. Ctrl+drag copies instead of moving (Option on macOS).
+told apart. Ctrl+drag copies instead of moving (Option on macOS); the panel
+reports such a drop and leaves the tree untouched, so ``_perform_copy`` below
+inserts the duplicates, which is the application's job in a real app.
 """
 
 import copy
+import itertools
+import json
 
 import panel as pn
 
@@ -87,9 +91,75 @@ def _log(tree_id: str, name: str, params: dict) -> None:
     event_log.object = "\n".join(log_lines)
 
 
+_copy_counter = itertools.count(1)
+
+
+def _locate(nodes: list[dict], key: str) -> tuple[list[dict], int] | None:
+    """The child list holding *key* and the index of *key* within it."""
+    for i, node in enumerate(nodes):
+        if node["key"] == key:
+            return nodes, i
+        found = _locate(node.get("children", []), key)
+        if found:
+            return found
+    return None
+
+
+def _rekey(node: dict, suffix: str) -> None:
+    """Give a cloned subtree fresh keys, and drop any selection it carried."""
+    node["key"] = f"{node['key']}{suffix}"
+    node.pop("selected", None)
+    for child in node.get("children", []):
+        _rekey(child, suffix)
+
+
+def _perform_copy(tree: Wunderbaum, params: dict) -> None:
+    """Insert the copies the panel reported but deliberately did not make.
+
+    On a copy-drag the panel emits the event and puts the dragged node back
+    where it was, leaving the actual duplication to the application - keys are
+    the app's to mint. This is that half, for one plausible key scheme.
+    """
+    # Round-trip through JSON, not copy.deepcopy. In a live session
+    # ``tree.source`` is a Bokeh property wrapper that holds back-references to
+    # the document, so deepcopying it walks into the server's IOLoop and raises
+    # RuntimeError. The source is JSON on the wire anyway.
+    source = json.loads(json.dumps(tree.source))
+    located = _locate(source, params["targetKey"])
+    if located is None:
+        return
+    siblings, index = located
+    region = params["region"]
+
+    if region in ("over", "appendChild", "prependChild"):
+        target_node = siblings[index]
+        dest = target_node.setdefault("children", [])
+        at = 0 if region == "prependChild" else len(dest)
+        target_node["expanded"] = True
+    else:
+        dest = siblings
+        at = index if region == "before" else index + 1
+
+    for offset, key in enumerate(params.get("sourceKeys", [])):
+        found = _locate(source, key)
+        if found is None:
+            continue
+        original_siblings, original_index = found
+        clone = copy.deepcopy(original_siblings[original_index])
+        clone["title"] = f"{clone['title']} (copy)"
+        _rekey(clone, f"-c{next(_copy_counter)}")
+        dest.insert(at + offset, clone)
+
+    tree.source = source
+
+
 def _callback(tree_id: str):
     def handler(name: str, params: dict) -> None:
         _log(tree_id, name, params)
+        if name == "drop" and params.get("copy"):
+            tree = TREES.get(tree_id)
+            if tree is not None:
+                _perform_copy(tree, params)
 
     return handler
 
@@ -108,6 +178,9 @@ def _make_tree(tree_id: str, options: dict) -> Wunderbaum:
 tree_multi = _make_tree("multi", {"dnd": True, "checkbox": True, "selectMode": "multi"})
 tree_hier = _make_tree("hier", {"dnd": True, "checkbox": True, "selectMode": "hier"})
 tree_plain = _make_tree("plain", {"dnd": True, "selectMode": "multi"})
+
+# Looked up by id inside the event handler, which is built before the trees are.
+TREES: dict[str, Wunderbaum] = {"multi": tree_multi, "hier": tree_hier, "plain": tree_plain}
 
 
 def _panel(title: str, subtitle: str, tree: Wunderbaum) -> pn.Column:
@@ -181,6 +254,23 @@ inserts after, the middle half drops into the row.
     the folder and lands above it at root level. This used to be refused.
 15. Drag `File 1` onto the middle of `Folder A`. Nothing happens - it is already
     in that folder, so there is no move to make.
+
+### Copy
+
+Ctrl+drag copies instead of moving, Option+drag on macOS. Hold the key before
+you start dragging and the cursor badge turns from move to copy.
+
+16. Ctrl+drag `File 3` onto `Folder B`. `File 3 (copy)` appears there and the
+    original stays put.
+17. Check `File 1` and `File 2`, then ctrl+drag `File 1` onto the top edge of
+    `File 4`. Both copies land above it, in order.
+18. Ctrl+drag `Folder A` onto `Folder B`. The children come along, each with a
+    fresh key.
+
+The panel itself never inserts these copies. It reports the drop with
+`copy: true`, `sourceKeys`, `region` and `newParentNodeId`, then puts the
+dragged node back - minting keys is the application's job. `_perform_copy` in
+this file is one way to do that half.
 
 **Across trees**, drag from any tree into another. The receiver emits
 `externalDrop` with `source_keys` and moves nothing on its own.
