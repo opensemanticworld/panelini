@@ -66,6 +66,7 @@ export function render({ model, el }) {
   const options = model.get("options") || {};
   const types = model.get("types") || {};
   const contextMenuItems = model.get("context_menu_items") || [];
+  const treeId = model.get("tree_id") || "";
 
   // Create Vue app with event handlers
   const app = createApp(WunderbaumComponent, {
@@ -74,6 +75,7 @@ export function render({ model, el }) {
     options: options,
     types: types,
     contextMenuItems: contextMenuItems,
+    treeId: treeId,
 
     // Event handlers (Vue uses onEventName convention for emits)
     'onChange:source': (newSource) => {

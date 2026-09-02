@@ -145,3 +145,59 @@ def test_start_edit_title_sends_the_tree_action():
     tree.start_edit_title("node-1")
     assert tree._tree_action["action"] == "startEditTitle"
     assert tree._tree_action["payload"] == {"key": "node-1"}
+
+
+def test_wunderbaum_tree_id_default_is_empty():
+    """Test that tree_id defaults to an empty string."""
+    tree = Wunderbaum()
+    assert tree.tree_id == ""
+
+
+def test_wunderbaum_tree_id_set():
+    """Test that tree_id is settable via the constructor."""
+    tree = Wunderbaum(tree_id="compounds")
+    assert tree.tree_id == "compounds"
+
+
+def test_wunderbaum_external_drop_event():
+    """Test that externalDrop reaches the general tree event callback."""
+    events_received: list = []
+
+    def on_event(name: str, params: dict) -> None:
+        events_received.append((name, params))
+
+    tree = Wunderbaum(tree_id="compounds", tree_event_callback=on_event)
+    params = {
+        "external": True,
+        "source_tree_id": "features",
+        "source_keys": ["fg/1", "fg/2"],
+        "target_key": "c/7",
+        "region": "over",
+    }
+    tree.handle_tree_event("externalDrop", params)
+
+    assert len(events_received) == 1
+    assert events_received[0] == ("externalDrop", params)
+
+
+def test_wunderbaum_filter_nodes_action():
+    """Test that filter_nodes() sends a filterNodes action."""
+    tree = Wunderbaum()
+    tree.filter_nodes("foo", {"mode": "hide"})
+    assert tree._tree_action["action"] == "filterNodes"
+    assert tree._tree_action["payload"] == {"filter": "foo", "options": {"mode": "hide"}}
+
+
+def test_wunderbaum_filter_nodes_without_options():
+    """Test that filter_nodes() defaults options to an empty dict."""
+    tree = Wunderbaum()
+    tree.filter_nodes("foo")
+    assert tree._tree_action["payload"] == {"filter": "foo", "options": {}}
+
+
+def test_wunderbaum_clear_filter_action():
+    """Test that clear_filter() sends a clearFilter action."""
+    tree = Wunderbaum()
+    tree.clear_filter()
+    assert tree._tree_action["action"] == "clearFilter"
+    assert tree._tree_action["payload"] is None
