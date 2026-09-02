@@ -3332,3 +3332,282 @@ def test_a_reorder_drop_is_blocked_while_sorted(page: Page, port):
     assert shape(table.source) == "a(a1),z(z2,z1),m"
 
     server.stop()
+
+
+# --- column sizing ------------------------------------------------------------
+
+# The keyboard step in TanstackTable.vue, so a nudge can be asserted in pixels
+# rather than as "wider than before".
+RESIZE_STEP = 16
+
+
+def header_width(page: Page, label: str) -> float:
+    """Rendered width of a header cell, padding included.
+
+    Every element in the panel inherits ``box-sizing: border-box``, so this is the
+    same number ``column.getSize()`` holds rather than that number minus padding.
+    """
+    box = header(page, label).bounding_box()
+    assert box
+    return box["width"]
+
+
+def expect_width(page: Page, label: str, px: float, tol: float = 2) -> None:
+    """Wait for a column to render *px* wide, within a pixel or two of rounding."""
+    wait_until(lambda: abs(header_width(page, label) - px) <= tol, timeout=10)
+
+
+def handle(page: Page, label: str):
+    return header(page, label).locator(".pnl-tst-resize")
+
+
+def drag_handle(page: Page, label: str, dx: float) -> None:
+    """Drag a column's resize handle *dx* pixels sideways and release.
+
+    The resize is committed on every frame, and TanStack throttles those into an
+    animation frame, so the pointer settles on the far end before the button comes
+    back up or the released width is one frame stale.
+    """
+    box = handle(page, label).bounding_box()
+    assert box
+
+    x = box["x"] + box["width"] / 2
+    y = box["y"] + box["height"] / 2
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x + dx, y, steps=8)
+    page.wait_for_timeout(120)
+    page.mouse.up()
+
+
+def test_declared_widths_render_and_the_tree_column_takes_the_slack(page: Page, port):
+    """A sized column gets what it asked for and the first one gets the rest.
+
+    The table is given a width, because a panel left to size itself is exactly as
+    wide as its columns and then there is no slack for anything to take.
+    """
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True}, width=520)
+    server = serve(table, page, port)
+
+    expect_width(page, "Size", 90)
+    # 150 is what the tree column asked for by saying nothing, and the other 280
+    # pixels are the slack: flex-grow on that column and a fixed basis on the rest.
+    expect_width(page, "Name", 520 - 90)
+
+    row = page.locator(".pnl-tst-hrow").bounding_box()
+    assert row
+    assert abs(header_width(page, "Name") + header_width(page, "Size") - row["width"]) <= 2
+
+    # Body cells read the same custom properties, so a column is one column wide
+    # from the header down.
+    cell = rows(page).nth(0).locator(".pnl-tst-cell").nth(1).bounding_box()
+    assert cell
+    assert abs(cell["width"] - 90) <= 2
+
+    server.stop()
+
+
+def test_dragging_the_handle_resizes_and_reaches_python(page: Page, port):
+    """The drag is the gesture, and the settled width is what Python is told."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    drag_handle(page, "Size", 60)
+
+    expect_width(page, "Size", 150)
+    wait_until(lambda: table.column_widths.get("size") == 150, timeout=10)
+    # A width is not a sort: the handle stops the click that carries it.
+    assert table.sorting == []
+
+    server.stop()
+
+
+def test_alt_arrows_resize_the_focused_header(page: Page, port):
+    """The resize a pointer alone could reach is the gap this panel exists to close."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("ArrowRight")
+    assert focused_header(page) == "Size"
+
+    page.keyboard.press("Alt+ArrowRight")
+    expect_width(page, "Size", 90 + RESIZE_STEP)
+    wait_until(lambda: table.column_widths.get("size") == 90 + RESIZE_STEP, timeout=10)
+
+    page.keyboard.press("Alt+ArrowLeft")
+    expect_width(page, "Size", 90)
+
+    # The header keeps the focus it started with, so the next press lands here too.
+    assert focused_header(page) == "Size"
+    assert headers(page).nth(1).get_attribute("aria-keyshortcuts") == "Alt+ArrowLeft Alt+ArrowRight Alt+Home"
+
+    server.stop()
+
+
+def test_min_and_max_width_clamp_a_resize(page: Page, port):
+    """The bounds are the column's own, and a nudge stops at them rather than past."""
+    columns = [
+        {"id": "title", "header": "Name"},
+        {"id": "size", "header": "Size", "width": 90, "min_width": 80, "max_width": 100},
+    ]
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=columns, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("ArrowRight")
+
+    # 90 + 16 is 106, which the column refuses.
+    page.keyboard.press("Alt+ArrowRight")
+    expect_width(page, "Size", 100)
+    page.keyboard.press("Alt+ArrowRight")
+    expect_width(page, "Size", 100)
+
+    page.keyboard.press("Alt+ArrowLeft")
+    expect_width(page, "Size", 84)
+    page.keyboard.press("Alt+ArrowLeft")
+    expect_width(page, "Size", 80)
+
+    wait_until(lambda: table.column_widths.get("size") == 80, timeout=10)
+
+    server.stop()
+
+
+def test_alt_home_and_a_double_click_both_reset_a_width(page: Page, port):
+    """Two ways back to the declared width, and both empty the map in Python."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Alt+ArrowRight")
+    expect_width(page, "Size", 90 + RESIZE_STEP)
+
+    page.keyboard.press("Alt+Home")
+    expect_width(page, "Size", 90)
+    # Reset drops the key rather than writing the declared width back into it.
+    wait_until(lambda: table.column_widths == {}, timeout=10)
+
+    drag_handle(page, "Size", 60)
+    expect_width(page, "Size", 150)
+
+    handle(page, "Size").dblclick()
+    expect_width(page, "Size", 90)
+    wait_until(lambda: table.column_widths == {}, timeout=10)
+
+    server.stop()
+
+
+def test_a_width_set_from_python_reaches_the_browser(page: Page, port):
+    """Bidirectional, exactly as the sort is."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    table.set_column_width("size", 200)
+    expect_width(page, "Size", 200)
+
+    table.reset_column_width("size")
+    expect_width(page, "Size", 90)
+
+    server.stop()
+
+
+def test_a_resized_column_keeps_its_width_through_a_source_rewrite(page: Page, port):
+    """Python replacing the tree is not the user asking for a different width."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    drag_handle(page, "Size", 60)
+    expect_width(page, "Size", 150)
+    # The width is on screen the moment the drag moves and reaches Python a round
+    # trip later, so the rewrite has to come after the round trip to be testing
+    # anything: rewriting first would race the push rather than the reset.
+    wait_until(lambda: table.column_widths.get("size") == 150, timeout=10)
+
+    table.rename_node("a", "Renamed")
+    expect_titles(page, ["Renamed", "File A1", "File A2", "Folder B", "File B1"])
+
+    expect_width(page, "Size", 150)
+    assert table.column_widths == {"size": 150}
+
+    server.stop()
+
+
+def test_a_column_can_opt_out_of_resizing(page: Page, port):
+    """No handle and no shortcut on that column, and its neighbour keeps both."""
+    columns = [
+        {"id": "title", "header": "Name"},
+        {"id": "size", "header": "Size", "width": 90, "resizable": False},
+    ]
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=columns, options={"expand_all": True})
+    server = serve(table, page, port)
+
+    assert handle(page, "Name").count() == 1
+    assert handle(page, "Size").count() == 0
+    assert headers(page).nth(1).get_attribute("aria-keyshortcuts") is None
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Alt+ArrowRight")
+
+    page.wait_for_timeout(200)
+    assert table.column_widths == {}
+    assert abs(header_width(page, "Size") - 90) <= 2
+
+    server.stop()
+
+
+def test_resizing_can_be_turned_off_for_the_whole_table(page: Page, port):
+    """A table whose layout is the application's business keeps its headers inert."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True, "resizable": False},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator(".pnl-tst-resize").count() == 0
+    assert headers(page).nth(0).get_attribute("aria-keyshortcuts") is None
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    page.keyboard.press("Alt+ArrowRight")
+
+    page.wait_for_timeout(200)
+    assert table.column_widths == {}
+    # Sorting is a separate opt-out, so the header still does its other job.
+    header(page, "Name").click()
+    wait_until(lambda: table.sorting == [{"id": "title", "desc": False}], timeout=10)
+
+    server.stop()
+
+
+def test_a_wide_column_scrolls_the_header_with_the_rows(page: Page, port):
+    """The scroller is the grid, so a sticky header cannot drift off its columns."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True}, width=520)
+    server = serve(table, page, port)
+
+    grid = page.locator(".pnl-tst-grid")
+
+    # 800 plus the tree column's own 150 against a 520 pixel panel.
+    table.set_column_width("size", 800)
+    expect_width(page, "Size", 800)
+
+    # Wider than the panel, so the grid scrolls sideways rather than squeezing a
+    # column somebody sized down to fit.
+    assert grid.evaluate("element => element.scrollWidth > element.clientWidth")
+
+    grid.evaluate("element => { element.scrollLeft = 120 }")
+    page.wait_for_timeout(100)
+    assert grid.evaluate("element => element.scrollLeft") == 120
+
+    head = page.locator(".pnl-tst-hcell").first.bounding_box()
+    cell = rows(page).nth(0).locator(".pnl-tst-cell").first.bounding_box()
+    assert head and cell
+    assert abs(head["x"] - cell["x"]) <= 2
+
+    server.stop()

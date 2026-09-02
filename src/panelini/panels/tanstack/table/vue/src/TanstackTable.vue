@@ -1,6 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
+  columnResizingFeature,
+  columnSizingFeature,
   createCoreRowModel,
   createExpandedRowModel,
   createSortedRowModel,
@@ -77,6 +79,8 @@ const props = defineProps({
   setEditingKey: { type: Function, required: true },
   // Two-way sync of the sort, as a list of {id, desc}.
   setSorting: { type: Function, required: true },
+  // Two-way sync of the resized column widths, as a map of column id to pixels.
+  setColumnWidths: { type: Function, required: true },
 })
 
 // Built once, outside the table instance: the adapter injects
@@ -87,7 +91,14 @@ const props = defineProps({
 // reach the bundle. `alphanumeric` is what puts `file2` above `file10`, `text` is
 // the case-insensitive compare plain strings fall back to, and anything else
 // (numbers, booleans) lands on `sortFn_basic`, which table-core imports itself.
+//
+// Sizing is two features rather than one: `columnSizingFeature` resolves a
+// column's width from the state and the column def, and `columnResizingFeature`
+// adds the drag that writes that state. A table can therefore be given widths
+// without being given a handle to change them.
 const features = tableFeatures({
+  columnSizingFeature,
+  columnResizingFeature,
   rowExpandingFeature,
   rowSelectionFeature,
   rowSortingFeature,
@@ -108,6 +119,10 @@ const hasColumns = computed(() => (props.state.columns || []).length > 0)
 const sortingEnabled = computed(() => hasColumns.value && props.state.options.sortable !== false)
 const foldersFirst = computed(() => props.state.options.sort_folders_first === true)
 
+// Resizing is on once a table has columns, for the same reason sorting is: a
+// header is the handle, and a tree-only table has none.
+const resizingEnabled = computed(() => hasColumns.value && props.state.options.resizable !== false)
+
 // Python column defs are {id, header, field, width}. The first column is the
 // tree column: it carries the indent and the expand twisty.
 const columnDefs = computed(() => {
@@ -121,14 +136,24 @@ const columnDefs = computed(() => {
       id: column.id,
       header: column.header ?? column.id,
       accessorFn: (row) => row[field],
-      meta: { width: column.width },
       enableSorting: column.sortable !== false,
+      enableResizing: column.resizable !== false,
+      // Written only where Python actually declared one, so the rest fall back to
+      // TanStack's own defaults (150 wide, no narrower than 20) rather than to a
+      // second set of numbers kept here.
+      ...numberOption('size', column.width),
+      ...numberOption('minSize', column.min_width),
+      ...numberOption('maxSize', column.max_width),
       // Only set when asked for, so an ordinary table keeps TanStack's own
       // detection of what a column holds rather than routing through ours.
       ...(foldersFirst.value ? { sortFn: branchesFirst } : {}),
     }
   })
 })
+
+function numberOption(name, value) {
+  return typeof value === 'number' && Number.isFinite(value) ? { [name]: value } : {}
+}
 
 // A branch is a node that has children or one that has not said it cannot take
 // them, which is the rule `tree.accepts_children` applies in Python. A tree that
@@ -280,6 +305,31 @@ function sameSorting(a, b) {
 
 const sorted = computed(() => sortingEnabled.value && sorting.value.length > 0)
 
+// Local mirror of TanStack's `columnSizing`, which is Python's `column_widths`
+// under the name table-core gives it: a map of column id to pixels holding the
+// columns somebody has actually sized, and nothing else. A column missing from it
+// is not unsized, it is at the width its column def asks for.
+const columnSizing = ref(cleanSizing(props.state.columnWidths))
+
+function cleanSizing(value) {
+  const sizes = {}
+  for (const [id, width] of Object.entries(value || {})) {
+    const px = Math.round(Number(width))
+    if (Number.isFinite(px) && px > 0) sizes[id] = px
+  }
+  return sizes
+}
+
+function sameSizing(a, b) {
+  const ids = Object.keys(a)
+  return ids.length === Object.keys(b).length && ids.every((id) => a[id] === b[id])
+}
+
+// Which column is being dragged, or null. Tracked here rather than read back out
+// of TanStack's transient resize state, because it is also what says a width is
+// still moving and must not be pushed to Python yet.
+const resizingId = ref(null)
+
 const table = useTable({
   features,
   data: computed(() => props.state.source || []),
@@ -309,10 +359,16 @@ const table = useTable({
   // column descending, which makes the same gesture mean two different things
   // depending on what a column happens to hold.
   sortDescFirst: false,
+  enableColumnResizing: resizingEnabled,
+  // The columns follow the pointer rather than a guide line that commits on
+  // release. It costs a render per frame of the drag, which is what a table with
+  // every row in the DOM can afford today and what P15 has to look at again.
+  columnResizeMode: 'onChange',
   state: computed(() => ({
     expanded: expanded.value,
     rowSelection: rowSelection.value,
     sorting: sorting.value,
+    columnSizing: columnSizing.value,
   })),
   onExpandedChange: (updater) => {
     expanded.value = typeof updater === 'function' ? updater(expanded.value) : updater
@@ -322,6 +378,11 @@ const table = useTable({
   },
   onSortingChange: (updater) => {
     sorting.value = cleanSorting(typeof updater === 'function' ? updater(sorting.value) : updater)
+  },
+  onColumnSizingChange: (updater) => {
+    columnSizing.value = cleanSizing(
+      typeof updater === 'function' ? updater(columnSizing.value) : updater,
+    )
   },
 })
 
@@ -379,6 +440,29 @@ watch(
     const next = cleanSorting(value)
     if (sameSorting(sorting.value, next)) return
     sorting.value = next
+  },
+)
+
+// The widths round trip like the sort, but never mid-drag: `onChange` commits a
+// width on every frame the pointer moves, and pushing each of those would put a
+// hundred param writes on the socket for one gesture. The drag clearing
+// `resizingId` is itself a change here, so the width it settled on is pushed once
+// as the mouse comes up.
+watch(
+  () => [columnSizing.value, resizingId.value],
+  ([sizes, dragging]) => {
+    if (dragging) return
+    props.setColumnWidths(sizes)
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => props.state.columnWidths,
+  (value) => {
+    const next = cleanSizing(value)
+    if (sameSizing(columnSizing.value, next)) return
+    columnSizing.value = next
   },
 )
 
@@ -528,6 +612,51 @@ function onHeaderClick(header) {
   toggleSort(header)
 }
 
+// One press of the keyboard is worth this many pixels. Coarse enough to get
+// somewhere in a few presses, fine enough to land on a width somebody wanted.
+const RESIZE_STEP = 16
+
+function canResize(header) {
+  return resizingEnabled.value && header.column.getCanResize()
+}
+
+// TanStack binds its own move and up listeners on `document`, and a shadow root
+// retargets the event without touching `clientX`, so the drag needs nothing from
+// us. The pair added here is only to know when it has finished: the width is
+// committed on every frame, and Python is told about it once.
+function onResizeStart(header, event) {
+  if (!canResize(header)) return
+  event.stopPropagation()
+  header.getResizeHandler()(event)
+  resizingId.value = header.column.id
+  const done = () => {
+    resizingId.value = null
+  }
+  for (const name of ['mouseup', 'touchend', 'touchcancel']) {
+    document.addEventListener(name, done, { once: true })
+  }
+}
+
+// Clamped here as well as on the way out, because `getSize()` clamps what it
+// reports and the state would otherwise keep drifting past the bound each press.
+function nudgeSize(header, delta) {
+  if (!canResize(header)) return
+  const column = header.column
+  const min = column.columnDef.minSize ?? 20
+  const max = column.columnDef.maxSize ?? Number.MAX_SAFE_INTEGER
+  const next = Math.min(Math.max(Math.round(column.getSize() + delta), min), max)
+  table.setColumnSizing((old) => ({ ...old, [column.id]: next }))
+}
+
+// Back to the width the column def asks for, which is what dropping the column
+// out of the sizing state means. The gesture is a double click on the handle, and
+// Alt+Home from the keyboard: Home on a header already means the first column, so
+// this is the width it started at.
+function resetSize(header) {
+  if (!canResize(header)) return
+  header.column.resetSize()
+}
+
 // The header's own keyboard region. Left and right walk the columns, down steps
 // into the rows, and Enter and Space sort, which are the meanings each key
 // already carries one row lower. Anything else bubbles to the grid, so the
@@ -538,6 +667,28 @@ function onHeaderKeydown(header, event) {
     0,
     list.findIndex((entry) => entry.column.id === headerFocusKey.value),
   )
+  // Alt widens and narrows the focused column, which gives resizing a keyboard
+  // route that costs no tab stop. Alt+Arrow is already this panel's modifier for
+  // "do that to what has focus", and the row actions it drives one row lower have
+  // no meaning on a header, so nothing is taken away by claiming it here.
+  if (event.altKey) {
+    switch (event.key) {
+      case 'ArrowLeft':
+        nudgeSize(header, -RESIZE_STEP)
+        break
+      case 'ArrowRight':
+        nudgeSize(header, RESIZE_STEP)
+        break
+      case 'Home':
+        resetSize(header)
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
   switch (event.key) {
     case 'ArrowLeft':
       focusHeaderByIndex(index - 1)
@@ -602,13 +753,32 @@ function isExpanded(row) {
   return filtering.value ? canExpand(row) : row.getIsExpanded()
 }
 
-function cellStyle(columnDef) {
-  const width = columnDef.meta?.width
-  return width ? { flex: `0 0 ${width}px` } : { flex: '1 1 0' }
+// Widths reach the DOM as custom properties on the grid rather than as an inline
+// width per cell. A drag then writes a handful of values on one element per frame
+// instead of one on every cell of every row, and a cell keeps a style that never
+// changes. They are named by position, because a column id comes from Python and
+// need not be a legal custom property name.
+const columnVars = computed(() => {
+  if (!hasColumns.value) return {}
+  const vars = { '--pnl-tst-total': `${table.getTotalSize()}px` }
+  headers.value.forEach((header, index) => {
+    vars[`--pnl-tst-w${index}`] = `${header.column.getSize()}px`
+  })
+  return vars
+})
+
+// The tree column takes whatever width the others leave over, so a table wider
+// than its columns has no gap at the end and one narrower than them scrolls
+// sideways rather than squeezing the names out of the column somebody sized. In
+// tree-only mode there is one column and no header, so nothing is sized and it
+// simply fills.
+function cellStyle(index) {
+  if (!hasColumns.value) return { flex: '1 1 0' }
+  return index === 0 ? { flex: '1 0 var(--pnl-tst-w0)' } : { flex: `0 0 var(--pnl-tst-w${index})` }
 }
 
-function treeCellStyle(row, columnDef) {
-  return { ...cellStyle(columnDef), paddingInlineStart: `${row.depth * indentPx.value}px` }
+function treeCellStyle(row) {
+  return { ...cellStyle(0), paddingInlineStart: `${row.depth * indentPx.value}px` }
 }
 
 // Roving tabindex: exactly one row is tabbable, and it is the one that has, or
@@ -2223,10 +2393,12 @@ function dropLineStyle(row) {
     <div
       v-else
       class="pnl-tst-grid"
+      :class="{ 'pnl-tst-grid--resizing': resizingId !== null }"
       role="treegrid"
       :aria-label="ariaLabel"
       :aria-colcount="headers.length"
       :aria-rowcount="ariaRowCount"
+      :style="columnVars"
       @keydown="onKeydown"
     >
       <div v-if="hasColumns" class="pnl-tst-head" role="rowgroup">
@@ -2240,8 +2412,9 @@ function dropLineStyle(row) {
             role="columnheader"
             :aria-colindex="index + 1"
             :aria-sort="ariaSort(header)"
+            :aria-keyshortcuts="canResize(header) ? 'Alt+ArrowLeft Alt+ArrowRight Alt+Home' : undefined"
             :tabindex="headerActive && header.column.id === headerFocusKey ? 0 : -1"
-            :style="cellStyle(header.column.columnDef)"
+            :style="cellStyle(index)"
             @click="onHeaderClick(header)"
             @focus="headerFocusId = header.column.id"
             @keydown="onHeaderKeydown(header, $event)"
@@ -2255,6 +2428,20 @@ function dropLineStyle(row) {
               class="pnl-tst-sortind"
               aria-hidden="true"
               v-html="sortIcon(header)"
+            ></span>
+            <!-- A mouse target and nothing else: the keyboard resizes from the
+                 header itself, which is why this is hidden rather than made a
+                 focusable separator that every arrow press would have to walk
+                 past. The click is stopped so a resize never also sorts. -->
+            <span
+              v-if="canResize(header)"
+              class="pnl-tst-resize"
+              :class="{ 'pnl-tst-resize--active': resizingId === header.column.id }"
+              aria-hidden="true"
+              @click.stop
+              @dblclick.stop="resetSize(header)"
+              @mousedown="onResizeStart(header, $event)"
+              @touchstart="onResizeStart(header, $event)"
             ></span>
           </div>
         </div>
@@ -2303,11 +2490,7 @@ function dropLineStyle(row) {
             :class="{ 'pnl-tst-cell--tree': cellIndex === 0 }"
             role="gridcell"
             :aria-colindex="cellIndex + 1"
-            :style="
-              cellIndex === 0
-                ? treeCellStyle(row, cell.column.columnDef)
-                : cellStyle(cell.column.columnDef)
-            "
+            :style="cellIndex === 0 ? treeCellStyle(row) : cellStyle(cellIndex)"
           >
             <template v-if="cellIndex === 0">
               <!-- Decorative: expanded state is announced from the row's

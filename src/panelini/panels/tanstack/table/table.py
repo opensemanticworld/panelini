@@ -91,8 +91,11 @@ class TanstackTable(AnyWidgetComponent):
         default=[],
         doc=(
             "Column definitions for treegrid mode, as {id, header, field, width} dicts. Empty = "
-            "tree-only mode. Optional per column: sortable=False to leave one column out of the "
-            "sort while the rest stay in."
+            "tree-only mode. width is the column's starting width in pixels, 150 when it says "
+            "nothing, and min_width and max_width bound what a resize may do to it, 20 and no limit "
+            "by default. Optional per column: sortable=False to leave one column out of the sort "
+            "while the rest stay in, and resizable=False to fix one column's width while the rest "
+            "can still be dragged."
         ),
     )
     options = param.Dict(
@@ -124,7 +127,8 @@ class TanstackTable(AnyWidgetComponent):
             "accepts nothing from outside itself, and holding Ctrl or Alt on the drop copies rather "
             "than moves. sortable=False takes the sort off a table that has columns, and "
             "sort_folders_first puts branches above leaves at every level whichever way a column "
-            "is sorted."
+            "is sorted. resizable=False takes the resize handles off the headers, leaving the "
+            "columns at the widths they were given."
         ),
     )
     icons = param.Dict(
@@ -173,6 +177,19 @@ class TanstackTable(AnyWidgetComponent):
             "Reordering next to a sibling is refused while a sort is active, by drag and by the "
             "toolbar alike, because position inside a parent is computed there and the row would "
             "land back where the sort puts it."
+        ),
+    )
+
+    # Bidirectional for the same reasons again. Written once as a resize drag ends,
+    # never on the frames it is made of.
+    column_widths = param.Dict(
+        default={},
+        doc=(
+            "Column widths a resize has set, as {column_id: pixels}. Only the columns somebody "
+            "actually sized are in here: the rest are at the width their column def asks for, so an "
+            "empty map means nothing has been resized rather than that everything is at zero. "
+            "Setting it from Python resizes those columns, and dropping a key puts one back to its "
+            "declared width. The first column takes any space the others leave over."
         ),
     )
 
@@ -238,6 +255,7 @@ class TanstackTable(AnyWidgetComponent):
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         sorting: Optional[list[dict[str, Any]]] = None,
+        column_widths: Optional[dict[str, float]] = None,
         undo_depth: Optional[int] = None,
         event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
@@ -260,6 +278,9 @@ class TanstackTable(AnyWidgetComponent):
             selected_keys: Keys of nodes to show selected.
             sorting: The sort to open with, as ``[{"id", "desc"}]``. One entry at
                 most, and a view concern only: ``source`` keeps its own order.
+            column_widths: Column widths to open with, as ``{column_id: pixels}``.
+                Only the columns named are affected; the rest keep the width their
+                column def asks for.
             undo_depth: How many tree states to keep for undo, 0 for none.
             event_callback: Callback for events emitted by the browser. Receives
                 ``(event_name, event_params)``.
@@ -309,6 +330,7 @@ class TanstackTable(AnyWidgetComponent):
             ("expanded_keys", expanded_keys),
             ("selected_keys", selected_keys),
             ("sorting", sorting),
+            ("column_widths", column_widths),
             ("undo_depth", undo_depth),
         ):
             if value is not None:
@@ -1646,3 +1668,35 @@ class TanstackTable(AnyWidgetComponent):
     def clear_sort(self) -> None:
         """Drop the sort and show the tree in the order ``source`` holds it."""
         self.sorting = []
+
+    def get_column_widths(self) -> dict[str, float]:
+        """Return the widths a resize has set, as ``{column_id: pixels}``.
+
+        Only the columns somebody actually sized are in the map. A column that is
+        not in it is at the width its column def asks for, which is what
+        :meth:`reset_column_width` puts one back to.
+        """
+        return dict(self.column_widths)
+
+    def set_column_width(self, column_id: str, width: float) -> None:
+        """Set one column's width in pixels.
+
+        Sizing is a view concern like the sort: nothing about the tree changes, so
+        nothing is recorded for undo. The width is clamped in the browser to the
+        column's own ``min_width`` and ``max_width``.
+
+        Args:
+            column_id: Id of the column to size.
+            width: Width in pixels.
+        """
+        self.column_widths = {**self.column_widths, column_id: width}
+
+    def reset_column_width(self, column_id: str) -> None:
+        """Put one column back to the width its column def asks for."""
+        if column_id not in self.column_widths:
+            return
+        self.column_widths = {key: value for key, value in self.column_widths.items() if key != column_id}
+
+    def clear_column_widths(self) -> None:
+        """Put every column back to the width its column def asks for."""
+        self.column_widths = {}

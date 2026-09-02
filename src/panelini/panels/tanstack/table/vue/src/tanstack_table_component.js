@@ -36,6 +36,9 @@ export function render({ model, el }) {
     // A view concern like the filter, and bidirectional for the same reason: an
     // application may set a default sort or read back the one the user chose.
     sorting: model.get("sorting") || [],
+    // The same again for the widths a user dragged, keyed by column id and
+    // holding only the columns somebody actually sized.
+    columnWidths: model.get("column_widths") || {},
     // Python owns the history as it owns the tree. The toolbar asks for a step and
     // reads these to know whether there is one, rather than counting its own.
     canUndo: model.get("can_undo") || false,
@@ -117,6 +120,20 @@ export function render({ model, el }) {
     model.save_changes();
   };
 
+  // Widths are a flat map of column id to pixels, so the guard is a key by key
+  // compare. The component only calls this when a drag has finished, never on the
+  // frames it is made of.
+  const sameWidths = (a, b) => {
+    const ids = Object.keys(a);
+    return ids.length === Object.keys(b).length && ids.every((id) => a[id] === b[id]);
+  };
+
+  const setColumnWidths = (value) => {
+    if (sameWidths(model.get("column_widths") || {}, value)) return;
+    model.set("column_widths", value);
+    model.save_changes();
+  };
+
   const app = createApp(TanstackTable, {
     state,
     emitEvent,
@@ -125,6 +142,7 @@ export function render({ model, el }) {
     setFilterText,
     setEditingKey,
     setSorting,
+    setColumnWidths,
   });
   app.mount(container);
 
@@ -154,6 +172,9 @@ export function render({ model, el }) {
   });
   model.on("change:sorting", () => {
     state.sorting = model.get("sorting") || [];
+  });
+  model.on("change:column_widths", () => {
+    state.columnWidths = model.get("column_widths") || {};
   });
   model.on("change:can_undo", () => {
     state.canUndo = model.get("can_undo") || false;

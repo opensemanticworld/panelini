@@ -28,20 +28,39 @@
   line-height: var(--pnl-tst-row-height);
 }
 
-/* The grid owns the vertical space and only the body scrolls, so the column
-   headers stay put. `min-height: 0` is what lets a flex child shrink below its
-   content height and hand the overflow to the body instead of the page. */
+/* The grid owns the vertical space and is what scrolls, in both directions. The
+   header is sticky rather than outside the scroller, so it stays put as the rows
+   go up and travels with them as the columns go sideways, which is the only way a
+   label stays over the column it names. `min-height: 0` is what lets a flex child
+   shrink below its content height and hand the overflow here instead of to the
+   page. */
 .pnl-tst-grid {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  overflow: auto;
+}
+
+/* Set on the grid from the column widths. Rows are as wide as their columns and
+   never narrower than the box they scroll in, so a table wider than the panel
+   scrolls and one narrower still fills it. */
+.pnl-tst-head,
+.pnl-tst-body,
+.pnl-tst-hrow,
+.pnl-tst-row {
+  min-width: max(100%, var(--pnl-tst-total, 0px));
 }
 
 .pnl-tst-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+}
+
+/* The pointer keeps the resize cursor for the whole drag, wherever it wanders. */
+.pnl-tst-grid--resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .pnl-tst *,
@@ -71,11 +90,13 @@
 }
 
 .pnl-tst-hcell {
+  position: relative;
   display: flex;
   align-items: center;
   overflow: hidden;
   gap: 4px;
   padding: 0 6px;
+  user-select: none;
 }
 
 .pnl-tst-hcell:focus-visible {
@@ -108,6 +129,35 @@
 .pnl-tst-sortind svg {
   width: 12px;
   height: 12px;
+}
+
+/* The resize handle. Eight pixels wide so the pointer can find it, with the line
+   itself drawn one pixel wide down the middle, and `touch-action: none` so a drag
+   on a touch screen resizes rather than scrolls the grid under it. */
+.pnl-tst-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pnl-tst-resize::after {
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  content: '';
+}
+
+.pnl-tst-resize:hover::after,
+.pnl-tst-resize--active::after {
+  background: var(--pnl-tst-focus);
 }
 
 .pnl-tst-row {

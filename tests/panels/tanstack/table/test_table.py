@@ -2012,3 +2012,92 @@ def test_a_sort_arriving_from_the_browser_is_kept(table):
     table.sorting = [{"id": "title", "desc": True}]
 
     assert table.get_sort() == {"id": "title", "desc": True}
+
+
+# --- column widths ------------------------------------------------------------
+
+
+def test_column_widths_start_empty(table):
+    # Empty means nothing has been resized, not that everything is at zero: a
+    # column missing from the map is at the width its column def asks for.
+    assert table.column_widths == {}
+    assert table.get_column_widths() == {}
+
+
+def test_set_column_width(table):
+    table.set_column_width("size", 220)
+
+    assert table.column_widths == {"size": 220}
+    assert table.get_column_widths() == {"size": 220}
+
+
+def test_set_column_width_keeps_the_other_columns(table):
+    table.set_column_width("size", 220)
+    table.set_column_width("title", 300)
+
+    assert table.column_widths == {"size": 220, "title": 300}
+
+
+def test_reset_column_width_drops_one_key(table):
+    table.set_column_width("size", 220)
+    table.set_column_width("title", 300)
+    table.reset_column_width("size")
+
+    assert table.column_widths == {"title": 300}
+
+
+def test_reset_column_width_ignores_a_column_that_was_never_sized(table):
+    table.set_column_width("title", 300)
+    table.reset_column_width("size")
+
+    assert table.column_widths == {"title": 300}
+
+
+def test_clear_column_widths(table):
+    table.set_column_width("size", 220)
+    table.clear_column_widths()
+
+    assert table.column_widths == {}
+
+
+def test_get_column_widths_returns_a_copy(table):
+    table.set_column_width("size", 220)
+    got = table.get_column_widths()
+    got["size"] = 999
+
+    assert table.column_widths == {"size": 220}
+
+
+def test_column_widths_can_be_set_at_construction(source):
+    table = TanstackTable(source=source, column_widths={"size": 120})
+
+    assert table.column_widths == {"size": 120}
+
+
+def test_column_widths_leave_the_tree_alone(table):
+    before = shape(table.source)
+    table.set_column_width("title", 400)
+
+    assert shape(table.source) == before
+
+
+def test_column_widths_record_no_history_step(table):
+    # A view concern like the sort: the tree did not change, so there is nothing
+    # to take back.
+    table.set_column_width("title", 400)
+
+    assert table.can_undo is False
+
+
+def test_column_widths_survive_a_new_tree(table):
+    # Widths name columns, and a new tree is shown through the same ones.
+    table.set_column_width("title", 400)
+    table.set_source([{"key": "z", "title": "Z"}])
+
+    assert table.column_widths == {"title": 400}
+
+
+def test_a_width_arriving_from_the_browser_is_kept(table):
+    table.column_widths = {"title": 260}
+
+    assert table.get_column_widths() == {"title": 260}
