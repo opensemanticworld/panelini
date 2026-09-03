@@ -3422,6 +3422,65 @@ def test_dragging_the_handle_resizes_and_reaches_python(page: Page, port):
     server.stop()
 
 
+def test_dragging_the_tree_column_moves_the_divider_it_grabbed(page: Page, port):
+    """The column that takes the slack has to resize from the width it shows.
+
+    It renders at 430 while storing the 150 its def asks for, so a drag that read
+    the stored width would snap the divider 280 pixels away from the pointer that
+    grabbed it. This is the handle a user of the example actually reaches for: it
+    sits between the two headers, not out at the right edge.
+    """
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True}, width=520)
+    server = serve(table, page, port)
+
+    expect_width(page, "Name", 430)
+
+    drag_handle(page, "Name", -120)
+
+    expect_width(page, "Name", 310)
+    # The neighbour keeps what it declared: a drag moves one divider, and the
+    # space the tree column gave up is left over rather than handed on.
+    expect_width(page, "Size", 90)
+    wait_until(lambda: table.column_widths.get("title") == 310, timeout=10)
+
+    server.stop()
+
+
+def test_the_keyboard_resizes_the_tree_column_from_what_it_shows(page: Page, port):
+    """Same width, same arithmetic, whichever way the column is sized."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True}, width=520)
+    server = serve(table, page, port)
+
+    expect_width(page, "Name", 430)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowUp")
+    assert focused_header(page) == "Name"
+
+    page.keyboard.press("Alt+ArrowLeft")
+    expect_width(page, "Name", 430 - RESIZE_STEP)
+    wait_until(lambda: table.column_widths.get("title") == 430 - RESIZE_STEP, timeout=10)
+
+    server.stop()
+
+
+def test_resetting_the_tree_column_gives_the_slack_back(page: Page, port):
+    """Growing again is what dropping out of the sizing map means."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True}, width=520)
+    server = serve(table, page, port)
+
+    expect_width(page, "Name", 430)
+    drag_handle(page, "Name", -120)
+    expect_width(page, "Name", 310)
+
+    handle(page, "Name").dblclick()
+
+    expect_width(page, "Name", 430)
+    wait_until(lambda: table.column_widths == {}, timeout=10)
+
+    server.stop()
+
+
 def test_alt_arrows_resize_the_focused_header(page: Page, port):
     """The resize a pointer alone could reach is the gap this panel exists to close."""
     table = TanstackTable(source=copy.deepcopy(SOURCE), columns=COLUMNS, options={"expand_all": True})

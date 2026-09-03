@@ -631,13 +631,34 @@ function canResize(header) {
   return resizingEnabled.value && header.column.getCanResize()
 }
 
+// A column that is growing cannot be dragged from the width it shows. TanStack
+// reads `getSize()` when the gesture starts, and for a tree column nobody has
+// sized that is the 150 its def asks for rather than the 430 on screen, so the
+// divider would jump away from the pointer that grabbed it. Writing the rendered
+// width into the sizing state first is what makes the two the same number, and
+// `cellStyle` stops the growing from the same fact. Returns the width it wrote,
+// or null when the column was already sized and there is nothing to settle.
+function settleWidth(header) {
+  const id = header.column.id
+  if (id in columnSizing.value) return null
+  const width = Math.round(headerElements.get(id)?.getBoundingClientRect().width ?? 0)
+  if (width <= 0 || width === header.column.getSize()) return null
+  columnSizing.value = { ...columnSizing.value, [id]: width }
+  return width
+}
+
 // TanStack binds its own move and up listeners on `document`, and a shadow root
 // retargets the event without touching `clientX`, so the drag needs nothing from
 // us. The pair added here is only to know when it has finished: the width is
 // committed on every frame, and Python is told about it once.
-function onResizeStart(header, event) {
+async function onResizeStart(header, event) {
   if (!canResize(header)) return
   event.stopPropagation()
+  // The settled width reaches TanStack through the adapter's own option sync,
+  // which is a microtask, so the handler is handed the event one tick later. No
+  // pointer event can land inside a microtask, and the start event carries the
+  // position it was fired with, so the gesture loses nothing by waiting.
+  if (settleWidth(header) !== null) await nextTick()
   header.getResizeHandler()(event)
   resizingId.value = header.column.id
   const done = () => {
@@ -655,7 +676,11 @@ function nudgeSize(header, delta) {
   const column = header.column
   const min = column.columnDef.minSize ?? 20
   const max = column.columnDef.maxSize ?? Number.MAX_SAFE_INTEGER
-  const next = Math.min(Math.max(Math.round(column.getSize() + delta), min), max)
+  // Counted from what the column shows for the same reason the drag is, and from
+  // the settled width directly because `getSize()` does not see that write until
+  // the adapter has synced it.
+  const from = settleWidth(header) ?? column.getSize()
+  const next = Math.min(Math.max(Math.round(from + delta), min), max)
   table.setColumnSizing((old) => ({ ...old, [column.id]: next }))
 }
 
@@ -778,14 +803,24 @@ const columnVars = computed(() => {
   return vars
 })
 
+// Whether the tree column is one somebody has sized, which is what stops it
+// growing. Resetting it drops the key again and hands the slack back.
+const treeColumnSized = computed(() => {
+  const first = headers.value[0]
+  return first ? first.column.id in columnSizing.value : false
+})
+
 // The tree column takes whatever width the others leave over, so a table wider
 // than its columns has no gap at the end and one narrower than them scrolls
-// sideways rather than squeezing the names out of the column somebody sized. In
-// tree-only mode there is one column and no header, so nothing is sized and it
-// simply fills.
+// sideways rather than squeezing the names out of the column somebody sized. It
+// gives that up the moment it is sized itself: a width a user dragged has to be
+// the width that renders, and a column cannot both grow and stay where it was
+// put. In tree-only mode there is one column and no header, so nothing is sized
+// and it simply fills.
 function cellStyle(index) {
   if (!hasColumns.value) return { flex: '1 1 0' }
-  return index === 0 ? { flex: '1 0 var(--pnl-tst-w0)' } : { flex: `0 0 var(--pnl-tst-w${index})` }
+  const grows = index === 0 && !treeColumnSized.value
+  return grows ? { flex: '1 0 var(--pnl-tst-w0)' } : { flex: `0 0 var(--pnl-tst-w${index})` }
 }
 
 function treeCellStyle(row) {
