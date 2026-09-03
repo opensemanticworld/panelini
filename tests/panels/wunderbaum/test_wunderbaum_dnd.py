@@ -1,11 +1,15 @@
 """Playwright E2E tests for Wunderbaum drag-and-drop.
 
-Tests both default drag (move) and Ctrl+drag (copy).
-Uses ``window.__wbForceCopy`` test hook to simulate Ctrl
-since Playwright keyboard events don't reach shadow DOM.
+Tests both default drag (move) and copy-drag. The copy modifier is Ctrl on
+Windows and Linux, Option on macOS, following Finder.
+
+``test_dnd_copy`` drives the copy through the ``window.__wbForceCopy`` test
+hook. ``test_dnd_copy_with_real_key`` presses the key itself, which reaches
+the panel because it listens on ``document`` in the capture phase.
 """
 
 import copy
+import sys
 import time
 
 import panel as pn
@@ -16,6 +20,7 @@ from panelini.panels.wunderbaum import Wunderbaum
 from panelini.testing import center, drag, wait_until, wb_wait
 
 _PORT = 6420
+_COPY_KEY = "Alt" if sys.platform == "darwin" else "Control"
 
 DND_SOURCE = [
     {
@@ -222,6 +227,45 @@ def test_dnd_copy(ready_page: Page):
     # Client-side: source still under Folder A
     a_children = _get_client_children(page, "a")
     assert "a/1" in a_children, f"Client: 'a/1' not in Folder A children {a_children}"
+
+
+def test_dnd_copy_with_real_key(ready_page: Page):
+    """Holding the real copy modifier key copies, without the test hook.
+
+    ``test_dnd_copy`` sets ``window.__wbForceCopy`` and never presses a key,
+    so it never exercises the actual modifier. Ctrl is the copy modifier on
+    Windows and Linux; macOS Finder uses Option instead.
+    """
+    page = ready_page
+
+    src = page.locator(
+        "css=.wb-row .wb-title",
+        has_text="File 1",
+    ).first
+    tgt = page.locator(
+        "css=.wb-row .wb-title",
+        has_text="Folder B",
+    ).first
+    s = src.bounding_box()
+    t = tgt.bounding_box()
+    assert s and t
+
+    # Click first so the page has keyboard focus and the node is selected.
+    src.click()
+
+    page.keyboard.down(_COPY_KEY)
+    drag(page, center(s), center(t), steps=5)
+    wait_until(lambda: any(e["name"] == "drop" for e in _events))
+    page.keyboard.up(_COPY_KEY)
+
+    drops = [e for e in _events if e["name"] == "drop"]
+    assert len(drops) == 1
+    d = drops[0]
+    assert d["sourceKey"] == "a/1"
+    assert d["targetKey"] == "b"
+    assert d.get("copy") is True
+    assert "copiedNodeId" in d
+    assert "movedNodeId" not in d
 
 
 def test_dnd_move_no_duplicate(ready_page: Page):
