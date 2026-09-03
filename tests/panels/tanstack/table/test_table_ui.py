@@ -4811,3 +4811,277 @@ def test_a_typed_editor_keeps_the_row_at_its_own_height(page: Page, port):
     assert rows(page).nth(0).bounding_box()["height"] == plain
 
     server.stop()
+
+
+# --- external file drop ---
+
+DROPPED_SOURCE = [
+    {
+        "key": "docs",
+        "title": "Docs",
+        "children": [{"key": "readme", "title": "readme.md", "allow_children": False}],
+    },
+    {"key": "notes", "title": "notes.txt", "allow_children": False},
+]
+
+
+def dropping_table(events=None, action_callback=None, **options):
+    """A table that takes files dragged in from the desktop."""
+    return TanstackTable(
+        source=copy.deepcopy(DROPPED_SOURCE),
+        options={"drop_files": "meta", "expand_all": True, **options},
+        event_callback=(lambda name, params: events.append((name, params))) if events is not None else None,
+        action_callback=action_callback,
+    )
+
+
+# Playwright cannot drag from the desktop, so the drag is synthesised: a real
+# `DataTransfer` carrying real `File`s, dispatched as the `dragenter`, `dragover`
+# and `drop` a browser would send. pdnd binds those on `window` and reads
+# `clientX` and `clientY` off them, which is exactly what the panel resolves the
+# row from, so nothing about the path under test is stubbed.
+#
+# The transfer is stashed on `window` between the two halves because a drop has
+# to carry the same one the drag did, and because a test wanting to assert the
+# hover affordance has to look while the drag is still in flight.
+_HOVER_FILES = """
+async ({ x, y, files }) => {
+  const transfer = new DataTransfer()
+  for (const file of files) {
+    transfer.items.add(new File([file.body ?? ''], file.name, { type: file.type }))
+  }
+  window.__pnlTransfer = { transfer, x, y }
+  const target = document.elementFromPoint(x, y)
+  const fire = (type) => target.dispatchEvent(new DragEvent(type, {
+    bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, dataTransfer: transfer,
+  }))
+  // pdnd batches its bookkeeping into an animation frame, so each event needs a
+  // painted frame before the next one is worth sending.
+  const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+  fire('dragenter')
+  await frame()
+  fire('dragover')
+  await frame()
+  fire('dragover')
+  await frame()
+}
+"""
+
+_RELEASE_FILES = """
+async () => {
+  const held = window.__pnlTransfer
+  const target = document.elementFromPoint(held.x, held.y)
+  target.dispatchEvent(new DragEvent('drop', {
+    bubbles: true, cancelable: true, composed: true,
+    clientX: held.x, clientY: held.y, dataTransfer: held.transfer,
+  }))
+}
+"""
+
+
+def hover_files(page: Page, row_index: int, files: list[dict], y_frac: float = 0.5) -> None:
+    """Bring a file drag over a row and leave it there."""
+    box = rows(page).nth(row_index).bounding_box()
+    assert box
+    page.evaluate(
+        _HOVER_FILES,
+        {"x": box["x"] + box["width"] / 2, "y": box["y"] + box["height"] * y_frac, "files": files},
+    )
+
+
+def drop_files(page: Page, row_index: int, files: list[dict], y_frac: float = 0.5) -> None:
+    """Drop files onto a row, releasing at *y_frac* of its height.
+
+    The vertical fraction picks the hitbox instruction exactly as it does for a
+    row drag: the middle band is ``make-child`` and the outer bands reorder.
+    """
+    hover_files(page, row_index, files, y_frac)
+    page.evaluate(_RELEASE_FILES)
+
+
+def a_file(name: str, mime: str = "text/plain", body: str = "hello") -> dict:
+    return {"name": name, "type": mime, "body": body}
+
+
+def test_a_dropped_file_becomes_a_node(page: Page, port):
+    table = dropping_table()
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md", "text/markdown")])
+
+    wait_until(lambda: shape(table.source) == "docs(readme,node-1),notes")
+    assert node_at(table.source, "node-1")["title"] == "plan.md"
+
+    server.stop()
+
+
+def test_a_file_dropped_above_a_row_lands_beside_it(page: Page, port):
+    table = dropping_table()
+    server = serve(table, page, port)
+
+    # The top band of `readme.md`, which is `reorder-above` for a file exactly as
+    # it is for a row.
+    drop_files(page, 1, [a_file("plan.md")], y_frac=0.1)
+
+    wait_until(lambda: shape(table.source) == "docs(node-1,readme),notes")
+
+    server.stop()
+
+
+def test_several_files_arrive_in_one_step(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events)
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("one.txt"), a_file("two.txt"), a_file("three.txt")])
+
+    # The callback runs last, after the tree and after the history, so it is the
+    # one signal that means the whole intent has been applied.
+    wait_until(lambda: bool(events))
+    assert shape(table.source) == "docs(readme,node-1,node-2,node-3),notes"
+    assert [node_at(table.source, f"node-{n}")["title"] for n in (1, 2, 3)] == [
+        "one.txt",
+        "two.txt",
+        "three.txt",
+    ]
+    # One undo step for the batch, so taking it back takes all three.
+    assert table.can_undo
+    table.undo()
+    assert shape(table.source) == "docs(readme),notes"
+
+    server.stop()
+
+
+def test_a_file_held_over_a_folder_shows_the_drop_indicator(page: Page, port):
+    table = dropping_table()
+    server = serve(table, page, port)
+
+    hover_files(page, 0, [a_file("plan.md")])
+
+    assert "pnl-tst-row--child-target" in row_classes(page, 0)
+
+    page.evaluate(_RELEASE_FILES)
+    # The indicator is not left behind once the drop has been handled.
+    wait_until(lambda: "pnl-tst-row--child-target" not in row_classes(page, 0))
+
+    server.stop()
+
+
+def test_a_file_held_between_rows_shows_the_drop_line(page: Page, port):
+    table = dropping_table()
+    server = serve(table, page, port)
+
+    hover_files(page, 1, [a_file("plan.md")], y_frac=0.1)
+
+    expect(rows(page).nth(1).locator(".pnl-tst-dropline--above")).to_be_visible()
+
+    server.stop()
+
+
+def test_a_leaf_refuses_a_file_dropped_into_it(page: Page, port):
+    """The rule a row drag already follows, applied to a file."""
+    events: list = []
+    table = dropping_table(events=events)
+    server = serve(table, page, port)
+
+    # The middle band of `notes.txt`, which takes no children. The hitbox blocks
+    # `make-child` there, so the release lands nowhere rather than beside it.
+    hover_files(page, 2, [a_file("plan.md")])
+    assert "pnl-tst-row--blocked" in row_classes(page, 2)
+
+    page.evaluate(_RELEASE_FILES)
+    page.wait_for_timeout(300)
+    assert shape(table.source) == "docs(readme),notes"
+    assert events == []
+
+    server.stop()
+
+
+def test_a_file_dropped_below_a_leaf_lands_beside_it(page: Page, port):
+    table = dropping_table()
+    server = serve(table, page, port)
+
+    drop_files(page, 2, [a_file("plan.md")], y_frac=0.9)
+
+    wait_until(lambda: shape(table.source) == "docs(readme),notes,node-1")
+
+    server.stop()
+
+
+def test_a_table_that_takes_no_files_ignores_a_file_drop(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events, drop_files=False)
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md")])
+    page.wait_for_timeout(300)
+
+    assert shape(table.source) == "docs(readme),notes"
+    assert events == []
+
+    server.stop()
+
+
+def test_a_file_the_table_does_not_accept_is_reported_rather_than_taken(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events, drop_accept=[".md"])
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md"), a_file("notes.txt")])
+
+    # Waiting on the callback rather than on the tree: `source` is rewritten
+    # before the callback runs, so watching it would race the report.
+    wait_until(lambda: bool(events))
+    assert shape(table.source) == "docs(readme,node-1),notes"
+    assert node_at(table.source, "node-1")["title"] == "plan.md"
+    name, params = events[-1]
+    assert name == "drop_files"
+    assert [item["name"] for item in params["rejected"]] == ["notes.txt"]
+    assert params["rejected"][0]["reason"] == "type"
+
+    server.stop()
+
+
+def test_a_vetoed_file_drop_leaves_the_tree_alone(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events, action_callback=lambda action, params: action != "drop_files")
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md")])
+
+    wait_until(lambda: bool(events))
+    assert shape(table.source) == "docs(readme),notes"
+    assert events[-1][1]["applied"] is False
+
+    server.stop()
+
+
+def test_the_bytes_arrive_when_the_table_asked_for_them(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events, drop_files="content")
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md", body="dropped text")])
+
+    wait_until(lambda: bool(events))
+    assert events[-1][1]["files"][0]["content"] == b"dropped text"
+    # And never into the tree, so a dropped file is not re-sent on every change.
+    assert "content" not in node_at(table.source, "node-1")
+
+    server.stop()
+
+
+def test_metadata_alone_carries_no_bytes(page: Page, port):
+    events: list = []
+    table = dropping_table(events=events)
+    server = serve(table, page, port)
+
+    drop_files(page, 0, [a_file("plan.md", body="dropped text")])
+
+    wait_until(lambda: bool(events))
+    dropped = events[-1][1]["files"][0]
+    assert dropped["content"] is None
+    assert dropped["size"] == len("dropped text")
+    assert dropped["mime"] == "text/plain"
+
+    server.stop()

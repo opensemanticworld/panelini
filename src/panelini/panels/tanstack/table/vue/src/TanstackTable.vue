@@ -15,7 +15,7 @@ import {
   useTable,
 } from '@tanstack/vue-table'
 import { attachInstruction } from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
-import { DND_TYPE, joinDndHost } from '@/dnd_host.js'
+import { DND_TYPE, FILE_TYPE, joinDndHost } from '@/dnd_host.js'
 // Material Icon Theme (MIT), the VS Code file icon set. Imported one file at a
 // time and inlined at build time, so the panel stays offline and only the icons
 // listed below reach the bundle rather than the set's thousand-odd SVGs.
@@ -2547,6 +2547,9 @@ onBeforeUnmount(() => {
 // is this pane's half of that, with the row resolved from the pointer position.
 const AUTO_EXPAND_MS = 500
 const ALL_INSTRUCTIONS = ['reorder-above', 'reorder-below', 'make-child', 'reparent']
+// Kept the same on both sides, so a file the browser declined to read is exactly
+// a file Python would have refused. `table.py` documents the option.
+const DEFAULT_DROP_MAX_BYTES = 5000000
 
 const dndEnabled = computed(() => props.state.options.enable_dnd === true)
 
@@ -2558,6 +2561,26 @@ const dndEnabled = computed(() => props.state.options.enable_dnd === true)
 // hand it any node.
 const transferGroup = computed(() => String(props.state.options.transfer_group || ''))
 const tableId = computed(() => String(props.state.tableId || ''))
+
+// Files dragged in from the desktop. `meta` reports what a file is called, how
+// large it is and what kind it claims to be; `content` reads the bytes as well.
+// Off unless a table asked, because a table that cannot store a file should not
+// offer to take one.
+const DROP_MODES = ['meta', 'content']
+const fileDropMode = computed(() => {
+  const mode = props.state.options.drop_files
+  if (mode === true) return 'meta'
+  return DROP_MODES.includes(mode) ? mode : 'none'
+})
+const fileDropEnabled = computed(() => fileDropMode.value !== 'none')
+// Extensions and MIME patterns, empty for anything. Python checks it again on the
+// way in and is the one that decides: this is what keeps a file it would refuse
+// from being read into memory in order to be refused.
+const dropAccept = computed(() => (props.state.options.drop_accept || []).map((entry) => String(entry).toLowerCase()))
+const dropMaxBytes = computed(() => {
+  const limit = Number(props.state.options.drop_max_bytes)
+  return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_DROP_MAX_BYTES
+})
 
 const draggingKeys = ref([])
 // The one row currently under the pointer, plus the instruction it resolved to.
@@ -2654,6 +2677,51 @@ function clearDropTarget() {
   cancelAutoExpand()
 }
 
+// Whether `drop_accept` covers a file. An entry is either an extension (`.png`),
+// a MIME type (`application/pdf`) or a MIME group (`image/*`), and an empty list
+// means everything. Mirrors `_accepts_file` in `table.py`, which is the one that
+// decides: this copy only avoids reading the bytes of a file Python will refuse.
+function acceptsFile(mime, name) {
+  const patterns = dropAccept.value
+  if (patterns.length === 0) return true
+  const type = String(mime || '').toLowerCase()
+  const filename = String(name || '').toLowerCase()
+  return patterns.some((pattern) => {
+    if (pattern.startsWith('.')) return filename.endsWith(pattern)
+    if (pattern.endsWith('/*')) return type.startsWith(pattern.slice(0, -1))
+    return type === pattern
+  })
+}
+
+// Base64, because the bytes travel inside the intent and an intent is JSON. Read
+// in chunks: `String.fromCharCode` is applied to the whole array otherwise, and a
+// file of any size overflows the argument limit rather than encoding slowly.
+async function encodeFile(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const CHUNK = 0x8000
+  let binary = ''
+  for (let start = 0; start < bytes.length; start += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(start, start + CHUNK))
+  }
+  return btoa(binary)
+}
+
+// One dropped file as the intent carries it. `content` is present only when the
+// table asked for bytes and this file is one Python would take: reading a file to
+// have it refused on arrival is the one cost worth spending a browser side check
+// to avoid.
+async function describeFile(file) {
+  const described = {
+    name: String(file.name || ''),
+    size: Number(file.size || 0),
+    mime: String(file.type || ''),
+    last_modified: Number(file.lastModified || 0),
+  }
+  const wanted = acceptsFile(described.mime, described.name) && described.size <= dropMaxBytes.value
+  if (fileDropMode.value === 'content' && wanted) described.content = await encodeFile(file)
+  return described
+}
+
 const rootElement = ref(null)
 
 // The element pdnd will actually be handed by the browser: the outermost shadow
@@ -2720,14 +2788,19 @@ function onRowControl(hit, input) {
 const dndPane = {
   id: () => tableId.value,
 
+  acceptsFiles: () => fileDropEnabled.value,
+
   // Anything outside a row (the header, the empty space below the last row) is
-  // not a drag handle, and neither is a row control.
+  // not a drag handle, and neither is a row control. Nor is any row at all in a
+  // table that joined the host for file drops alone.
   canDragFrom(input) {
+    if (!dndEnabled.value) return false
     const hit = rowAt(input)
     return hit !== null && !onRowControl(hit, input)
   },
 
   dragData(input) {
+    if (!dndEnabled.value) return null
     const hit = rowAt(input)
     if (!hit) return null
     return {
@@ -2743,6 +2816,7 @@ const dndPane = {
   // snapshot of the whole layout. Point it at the row being dragged, offset so
   // the preview stays under the cursor where it was grabbed.
   preview(input, nativeSetDragImage) {
+    if (!dndEnabled.value) return false
     const hit = rowAt(input)
     if (!hit) return false
     nativeSetDragImage(hit.element, input.clientX - hit.rect.left, input.clientY - hit.rect.top)
@@ -2757,6 +2831,7 @@ const dndPane = {
   // table that opted into nothing shows no drop state at all rather than
   // accepting a drag Python is bound to reject.
   dropData(input, drag) {
+    if (!dndEnabled.value) return null
     const hit = rowAt(input)
     if (!hit) return null
     const foreign = drag.sourceId !== tableId.value
@@ -2771,6 +2846,49 @@ const dndPane = {
       indentPerLevel: indentPx.value,
       mode: itemMode(hit.row),
       block: blockedInstructions(hit.row, drag.keys ?? [], foreign),
+    })
+  },
+
+  // A file lands through the hitbox a node lands through, with an empty key list:
+  // a file is not a row in this tree, so nothing is being dropped onto itself and
+  // the only rules left are the ones about the target. That is the same case a
+  // drag from the other pane is, which is why `foreign` is already an argument.
+  //
+  // The indicator says a file is arriving and never which file. pdnd hands every
+  // in-flight external callback `items: []` on purpose and only fills the payload
+  // in `getDropPayload`, so nothing about the files exists until the drop. What
+  // `drop_accept` covers is therefore decided in `describeFile`, where the names
+  // and the sizes are real, and in Python, which decides for good.
+  externalDropData(input) {
+    if (!fileDropEnabled.value) return null
+    const hit = rowAt(input)
+    if (!hit) return null
+    const data = { type: FILE_TYPE, key: hit.row.id, paneId: tableId.value }
+    return attachInstruction(data, {
+      element: hit.element,
+      input,
+      currentLevel: hit.row.depth,
+      indentPerLevel: indentPx.value,
+      mode: itemMode(hit.row),
+      block: blockedInstructions(hit.row, [], true),
+    })
+  },
+
+  // Reading the bytes is asynchronous, so the intent is emitted after the drop
+  // has already finished as far as the browser is concerned. Nothing waits on it:
+  // the rows arrive when Python has written them, exactly as they do for a
+  // transfer, and the tree is untouched until then.
+  async dropFiles(files, key, instruction) {
+    if (!fileDropEnabled.value || files.length === 0) return
+    const described = await Promise.all(files.map(describeFile))
+    // Minted keys are Python's, so the new rows are found by diffing the tree the
+    // way a pasted copy's are.
+    refocus = { pasted: new Set(table.getCoreRowModel().flatRows.map((row) => row.id)) }
+    props.emitEvent('drop_files', {
+      files: described,
+      targetKey: key,
+      instruction: instruction.type,
+      desiredLevel: instruction.desiredLevel ?? instruction.currentLevel,
     })
   },
 
@@ -2810,19 +2928,21 @@ const dndPane = {
 
 let dndCleanup = null
 
-// Joined on mount and rejoined when `enable_dnd` flips, so a disabled table takes
-// no part in a drag over the layout it shares.
+// Joined on mount and rejoined when either option flips, so a table that takes
+// neither rows nor files takes no part in a drag over the layout it shares. The
+// two are independent: a table that refuses to be reordered may still be a place
+// files can be put, and the pane's own callbacks answer for one without the other.
 function registerDnd() {
   dndCleanup?.()
   dndCleanup = null
 
   const host = dndHost()
-  if (!host || !dndEnabled.value) return
+  if (!host || !(dndEnabled.value || fileDropEnabled.value)) return
   dndCleanup = joinDndHost(host, dndPane)
 }
 
 onMounted(registerDnd)
-watch(dndEnabled, registerDnd)
+watch([dndEnabled, fileDropEnabled], registerDnd)
 
 onBeforeUnmount(() => {
   cancelAutoExpand()

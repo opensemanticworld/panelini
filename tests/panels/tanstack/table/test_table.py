@@ -6,6 +6,7 @@ without a browser, by feeding ``handle_event`` the payload the JS layer sends.
 """
 
 import copy
+from base64 import b64encode
 
 import pytest
 
@@ -3017,3 +3018,335 @@ def test_the_range_is_checked_here_and_not_only_hinted_at_the_input():
     table.handle_event("edit", {"key": "b", "column": "score", "value": 99})
 
     assert field_of(table, "b", "score") is None
+
+
+# --- external file drop ---
+
+DROP_SOURCE = [
+    {"key": "docs", "title": "Docs", "children": [{"key": "readme", "title": "readme.md"}]},
+    {"key": "notes", "title": "notes.txt", "allow_children": False},
+]
+
+
+def drop_table(**options):
+    """A table that takes files dragged in from the desktop."""
+    callbacks = {name: options.pop(name) for name in ("event_callback", "action_callback") if name in options}
+    return TanstackTable(source=copy.deepcopy(DROP_SOURCE), options={"drop_files": "meta", **options}, **callbacks)
+
+
+def dropped(name, mime="text/plain", size=10, content=None):
+    """One file as the browser half describes it."""
+    item = {"name": name, "size": size, "mime": mime, "last_modified": 0}
+    if content is not None:
+        item["content"] = b64encode(content).decode("ascii")
+    return item
+
+
+def drop_on(table, files, key="docs", instruction="make-child"):
+    """Land files on a row through the hitbox vocabulary a drop actually speaks."""
+    table.handle_event(
+        "drop_files",
+        {"files": files, "targetKey": key, "instruction": instruction, "desiredLevel": 0},
+    )
+
+
+def test_a_dropped_file_becomes_a_node_titled_with_its_name():
+    table = drop_table()
+
+    drop_on(table, [dropped("plan.md")])
+
+    assert shape(table.source) == "docs(readme,node-1),notes"
+    assert title_of(table, "node-1") == "plan.md"
+
+
+def test_a_dropped_node_carries_the_size_and_the_mime_and_not_the_type():
+    """`type` names an entry in the node type registry, so a MIME type cannot go there."""
+    table = drop_table()
+
+    drop_on(table, [dropped("photo.png", mime="image/png", size=2048)])
+
+    node = tree.find_node(table.source, "node-1")
+    assert node is not None
+    assert node["size"] == 2048
+    assert node["mime"] == "image/png"
+    assert "type" not in node
+
+
+def test_a_dropped_file_gets_the_icon_its_extension_names():
+    table = drop_table()
+
+    drop_on(table, [dropped("script.py")])
+
+    node = tree.find_node(table.source, "node-1")
+    assert node is not None
+    assert node["icon"] == "python"
+
+
+def test_every_file_in_one_drop_gets_its_own_key():
+    """Minting against `source` alone would hand all three the lowest free key."""
+    table = drop_table()
+
+    drop_on(table, [dropped("a.txt"), dropped("b.txt"), dropped("c.txt")])
+
+    assert shape(table.source) == "docs(readme,node-1,node-2,node-3),notes"
+    assert [title_of(table, key) for key in ("node-1", "node-2", "node-3")] == ["a.txt", "b.txt", "c.txt"]
+
+
+def test_a_batch_lands_in_the_order_it_was_dragged():
+    table = drop_table()
+
+    drop_on(table, [dropped("a.txt"), dropped("b.txt")], key="readme", instruction="reorder-below")
+
+    assert shape(table.source) == "docs(readme,node-1,node-2),notes"
+
+
+def test_the_hitbox_decides_where_they_land():
+    table = drop_table()
+
+    drop_on(table, [dropped("a.txt")], key="notes", instruction="reorder-above")
+
+    assert shape(table.source) == "docs(readme),node-1,notes"
+
+
+def test_the_callback_sees_the_decoded_bytes():
+    events = []
+    table = drop_table(drop_files="content", event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("plan.md", content=b"hello")])
+
+    assert events[0][1]["files"][0]["content"] == b"hello"
+
+
+def test_the_bytes_never_reach_the_tree():
+    """A megabyte of base64 in `source` would cross the wire again on every change after it."""
+    table = drop_table(drop_files="content")
+
+    drop_on(table, [dropped("plan.md", content=b"hello")])
+
+    node = tree.find_node(table.source, "node-1")
+    assert node is not None
+    assert "content" not in node
+
+
+def test_meta_mode_reports_no_content_at_all():
+    events = []
+    table = drop_table(event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("plan.md")])
+
+    assert events[0][1]["files"][0]["content"] is None
+
+
+def test_a_content_that_is_not_base64_comes_back_empty_rather_than_raising():
+    """One malformed file should not take the whole drop with it."""
+    events = []
+    table = drop_table(drop_files="content", event_callback=lambda name, params: events.append((name, params)))
+
+    table.handle_event(
+        "drop_files",
+        {
+            "files": [{"name": "plan.md", "size": 5, "mime": "text/plain", "content": "not base64!!"}],
+            "targetKey": "docs",
+            "instruction": "make-child",
+        },
+    )
+
+    assert events[0][1]["files"][0]["content"] is None
+    assert title_of(table, "node-1") == "plan.md"
+
+
+def test_a_file_over_the_cap_is_refused_with_a_reason():
+    events = []
+    table = drop_table(drop_max_bytes=100, event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("big.bin", size=101)])
+
+    params = events[0][1]
+    assert params["files"] == []
+    assert params["rejected"][0]["reason"] == "size"
+    assert params["applied"] is False
+    assert shape(table.source) == "docs(readme),notes"
+
+
+def test_a_file_at_the_cap_is_taken():
+    table = drop_table(drop_max_bytes=100)
+
+    drop_on(table, [dropped("big.bin", size=100)])
+
+    assert title_of(table, "node-1") == "big.bin"
+
+
+def test_the_default_cap_is_five_megabytes():
+    table = drop_table()
+
+    drop_on(table, [dropped("under.bin", size=5_000_000), dropped("over.bin", size=5_000_001)])
+
+    assert shape(table.source) == "docs(readme,node-1),notes"
+    assert title_of(table, "node-1") == "under.bin"
+
+
+def test_accept_takes_a_mime_group():
+    events = []
+    table = drop_table(drop_accept=["image/*"], event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("photo.png", mime="image/png"), dropped("plan.md", mime="text/markdown")])
+
+    params = events[0][1]
+    assert [item["name"] for item in params["files"]] == ["photo.png"]
+    assert params["rejected"][0]["reason"] == "type"
+
+
+def test_accept_takes_an_exact_mime_type():
+    table = drop_table(drop_accept=["application/pdf"])
+
+    drop_on(table, [dropped("paper.pdf", mime="application/pdf"), dropped("photo.png", mime="image/png")])
+
+    assert shape(table.source) == "docs(readme,node-1),notes"
+    assert title_of(table, "node-1") == "paper.pdf"
+
+
+def test_accept_takes_an_extension_the_browser_could_never_have_checked():
+    """A drag exposes the types and withholds the names, so this rule only ever runs here."""
+    table = drop_table(drop_accept=[".csv"])
+
+    drop_on(table, [dropped("rows.csv", mime=""), dropped("rows.txt", mime="")])
+
+    assert shape(table.source) == "docs(readme,node-1),notes"
+    assert title_of(table, "node-1") == "rows.csv"
+
+
+def test_an_empty_accept_takes_anything():
+    table = drop_table(drop_accept=[])
+
+    drop_on(table, [dropped("whatever.bin", mime="application/octet-stream")])
+
+    assert title_of(table, "node-1") == "whatever.bin"
+
+
+def test_the_veto_leaves_the_tree_alone_and_names_nothing():
+    table = drop_table(action_callback=lambda action, params: action != "drop_files")
+
+    drop_on(table, [dropped("plan.md")])
+
+    assert shape(table.source) == "docs(readme),notes"
+
+
+def test_the_veto_is_asked_once_with_every_accepted_file():
+    seen = []
+
+    def veto(action, params):
+        seen.append((action, [item["name"] for item in params["files"]]))
+        return True
+
+    table = drop_table(action_callback=veto)
+
+    drop_on(table, [dropped("a.txt"), dropped("b.txt")])
+
+    assert seen == [("drop_files", ["a.txt", "b.txt"])]
+
+
+def test_a_vetoed_drop_reports_no_keys():
+    events = []
+    table = drop_table(
+        action_callback=lambda action, params: False,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+
+    drop_on(table, [dropped("plan.md")])
+
+    params = events[0][1]
+    assert params["keys"] == []
+    assert params["applied"] is False
+
+
+def test_a_drop_onto_a_leaf_cannot_make_it_a_parent():
+    """The browser blocks `make-child` on such a node too, so this is the same rule twice."""
+    events = []
+    table = drop_table(event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("plan.md")], key="notes", instruction="make-child")
+
+    assert shape(table.source) == "docs(readme),notes"
+    assert events[0][1]["position"] is None
+
+
+def test_a_drop_that_landed_nowhere_still_reports_what_arrived():
+    """Three files arriving and none of them being taken is the case worth saying something about."""
+    events = []
+    table = drop_table(event_callback=lambda name, params: events.append((name, params)))
+
+    table.handle_event("drop_files", {"files": [dropped("plan.md")], "targetKey": "nope", "instruction": "make-child"})
+
+    params = events[0][1]
+    assert [item["name"] for item in params["files"]] == ["plan.md"]
+    assert params["applied"] is False
+
+
+def test_a_drop_reports_the_keys_it_minted():
+    events = []
+    table = drop_table(event_callback=lambda name, params: events.append((name, params)))
+
+    drop_on(table, [dropped("a.txt"), dropped("b.txt")])
+
+    params = events[0][1]
+    assert params["keys"] == ["node-1", "node-2"]
+    assert params["applied"] is True
+    assert params["anchor_key"] == "docs"
+    assert params["position"] == "child"
+
+
+def test_the_template_is_merged_the_way_a_new_node_s_is():
+    table = drop_table(drop_node={"kind": "upload", "allow_children": False})
+
+    drop_on(table, [dropped("plan.md")])
+
+    node = tree.find_node(table.source, "node-1")
+    assert node is not None
+    assert node["kind"] == "upload"
+    assert node["allow_children"] is False
+
+
+def test_the_template_never_names_the_key():
+    table = drop_table(drop_node={"key": "mine"})
+
+    drop_on(table, [dropped("plan.md")])
+
+    assert tree.find_node(table.source, "mine") is None
+    assert title_of(table, "node-1") == "plan.md"
+
+
+def test_a_whole_batch_is_one_undo_step():
+    table = drop_table()
+
+    drop_on(table, [dropped("a.txt"), dropped("b.txt"), dropped("c.txt")])
+    table.undo()
+
+    assert shape(table.source) == "docs(readme),notes"
+
+
+def test_an_empty_drop_changes_nothing():
+    table = drop_table()
+
+    drop_on(table, [])
+
+    assert shape(table.source) == "docs(readme),notes"
+    assert table.can_undo is False
+
+
+def test_a_dropped_file_is_a_leaf_by_default():
+    """It came from a file, so nothing can be dropped into it until a template says so."""
+    table = drop_table()
+
+    drop_on(table, [dropped("plan.md")])
+
+    assert field_of(table, "node-1", "allow_children") is False
+    assert tree.accepts_children(table.source, "node-1") is False
+
+
+def test_the_template_can_make_a_dropped_file_a_folder():
+    table = drop_table(drop_node={"allow_children": True, "icon": "folder"})
+
+    drop_on(table, [dropped("archive.zip")])
+
+    assert field_of(table, "node-1", "allow_children") is True
+    assert field_of(table, "node-1", "icon") == "folder"

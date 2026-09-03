@@ -1,5 +1,7 @@
 """Entrypoint of the TanstackTable panel."""
 
+from base64 import b64decode
+from binascii import Error as Base64Error
 from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -29,6 +31,36 @@ bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
 #:
 #: Weak, so a table that goes out of scope leaves nothing behind here.
 _LIVE_TABLES: "WeakValueDictionary[str, TanstackTable]" = WeakValueDictionary()
+
+#: How large one dropped file may be before it is refused. Kept the same in
+#: ``TanstackTable.vue``, so a file the browser declined to read is exactly a file
+#: this would have turned away, rather than one that arrives with no bytes in it.
+_DEFAULT_DROP_MAX_BYTES = 5_000_000
+
+
+def _accepts_file(patterns: list[Any], item: dict[str, Any]) -> bool:
+    """Return whether ``drop_accept`` covers a dropped file.
+
+    An entry is an extension (``.png``), a MIME type (``application/pdf``) or a
+    MIME group (``image/*``), and an empty list means anything. The browser runs
+    the same rule on the type alone while a drag is in flight, because a drag
+    exposes the types and withholds the names.
+    """
+    if not patterns:
+        return True
+    mime = str(item.get("mime") or "").lower()
+    name = str(item.get("name") or "").lower()
+    for entry in patterns:
+        pattern = str(entry).lower()
+        if pattern.startswith("."):
+            if name.endswith(pattern):
+                return True
+        elif pattern.endswith("/*"):
+            if mime.startswith(pattern[:-1]):
+                return True
+        elif mime == pattern:
+            return True
+    return False
 
 
 class _Step:
@@ -165,7 +197,17 @@ class TanstackTable(AnyWidgetComponent):
             "browser has opened rather than the whole tree, leaving the rest to arrive the first "
             "time they are expanded, which takes a ten thousand node tree from about 950 kB on the "
             "wire to about 6 kB. It is off by default, because it also means a search reaches "
-            "unloaded branches through Python rather than through the browser alone."
+            "unloaded branches through Python rather than through the browser alone. "
+            "drop_files in none | meta | content takes files dragged in from the desktop, landing "
+            "them through the same hitbox a move uses and minting one node per file: meta reports "
+            "the name, the size, the MIME type and the last modified stamp, content reads the bytes "
+            "as well and hands them to the callbacks as bytes. It is none by default, because a "
+            "table that cannot store a file should not offer to take one. drop_accept is a list of "
+            "extensions and MIME patterns ('.png', 'image/*', 'application/pdf'), empty for "
+            "anything, and drop_max_bytes caps one file at 5 MB unless it is raised. Both are "
+            "decided here; the browser hints on the MIME type alone, which is all a drag exposes. "
+            "drop_node is the template a dropped file's node is minted from, the way new_node is "
+            "for an added one, and the node carries the file's size and mime beside its title."
         ),
     )
     icons = param.Dict(
@@ -374,10 +416,10 @@ class TanstackTable(AnyWidgetComponent):
                 the rest.
             action_callback: Veto hook for the toolbar's structural actions.
                 Receives ``(action, params)`` with action in ``add | rename |
-                edit | delete | paste``, and returning False leaves ``source``
-                untouched. Called once for the whole action rather than per node,
-                because adding one node and deleting a batch are each a single
-                decision. Moves keep going through ``move_callback``, and so does
+                edit | delete | paste | drop_files``, and returning False leaves
+                ``source`` untouched. Called once for the whole action rather than
+                per node, because adding one node, deleting a batch and taking a
+                handful of dropped files are each a single decision. Moves keep going through ``move_callback``, and so does
                 a paste of something cut, since that is a move. Undo and redo are
                 not asked at all: they replay states this hook already allowed.
                 A cross-pane ``transfer`` asks the table the nodes are leaving,
@@ -463,6 +505,7 @@ class TanstackTable(AnyWidgetComponent):
             "copy": partial(self._apply_clipboard_intent, "copy"),
             "paste": self._apply_paste_intent,
             "transfer": self._apply_transfer_intent,
+            "drop_files": self._apply_drop_files_intent,
             "undo": lambda _params: self._apply_history_intent("undo"),
             "redo": lambda _params: self._apply_history_intent("redo"),
             "lazy_load": self._apply_lazy_load_intent,
@@ -893,6 +936,156 @@ class TanstackTable(AnyWidgetComponent):
 
         params["applied"] = True
         return params
+
+    def _apply_drop_files_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Mint a node per file dragged in from the desktop and rewrite ``source``.
+
+        The browser reports what landed and where, and refuses nothing: it reads
+        ``drop_accept`` and ``drop_max_bytes`` only to skip loading the bytes of a
+        file this would turn away, which it can do because a drop is the first
+        moment a name and a size exist. Which files are taken is decided here.
+
+        A file's bytes never reach the tree. They go to the callbacks and nowhere
+        else, so a dropped file does not put a megabyte of base64 into ``source``
+        and back onto the wire on every change after it.
+
+        Args:
+            event_params: Raw payload with ``files``, each ``{name, size, mime,
+                last_modified}`` and a base64 ``content`` when the table asked for
+                bytes, plus the hitbox placement a move carries.
+
+        Returns:
+            The normalised payload. ``files`` holds the accepted ones with their
+            content decoded to :class:`bytes`, ``rejected`` the rest with a
+            ``reason`` in ``type | size``, and ``keys`` the minted keys.
+        """
+        position, anchor_key = self._resolve_placement(event_params)
+        # The same guard an add takes, for the same reason: the hitbox already
+        # blocks `make-child` on a node that refuses children and the browser only
+        # ever names a row it is rendering, so this is that rule stated where it
+        # is enforced rather than where it is shown.
+        if (
+            anchor_key is None
+            or tree.find_node(self.source, anchor_key) is None
+            or (position == "child" and not tree.accepts_children(self.source, anchor_key, self.types))
+        ):
+            position = None
+        dropped = [dict(item) for item in (event_params.get("files") or []) if isinstance(item, dict)]
+
+        accepted: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        for item in dropped:
+            reason = self._refuses_file(item)
+            if reason is None:
+                accepted.append(self._decode_file(item))
+            else:
+                rejected.append({**item, "content": None, "reason": reason})
+
+        params: dict[str, Any] = {
+            "files": accepted,
+            "rejected": rejected,
+            "anchor_key": anchor_key,
+            "position": position,
+            "keys": [],
+            "applied": False,
+        }
+
+        # A drop that landed nowhere resolvable still reports, because "three PDFs
+        # arrived and none of them were taken" is the case an application most
+        # wants to say something about.
+        if not accepted or position is None:
+            return params
+
+        # Minted against the tree plus the nodes already minted in this call, or
+        # every file in one drop would take the same lowest free key.
+        nodes: list[dict[str, Any]] = []
+        for item in accepted:
+            nodes.append(self._file_node(item, self.source + nodes))
+        params["keys"] = [str(node[tree.KEY]) for node in nodes]
+        if not self._allows_action("drop_files", params):
+            params["keys"] = []
+            return params
+
+        # The same insert a transfer arrives through, and for the same reason: a
+        # batch has to land in the order it was dragged rather than reversed. The
+        # re-keying it does costs nothing here, since a minted key is new by
+        # construction and cannot collide with the tree it was minted against.
+        updated, arrived = self._receive_transfer(nodes, anchor_key, position)
+        if not arrived:
+            return params
+
+        self._commit_source(updated)
+        params["keys"] = arrived
+        params["applied"] = True
+        return params
+
+    def _refuses_file(self, item: dict[str, Any]) -> Optional[str]:
+        """Return why a dropped file is not taken, or None when it is.
+
+        Both limits are checked here rather than trusted from the browser, which
+        is the bargain a number column's ``min`` and ``max`` already take: the
+        browser is trusted for the affordance and never for the decision.
+        """
+        limit = self.options.get("drop_max_bytes", _DEFAULT_DROP_MAX_BYTES)
+        try:
+            if float(item.get("size") or 0) > float(limit):
+                return "size"
+        except (TypeError, ValueError):
+            return "size"
+        patterns = self.options.get("drop_accept") or []
+        return None if _accepts_file(patterns, item) else "type"
+
+    @staticmethod
+    def _decode_file(item: dict[str, Any]) -> dict[str, Any]:
+        """Return a dropped file with its base64 content decoded to bytes.
+
+        ``content`` is absent under ``drop_files='meta'`` and present but
+        undecodable only if something other than this panel's own browser half
+        wrote the payload, which comes back as None rather than raising: one
+        malformed file should not take the whole drop with it.
+        """
+        content = item.get("content")
+        if content is None:
+            return {**item, "content": None}
+        try:
+            return {**item, "content": b64decode(str(content), validate=True)}
+        except (Base64Error, ValueError):
+            return {**item, "content": None}
+
+    def _file_node(self, item: dict[str, Any], against: list[dict[str, Any]]) -> dict[str, Any]:
+        """Return the node one dropped file is minted as.
+
+        ``mime`` rather than ``type``, because ``type`` already names an entry in
+        the node type registry and a file claiming to be ``image/png`` is not a
+        node claiming to be of type ``image/png``.
+
+        Args:
+            item: The dropped file, already accepted.
+            against: The tree the key has to be unique within, which is this
+                table's plus whatever the same drop has minted so far.
+        """
+        template = {name: value for name, value in (self.options.get("drop_node") or {}).items() if name != tree.KEY}
+        title = str(item.get("name") or "")
+        # A dropped file is a file, so it is a leaf carrying the generic sheet of
+        # paper unless the template says otherwise. Both come before the template
+        # rather than after it, because a table dropping into a tree of archives
+        # may well want folders instead.
+        node = {
+            "title": title,
+            tree.ALLOW_CHILDREN: False,
+            tree.ICON: DEFAULT_FILE_ICON,
+            **template,
+            tree.KEY: tree.new_key(against, self.options.get("new_key_prefix", "node")),
+            "size": item.get("size"),
+            "mime": item.get("mime"),
+        }
+        # A dropped `report.pdf` then gets the icon its extension names, exactly
+        # as a renamed node does. Only the generic icon is the panel's to
+        # maintain, so a template that picked its own keeps it.
+        icon = self._typed_icon(node, title, "")
+        if icon is not None:
+            node[tree.ICON] = icon
+        return node
 
     def _apply_rename_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
         """Retitle the node a browser rename intent names and rewrite ``source``.

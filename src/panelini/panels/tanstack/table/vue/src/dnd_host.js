@@ -1,8 +1,13 @@
+import { dropTargetForExternal } from '@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external'
+import { monitorForExternal } from '@atlaskit/pragmatic-drag-and-drop/adapter/monitor-for-external'
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine'
 import {
   draggable,
   dropTargetForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { preventUnhandled } from '@atlaskit/pragmatic-drag-and-drop/prevent-unhandled'
+import { containsFiles } from '@atlaskit/pragmatic-drag-and-drop/utils/contains-files'
+import { getFiles } from '@atlaskit/pragmatic-drag-and-drop/utils/get-files'
 import { extractInstruction } from '@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item'
 
 /**
@@ -27,10 +32,45 @@ import { extractInstruction } from '@atlaskit/pragmatic-drag-and-drop-hitbox/tre
  * the pointer is actually over. Panel loads this module once per page and calls
  * `render` once per component, so the registry below is shared by every table in
  * an app without going anywhere near `window`.
+ *
+ * The external adapter is bound on `window` rather than `document` and resolves
+ * its target through the same walk, so a file dragged in from the desktop has the
+ * same problem and takes the same answer: a third registration on the host, given
+ * out to the pane under the pointer.
  */
 const HOSTS = new Map()
 
 export const DND_TYPE = 'pnl-tst-row'
+export const FILE_TYPE = 'pnl-tst-file'
+
+/**
+ * The row `getData` named, and the pane holding it.
+ *
+ * Both adapters resolve one the same way, so this is shared to keep the external
+ * adapter from drifting from the element one. A blocked instruction is still a
+ * target: it is what the row draws the no-drop affordance from, and refusing it
+ * here would mean a drag that shows nothing at all over a row it cannot land on.
+ */
+function targetFor(entry, data) {
+  const instruction = extractInstruction(data)
+  if (!data.key || !instruction) return null
+  const pane = entry.panes.find((candidate) => candidate.id() === data.paneId)
+  return pane ? { pane, key: data.key, instruction } : null
+}
+
+/** The same target, once a release has to actually land somewhere. */
+function dropTargetFor(entry, data) {
+  const target = targetFor(entry, data)
+  return target && target.instruction.type !== 'instruction-blocked' ? target : null
+}
+
+function showDropOn(entry, data) {
+  const target = targetFor(entry, data)
+  for (const pane of entry.panes) {
+    if (target && pane === target.pane) pane.showDrop(target.key, target.instruction)
+    else pane.clearDrop()
+  }
+}
 
 function registerHost(host, entry) {
   return combine(
@@ -83,25 +123,58 @@ function registerHost(host, entry) {
         }
         return { type: DND_TYPE, key: null, paneId: '' }
       },
-      onDrag: ({ self }) => {
-        const key = self.data.key
-        const instruction = extractInstruction(self.data)
-        for (const pane of entry.panes) {
-          if (pane.id() === self.data.paneId && key && instruction) pane.showDrop(key, instruction)
-          else pane.clearDrop()
-        }
-      },
+      onDrag: ({ self }) => showDropOn(entry, self.data),
       onDragLeave: () => {
         for (const pane of entry.panes) pane.clearDrop()
       },
       onDrop: ({ self, source, location }) => {
         for (const pane of entry.panes) pane.clearDrop()
-        const target = entry.panes.find((pane) => pane.id() === self.data.paneId)
-        const key = self.data.key
-        const instruction = extractInstruction(self.data)
-        if (!target || !key || !instruction || instruction.type === 'instruction-blocked') return
-        target.drop(source.data, key, instruction, location.current.input)
+        const target = dropTargetFor(entry, self.data)
+        target?.pane.drop(source.data, target.key, target.instruction, location.current.input)
       },
+    }),
+    // Files dragged in from the desktop. A third registration rather than a
+    // branch inside the second, because the two adapters carry different payloads
+    // and pdnd keeps them apart on purpose: an external drag has no source
+    // element, no preview to generate and no drag start inside the window.
+    dropTargetForExternal({
+      element: host,
+      // Text, links and HTML dragged in are somebody else's business. Files are
+      // the only external kind this panel has anything to say about, and the same
+      // reasoning as above applies: which pane, and whether it takes files at
+      // all, is decided in `getData` because that runs on every move.
+      canDrop: ({ source }) => containsFiles({ source }),
+      getData: ({ input }) => {
+        for (const pane of entry.panes) {
+          const data = pane.externalDropData(input)
+          if (data) return data
+        }
+        return { type: FILE_TYPE, key: null, paneId: '' }
+      },
+      onDrag: ({ self }) => showDropOn(entry, self.data),
+      onDragLeave: () => {
+        for (const pane of entry.panes) pane.clearDrop()
+      },
+      onDrop: ({ self, source }) => {
+        for (const pane of entry.panes) pane.clearDrop()
+        const target = dropTargetFor(entry, self.data)
+        // Read synchronously: the browser neuters the `DataTransfer` the moment
+        // this handler returns, so the `File` handles have to be taken now even
+        // though reading their bytes happens later.
+        target?.pane.dropFiles(getFiles({ source }), target.key, target.instruction)
+      },
+    }),
+    // A file dropped anywhere the panel does not claim makes the browser navigate
+    // to it, which throws the Panel session away without asking. pdnd blocks that
+    // for the rest of the drag, and only while a table on the page is one that
+    // would have taken the file: a page that opted into nothing keeps whatever
+    // behaviour it had.
+    monitorForExternal({
+      canMonitor: ({ source }) => containsFiles({ source }),
+      onDragStart: () => {
+        if (entry.panes.some((pane) => pane.acceptsFiles())) preventUnhandled.start()
+      },
+      onDrop: () => preventUnhandled.stop(),
     }),
   )
 }
