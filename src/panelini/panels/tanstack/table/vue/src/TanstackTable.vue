@@ -585,7 +585,7 @@ function focusHeader() {
 
 function leaveHeader() {
   headerActive.value = false
-  nextTick(() => rowElements.get(focusKey.value)?.focus())
+  focusRowElement(focusKey.value)
 }
 
 function canSort(header) {
@@ -827,6 +827,147 @@ function treeCellStyle(row) {
   return { ...cellStyle(0), paddingInlineStart: `${row.depth * indentPx.value}px` }
 }
 
+// Only the rows a reader can see are in the DOM. Rows are one line by design, so
+// which ones those are is arithmetic rather than measurement: the scroll position
+// over the row height gives the first, the viewport over the row height gives the
+// count, and both fall out of numbers the grid already reports.
+//
+// There is no option and no threshold, because a grid the host left to size itself
+// measures a viewport as tall as its content, and the same formula then names every
+// row. Windowing and rendering everything are one code path.
+const OVERSCAN = 6
+
+// What to render before the grid has been measured. The first render happens
+// before the element is in the document, and `onMounted` corrects it inside the
+// same microtask, so this is what the browser is spared rather than what it shows.
+const UNMEASURED_ROWS = 40
+
+const gridElement = ref(null)
+const headElement = ref(null)
+const scrollTop = ref(0)
+const viewportPx = ref(null)
+const headPx = ref(0)
+const rowPx = ref(28)
+
+// The declared height rather than a rendered one. `.pnl-tst-row` is exactly this
+// tall, so the two agree by construction and nothing has to be measured per row.
+function measureGrid() {
+  const element = gridElement.value
+  if (!element) return
+  const declared = Number.parseFloat(getComputedStyle(element).getPropertyValue('--pnl-tst-row-height'))
+  if (Number.isFinite(declared) && declared > 0) rowPx.value = declared
+  headPx.value = headElement.value?.offsetHeight ?? 0
+  viewportPx.value = element.clientHeight
+  scrollTop.value = element.scrollTop
+}
+
+// The half open range of rows the viewport reaches. The sticky header covers the
+// top of it, so the rows start that far down the scrolled content.
+const rowWindow = computed(() => {
+  const total = rows.value.length
+  if (viewportPx.value === null) return { start: 0, end: Math.min(total, UNMEASURED_ROWS) }
+  const top = Math.max(0, scrollTop.value - headPx.value)
+  const start = Math.max(0, Math.floor(top / rowPx.value) - OVERSCAN)
+  const count = Math.ceil(viewportPx.value / rowPx.value) + OVERSCAN * 2 + 1
+  return { start, end: Math.min(total, start + count) }
+})
+
+// The window, plus the row the roving tabindex points at wherever that has gone.
+// A tabindex on a row that is not rendered is no tab stop at all, so the grid would
+// drop out of the tab order, and a focused row unmounted by a scroll hands focus
+// back to the document and takes the keyboard with it. The row is kept at the index
+// it belongs to rather than at the edge of the window, so the DOM order and
+// `aria-rowindex` go on saying the same thing.
+const renderedRows = computed(() => {
+  const list = rows.value
+  const { start, end } = rowWindow.value
+  const held = list.findIndex((row) => row.id === focusKey.value)
+  const entries = []
+  if (held >= 0 && held < start) entries.push({ row: list[held], index: held, held: true })
+  for (let index = start; index < end; index += 1) {
+    entries.push({ row: list[index], index, held: false })
+  }
+  if (held >= end) entries.push({ row: list[held], index: held, held: true })
+  return entries
+})
+
+// Out of the flow and at its own offset, because the row it is pinning is not next
+// to the window it is rendered beside. Absolute positioning is against the padding
+// box, so the offset is the same arithmetic the window uses and owes the rowgroup's
+// own padding nothing.
+function heldRowStyle(index) {
+  return { position: 'absolute', top: `${index * rowPx.value}px`, left: '0' }
+}
+
+// The rowgroup declares the height of every row there is and pushes the window
+// down with its own padding, so one style property moves per scroll frame instead
+// of one per row, and the rows stay in normal flow as the only children a rowgroup
+// is allowed. Everything inherits `box-sizing: border-box`, so the padding is
+// inside the height and the last row of the window lands exactly on the last row
+// there is.
+const bodyStyle = computed(() => ({
+  height: `${rows.value.length * rowPx.value}px`,
+  paddingTop: `${rowWindow.value.start * rowPx.value}px`,
+}))
+
+function onGridScroll(event) {
+  scrollTop.value = event.currentTarget.scrollTop
+}
+
+// Brings a row into the window before anything tries to focus it. The scroll
+// position is mirrored here rather than waited for, because a `scroll` event
+// arrives a frame later and the focus that follows this cannot wait that long.
+function revealRow(key) {
+  const element = gridElement.value
+  if (!element || viewportPx.value === null) return
+  const index = rows.value.findIndex((row) => row.id === key)
+  if (index < 0) return
+  const top = index * rowPx.value + headPx.value
+  const bottom = top + rowPx.value
+  // The sticky header hides the first `headPx` of the viewport, so a row is only
+  // clear of it once it starts below there.
+  if (top < element.scrollTop + headPx.value) element.scrollTop = top - headPx.value
+  else if (bottom > element.scrollTop + element.clientHeight) {
+    element.scrollTop = bottom - element.clientHeight
+  }
+  scrollTop.value = element.scrollTop
+}
+
+// Every path that moves focus onto a row goes through here, because a row outside
+// the window has no element to focus and `.focus()` would silently do nothing.
+function focusRowElement(key, options = undefined) {
+  if (key == null) return
+  revealRow(key)
+  nextTick(() => rowElements.get(key)?.focus(options))
+}
+
+let gridObserver = null
+
+onMounted(() => {
+  measureGrid()
+  if (typeof ResizeObserver === 'function') {
+    gridObserver = new ResizeObserver(() => measureGrid())
+    if (gridElement.value) gridObserver.observe(gridElement.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  gridObserver?.disconnect()
+  gridObserver = null
+})
+
+// The grid is behind a `v-if`, so it comes and goes with the row count and the
+// observer has to follow it rather than be attached once.
+function setGridElement(element) {
+  gridElement.value = element ?? null
+  if (!gridObserver) return
+  gridObserver.disconnect()
+  if (element) {
+    gridObserver.observe(element)
+    nextTick(measureGrid)
+  }
+}
+
 // Roving tabindex: exactly one row is tabbable, and it is the one that has, or
 // would next receive, focus. Falls back to the first row when the active key is
 // gone (collapsed away, or removed by a Python source push).
@@ -863,7 +1004,7 @@ const focusKey = computed(() => {
 function focusRowByKey(key) {
   if (key == null) return
   setActive(key)
-  nextTick(() => rowElements.get(key)?.focus())
+  focusRowElement(key)
 }
 
 function focusRowByIndex(index) {
@@ -1985,7 +2126,7 @@ function closeMenu(restore = true, focusOptions = undefined) {
   menuKey.value = null
   // The row's own focus handler makes it active again, so closing does not have to
   // say so itself and a row left quiet by a deselect stays quiet.
-  if (restore && key != null) nextTick(() => rowElements.get(key)?.focus(focusOptions))
+  if (restore && key != null) focusRowElement(key, focusOptions)
 }
 
 function runMenuItem(item) {
@@ -2200,7 +2341,9 @@ function dndHost() {
 // root would also work, but it returns null whenever the topmost element at that
 // point sits outside the shadow tree, which pdnd's post-drag honey pot does.
 function rowAt(input) {
-  for (const row of rows.value) {
+  // What is rendered rather than every row: a row outside that has no element, and
+  // the pointer cannot be over one that is not on screen.
+  for (const { row } of renderedRows.value) {
     const element = rowElements.get(row.id)
     if (!element) continue
     const rect = element.getBoundingClientRect()
@@ -2446,6 +2589,7 @@ function dropLineStyle(row) {
 
     <div
       v-else
+      :ref="setGridElement"
       class="pnl-tst-grid"
       :class="{ 'pnl-tst-grid--resizing': resizingId !== null }"
       role="treegrid"
@@ -2454,8 +2598,9 @@ function dropLineStyle(row) {
       :aria-rowcount="ariaRowCount"
       :style="columnVars"
       @keydown="onKeydown"
+      @scroll="onGridScroll"
     >
-      <div v-if="hasColumns" class="pnl-tst-head" role="rowgroup">
+      <div v-if="hasColumns" ref="headElement" class="pnl-tst-head" role="rowgroup">
         <div class="pnl-tst-hrow" role="row" :aria-rowindex="1">
           <div
             v-for="(header, index) in headers"
@@ -2501,12 +2646,13 @@ function dropLineStyle(row) {
         </div>
       </div>
 
-      <div class="pnl-tst-body" role="rowgroup">
+      <div class="pnl-tst-body" role="rowgroup" :style="bodyStyle">
         <div
-          v-for="(row, rowIndex) in rows"
+          v-for="{ row, index, held } in renderedRows"
           :key="row.id"
           :ref="(element) => setRowElement(row.id, element)"
           class="pnl-tst-row"
+          :style="held ? heldRowStyle(index) : undefined"
           :class="[
             rowDndClass(row),
             nodeClass(row),
@@ -2520,7 +2666,7 @@ function dropLineStyle(row) {
           :aria-level="row.depth + 1"
           :aria-posinset="posInSet(row)"
           :aria-setsize="setSize(row)"
-          :aria-rowindex="rowIndex + rowIndexOffset"
+          :aria-rowindex="index + rowIndexOffset"
           :aria-expanded="canExpand(row) ? isExpanded(row) : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :aria-haspopup="hasMenu ? 'menu' : undefined"

@@ -3802,3 +3802,191 @@ def test_a_type_never_reaches_the_tree_it_describes(page: Page, port):
     assert node_at(table.source, "md") == {"key": "md", "title": "notes.md", "type": "file"}
 
     server.stop()
+
+
+# --- row virtualisation -------------------------------------------------------
+
+# The CSS token in tanstack_table.css, which the row window is arithmetic over.
+ROW_PX = 28
+
+
+def flat_source(count: int) -> list[dict]:
+    """A tree of *count* rows at one level, which is the shape a window is over."""
+    return [{"key": f"n{index}", "title": f"node {index:04d}"} for index in range(count)]
+
+
+def grid(page: Page):
+    return page.locator(".pnl-tst-grid")
+
+
+def rendered_indices(page: Page) -> list[int]:
+    """``aria-rowindex`` of every row in the DOM, which is its place in the tree."""
+    return [
+        int(value) for value in rows(page).evaluate_all("list => list.map((el) => el.getAttribute('aria-rowindex'))")
+    ]
+
+
+def scroll_to(page: Page, top: float) -> None:
+    grid(page).evaluate("(element, top) => { element.scrollTop = top }", top)
+
+
+def test_only_a_screenful_of_rows_is_in_the_dom(page: Page, port):
+    """Five hundred rows, a three hundred pixel viewport, and a handful rendered.
+
+    The grid is given a height because that is what makes a viewport: a table left
+    to size itself measures one as tall as its content, which is the case the next
+    test covers.
+    """
+    table = TanstackTable(source=flat_source(500), height=300)
+    server = serve(table, page, port)
+
+    # Eleven rows fit, and the overscan renders six more at each end.
+    wait_until(lambda: rows(page).count() < 40, timeout=10)
+    assert rows(page).count() > 10
+
+    # The grid still reports the whole tree, which is what a screen reader reads
+    # and the one thing virtualisation must not take away.
+    assert grid(page).get_attribute("aria-rowcount") == "500"
+    assert rendered_indices(page)[0] == 1
+
+    # The scrollbar is the length of every row there is, not of the rendered few.
+    assert grid(page).evaluate("element => element.scrollHeight") == 500 * ROW_PX
+
+    server.stop()
+
+
+def test_a_table_that_sizes_itself_renders_every_row(page: Page, port):
+    """No height, no viewport, no window: the same formula names every row."""
+    table = TanstackTable(source=flat_source(60))
+    server = serve(table, page, port)
+
+    wait_until(lambda: rows(page).count() == 60, timeout=10)
+    assert rendered_indices(page) == list(range(1, 61))
+
+    server.stop()
+
+
+def test_scrolling_moves_the_window(page: Page, port):
+    """What leaves the viewport leaves the DOM, and its index goes with it."""
+    table = TanstackTable(source=flat_source(500), height=300)
+    server = serve(table, page, port)
+
+    wait_until(lambda: rows(page).count() < 40, timeout=10)
+    assert row_titles(page)[0] == "node 0000"
+
+    scroll_to(page, 200 * ROW_PX)
+
+    wait_until(lambda: rendered_indices(page)[-1] > 200, timeout=10)
+    # Nothing has been focused, so the tab stop is still the first row and it is
+    # rendered wherever the window has gone. The window itself is what follows it.
+    indices = rendered_indices(page)
+    assert indices[0] == 1
+    window = indices[1:]
+    # The index is the row's place in the tree rather than its place in the DOM,
+    # so a reader landing here is told which of the five hundred this is.
+    assert window[0] > 180
+    assert window == list(range(window[0], window[0] + len(window)))
+    assert "node 0001" not in row_titles(page)
+    assert "node 0200" in row_titles(page)
+
+    server.stop()
+
+
+def test_the_keyboard_reaches_a_row_outside_the_window(page: Page, port):
+    """`End` on five hundred rows lands on the last one, which was never rendered.
+
+    Focus is the whole of the problem virtualisation creates: the row a key press
+    names has no element until the window is moved onto it first.
+    """
+    table = TanstackTable(source=flat_source(500), height=300)
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    page.keyboard.press("End")
+
+    wait_until(lambda: focused_title(page) == "node 0499", timeout=10)
+    assert rendered_indices(page)[-1] == 500
+    # Still a window, so getting there did not render the four hundred it passed.
+    assert rows(page).count() < 40
+
+    page.keyboard.press("Home")
+
+    wait_until(lambda: focused_title(page) == "node 0000", timeout=10)
+    assert rendered_indices(page)[0] == 1
+
+    server.stop()
+
+
+def test_a_range_selection_spans_rows_that_were_never_rendered(page: Page, port):
+    """Shift click across a window, and the rows in between come with it.
+
+    The range is taken over the row model rather than over the DOM, so the four
+    hundred and ninety eight rows the scroll went past are selected without ever
+    having been rendered.
+    """
+    table = TanstackTable(source=flat_source(500), height=300, options={"select_mode": "multi"})
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()
+    wait_until(lambda: table.selected_keys == ["n0"], timeout=10)
+
+    scroll_to(page, 500 * ROW_PX)
+    wait_until(lambda: "node 0499" in row_titles(page), timeout=10)
+
+    rows(page).last.click(modifiers=["Shift"])
+
+    wait_until(lambda: len(table.selected_keys) == 500, timeout=10)
+    assert rows(page).count() < 40
+
+    server.stop()
+
+
+def test_the_grid_keeps_its_tab_stop_when_the_window_moves_away(page: Page, port):
+    """A roving tabindex on a row that is not in the DOM is no tab stop at all."""
+    table = TanstackTable(source=flat_source(500), height=300)
+    server = serve(table, page, port)
+
+    rows(page).nth(0).click()
+    wait_until(lambda: focused_title(page) == "node 0000", timeout=10)
+
+    scroll_to(page, 300 * ROW_PX)
+    wait_until(lambda: rendered_indices(page)[-1] > 300, timeout=10)
+
+    # Exactly one, and it is the row the keyboard would carry on from.
+    tab_stop = page.locator(".pnl-tst-row[tabindex='0']")
+    assert tab_stop.count() == 1
+    assert tab_stop.get_attribute("aria-rowindex") == "1"
+    # Still a window, not the whole tree dragged along behind the tab stop.
+    assert rows(page).count() < 40
+
+    # Every rendered row sits where its index says, the held one included, so it is
+    # scrolled out of sight rather than laid over the rows that are on screen.
+    offsets = rows(page).evaluate_all(
+        "list => list.map((el) => [Number(el.getAttribute('aria-rowindex')), el.offsetTop])"
+    )
+    assert offsets == [[index, (index - 1) * ROW_PX] for index, _ in offsets]
+
+    server.stop()
+
+
+def test_the_keyboard_survives_a_scroll_away_from_the_focused_row(page: Page, port):
+    """Scrolling must not take the keyboard with it.
+
+    A focused element that leaves the DOM hands focus back to the document, and
+    every key press after that lands nowhere: the grid is left inert until a
+    pointer rescues it.
+    """
+    table = TanstackTable(source=flat_source(500), height=300)
+    server = serve(table, page, port)
+
+    rows(page).nth(0).focus()
+    wait_until(lambda: focused_title(page) == "node 0000", timeout=10)
+
+    scroll_to(page, 300 * ROW_PX)
+    wait_until(lambda: rendered_indices(page)[-1] > 300, timeout=10)
+
+    page.keyboard.press("ArrowDown")
+
+    wait_until(lambda: focused_title(page) == "node 0001", timeout=10)
+
+    server.stop()

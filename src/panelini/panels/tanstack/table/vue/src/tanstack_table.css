@@ -52,8 +52,15 @@
   min-width: max(100%, var(--pnl-tst-total, 0px));
 }
 
+/* The height of every row there is, and a top padding that pushes the rendered
+   window down to where it belongs. Only the rows a reader can see are in the DOM,
+   so this is what keeps the scrollbar the length the whole tree deserves. It is
+   positioned because the row holding the tab stop is rendered wherever that row
+   has scrolled to, out of flow, and has to be offset against this and not against
+   whichever ancestor happened to be positioned. */
 .pnl-tst-body {
-  flex: 1 1 auto;
+  position: relative;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -160,11 +167,14 @@
   background: var(--pnl-tst-focus);
 }
 
+/* An exact height rather than a floor, because the row window is arithmetic over
+   this number: a row that grew to its content would put every row below it in the
+   wrong place. An application restyles rows by moving the token. */
 .pnl-tst-row {
   position: relative;
   display: flex;
   align-items: center;
-  min-height: var(--pnl-tst-row-height);
+  height: var(--pnl-tst-row-height);
   cursor: default;
 }
 
