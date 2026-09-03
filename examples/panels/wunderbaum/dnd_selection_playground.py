@@ -125,20 +125,27 @@ def _perform_copy(tree: Wunderbaum, params: dict) -> None:
     # the document, so deepcopying it walks into the server's IOLoop and raises
     # RuntimeError. The source is JSON on the wire anyway.
     source = json.loads(json.dumps(tree.source))
-    located = _locate(source, params["targetKey"])
-    if located is None:
-        return
-    siblings, index = located
+    target_key = params["targetKey"]
     region = params["region"]
 
-    if region in ("over", "appendChild", "prependChild"):
-        target_node = siblings[index]
-        dest = target_node.setdefault("children", [])
-        at = 0 if region == "prependChild" else len(dest)
-        target_node["expanded"] = True
+    if target_key is None:
+        # A drop in the blank area below the last row reports no target row at
+        # all, because there is none under the cursor. The copies belong at the
+        # end of the root list.
+        dest, at = source, len(source)
     else:
-        dest = siblings
-        at = index if region == "before" else index + 1
+        located = _locate(source, target_key)
+        if located is None:
+            return
+        siblings, index = located
+        if region in ("over", "appendChild", "prependChild"):
+            target_node = siblings[index]
+            dest = target_node.setdefault("children", [])
+            at = 0 if region == "prependChild" else len(dest)
+            target_node["expanded"] = True
+        else:
+            dest = siblings
+            at = index if region == "before" else index + 1
 
     for offset, key in enumerate(params.get("sourceKeys", [])):
         found = _locate(source, key)
