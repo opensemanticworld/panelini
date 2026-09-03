@@ -205,7 +205,8 @@ class TanstackTable(AnyWidgetComponent):
             "table that cannot store a file should not offer to take one. drop_accept is a list of "
             "extensions and MIME patterns ('.png', 'image/*', 'application/pdf'), empty for "
             "anything, and drop_max_bytes caps one file at 5 MB unless it is raised. Both are "
-            "decided here; the browser hints on the MIME type alone, which is all a drag exposes. "
+            "decided here; the browser reads them only to skip loading the bytes of a file this "
+            "would turn away, so nothing is fetched in order to be refused. "
             "drop_node is the template a dropped file's node is minted from, the way new_node is "
             "for an added one, and the node carries the file's size and mime beside its title."
         ),

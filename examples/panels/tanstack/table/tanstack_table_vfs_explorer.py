@@ -135,7 +135,10 @@ def locked(key: str | None) -> bool:
 
 def allow_action(action: str, params: dict[str, Any]) -> bool:
     """Veto adding to, renaming in, pasting into, or deleting from the read-only branch."""
-    if action == "add":
+    if action in ("add", "drop_files"):
+        # A dropped file's `keys` are the ones about to be minted, so they name
+        # nothing yet and nothing about them can be locked. Where the batch lands
+        # is the only thing to have an opinion about, exactly as for an add.
         keys = [params["anchor_key"]]
     elif action == "rename":
         keys = [params["key"]]
@@ -164,6 +167,32 @@ def describe_transfer(params: dict) -> str:
     return f"{verb} {asked} from the other pane{renamed}, {where}"
 
 
+def describe_drop_files(params: dict) -> str:
+    """Phrase one drop from the desktop for the log.
+
+    ``files`` are the ones this table took and ``rejected`` the ones it turned
+    away, each with a ``reason`` naming which of ``drop_accept`` and
+    ``drop_max_bytes`` it fell foul of. A file's bytes are in ``content`` and go no
+    further: they reach the callbacks and never the tree.
+    """
+    taken = ", ".join(f"`{item['name']}`" for item in params["files"])
+    refused = ", ".join(f"`{item['name']}` ({item['reason']})" for item in params["rejected"])
+    where = f"{params['position']} `{params['anchor_key']}`" if params["position"] else "nowhere"
+
+    if params["applied"]:
+        # `content` is present under `drop_files='content'` and None under
+        # `'meta'`, which is the whole difference between the two panes.
+        read = sum(len(item["content"]) for item in params["files"] if item["content"] is not None)
+        line = f"took {taken} {where}" + (f", {read:,} bytes read" if read else ", metadata only")
+    elif taken:
+        # The files were acceptable and the drop still did not land, which is
+        # `action_callback` refusing the batch or a hitbox that resolved nowhere.
+        line = f"refused {taken} {where}"
+    else:
+        line = "took no files"
+    return f"{line}, turned away {refused}" if refused else line
+
+
 def say(pane: str, text: str) -> None:
     """Add one line to the shared log, named for the pane it came from."""
     messages.append(f"**{pane}** {text}")
@@ -187,6 +216,8 @@ def on_event(pane: str, name: str, params: dict) -> None:
         say(pane, f"{verb} {moved} {params['position']} `{params['anchor_key']}`")
     elif name == "transfer":
         say(pane, describe_transfer(params))
+    elif name == "drop_files":
+        say(pane, describe_drop_files(params))
     elif name == "add":
         where = f"{params['position']} `{params['anchor_key']}`" if params["anchor_key"] else "at root"
         verb = f"added `{params['key']}`" if params["applied"] else "refused to add"
@@ -256,6 +287,19 @@ table = TanstackTable(
         ],
         "search_label": "Search name or kind",
         "new_key_prefix": "doc",
+        # Files dragged in from the desktop land through the same hitbox a row
+        # does. `content` reads the bytes as well as the name and hands them to
+        # the callbacks; the other pane asks for `meta` alone, so the two show
+        # both halves of the option side by side.
+        "drop_files": "content",
+        # Extensions and MIME patterns both work. Python decides; the browser
+        # reads this only to skip loading the bytes of a file that would be
+        # turned away, so nothing is fetched in order to be refused.
+        "drop_accept": [".pdf", ".csv", ".md", ".txt", "image/*"],
+        "drop_max_bytes": 1_000_000,
+        # The template a dropped file's node is minted from, exactly as
+        # `new_node` is for an added one. `size` and `mime` are written beside it.
+        "drop_node": {"kind": "file"},
     },
     event_callback=partial(on_event, "explorer"),
     move_callback=allow_move,
@@ -297,6 +341,11 @@ staging = TanstackTable(
         ],
         "search_label": "Search staging",
         "new_key_prefix": "stg",
+        # The same gesture, half the payload: a name, a size, a MIME type and a
+        # stamp, and no bytes at all. A staging tray that only has to know what
+        # arrived has no reason to move a megabyte across the socket to find out.
+        "drop_files": "meta",
+        "drop_node": {"kind": "file"},
     },
     event_callback=partial(on_event, "staging"),
     sizing_mode="stretch_both",
@@ -405,8 +454,28 @@ gestures = pn.pane.Markdown(
   Python `action_callback`.
 - Clicking the only selected row **again** clears the selection, and so does
   `Escape` or the clear button: an emptied selection leaves no colour behind.
+- **Drag a file in from your desktop** and drop it into a folder or between two
+  rows. It lands through the same hitbox a row does, with the same drop line and
+  the same no-drop affordance, and Python mints one node per file.
+- While the file is in flight the indicator says **that a file is arriving and
+  never which one**. Browsers withhold the name, the size and the type until the
+  drop, so `drop_accept` is read at the drop, where those three are real.
+- The two panes ask for different things. `Documents` takes `.pdf`, `.csv`,
+  `.md`, `.txt` and any image up to 1 MB and reads the **bytes**; `Staging` takes
+  anything and reads the **metadata only**. Drop a `.zip` on each and watch the
+  log: one turns it away by type, the other takes it and reads nothing.
+- Drop something over 1 MB into `Documents` and it comes back refused by size.
+  The bytes are never loaded to be refused: the browser reads the two options at
+  the drop only to skip a file Python is going to turn away anyway.
+- **The bytes never enter the tree.** They reach `event_callback` and stop there,
+  so a dropped file does not put a megabyte of base64 into `source` and back onto
+  the wire on every change after it. The node keeps the name, the size and the
+  MIME type.
+- `Archive (read only)` refuses a file drop too, through the same
+  `action_callback`, and one drop of five files is **one undo step**.
 - **Icons** come from `icon_for`, which maps a file extension onto one of the
-  bundled glyphs. `inbox.bak` is not mapped, so it shows the generic one.
+  bundled glyphs. `inbox.bak` is not mapped, so it shows the generic one, and a
+  dropped `report.pdf` gets the pdf glyph by the same rule.
 """,
     sizing_mode="stretch_width",
 )
