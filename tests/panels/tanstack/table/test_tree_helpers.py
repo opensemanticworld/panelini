@@ -586,3 +586,125 @@ def test_set_children_reaches_a_nested_branch():
 
     assert result is not None
     assert result[0]["children"][0]["children"] == [{"key": "c", "title": "C"}]
+
+
+# --- pruning the wire ---
+
+PRUNE_TREE = [
+    {
+        "key": "src",
+        "title": "src",
+        "children": [
+            {"key": "app", "title": "app", "children": [{"key": "main", "title": "main.py"}]},
+            {"key": "readme", "title": "README.md"},
+        ],
+    },
+    {"key": "docs", "title": "docs", "children": [{"key": "guide", "title": "guide.md"}]},
+]
+
+
+def test_ancestor_keys_returns_the_path_and_not_the_node():
+    assert tree.ancestor_keys(PRUNE_TREE, ["main"]) == {"src", "app"}
+
+
+def test_ancestor_keys_of_a_root_node_is_empty():
+    assert tree.ancestor_keys(PRUNE_TREE, ["src"]) == set()
+
+
+def test_ancestor_keys_merges_several_paths():
+    assert tree.ancestor_keys(PRUNE_TREE, ["main", "guide"]) == {"src", "app", "docs"}
+
+
+def test_ancestor_keys_ignores_a_key_that_is_not_there():
+    assert tree.ancestor_keys(PRUNE_TREE, ["nope"]) == set()
+
+
+def test_ancestor_keys_of_nothing_walks_nothing():
+    assert tree.ancestor_keys(PRUNE_TREE, []) == set()
+
+
+def test_matching_keys_finds_a_title_anywhere_in_the_tree():
+    assert tree.matching_keys(PRUNE_TREE, "guide", ["title"]) == {"guide"}
+
+
+def test_matching_keys_ignores_case_and_surrounding_space():
+    assert tree.matching_keys(PRUNE_TREE, "  README  ", ["title"]) == {"readme"}
+
+
+def test_matching_keys_reads_every_field_it_is_given():
+    nodes = [{"key": "a", "title": "A", "owner": "ada"}, {"key": "b", "title": "ada"}]
+
+    assert tree.matching_keys(nodes, "ada", ["title", "owner"]) == {"a", "b"}
+
+
+def test_matching_keys_reads_through_the_type_registry():
+    """A column value may come from a type, exactly as an icon may."""
+    nodes = [{"key": "a", "title": "A", "type": "db"}]
+    types = {"db": {"kind": "database"}}
+
+    assert tree.matching_keys(nodes, "database", ["kind"], types) == {"a"}
+    assert tree.matching_keys(nodes, "database", ["kind"]) == set()
+
+
+def test_matching_keys_treats_a_blank_search_as_no_search():
+    assert tree.matching_keys(PRUNE_TREE, "   ", ["title"]) == set()
+
+
+def test_matching_keys_matches_nothing_when_no_field_is_read():
+    assert tree.matching_keys(PRUNE_TREE, "guide", []) == set()
+
+
+def test_prune_drops_the_children_of_a_branch_outside_the_keep_set():
+    result = tree.prune(PRUNE_TREE, set())
+
+    assert shape(result) == "src,docs"
+    assert all(node["lazy"] is True for node in result)
+    assert all("children" not in node for node in result)
+
+
+def test_prune_keeps_the_children_of_a_branch_inside_it():
+    result = tree.prune(PRUNE_TREE, {"src"})
+
+    assert shape(result) == "src(app,readme),docs"
+    assert result[0]["children"][0]["lazy"] is True
+    assert "lazy" not in result[0]["children"][1]
+
+
+def test_prune_reaches_a_nested_branch_when_the_path_is_kept():
+    result = tree.prune(PRUNE_TREE, {"src", "app"})
+
+    assert shape(result) == "src(app(main),readme),docs"
+
+
+def test_prune_leaves_a_leaf_alone():
+    result = tree.prune([{"key": "a", "title": "A"}], set())
+
+    assert result == [{"key": "a", "title": "A"}]
+
+
+def test_prune_leaves_an_empty_child_list_alone():
+    """No children is no twisty, so there is nothing to promise to load."""
+    result = tree.prune([{"key": "a", "title": "A", "children": []}], set())
+
+    assert result == [{"key": "a", "title": "A", "children": []}]
+
+
+def test_prune_keeps_the_fields_of_the_branch_it_empties():
+    result = tree.prune([{"key": "a", "title": "A", "icon": "folder", "children": [{"key": "b"}]}], set())
+
+    assert result[0] == {"key": "a", "title": "A", "icon": "folder", "lazy": True}
+
+
+def test_prune_leaves_the_tree_it_read_untouched():
+    source = copy.deepcopy(PRUNE_TREE)
+
+    tree.prune(source, set())
+
+    assert source == PRUNE_TREE
+
+
+def test_prune_shares_the_nodes_it_did_not_have_to_touch():
+    """Deriving this on every push has to be cheap on a tree worth pruning."""
+    result = tree.prune(PRUNE_TREE, {"src"})
+
+    assert result[0]["children"][1] is PRUNE_TREE[0]["children"][1]

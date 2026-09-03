@@ -2384,3 +2384,221 @@ def test_set_children_is_the_public_way_to_answer_later():
     assert docs is not None
     assert "lazy" not in docs
     assert table.can_undo is False
+
+
+# --- pruning the wire ---
+
+PRUNE_SOURCE = [
+    {
+        "key": "src",
+        "title": "src",
+        "children": [
+            {"key": "app", "title": "app", "children": [{"key": "main", "title": "main.py"}]},
+            {"key": "readme", "title": "README.md"},
+        ],
+    },
+    {"key": "docs", "title": "docs", "children": [{"key": "guide", "title": "guide.md"}]},
+]
+
+
+def pruned_table(**kwargs):
+    """A table that sends the opened branches rather than the whole tree."""
+    options = {"prune": "collapsed", **kwargs.pop("options", {})}
+    return TanstackTable(source=PRUNE_SOURCE, options=options, **kwargs)
+
+
+def test_an_ordinary_table_sends_the_tree_itself():
+    """No pruning is no copy, so the split costs an unpruned table nothing."""
+    table = TanstackTable(source=PRUNE_SOURCE)
+
+    assert table._view is table.source
+
+
+def test_the_tree_is_never_on_the_wire():
+    """It is Python's to read; only the view crosses."""
+    assert TanstackTable._property_mapping["source"] is None
+
+
+def test_pruning_sends_the_roots_and_leaves_the_tree_alone():
+    table = pruned_table()
+
+    assert shape(table._view) == "src,docs"
+    assert all(node["lazy"] is True for node in table._view)
+    assert shape(table.source) == "src(app(main),readme),docs(guide)"
+
+
+def test_expanding_a_branch_widens_the_view():
+    table = pruned_table()
+
+    table.expanded_keys = ["src"]
+
+    assert shape(table._view) == "src(app,readme),docs"
+
+
+def test_expanding_a_nested_branch_carries_the_path_to_it():
+    table = pruned_table()
+
+    table.expanded_keys = ["app"]
+
+    assert shape(table._view) == "src(app(main),readme),docs"
+
+
+def test_a_load_intent_on_a_pruned_branch_is_answered_without_a_callback():
+    """The children were never missing, only left behind."""
+    seen = []
+    table = pruned_table(event_callback=lambda name, params: seen.append((name, params)))
+
+    table.handle_event("lazy_load", {"key": "src"})
+
+    assert shape(table._view) == "src(app,readme),docs"
+    assert seen == [("lazy_load", {"key": "src", "applied": True})]
+
+
+def test_a_load_intent_on_a_pruned_branch_never_reaches_the_lazy_callback():
+    asked = []
+    table = pruned_table(lazy_callback=lambda key, node: asked.append(key) or [])
+
+    table.handle_event("lazy_load", {"key": "src"})
+
+    assert asked == []
+
+
+def test_a_genuinely_lazy_branch_still_reaches_the_callback_under_pruning():
+    table = TanstackTable(
+        source=[{"key": "root", "title": "root", "children": [{"key": "docs", "title": "docs", "lazy": True}]}],
+        options={"prune": "collapsed"},
+        lazy_callback=lambda key, node: [{"key": "d1", "title": "a.md"}],
+    )
+    table.expanded_keys = ["root"]
+
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    assert shape(table.source) == "root(docs(d1))"
+
+
+def test_a_collapsed_branch_stays_loaded():
+    """The wire is paid once per branch, so a second expand is instant."""
+    table = pruned_table()
+    table.expanded_keys = ["src"]
+
+    table.expanded_keys = []
+
+    assert shape(table._view) == "src(app,readme),docs"
+
+
+def test_a_search_carries_the_path_to_what_it_matched():
+    table = pruned_table()
+
+    table.filter_text = "main"
+
+    assert shape(table._view) == "src(app(main),readme),docs"
+
+
+def test_a_search_sends_a_matching_branch_without_its_subtree():
+    """A folder whose name matches arrives as a folder, not as its contents."""
+    table = pruned_table()
+
+    table.filter_text = "app"
+
+    assert shape(table._view) == "src(app,readme),docs"
+
+
+def test_clearing_a_search_takes_back_what_it_widened():
+    table = pruned_table()
+    table.filter_text = "main"
+
+    table.filter_text = ""
+
+    assert shape(table._view) == "src,docs"
+
+
+def test_a_search_reads_the_columns_the_browser_renders():
+    table = TanstackTable(
+        source=[{"key": "a", "title": "A", "children": [{"key": "b", "title": "B", "owner": "ada"}]}],
+        columns=[{"id": "title", "field": "title"}, {"id": "owner", "field": "owner"}],
+        options={"prune": "collapsed"},
+    )
+
+    table.filter_text = "ada"
+
+    assert shape(table._view) == "a(b)"
+
+
+def test_a_search_reads_a_column_value_a_type_supplies():
+    table = TanstackTable(
+        source=[{"key": "a", "title": "A", "children": [{"key": "b", "title": "B", "type": "db"}]}],
+        columns=[{"id": "title", "field": "title"}, {"id": "kind", "field": "kind"}],
+        types={"db": {"kind": "database"}},
+        options={"prune": "collapsed"},
+    )
+
+    table.filter_text = "database"
+
+    assert shape(table._view) == "a(b)"
+
+
+def test_a_mutation_leaves_the_view_pruned():
+    table = pruned_table()
+
+    table.rename_node("docs", "documents")
+
+    assert shape(table._view) == "src,docs"
+    assert title_of(table, "docs") == "documents"
+
+
+def test_turning_pruning_on_later_narrows_the_view():
+    table = TanstackTable(source=PRUNE_SOURCE)
+
+    table.options = {"prune": "collapsed"}
+
+    assert shape(table._view) == "src,docs"
+
+
+def test_a_new_tree_forgets_which_branches_were_sent():
+    table = pruned_table()
+    table.expanded_keys = ["src"]
+    table.expanded_keys = []
+
+    table.set_source(copy.deepcopy(PRUNE_SOURCE))
+
+    assert shape(table._view) == "src,docs"
+
+
+def test_a_new_tree_still_carries_the_branches_that_are_open():
+    """A key still in expanded_keys is a branch the browser is showing."""
+    table = pruned_table()
+    table.expanded_keys = ["src"]
+
+    table.set_source(copy.deepcopy(PRUNE_SOURCE))
+
+    assert shape(table._view) == "src(app,readme),docs"
+
+
+def test_pruning_takes_a_large_tree_off_the_wire():
+    """The number P16 measured, asserted rather than described."""
+    import json
+
+    def leaf(folder, index):
+        return {
+            "key": f"f{folder}n{index}",
+            "title": f"file {index}.py",
+            "size": index * 1024,
+            "kind": "python",
+            "modified": "2026-01-01",
+        }
+
+    source = [
+        {
+            "key": f"f{folder}",
+            "title": f"folder {folder}",
+            "children": [leaf(folder, index) for index in range(100)],
+        }
+        for folder in range(100)
+    ]
+    table = TanstackTable(source=source, options={"prune": "collapsed"})
+
+    whole = len(json.dumps(table.source))
+    view = len(json.dumps(table._view))
+
+    assert whole > 900_000
+    assert view < 10_000

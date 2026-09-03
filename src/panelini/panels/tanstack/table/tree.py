@@ -12,7 +12,7 @@ so the caller can assign the result to a param and get a change event.
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Container, Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
 Node = dict[str, Any]
@@ -492,3 +492,112 @@ def subtree_keys(tree: Tree, key: str) -> list[str]:
 def expandable_keys(tree: Tree) -> list[str]:
     """Return the sorted keys of every node that has children."""
     return sorted(node[KEY] for node in iter_nodes(tree) if node.get(CHILDREN) and KEY in node)
+
+
+def ancestor_keys(tree: Tree, keys: Iterable[str]) -> set[str]:
+    """Return the keys of every node above any of ``keys``.
+
+    The keys themselves are not included, so a caller can ask for the path to a
+    node without also asking for the node's own subtree.
+
+    Args:
+        tree: Tree to walk.
+        keys: Keys to find the paths to. Keys not in the tree contribute nothing.
+
+    Returns:
+        The set of ancestor keys, empty when nothing was found.
+    """
+    wanted = set(keys)
+    if not wanted:
+        return set()
+
+    found: set[str] = set()
+
+    def visit(nodes: Tree, path: list[str]) -> None:
+        for node in nodes:
+            key = node.get(KEY)
+            named = key if isinstance(key, str) else None
+            if named is not None and named in wanted:
+                found.update(path)
+            children = node.get(CHILDREN)
+            if children:
+                visit(children, [*path, named] if named is not None else path)
+
+    visit(tree, [])
+    return found
+
+
+def matching_keys(tree: Tree, text: str, fields: Sequence[str], types: Types | None = None) -> set[str]:
+    """Return the keys of every node one of whose ``fields`` contains ``text``.
+
+    This is the browser's own search written in Python: it reads the same fields
+    the rendered columns read, resolved through the same type registry, and
+    compares them the same case insensitive way. It exists so that a tree the
+    panel pruned can still be searched, which means the two have to agree. A
+    field the browser would render as empty matches nothing here either.
+
+    Args:
+        tree: Tree to search.
+        text: Search text. Empty or blank matches nothing rather than everything,
+            because an empty search is not a search.
+        fields: Node fields to read, which are the columns' ``field`` names, or
+            ``title`` alone in tree-only mode.
+        types: Registry the fields are resolved through.
+
+    Returns:
+        The set of matching keys.
+    """
+    needle = text.strip().lower()
+    if not needle or not fields:
+        return set()
+
+    found: set[str] = set()
+    for node in iter_nodes(tree):
+        key = node.get(KEY)
+        if key is None:
+            continue
+        resolved = resolve_node(node, types)
+        if any(needle in str(resolved.get(field) or "").lower() for field in fields):
+            found.add(key)
+    return found
+
+
+def prune(tree: Tree, keep: Container[str]) -> Tree:
+    """Return the tree with the children of every branch outside ``keep`` dropped.
+
+    A branch that loses its children is marked ``lazy``, which is the flag a
+    branch whose children were never loaded already carries: it keeps its twisty,
+    and expanding it asks for what is missing. There is deliberately no second
+    concept for a branch that was pruned rather than never loaded, because from
+    the browser's side the two are the same thing.
+
+    A branch is only pruned when it is outside ``keep`` **and** its parent chain
+    is inside it, since a node whose parent was pruned is not in the result at all
+    and cannot be asked about. Callers should therefore pass a ``keep`` that is
+    closed under ancestry; :func:`ancestor_keys` is how that closure is built.
+
+    Nodes that are neither pruned nor on the path to one are shared with the input
+    rather than copied. Everything in this module treats a tree as immutable and
+    copies before it writes, so the sharing is safe, and it is what keeps deriving
+    this from a large tree cheap enough to do on every push.
+
+    Args:
+        tree: Tree to derive from.
+        keep: Keys whose children are sent whole.
+
+    Returns:
+        A new tree, no deeper than ``keep`` reaches.
+    """
+    result: Tree = []
+    for node in tree:
+        children = node.get(CHILDREN)
+        key = node.get(KEY)
+        if not children:
+            result.append(node)
+        elif isinstance(key, str) and key in keep:
+            result.append({**node, CHILDREN: prune(children, keep)})
+        else:
+            pruned = {**node, LAZY: True}
+            del pruned[CHILDREN]
+            result.append(pruned)
+    return result

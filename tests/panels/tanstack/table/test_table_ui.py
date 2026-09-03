@@ -4116,3 +4116,113 @@ def test_a_table_with_no_lazy_node_is_untouched(page: Page, port):
     assert "lazy_load" not in seen
 
     server.stop()
+
+
+# --- pruning the wire ---
+
+
+PRUNE_SOURCE = [
+    {
+        "key": "src",
+        "title": "src",
+        "children": [
+            {"key": "app", "title": "app.py", "allow_children": False},
+            {"key": "util", "title": "util.py", "allow_children": False},
+        ],
+    },
+    {"key": "docs", "title": "docs", "children": [{"key": "guide", "title": "guide.md", "allow_children": False}]},
+]
+
+
+def pruned_table(**options):
+    return TanstackTable(
+        source=copy.deepcopy(PRUNE_SOURCE),
+        options={"prune": "collapsed", **options},
+    )
+
+
+def test_a_pruned_table_opens_with_the_roots_alone(page: Page, port):
+    table = pruned_table()
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+    # Twisties all the same, because a pruned branch is a lazy one to this side.
+    expect(rows(page).nth(0)).to_have_attribute("aria-expanded", "false")
+    expect(rows(page).nth(1)).to_have_attribute("aria-expanded", "false")
+    # And the tree Python owns never lost anything.
+    assert shape(table.source) == "src(app,util),docs(guide)"
+
+    server.stop()
+
+
+def test_expanding_a_pruned_branch_fills_it_without_any_callback(page: Page, port):
+    """The children were in `source` all along, only left off the wire."""
+    table = pruned_table()
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+    twisty(page, "src").click()
+
+    wait_until(lambda: row_titles(page) == ["src", "app.py", "util.py", "docs"], timeout=10)
+    expect(rows(page).nth(0)).to_have_attribute("aria-expanded", "true")
+
+    server.stop()
+
+
+def test_collapsing_a_loaded_branch_does_not_send_it_again(page: Page, port):
+    """The wire is paid once per branch, so the second expand is a plain toggle."""
+    table = pruned_table()
+    seen = []
+    table._event_callback = lambda name, params: seen.append(name)
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+    twisty(page, "src").click()
+    wait_until(lambda: row_titles(page) == ["src", "app.py", "util.py", "docs"], timeout=10)
+    twisty(page, "src").click()
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+    twisty(page, "src").click()
+    wait_until(lambda: row_titles(page) == ["src", "app.py", "util.py", "docs"], timeout=10)
+
+    assert seen.count("lazy_load") == 1
+
+    server.stop()
+
+
+def test_a_search_reaches_a_branch_the_browser_never_held(page: Page, port):
+    table = TanstackTable(
+        source=copy.deepcopy(PRUNE_SOURCE),
+        options={"prune": "collapsed", "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+    page.locator(".pnl-tst-search input").fill("guide")
+
+    # Python widens the view to the path of the match, and the browser's own
+    # filter then does what it has always done with what it holds.
+    wait_until(lambda: row_titles(page) == ["docs", "guide.md"], timeout=10)
+
+    page.locator(".pnl-tst-search input").fill("")
+    wait_until(lambda: row_titles(page) == ["src", "docs"], timeout=10)
+
+    server.stop()
+
+
+def test_the_search_box_tells_python_once_the_typing_settles(page: Page, port):
+    """Each value that crosses is a tree rebuilt and pushed, so a term typed a
+    letter at a time must not ask for the search five times over."""
+    table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
+    seen = []
+    table.param.watch(lambda event: seen.append(event.new), ["filter_text"])
+    server = serve(table, page, port)
+
+    wait_until(lambda: len(row_titles(page)) == 5, timeout=10)
+    page.locator(".pnl-tst-search input").press_sequentially("File", delay=20)
+
+    # The rows narrow on the keystroke, without waiting for the round trip.
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
+    wait_until(lambda: table.filter_text == "File", timeout=10)
+    assert len(seen) == 1
+
+    server.stop()

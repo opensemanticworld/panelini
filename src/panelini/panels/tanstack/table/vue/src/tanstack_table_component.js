@@ -5,10 +5,10 @@ import "@/tanstack_table.css";
 /**
  * anywidget entry point for the TanstackTable panel.
  *
- * Data flow is strictly unidirectional: Python owns `source`, pushes it down, and
- * the component only ever emits intent back through `_event_data`. That removes the
- * need for the `sourceFromJS` guard flag the wunderbaum panel uses to break its
- * JS to Python to JS feedback loop.
+ * Data flow is strictly unidirectional: Python owns the tree, pushes down what this
+ * side should hold, and the component only ever emits intent back through
+ * `_event_data`. That removes the need for the `sourceFromJS` guard flag the
+ * wunderbaum panel uses to break its JS to Python to JS feedback loop.
  */
 export function render({ model, el }) {
   // Give the shadow host layout dimensions so percentage sizes resolve. Height is
@@ -25,7 +25,10 @@ export function render({ model, el }) {
 
   // Written only by the model listeners below, never by the component.
   const state = reactive({
-    source: model.get("source") || [],
+    // What this side holds, which is the whole tree unless `options.prune` asked
+    // Python to send the opened branches only. The tree Python owns is not on the
+    // wire at all, so there is nothing here to mistake for it.
+    view: model.get("_view") || [],
     columns: model.get("columns") || [],
     options: model.get("options") || {},
     icons: model.get("icons") || {},
@@ -151,8 +154,8 @@ export function render({ model, el }) {
   });
   app.mount(container);
 
-  model.on("change:source", () => {
-    state.source = model.get("source") || [];
+  model.on("change:_view", () => {
+    state.view = model.get("_view") || [];
   });
   model.on("change:columns", () => {
     state.columns = model.get("columns") || [];

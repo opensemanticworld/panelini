@@ -61,12 +61,16 @@ class _Step:
 class TanstackTable(AnyWidgetComponent):
     """An accessible tree and treegrid component built on TanStack Table.
 
-    Data flow is strictly unidirectional. Python owns ``source``: it is pushed to
-    JavaScript and never written back from there. The browser emits intent only
-    (a move request, an activation) through ``_event_data``; Python validates it,
-    rewrites ``source``, and the new tree is pushed down. That removes the guard
+    Data flow is strictly unidirectional. Python owns ``source`` and the browser is
+    never able to write it. The browser emits intent only (a move request, an
+    activation) through ``_event_data``; Python validates it, rewrites ``source``,
+    and what the browser should now hold is pushed down. That removes the guard
     flag the wunderbaum panel needs to break its feedback loop, and it makes the
     tree state testable in Python without a browser.
+
+    What is pushed is ``_view``, which is ``source`` itself unless ``options.prune``
+    asks for less. Two names because narrowing what crosses must not narrow what
+    Python can see.
 
     Two display modes:
     - Tree-only mode (default): when ``columns`` is empty.
@@ -79,7 +83,15 @@ class TanstackTable(AnyWidgetComponent):
         (bundled_assets_dir / "tanstack_table.css").read_text(encoding="utf-8"),
     ]
 
-    # Python to JavaScript. Never written from the browser.
+    # `source` is the tree Python owns and `_view` is the tree the browser holds,
+    # and mapping the first onto None is what keeps it off the wire. They were one
+    # param until pruning needed them apart: narrowing what crosses would otherwise
+    # have narrowed what `find_node` and every public method can see. Nothing about
+    # `source` changes for an application, which is the point of the split.
+    _property_mapping: ClassVar = {**AnyWidgetComponent._property_mapping, "source": None}
+
+    # Owned by Python and read by Python. Never written from the browser, and since
+    # the split above, never sent to it either: `_view` is what crosses.
     source = param.List(
         default=[],
         doc=(
@@ -92,6 +104,14 @@ class TanstackTable(AnyWidgetComponent):
             "expanded."
         ),
     )
+    # Python to JavaScript, derived from source and never set by hand. It is the
+    # same list object when nothing is pruned, so an unpruned table keeps one tree
+    # in memory and pays nothing for the split.
+    _view = param.List(
+        default=[],
+        doc="The tree the browser holds, which is source itself unless options.prune says otherwise.",
+    )
+
     columns = param.List(
         default=[],
         doc=(
@@ -133,7 +153,11 @@ class TanstackTable(AnyWidgetComponent):
             "than moves. sortable=False takes the sort off a table that has columns, and "
             "sort_folders_first puts branches above leaves at every level whichever way a column "
             "is sorted. resizable=False takes the resize handles off the headers, leaving the "
-            "columns at the widths they were given."
+            "columns at the widths they were given. prune='collapsed' sends only the branches the "
+            "browser has opened rather than the whole tree, leaving the rest to arrive the first "
+            "time they are expanded, which takes a ten thousand node tree from about 950 kB on the "
+            "wire to about 6 kB. It is off by default, because it also means a search reaches "
+            "unloaded branches through Python rather than through the browser alone."
         ),
     )
     icons = param.Dict(
@@ -343,6 +367,13 @@ class TanstackTable(AnyWidgetComponent):
         self._table_id = f"tst-{uuid4().hex}"
         _LIVE_TABLES[self._table_id] = self
 
+        # Branches whose children have already been sent, so the wire is paid once
+        # per branch and re-expanding one is instant. It only grows, which is what
+        # makes a browser that reloads or a second tab safe: the view then carries
+        # more than that browser needs and never less. Set before anything below
+        # can write source, because the view is derived from both.
+        self._sent: set[str] = set()
+
         # Named arguments exist so the signature documents itself, but each one is
         # a plain param underneath. Applying them in a loop rather than as a run of
         # `if` statements keeps adding the next one from growing the branch count.
@@ -401,6 +432,15 @@ class TanstackTable(AnyWidgetComponent):
         self.param.watch(self._on_event_data_change, ["_event_data"])
         self.param.watch(self._on_undo_depth_change, ["undo_depth"])
 
+        # Everything the view is derived from. `columns` and `types` are in the list
+        # because they decide which fields a search reads, and `options` because it
+        # decides whether there is any pruning at all.
+        self.param.watch(
+            self._rebuild_view,
+            ["source", "options", "columns", "types", "filter_text", "expanded_keys"],
+        )
+        self._rebuild_view()
+
     def _on_event_data_change(self, event: Any) -> None:
         """Dispatch event data coming from JavaScript.
 
@@ -439,6 +479,69 @@ class TanstackTable(AnyWidgetComponent):
         self._undo_stack = deque(self._undo_stack, maxlen=event.new)
         self._redo_stack = deque(self._redo_stack, maxlen=event.new)
         self._sync_history()
+
+    @property
+    def _pruning(self) -> bool:
+        """Whether the browser is sent the opened branches rather than the tree."""
+        return self.options.get("prune") in (True, "collapsed")
+
+    def _search_fields(self) -> list[str]:
+        """Return the node fields a search reads, which are the rendered ones.
+
+        These are the columns' accessors, or ``title`` alone in tree-only mode
+        where the single column is the tree itself. The browser builds its column
+        defs from the same two rules, and a search that read anything else would
+        find rows in a pruned branch that the same term does not find in a loaded
+        one.
+        """
+        columns = self.columns or []
+        fields = [
+            str(column.get("field") or column.get("id"))
+            for column in columns
+            if column.get("field") or column.get("id")
+        ]
+        return fields or ["title"]
+
+    def _keep_keys(self) -> set[str]:
+        """Return the branches whose children the browser is sent.
+
+        Three things are kept, and they answer three different questions. The
+        branches already sent, so a collapse and a second expand cost nothing. The
+        branches that are open, because a branch pushed down expanded and empty
+        would sit that way forever, and Python may open one through
+        :meth:`expand_node` long before a browser exists. And the path to every
+        node matching an active search, so a term still finds what has not been
+        loaded.
+
+        A match contributes its ancestors and not itself, so a folder whose name
+        matches arrives as a folder with a twisty rather than with its whole
+        subtree. Matches are deliberately not recorded as sent: what a search
+        widened goes away again when the search does.
+        """
+        held = self._sent | set(self.expanded_keys or [])
+        keep = held | tree.ancestor_keys(self.source, held)
+        text = (self.filter_text or "").strip()
+        if text:
+            matches = tree.matching_keys(self.source, text, self._search_fields(), self.types)
+            keep |= tree.ancestor_keys(self.source, matches)
+        return keep
+
+    def _rebuild_view(self, *_events: Any) -> None:
+        """Derive what the browser holds from what Python owns.
+
+        Without pruning this is an assignment rather than a copy, so an ordinary
+        table holds one tree and the split costs it nothing.
+        """
+        if not self._pruning:
+            if self._view is not self.source:
+                self._view = self.source
+            return
+
+        # A branch the browser has opened is a branch this rebuild is about to hand
+        # it, so the record of what it holds grows here and nowhere else but the
+        # load intent.
+        self._sent.update(self.expanded_keys or [])
+        self._view = tree.prune(self.source, self._keep_keys())
 
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
@@ -816,6 +919,11 @@ class TanstackTable(AnyWidgetComponent):
         now, returning None answers later through :meth:`set_children`, and no
         callback at all leaves the intent to ``event_callback``.
 
+        A branch this panel pruned on the way out is the one case answered without
+        asking anybody. Its children are in ``source`` already, so the answer is to
+        stop leaving them behind rather than to fetch them a second time, and the
+        application never hears that the wire had been narrowed underneath it.
+
         Nothing is vetoed here. A load reveals what the tree already contains
         rather than changing it, so there is no decision for ``action_callback`` to
         take, and the veto for what a load then makes reachable is the one every
@@ -830,7 +938,16 @@ class TanstackTable(AnyWidgetComponent):
         key = params.get("key")
         node = tree.find_node(self.source, str(key)) if key else None
         params["applied"] = False
-        if node is None or not self._lazy_callback:
+        if node is None:
+            return params
+
+        if self._pruning and node.get(tree.CHILDREN):
+            self._sent.add(str(key))
+            self._rebuild_view()
+            params["applied"] = True
+            return params
+
+        if not self._lazy_callback:
             return params
 
         children = self._lazy_callback(str(key), deepcopy(node))
@@ -1360,10 +1477,15 @@ class TanstackTable(AnyWidgetComponent):
         recorded against the old one go with it: their keys need not mean anything
         here, and stepping back into one would restore a tree the application had
         already replaced. Anything cut or copied out of the old tree goes for the
-        same reason. :meth:`clear` is the other thing, an edit of the tree in hand,
-        so emptying it stays undoable.
+        same reason, and so does the record of which branches the browser has been
+        sent: those keys need not name anything here either. :meth:`clear` is the
+        other thing, an edit of the tree in hand, so emptying it stays undoable.
         """
+        self._sent = set()
         self.source = source
+        # Explicitly, because a tree that happens to equal the one it replaces
+        # fires no param event, and what the browser is owed has changed anyway.
+        self._rebuild_view()
         self.clear_history()
         self.clear_clipboard()
 

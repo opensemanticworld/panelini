@@ -135,7 +135,10 @@ const columnDefs = computed(() => {
     return {
       id: column.id,
       header: column.header ?? column.id,
-      accessorFn: (row) => row[field],
+      // Through the type registry, because a type may carry a column value just as
+      // it carries an icon, and because Python reads the same fields the same way
+      // when it decides what a search reaches inside a pruned branch.
+      accessorFn: (row) => fieldOf(row, field),
       enableSorting: column.sortable !== false,
       enableResizing: column.resizable !== false,
       // Written only where Python actually declared one, so the rest fall back to
@@ -343,7 +346,7 @@ const resizingId = ref(null)
 
 const table = useTable({
   features,
-  data: computed(() => props.state.source || []),
+  data: computed(() => props.state.view || []),
   columns: columnDefs,
   getRowId: (row) => row.key,
   getSubRows: (row) => row.children,
@@ -480,7 +483,7 @@ watch(
 // `options.expand_all` is a display option, not tree data, so it is applied here
 // rather than by Python enumerating every expandable key.
 watch(
-  () => [props.state.options.expand_all, props.state.source],
+  () => [props.state.options.expand_all, props.state.view],
   ([expandAll]) => {
     if (expandAll) table.toggleAllRowsExpanded(true)
   },
@@ -491,26 +494,46 @@ watch(
 // holds the whole tree and this only decides what is rendered. That is what keeps
 // a drop valid while a filter is active, and what lets Python go on owning the
 // tree without knowing that a search box exists.
-const filterText = computed(() => (props.state.filterText ?? '').trim().toLowerCase())
+// What the toolbar's search box holds, and what the rows are matched against. The
+// box is the single reader so that filtering is instant: sending each keystroke to
+// Python and waiting for it back would make every letter cost a round trip.
+const searchText = ref(props.state.filterText ?? '')
+const filterText = computed(() => searchText.value.trim().toLowerCase())
 const filtering = computed(() => filterText.value.length > 0)
 
-// What the toolbar's search box shows. The param stays the single source of truth,
-// so a filter set from Python still lands in the box, and the box is only a
-// mirror because binding it straight to the param would make every keystroke wait
-// on a round trip before it appeared.
-const searchText = ref(props.state.filterText ?? '')
+// Python is told what was typed, but only once the typing has settled. With
+// `options.prune` on, every value that crosses is a tree rebuilt and pushed back,
+// so a term typed a letter at a time would ask for the search eight times over.
+const SEARCH_DEBOUNCE_MS = 200
+let searchTimer = null
+// The last value handed to Python. An echo of it is this component hearing itself
+// and must not overwrite whatever has been typed since, while any other value is
+// an application setting the filter and belongs in the box.
+let sentText = props.state.filterText ?? ''
 
 watch(
   () => props.state.filterText,
   (value) => {
-    searchText.value = value ?? ''
+    const next = value ?? ''
+    if (next === sentText) return
+    sentText = next
+    searchText.value = next
   },
 )
 
 function onSearchInput(value) {
   searchText.value = value
-  props.setFilterText(value)
+  if (searchTimer !== null) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    searchTimer = null
+    sentText = searchText.value
+    props.setFilterText(sentText)
+  }, SEARCH_DEBOUNCE_MS)
 }
+
+onBeforeUnmount(() => {
+  if (searchTimer !== null) clearTimeout(searchTimer)
+})
 
 // Any rendered column value counts, which is what makes this a global filter
 // rather than a title search. In tree-only mode the one column is the title.
@@ -1570,7 +1593,7 @@ function reorderAnchor(offset) {
 let refocus = null
 
 watch(
-  () => props.state.source,
+  () => props.state.view,
   () => {
     const request = refocus
     refocus = null
