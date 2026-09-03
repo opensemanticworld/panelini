@@ -148,6 +148,8 @@ def _below_last_row(page: Page) -> tuple[float, float]:
     """A point in the blank area under the last row, still inside the tree."""
     box = page.locator(".tree-container").first.bounding_box()
     last = page.locator(".wb-row").last.bounding_box()
+    assert box is not None, "tree container is not visible"
+    assert last is not None, "no rows are visible"
     y = last["y"] + last["height"] + 30
     assert y < box["y"] + box["height"], "no blank area below the last row"
     return box["x"] + box["width"] / 2, y
