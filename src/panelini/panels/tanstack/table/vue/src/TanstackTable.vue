@@ -155,12 +155,23 @@ function numberOption(name, value) {
   return typeof value === 'number' && Number.isFinite(value) ? { [name]: value } : {}
 }
 
+// A node names a type and takes that type's fields for every one it does not set
+// itself, which is `tree.resolve_node` in Python. Resolved wherever a field is
+// read rather than merged into the node, so `source` carries the type name alone
+// and a tree that names no types costs one lookup that finds nothing.
+function fieldOf(node, name) {
+  const own = node?.[name]
+  if (own !== undefined) return own
+  const entry = (props.state.types || {})[node?.type]
+  return entry && typeof entry === 'object' ? entry[name] : undefined
+}
+
 // A branch is a node that has children or one that has not said it cannot take
 // them, which is the rule `tree.accepts_children` applies in Python. A tree that
 // never declares `allow_children` therefore has no leaves, and asking for folders
 // first in one changes nothing rather than inventing a distinction.
 function isBranch(row) {
-  return row.subRows.length > 0 || row.original.allow_children !== false
+  return row.subRows.length > 0 || fieldOf(row.original, 'allow_children') !== false
 }
 
 // Folders above files at every level, whichever way the column itself is sorted.
@@ -248,7 +259,7 @@ function iconByName(name) {
 // entry exists. That lets a folder open without the panel having to know which
 // names mean "folder".
 function iconMarkup(row) {
-  const name = row.original.icon
+  const name = fieldOf(row.original, 'icon')
   if (!name) return null
   return (isExpanded(row) ? iconByName(`${name}-open`) : null) ?? iconByName(name)
 }
@@ -1420,7 +1431,7 @@ function extensionOf(name) {
 function warnsAboutExtension(node, title) {
   return (
     extensionWarning.value &&
-    node.allow_children === false &&
+    fieldOf(node, 'allow_children') === false &&
     extensionOf(title) !== extensionOf(node.title ?? '')
   )
 }
@@ -1591,7 +1602,7 @@ function emitMove(anchor, position) {
 // decision and stays here, exactly as it does for indent.
 function emitAdd(item) {
   const row = activeRow.value
-  const position = row ? (row.original.allow_children === false ? 'after' : 'child') : null
+  const position = row ? (fieldOf(row.original, 'allow_children') === false ? 'after' : 'child') : null
   if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
   refocus = { added: new Set(table.getCoreRowModel().flatRows.map((candidate) => candidate.id)) }
   props.emitEvent('add', { anchorKey: row?.id ?? null, position, node: item.node })
@@ -1634,7 +1645,7 @@ function emitClipboard(action) {
 // found by diffing the tree, exactly as an add's are.
 function emitPaste() {
   const row = activeRow.value
-  const position = row ? (row.original.allow_children === false ? 'after' : 'child') : null
+  const position = row ? (fieldOf(row.original, 'allow_children') === false ? 'after' : 'child') : null
   if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
   const held = clipboardKeys.value
   refocus =
@@ -1682,7 +1693,7 @@ function actionEnabled(item) {
       // Indenting means becoming a child of the row above, so a leaf that refuses
       // children blocks it exactly as it blocks a `make-child` drop.
       const anchor = reorderAnchor(-1)
-      return anchor !== null && anchor.original.allow_children !== false
+      return anchor !== null && fieldOf(anchor.original, 'allow_children') !== false
     }
     case 'outdent':
       return Boolean(activeRow.value?.parentId)
@@ -2091,7 +2102,7 @@ function dragKeysFor(row) {
 function blockedInstructions(row, sourceKeys, foreign) {
   if (!foreign && isSelfOrDescendant(row, sourceKeys)) return ALL_INSTRUCTIONS
   const blocked = sorted.value ? ['reorder-above', 'reorder-below'] : []
-  if (row.original.allow_children === false) blocked.push('make-child')
+  if (fieldOf(row.original, 'allow_children') === false) blocked.push('make-child')
   return blocked
 }
 
@@ -2310,6 +2321,14 @@ function instructionFor(row) {
   return dropTarget.value?.key === row.id ? dropTarget.value.instruction : null
 }
 
+// A class named by the node or by its type, which is how a kind of row is made
+// visible without an icon. The panel ships no styling for it: naming a class is
+// the application saying it has its own.
+function nodeClass(row) {
+  const value = fieldOf(row.original, 'class')
+  return typeof value === 'string' ? value : null
+}
+
 function rowDndClass(row) {
   const instruction = instructionFor(row)
   return {
@@ -2455,6 +2474,7 @@ function dropLineStyle(row) {
           class="pnl-tst-row"
           :class="[
             rowDndClass(row),
+            nodeClass(row),
             {
               'pnl-tst-row--active': activeShown && row.id === activeKey,
               'pnl-tst-row--quiet': !activeShown && row.id === activeKey,

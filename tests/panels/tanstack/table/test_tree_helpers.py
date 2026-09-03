@@ -438,3 +438,105 @@ def test_rekey_subtree_copies_deeply(sample):
     copied["children"][0]["title"] = "Changed"
 
     assert node_at(sample, "b1")["title"] == "B1"
+
+
+# --- node types ---------------------------------------------------------------
+
+TYPES = {"file": {"icon": "file", "allow_children": False, "kind": "leaf"}}
+
+
+def test_resolve_node_fills_in_the_fields_of_its_type():
+    resolved = tree.resolve_node({"key": "f", "title": "F", "type": "file"}, TYPES)
+
+    assert resolved["icon"] == "file"
+    assert resolved["allow_children"] is False
+    assert resolved["kind"] == "leaf"
+
+
+def test_resolve_node_lets_the_node_win():
+    """A type is a set of defaults, not a second owner of the data."""
+    resolved = tree.resolve_node({"key": "f", "type": "file", "icon": "python"}, TYPES)
+
+    assert resolved["icon"] == "python"
+
+
+def test_resolve_node_lets_the_node_win_even_with_a_falsy_value():
+    resolved = tree.resolve_node({"key": "f", "type": "file", "icon": ""}, TYPES)
+
+    assert resolved["icon"] == ""
+
+
+def test_resolve_node_never_takes_a_key_or_children_from_a_type():
+    """A type naming keys would be naming nodes it cannot see."""
+    types = {"folder": {"key": "stolen", "children": [{"key": "ghost"}], "icon": "folder"}}
+    resolved = tree.resolve_node({"key": "a", "type": "folder"}, types)
+
+    assert resolved["key"] == "a"
+    assert "children" not in resolved
+    assert resolved["icon"] == "folder"
+
+
+def test_resolve_node_leaves_a_node_alone_without_a_registry():
+    node = {"key": "f", "type": "file"}
+
+    assert tree.resolve_node(node) is node
+    assert tree.resolve_node(node, {}) is node
+
+
+def test_resolve_node_leaves_a_node_alone_without_a_type():
+    node = {"key": "f", "title": "F"}
+
+    assert tree.resolve_node(node, TYPES) is node
+
+
+def test_resolve_node_ignores_a_type_the_registry_does_not_hold():
+    node = {"key": "f", "type": "nope"}
+
+    assert tree.resolve_node(node, TYPES) is node
+
+
+def test_resolve_node_ignores_an_entry_that_is_not_a_mapping():
+    node = {"key": "f", "type": "file"}
+
+    assert tree.resolve_node(node, {"file": "not a dict"}) is node
+
+
+def test_resolve_node_does_not_mutate_the_node_it_reads():
+    node = {"key": "f", "type": "file"}
+    tree.resolve_node(node, TYPES)
+
+    assert node == {"key": "f", "type": "file"}
+
+
+def test_accepts_children_reads_through_the_type():
+    nodes = [{"key": "f", "title": "F", "type": "file"}]
+
+    assert tree.accepts_children(nodes, "f") is True
+    assert tree.accepts_children(nodes, "f", TYPES) is False
+
+
+def test_accepts_children_lets_the_node_overrule_its_type():
+    nodes = [{"key": "f", "title": "F", "type": "file", "allow_children": True}]
+
+    assert tree.accepts_children(nodes, "f", TYPES) is True
+
+
+def test_apply_move_rejects_a_child_drop_onto_a_typed_leaf():
+    nodes = [{"key": "a", "title": "A"}, {"key": "f", "title": "F", "type": "file"}]
+
+    assert tree.apply_move(nodes, "a", "f", "child", TYPES) is None
+    assert shape(tree.apply_move(nodes, "a", "f", "child")) == "f(a)"
+
+
+def test_apply_move_still_allows_a_sibling_drop_next_to_a_typed_leaf():
+    nodes = [{"key": "a", "title": "A"}, {"key": "f", "title": "F", "type": "file"}]
+
+    assert shape(tree.apply_move(nodes, "a", "f", "after", TYPES)) == "f,a"
+
+
+def test_apply_moves_rejects_the_batch_when_the_typed_anchor_takes_no_children():
+    nodes = [{"key": "a", "title": "A"}, {"key": "b", "title": "B"}, {"key": "f", "type": "file"}]
+    result, moved = tree.apply_moves(nodes, ["a", "b"], "f", "child", TYPES)
+
+    assert moved == []
+    assert result is nodes

@@ -3611,3 +3611,135 @@ def test_a_wide_column_scrolls_the_header_with_the_rows(page: Page, port):
     assert abs(head["x"] - cell["x"]) <= 2
 
     server.stop()
+
+
+# --- node types ----------------------------------------------------------------
+#
+# A node names a type and the browser resolves it as it renders, so fields a tree
+# of a thousand files would otherwise repeat cross the socket once. Nothing is
+# written back into `source`, which is what makes the saving real.
+
+TYPES = {
+    "file": {"icon": "markdown", "allow_children": False, "class": "row-file"},
+    "folder": {"icon": "folder", "class": "row-folder"},
+}
+
+TYPED_SOURCE = [
+    {
+        "key": "docs",
+        "title": "Docs",
+        "type": "folder",
+        "children": [
+            {"key": "md", "title": "notes.md", "type": "file"},
+            {"key": "own", "title": "logo.png", "type": "file", "icon": "image", "class": "row-picked"},
+            {"key": "loud", "title": "Inbox", "type": "file", "allow_children": True},
+        ],
+    },
+    # Untyped, and carrying by hand exactly what the folder type carries, which is
+    # what lets the two rows be compared glyph for glyph.
+    {"key": "plain", "title": "Plain", "icon": "folder", "children": []},
+]
+
+
+def typed_table(columns=None, **options) -> TanstackTable:
+    return TanstackTable(
+        source=copy.deepcopy(TYPED_SOURCE),
+        columns=columns or [],
+        types=copy.deepcopy(TYPES),
+        options={"expand_all": True, "enable_dnd": True, **options},
+    )
+
+
+def test_a_row_draws_the_icon_its_type_names(page: Page, port):
+    table = typed_table()
+    server = serve(table, page, port)
+
+    # Row 0 takes the folder glyph from its type, row 4 carries it by hand.
+    assert row_icon(page, 0) == row_icon(page, 4)
+    # And the node's own icon still wins over the one its type names.
+    assert row_icon(page, 2) != row_icon(page, 1)
+
+    server.stop()
+
+
+def row_classes(page: Page, index: int) -> list[str]:
+    return str(rows(page).nth(index).get_attribute("class") or "").split()
+
+
+def test_a_row_carries_the_class_its_type_names(page: Page, port):
+    """Which is how a kind of row is made visible without an icon."""
+    table = typed_table()
+    server = serve(table, page, port)
+
+    assert "row-folder" in row_classes(page, 0)
+    assert "row-file" in row_classes(page, 1)
+    # The node's own class wins, exactly as its own icon does.
+    assert "row-picked" in row_classes(page, 2)
+    assert "row-file" not in row_classes(page, 2)
+    # And an untyped row is left with the panel's own classes alone.
+    assert all(name.startswith("pnl-tst-") for name in row_classes(page, 4))
+
+    server.stop()
+
+
+def test_a_typed_leaf_refuses_a_drop_into_it(page: Page, port):
+    """`allow_children` read through the type refuses the drop the flag refuses."""
+    table = typed_table()
+    server = serve(table, page, port)
+
+    drag_row(page, 4, 1, y_frac=0.5, expect_blocked=True)
+
+    page.wait_for_timeout(400)
+    assert shape(table.source) == "docs(md,own,loud),plain"
+
+    server.stop()
+
+
+def test_a_node_may_take_children_its_type_refuses(page: Page, port):
+    table = typed_table()
+    server = serve(table, page, port)
+
+    drag_row(page, 4, 3, y_frac=0.5)
+
+    wait_until(lambda: shape(table.source) == "docs(md,own,loud(plain))", timeout=10)
+
+    server.stop()
+
+
+def test_folders_first_reads_the_type(page: Page, port):
+    """A typed leaf sorts below a branch, the way a node carrying the flag does."""
+    table = typed_table(columns=COLUMNS, sort_folders_first=True)
+    server = serve(table, page, port)
+
+    header(page, "Name").click()
+    # Inbox takes children despite its type, so it sorts with the folders.
+    expect_titles(page, ["Docs", "Inbox", "logo.png", "notes.md", "Plain"])
+
+    server.stop()
+
+
+def test_a_type_written_from_python_reaches_the_browser(page: Page, port):
+    table = typed_table()
+    server = serve(table, page, port)
+
+    folder_icon = row_icon(page, 0)
+    assert row_icon(page, 1) != folder_icon
+
+    table.set_type("file", {"icon": "folder", "allow_children": False, "class": "row-file"})
+
+    wait_until(lambda: row_icon(page, 1) == folder_icon, timeout=10)
+
+    server.stop()
+
+
+def test_a_type_never_reaches_the_tree_it_describes(page: Page, port):
+    """Both sides resolve as they read, so `source` keeps the type name alone."""
+    table = typed_table()
+    server = serve(table, page, port)
+
+    drag_row(page, 1, 4, y_frac=0.5)
+    wait_until(lambda: shape(table.source) == "docs(own,loud),plain(md)", timeout=10)
+
+    assert node_at(table.source, "md") == {"key": "md", "title": "notes.md", "type": "file"}
+
+    server.stop()

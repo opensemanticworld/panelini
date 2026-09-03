@@ -12,11 +12,13 @@ so the caller can assign the result to a param and get a change event.
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 Node = dict[str, Any]
 Tree = list[Node]
+#: Node type registry: a type name mapped onto the fields its nodes take by default.
+Types = Mapping[str, Any]
 
 KEY = "key"
 CHILDREN = "children"
@@ -25,6 +27,13 @@ ICON = "icon"
 #: Node flag. Set it to False to make a node a leaf that can never gain children,
 #: which is how a file is told apart from an empty folder.
 ALLOW_CHILDREN = "allow_children"
+#: Node field naming an entry of the ``types`` param, whose fields the node then
+#: takes for every one it does not set itself.
+TYPE = "type"
+#: Fields a type entry never supplies. A type that could name keys would be naming
+#: nodes it cannot see, and one that could bring children would put the same
+#: subtree in the tree once per node of that type.
+UNTYPED = (KEY, CHILDREN)
 
 #: Normalised drop positions. Every hitbox instruction maps onto one of these.
 POSITIONS = ("before", "after", "child")
@@ -252,18 +261,49 @@ def resolve_instruction(
     return "after", anchor
 
 
-def accepts_children(tree: Tree, key: str) -> bool:
+def resolve_node(node: Node, types: Types | None = None) -> Node:
+    """Return ``node`` with the fields of its type filled in underneath it.
+
+    A node names a type and takes every field of that entry it does not set
+    itself, so a tree of a thousand files declares ``allow_children`` and an icon
+    once rather than a thousand times. The node always wins, which is what makes
+    the registry a set of defaults rather than a second owner of the data.
+
+    Nothing is written back. The type is resolved wherever a field is read, here
+    and again in the browser, so ``source`` keeps the type name alone and the wire
+    saving is real.
+
+    Args:
+        node: Node to read.
+        types: Registry as ``{type name: {field: value}}``, or None for no types.
+
+    Returns:
+        A merged dict, or ``node`` itself when nothing applies, which is what
+        keeps this cheap on a tree that names no types. Read it rather than
+        mutate it: the cheap case hands back the node in the tree.
+    """
+    if not types or not isinstance(node, dict):
+        return node
+    entry = types.get(node.get(TYPE))
+    if not isinstance(entry, dict):
+        return node
+    defaults = {name: value for name, value in entry.items() if name not in UNTYPED}
+    return {**defaults, **node} if defaults else node
+
+
+def accepts_children(tree: Tree, key: str, types: Types | None = None) -> bool:
     """Return whether ``key`` may hold children.
 
-    Any node may, unless it carries ``allow_children: False``. Absence of a
-    ``children`` list is deliberately not enough: an empty folder is still a
-    folder, so the distinction has to be declared rather than inferred.
+    Any node may, unless it carries ``allow_children: False`` itself or takes it
+    from its type. Absence of a ``children`` list is deliberately not enough: an
+    empty folder is still a folder, so the distinction has to be declared rather
+    than inferred.
     """
     node = find_node(tree, key)
-    return node is not None and node.get(ALLOW_CHILDREN, True) is not False
+    return node is not None and resolve_node(node, types).get(ALLOW_CHILDREN, True) is not False
 
 
-def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | None:
+def apply_move(tree: Tree, key: str, anchor_key: str, position: str, types: Types | None = None) -> Tree | None:
     """Move ``key`` next to or under ``anchor_key``.
 
     Args:
@@ -271,6 +311,8 @@ def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | N
         key: Key of the node being moved.
         anchor_key: Key the node lands next to or inside.
         position: One of :data:`POSITIONS`.
+        types: Optional node type registry, so an anchor that refuses children
+            through its type refuses this drop as one refusing them itself does.
 
     Returns:
         A new tree, or None when the move is rejected or would change nothing.
@@ -284,7 +326,7 @@ def apply_move(tree: Tree, key: str, anchor_key: str, position: str) -> Tree | N
         return None
     if is_descendant(tree, anchor_key, key):
         return None
-    if position == "child" and not accepts_children(tree, anchor_key):
+    if position == "child" and not accepts_children(tree, anchor_key, types):
         return None
 
     pruned, node = remove_key(tree, key)
@@ -310,7 +352,13 @@ def prune_redundant_keys(tree: Tree, keys: Sequence[str]) -> list[str]:
     return [key for key in unique if not any(other != key and is_descendant(tree, key, other) for other in unique)]
 
 
-def apply_moves(tree: Tree, keys: Sequence[str], anchor_key: str, position: str) -> tuple[Tree, list[str]]:
+def apply_moves(
+    tree: Tree,
+    keys: Sequence[str],
+    anchor_key: str,
+    position: str,
+    types: Types | None = None,
+) -> tuple[Tree, list[str]]:
     """Move several nodes to the same place, keeping their relative order.
 
     The first node lands where the drop asked for, and each later one lands after
@@ -326,6 +374,7 @@ def apply_moves(tree: Tree, keys: Sequence[str], anchor_key: str, position: str)
         keys: Keys of the nodes being moved, in display order.
         anchor_key: Key the nodes land next to or inside.
         position: One of :data:`POSITIONS`.
+        types: Optional node type registry, passed on to every move in the batch.
 
     Returns:
         ``(tree, moved_keys)``. On rejection this is the original tree and an
@@ -336,14 +385,14 @@ def apply_moves(tree: Tree, keys: Sequence[str], anchor_key: str, position: str)
         return tree, []
     if any(anchor_key == key or is_descendant(tree, anchor_key, key) for key in ordered):
         return tree, []
-    if position == "child" and not accepts_children(tree, anchor_key):
+    if position == "child" and not accepts_children(tree, anchor_key, types):
         return tree, []
 
     current = tree
     anchor, pos = anchor_key, position
     moved: list[str] = []
     for key in ordered:
-        result = apply_move(current, key, anchor, pos)
+        result = apply_move(current, key, anchor, pos, types)
         if result is not None:
             current = result
             moved.append(key)

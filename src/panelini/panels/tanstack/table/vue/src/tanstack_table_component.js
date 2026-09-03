@@ -29,6 +29,11 @@ export function render({ model, el }) {
     columns: model.get("columns") || [],
     options: model.get("options") || {},
     icons: model.get("icons") || {},
+    // A node names a type, the registry says what that type's nodes are like.
+    // Read wherever a field is read, never merged into `source`, which is what
+    // keeps a tree of a thousand files from carrying the same fields a thousand
+    // times over the socket.
+    types: model.get("types") || {},
     filterText: model.get("filter_text") || "",
     editingKey: model.get("editing_key") || "",
     expandedKeys: model.get("expanded_keys") || [],
@@ -157,6 +162,9 @@ export function render({ model, el }) {
   });
   model.on("change:icons", () => {
     state.icons = model.get("icons") || {};
+  });
+  model.on("change:types", () => {
+    state.types = model.get("types") || {};
   });
   model.on("change:filter_text", () => {
     state.filterText = model.get("filter_text") || "";

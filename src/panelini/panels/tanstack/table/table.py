@@ -83,8 +83,10 @@ class TanstackTable(AnyWidgetComponent):
         default=[],
         doc=(
             "Tree source data - list of node dicts with key, title, children, plus column fields. "
-            "Optional per node: icon, naming an entry of the icons param, and allow_children=False "
-            "to make the node a leaf nothing can be dropped into."
+            "Optional per node: icon, naming an entry of the icons param, allow_children=False "
+            "to make the node a leaf nothing can be dropped into, class for a CSS class on the "
+            "row, and type, naming an entry of the types param whose fields the node then takes "
+            "for every one it does not set itself."
         ),
     )
     columns = param.List(
@@ -138,6 +140,18 @@ class TanstackTable(AnyWidgetComponent):
             "set (document, file, folder, folder-open, image, markdown, pdf, python). See "
             "panelini.panels.tanstack.table.load_icons. An expanded node prefers the '<name>-open' "
             "entry when it exists, which is how a folder opens."
+        ),
+    )
+    types = param.Dict(
+        default={},
+        doc=(
+            "Node type registry, as {type name: {field: value}}. A node carrying type='name' takes "
+            "every field of that entry it does not set itself, so a tree of a thousand files "
+            "declares icon and allow_children once rather than a thousand times. The node always "
+            "wins, and key and children are never taken from a type. Any field may be given, not "
+            "only icon, class and allow_children: a type can carry a column value just as well. "
+            "Both sides resolve it as they read a node and neither writes it back, so source keeps "
+            "the type name alone."
         ),
     )
 
@@ -250,6 +264,7 @@ class TanstackTable(AnyWidgetComponent):
         columns: Optional[list[dict[str, Any]]] = None,
         options: Optional[dict[str, Any]] = None,
         icons: Optional[dict[str, str]] = None,
+        types: Optional[dict[str, dict[str, Any]]] = None,
         filter_text: Optional[str] = None,
         editing_key: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
@@ -271,6 +286,8 @@ class TanstackTable(AnyWidgetComponent):
             options: Display options.
             icons: Extra icons as name to inline SVG markup, merged over the
                 bundled set and referenced by a node's ``icon``.
+            types: Node type registry as ``{type name: {field: value}}``, giving
+                every node that names a type the fields it does not set itself.
             filter_text: Search text. Hides every row that neither matches nor
                 leads to a match.
             editing_key: Key of the node to open the inline title editor on.
@@ -325,6 +342,7 @@ class TanstackTable(AnyWidgetComponent):
             ("columns", columns),
             ("options", options),
             ("icons", icons),
+            ("types", types),
             ("filter_text", filter_text),
             ("editing_key", editing_key),
             ("expanded_keys", expanded_keys),
@@ -646,7 +664,7 @@ class TanstackTable(AnyWidgetComponent):
         if not allowed:
             return params
 
-        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, position)
+        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, position, self.types)
         if not moved:
             return params
 
@@ -688,7 +706,7 @@ class TanstackTable(AnyWidgetComponent):
         elif (
             position not in ("after", "child")
             or tree.find_node(self.source, anchor_key) is None
-            or (position == "child" and not tree.accepts_children(self.source, anchor_key))
+            or (position == "child" and not tree.accepts_children(self.source, anchor_key, self.types))
         ):
             return params
 
@@ -783,6 +801,11 @@ class TanstackTable(AnyWidgetComponent):
         picked by hand survives a rename, because naming an icon is a statement
         about the node rather than about the extension it happens to sit next to.
 
+        A node's type counts as the node here. A type whose icon is the generic
+        one is read the way a node carrying that icon is, so a typed file renamed
+        to ``.py`` gains a python icon of its own, and a type naming a specific
+        icon keeps it exactly as a hand-picked one does.
+
         Args:
             node: The node as it is now, before the rename is applied.
             title: The name the node is taking.
@@ -791,8 +814,9 @@ class TanstackTable(AnyWidgetComponent):
         Returns:
             The new icon name, or None to leave the node's icon exactly as it is.
         """
-        current = node.get(tree.ICON)
-        if not isinstance(current, str) or node.get(tree.ALLOW_CHILDREN, True) is not False:
+        resolved = tree.resolve_node(node, self.types)
+        current = resolved.get(tree.ICON)
+        if not isinstance(current, str) or resolved.get(tree.ALLOW_CHILDREN, True) is not False:
             return None
         extra = self.options.get("file_icons")
         if current not in (DEFAULT_FILE_ICON, icon_for(previous_title, extra)):
@@ -941,7 +965,7 @@ class TanstackTable(AnyWidgetComponent):
         elif (
             position not in ("after", "child")
             or tree.find_node(self.source, anchor_key) is None
-            or (position == "child" and not tree.accepts_children(self.source, anchor_key))
+            or (position == "child" and not tree.accepts_children(self.source, anchor_key, self.types))
         ):
             return params
         params["position"] = position
@@ -975,7 +999,7 @@ class TanstackTable(AnyWidgetComponent):
         if not allowed:
             return params
 
-        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, str(position))
+        updated, moved = tree.apply_moves(self.source, allowed, anchor_key, str(position), self.types)
         if not moved:
             return params
 
@@ -1083,7 +1107,7 @@ class TanstackTable(AnyWidgetComponent):
         position, anchor_key = self._resolve_placement(event_params)
         if position is None or anchor_key is None or tree.find_node(self.source, anchor_key) is None:
             return None, None
-        if position == "child" and not tree.accepts_children(self.source, anchor_key):
+        if position == "child" and not tree.accepts_children(self.source, anchor_key, self.types):
             return None, None
         return position, anchor_key
 
@@ -1532,7 +1556,7 @@ class TanstackTable(AnyWidgetComponent):
             covers an unknown key, dropping a node onto itself and dropping a
             node into its own subtree.
         """
-        updated = tree.apply_move(self.source, key, anchor_key, position)
+        updated = tree.apply_move(self.source, key, anchor_key, position, self.types)
         if updated is None:
             return False
         self._commit_source(updated)
@@ -1551,7 +1575,7 @@ class TanstackTable(AnyWidgetComponent):
             which covers an anchor inside one of the moved subtrees and an anchor
             that does not accept children.
         """
-        updated, moved = tree.apply_moves(self.source, keys, anchor_key, position)
+        updated, moved = tree.apply_moves(self.source, keys, anchor_key, position, self.types)
         if moved:
             self._commit_source(updated)
         return moved
@@ -1700,3 +1724,42 @@ class TanstackTable(AnyWidgetComponent):
     def clear_column_widths(self) -> None:
         """Put every column back to the width its column def asks for."""
         self.column_widths = {}
+
+    def get_types(self) -> dict[str, dict[str, Any]]:
+        """Return the node type registry, as ``{type name: {field: value}}``."""
+        return deepcopy(self.types)
+
+    def set_type(self, name: str, fields: dict[str, Any]) -> None:
+        """Declare one node type, replacing any entry of that name.
+
+        Nothing in ``source`` is rewritten: a type is read wherever a field is
+        read, so declaring one changes every node already carrying that name.
+
+        Args:
+            name: Type name, which nodes reference through their ``type`` field.
+            fields: Fields a node of this type takes when it does not set them
+                itself. ``key`` and ``children`` are ignored.
+        """
+        self.types = {**self.types, name: dict(fields)}
+
+    def remove_type(self, name: str) -> None:
+        """Drop one type. Nodes naming it fall back to their own fields alone."""
+        if name not in self.types:
+            return
+        self.types = {key: value for key, value in self.types.items() if key != name}
+
+    def resolve_node(self, key: str) -> Optional[dict[str, Any]]:
+        """Return a node as the panel reads it, with its type's fields filled in.
+
+        This is the node the drop guards and the browser both see, so it is the
+        way to ask what a node actually allows rather than what it says.
+
+        Args:
+            key: Key of the node to read.
+
+        Returns:
+            A copy carrying the node's own fields over its type's, or None when
+            no node has that key.
+        """
+        node = tree.find_node(self.source, key)
+        return None if node is None else deepcopy(tree.resolve_node(node, self.types))

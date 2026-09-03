@@ -2101,3 +2101,185 @@ def test_a_width_arriving_from_the_browser_is_kept(table):
     table.column_widths = {"title": 260}
 
     assert table.get_column_widths() == {"title": 260}
+
+
+# --- node types ---------------------------------------------------------------
+#
+# A type names the fields its nodes take by default. Both sides resolve it as they
+# read a node and neither writes it back, so ``source`` keeps the type name alone
+# and a tree of a thousand files stops carrying the same two fields a thousand
+# times over the socket.
+
+TYPES = {
+    "file": {"icon": "file", "allow_children": False},
+    "python": {"icon": "python", "allow_children": False},
+    "dataset": {"icon": "database", "allow_children": False},
+    "folder": {"icon": "folder", "class": "row-folder"},
+}
+
+TYPED = [
+    {"key": "dir", "title": "src", "type": "folder", "children": [{"key": "f", "title": "app.py", "type": "python"}]},
+    {"key": "plain", "title": "notes.md", "type": "file"},
+    {"key": "data", "title": "cities.json", "type": "dataset"},
+    {"key": "loud", "title": "override.md", "type": "file", "allow_children": True},
+]
+
+
+@pytest.fixture
+def typed(events):
+    """A table whose nodes name types rather than repeating their fields."""
+    return TanstackTable(
+        source=copy.deepcopy(TYPED),
+        types=copy.deepcopy(TYPES),
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+
+
+def test_types_default_to_empty():
+    assert TanstackTable().types == {}
+
+
+def test_types_can_be_set_at_construction(source):
+    table = TanstackTable(source=source, types={"file": {"icon": "file"}})
+
+    assert table.types == {"file": {"icon": "file"}}
+
+
+def test_a_typed_leaf_refuses_a_child_drop(typed):
+    typed.handle_event("move", {"key": "dir", "anchorKey": "plain", "position": "child"})
+
+    assert shape(typed.source) == "dir(f),plain,data,loud"
+
+
+def test_a_typed_folder_takes_a_child_drop(typed):
+    typed.handle_event("move", {"key": "plain", "anchorKey": "dir", "position": "child"})
+
+    assert shape(typed.source) == "dir(f,plain),data,loud"
+
+
+def test_a_node_overrules_the_type_that_refuses_children(typed):
+    typed.handle_event("move", {"key": "plain", "anchorKey": "loud", "position": "child"})
+
+    assert shape(typed.source) == "dir(f),data,loud(plain)"
+
+
+def test_a_typed_leaf_refuses_an_add_child_intent(typed, events):
+    typed.handle_event("add", {"anchorKey": "plain", "position": "child", "node": {"title": "New"}})
+
+    assert events[0][1]["applied"] is False
+    assert shape(typed.source) == "dir(f),plain,data,loud"
+
+
+def test_a_typed_leaf_refuses_a_pasted_child(typed):
+    typed.copy_nodes(["loud"])
+    typed.paste_nodes("plain", "child")
+
+    assert shape(typed.source) == "dir(f),plain,data,loud"
+
+
+def test_move_node_reads_the_registry(typed):
+    typed.move_node("dir", "plain", "child")
+
+    assert shape(typed.source) == "dir(f),plain,data,loud"
+
+
+def test_move_nodes_reads_the_registry(typed):
+    typed.move_nodes(["dir", "loud"], "plain", "child")
+
+    assert shape(typed.source) == "dir(f),plain,data,loud"
+
+
+def test_a_rename_derives_an_icon_through_a_generic_type(typed):
+    """The type's icon is the generic one, so the panel derives as it would."""
+    typed.handle_event("rename", {"key": "plain", "title": "notes.py"})
+
+    assert icon_of(typed, "plain") == "python"
+
+
+def test_a_rename_leaves_a_specific_type_icon_alone(typed):
+    """A type naming an icon is a statement about the kind, not the extension."""
+    typed.handle_event("rename", {"key": "data", "title": "cities.csv"})
+
+    assert icon_of(typed, "data") is None
+
+
+def test_a_rename_derives_when_the_type_icon_is_the_one_the_old_name_maps_to(typed):
+    """Indistinguishable from an icon the panel derived, so it is kept in step."""
+    typed.handle_event("rename", {"key": "f", "title": "app.md"})
+
+    assert icon_of(typed, "f") == "markdown"
+
+
+def test_a_rename_never_writes_a_type_onto_the_node(typed):
+    """The wire saving would be undone by an expansion in Python."""
+    typed.handle_event("rename", {"key": "plain", "title": "notes.py"})
+    node = tree.find_node(typed.source, "plain")
+
+    assert node is not None
+    assert node["type"] == "file"
+    assert "allow_children" not in node
+
+
+def test_get_types_returns_a_deep_copy(typed):
+    got = typed.get_types()
+    got["file"]["icon"] = "changed"
+
+    assert typed.types["file"]["icon"] == "file"
+
+
+def test_set_type_adds_an_entry(typed):
+    typed.set_type("image", {"icon": "image", "allow_children": False})
+
+    assert typed.types["image"] == {"icon": "image", "allow_children": False}
+    assert typed.types["file"] == {"icon": "file", "allow_children": False}
+
+
+def test_set_type_replaces_an_entry(typed):
+    typed.set_type("file", {"icon": "document"})
+
+    assert typed.types["file"] == {"icon": "document"}
+
+
+def test_set_type_takes_effect_on_the_guards(typed):
+    typed.set_type("file", {"icon": "file"})
+    typed.handle_event("move", {"key": "dir", "anchorKey": "plain", "position": "child"})
+
+    assert shape(typed.source) == "plain(dir(f)),data,loud"
+
+
+def test_remove_type_drops_an_entry(typed):
+    typed.remove_type("file")
+
+    assert "file" not in typed.types
+    assert "folder" in typed.types
+
+
+def test_remove_type_ignores_a_name_it_does_not_hold(typed):
+    before = typed.get_types()
+    typed.remove_type("nope")
+
+    assert typed.types == before
+
+
+def test_resolve_node_merges_the_type_underneath_the_node(typed):
+    resolved = typed.resolve_node("loud")
+
+    assert resolved == {"key": "loud", "title": "override.md", "type": "file", "allow_children": True, "icon": "file"}
+
+
+def test_resolve_node_returns_none_for_a_key_that_is_not_there(typed):
+    assert typed.resolve_node("nope") is None
+
+
+def test_resolve_node_returns_a_copy_the_caller_may_keep(typed):
+    resolved = typed.resolve_node("plain")
+    resolved["title"] = "changed"
+
+    assert title_of(typed, "plain") == "notes.md"
+
+
+def test_types_leave_the_tree_alone(typed):
+    before = copy.deepcopy(typed.source)
+    typed.set_type("file", {"icon": "document"})
+
+    assert typed.source == before
