@@ -2623,6 +2623,7 @@ EDIT_COLUMNS = [
     {"id": "note", "header": "Note", "editable": True},
     {"id": "kind", "header": "Kind", "editable": True, "editor": "select", "choices": ["python", "text"]},
     {"id": "done", "header": "Done", "editable": True, "editor": "checkbox"},
+    {"id": "score", "header": "Score", "editable": True, "editor": "number", "min": 0, "max": 10},
     {"id": "locked", "header": "Locked", "field": "kind"},
 ]
 
@@ -2903,3 +2904,116 @@ def test_the_rename_intent_is_untouched_by_any_of_this():
     table.handle_event("rename", {"key": "b", "title": "B2"})
 
     assert title_of(table, "b") == "B2"
+
+
+# --- typed editors ---
+#
+# The coercion is P17a's and is covered above. What is new is that a value the column
+# cannot hold now comes back the way a refused one does, and that a number column's
+# own bounds are checked here rather than trusted from the input that carries them.
+
+
+def test_a_value_the_column_cannot_hold_comes_back_like_a_refused_one():
+    """From the editor's side these are the same fact: the value did not land, and
+    an editor that closed on `twelve` would have said nothing about where it went."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "twelve"})
+
+    assert table._edit_error["key"] == "b"
+    assert table._edit_error["column"] == "size"
+    assert table._edit_error["value"] == "twelve"
+
+
+def test_a_choice_the_select_does_not_offer_comes_back_too():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "kind", "value": "binary"})
+
+    assert table._edit_error["value"] == "binary"
+
+
+def test_a_value_that_did_not_change_comes_back_as_nothing():
+    """Unchanged is not the same as rejected: nothing landed because there was
+    nothing to land, so there is nothing to reopen an editor over."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "3"})
+
+    assert table._edit_error == {}
+
+
+def test_a_number_below_the_column_minimum_is_refused():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "score", "value": "-1"})
+
+    assert field_of(table, "b", "score") is None
+    assert table._edit_error["value"] == "-1"
+
+
+def test_a_number_above_the_column_maximum_is_refused():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "score", "value": "11"})
+
+    assert field_of(table, "b", "score") is None
+
+
+def test_a_number_on_the_boundary_is_inside_it():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "score", "value": "10"})
+
+    assert field_of(table, "b", "score") == 10
+
+
+def test_a_column_declaring_no_bounds_takes_any_number():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "-4000"})
+
+    assert field_of(table, "b", "size") == -4000
+
+
+def test_only_the_bound_a_column_declares_is_applied():
+    columns = [
+        {"id": "title", "header": "Name"},
+        {"id": "size", "header": "Size", "editable": True, "editor": "number", "min": 0},
+    ]
+    table = TanstackTable(source=EDIT_SOURCE, columns=columns)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "9999"})
+
+    assert field_of(table, "b", "size") == 9999
+
+
+def test_a_bound_that_cannot_be_read_bounds_nothing():
+    """Refusing every value in a column because its own def is malformed would be
+    the panel making an application's typo into a table nobody can edit."""
+    columns = [
+        {"id": "title", "header": "Name"},
+        {"id": "size", "header": "Size", "editable": True, "editor": "number", "max": "ten"},
+    ]
+    table = TanstackTable(source=EDIT_SOURCE, columns=columns)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert field_of(table, "b", "size") == 42
+
+
+def test_set_field_refuses_a_number_outside_the_column_bounds():
+    table = edit_table()
+
+    assert table.set_field("b", "score", 11) is False
+    assert field_of(table, "b", "score") is None
+
+
+def test_the_range_is_checked_here_and_not_only_hinted_at_the_input():
+    """The browser is trusted for the affordance and never for the decision: an
+    event built by hand carries no input and so carries no bounds either."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "score", "value": 99})
+
+    assert field_of(table, "b", "score") is None

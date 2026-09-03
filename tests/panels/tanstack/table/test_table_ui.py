@@ -4600,3 +4600,214 @@ def test_an_open_cell_editor_does_not_start_a_drag(page: Page, port):
     expect(editor(page)).to_have_count(1)
 
     server.stop()
+
+
+# Typed editors. The coercion is Python's and is covered in test_table.py; what is
+# pinned down here is that a column's declared kind is the control a user gets, and
+# that the two without a typing phase commit on the choice itself.
+
+KINDS_SOURCE = [
+    {"key": "a", "title": "File A", "size": 1, "kind": "python", "done": False},
+    {"key": "b", "title": "File B", "size": 2, "kind": "text", "done": True},
+]
+
+KINDS_COLUMNS = [
+    {"id": "title", "header": "Name"},
+    {"id": "size", "header": "Size", "width": 90, "editable": True, "editor": "number", "min": 0, "max": 10, "step": 1},
+    {"id": "kind", "header": "Kind", "width": 90, "editable": True, "editor": "select", "choices": ["python", "text"]},
+    {"id": "done", "header": "Done", "width": 70, "editable": True, "editor": "checkbox"},
+]
+
+
+def kinds_table(**kwargs) -> TanstackTable:
+    return TanstackTable(source=copy.deepcopy(KINDS_SOURCE), columns=copy.deepcopy(KINDS_COLUMNS), **kwargs)
+
+
+def test_a_number_column_opens_a_number_input_carrying_its_bounds(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 1).dblclick()
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).get_attribute("type") == "number"
+    assert editor(page).get_attribute("min") == "0"
+    assert editor(page).get_attribute("max") == "10"
+    assert editor(page).get_attribute("step") == "1"
+    assert editor(page).input_value() == "1"
+
+    server.stop()
+
+
+def test_a_number_column_writes_a_number_and_not_a_string(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 1).dblclick()
+    editor(page).fill("7")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: field_of(table, "a", "size") == 7, timeout=10)
+    assert not isinstance(field_of(table, "a", "size"), str)
+
+    server.stop()
+
+
+def test_a_number_outside_the_bounds_comes_back_marked_invalid(page: Page, port):
+    """The input hints the range and Python decides it, so the answer arrives the
+    same way a refusal does rather than being swallowed."""
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 1).dblclick()
+    editor(page).fill("99")
+    page.keyboard.press("Enter")
+
+    expect(editor(page)).to_have_attribute("aria-invalid", "true", timeout=10000)
+    assert editor(page).input_value() == "99"
+    assert field_of(table, "a", "size") == 1
+
+    server.stop()
+
+
+def test_a_select_column_opens_a_select_over_its_choices(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 2).dblclick()
+
+    chooser = page.locator(".pnl-tst-edit--select")
+    expect(chooser).to_have_count(1, timeout=10000)
+    assert chooser.locator("option").all_text_contents() == ["python", "text"]
+    assert chooser.input_value() == "python"
+    assert chooser.get_attribute("aria-label") == "Kind of File A"
+
+    server.stop()
+
+
+def test_choosing_an_option_is_the_whole_interaction(page: Page, port):
+    """A select has no half-chosen state to hold, so the choice commits and the
+    editor closes rather than asking for an Enter that confirms nothing."""
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 2).dblclick()
+    page.locator(".pnl-tst-edit--select").select_option("text")
+
+    wait_until(lambda: field_of(table, "a", "kind") == "text", timeout=10)
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    wait_until(lambda: focused_title(page) == "File A", timeout=10)
+
+    server.stop()
+
+
+def test_escape_before_choosing_leaves_the_select_alone(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 2).dblclick()
+    expect(page.locator(".pnl-tst-edit--select")).to_have_count(1, timeout=10000)
+    page.keyboard.press("Escape")
+
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    assert field_of(table, "a", "kind") == "python"
+
+    server.stop()
+
+
+def test_a_checkbox_column_opens_a_checkbox_holding_the_current_value(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 3).dblclick()  # File B, which is done
+
+    box = page.locator(".pnl-tst-edit--check")
+    expect(box).to_have_count(1, timeout=10000)
+    assert box.is_checked() is True
+    assert box.get_attribute("aria-label") == "Done of File B"
+
+    server.stop()
+
+
+def test_toggling_the_box_is_the_whole_interaction(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 3).dblclick()  # File A, which is not done
+    # `click`, not `check`: the box commits on the toggle and so unmounts itself,
+    # and `check` verifies a post-state on an element that is correctly gone.
+    page.locator(".pnl-tst-edit--check").click()
+
+    wait_until(lambda: field_of(table, "a", "done") is True, timeout=10)
+    expect(editor(page)).to_have_count(0, timeout=10000)
+
+    server.stop()
+
+
+def test_a_checkbox_writes_a_bool_and_not_the_word(page: Page, port):
+    """`bool("false")` is True, so a checkbox that sent its state as text would
+    turn every untick into a tick."""
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 3).dblclick()  # File B, which is done
+    page.locator(".pnl-tst-edit--check").click()
+
+    wait_until(lambda: field_of(table, "b", "done") is False, timeout=10)
+
+    server.stop()
+
+
+def test_a_checkbox_cell_is_a_span_until_its_editor_opens(page: Page, port):
+    """One interaction model: every editable column is a cell with an editor behind
+    it, and a single click is already select plus drag."""
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    expect(page.locator(".pnl-tst-edit--check")).to_have_count(0)
+    cell(page, 0, 3).click()
+    page.wait_for_timeout(300)
+
+    expect(page.locator(".pnl-tst-edit--check")).to_have_count(0)
+    assert field_of(table, "a", "done") is False
+
+    server.stop()
+
+
+def test_tab_walks_across_all_three_kinds(page: Page, port):
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    cell(page, 0, 1).dblclick()
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Size of File A", timeout=10)
+
+    page.keyboard.press("Tab")
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Kind of File A", timeout=10)
+    assert page.locator(".pnl-tst-edit--select").count() == 1
+
+    page.keyboard.press("Tab")
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Done of File A", timeout=10)
+    assert page.locator(".pnl-tst-edit--check").count() == 1
+
+    page.keyboard.press("Tab")
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    # Nothing was chosen in either control, so nothing was written on the way past.
+    assert field_of(table, "a", "kind") == "python"
+    assert field_of(table, "a", "done") is False
+
+    server.stop()
+
+
+def test_a_typed_editor_keeps_the_row_at_its_own_height(page: Page, port):
+    """The windowed rowgroup measures every offset from one fixed row height, so a
+    control taller than a text input would put the rows out of step with it."""
+    table = kinds_table()
+    server = serve(table, page, port)
+
+    plain = rows(page).nth(1).bounding_box()["height"]
+    cell(page, 0, 2).dblclick()
+    expect(page.locator(".pnl-tst-edit--select")).to_have_count(1, timeout=10000)
+
+    assert rows(page).nth(0).bounding_box()["height"] == plain
+
+    server.stop()

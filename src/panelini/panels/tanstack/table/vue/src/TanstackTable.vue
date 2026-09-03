@@ -140,6 +140,27 @@ function columnById(id) {
   return editableColumns.value.find((column) => String(column.id) === id) ?? null
 }
 
+// Which control a column opens. Python reads the same key off the same def and
+// coerces by it, so the control a user sees and the type a value lands as are one
+// declaration rather than two that can disagree.
+function editorKind(columnId) {
+  return String(columnById(columnId)?.editor || 'text')
+}
+
+// What a select offers. A column that declares no choices offers none, which renders
+// an empty list rather than guessing at values from the rows: a select is the column
+// saying what may be picked, and a column that says nothing has not said it.
+function editorChoices(columnId) {
+  return (columnById(columnId)?.choices || []).map((choice) => String(choice))
+}
+
+// `step`, `min` and `max` straight off the column def, and undefined when it declares
+// none so Vue leaves the attribute off entirely rather than writing `min="undefined"`.
+function editorAttr(columnId, name) {
+  const value = columnById(columnId)?.[name]
+  return value === undefined || value === null ? undefined : value
+}
+
 // Python column defs are {id, header, field, width}. The first column is the
 // tree column: it carries the indent and the expand twisty.
 const columnDefs = computed(() => {
@@ -1695,6 +1716,11 @@ const editingColumn = ref('')
 const editText = ref('')
 const editInput = ref(null)
 
+// A checkbox holds a boolean and every other control holds text, so the two are kept
+// apart rather than making `editText` carry `"false"`, which is a string Python would
+// have to read as a truth value and would read as `True`.
+const editChecked = ref(false)
+
 // Set when Python refuses a value, so the editor comes back holding what was typed
 // rather than making it be retyped, and says so through `aria-invalid`. Cleared by
 // the next keystroke, because a value being corrected is no longer the rejected one.
@@ -1752,9 +1778,9 @@ function startCellEdit(key, columnId) {
   const column = columnById(columnId)
   if (!row || !column) return
   freshKey = null
-  const field = column.field ?? column.id
-  const value = fieldOf(row.original, field)
-  openEditor(key, columnId, value === undefined || value === null ? '' : String(value))
+  const value = cellValue(row, columnId)
+  editChecked.value = value === true
+  openEditor(key, columnId, value === true || value === false ? '' : value)
 }
 
 // The one place the editor opens, whichever cell it is. Selecting the text is what
@@ -1769,7 +1795,9 @@ function openEditor(key, columnId, text) {
   props.setEditingColumn(columnId)
   nextTick(() => {
     editInput.value?.focus()
-    editInput.value?.select()
+    // Only a text field has text to select, and a `<select>` has no such method at
+    // all, so this is asked for rather than assumed.
+    editInput.value?.select?.()
   })
 }
 
@@ -1821,6 +1849,16 @@ function onEditInput(value) {
   editInvalid.value = false
 }
 
+// A select and a checkbox have no typing phase: there is no half-chosen state to
+// hold, so choosing is the whole interaction and it commits at once. Escape before
+// choosing still cancels, which is what keeps a control opened by mistake harmless.
+function onEditChoice(row, columnId, value) {
+  editInvalid.value = false
+  if (editorKind(columnId) === 'checkbox') editChecked.value = value === true
+  else editText.value = String(value)
+  commitCell(row, columnId)
+}
+
 // Committing is a `rename` intent like any other: Python decides, rewrites `source`
 // and pushes it back. A title that did not change is not worth a round trip, and an
 // empty one is a cancel rather than a blank rename, which is how Python reads it too
@@ -1864,8 +1902,8 @@ function commitEdit(row, next = null) {
 // unmounts a focused input, and the blur that follows would commit a second time.
 function commitCell(row, columnId, next = null) {
   if (editingKey.value !== row.id || editingColumn.value !== columnId) return
-  const value = editText.value
-  const changed = value !== cellText(row, columnId)
+  const value = editorKind(columnId) === 'checkbox' ? editChecked.value : editText.value
+  const changed = value !== cellValue(row, columnId)
   moveEditor(row, next)
   if (!changed) {
     if (next === null) focusRowByKey(row.id)
@@ -1875,12 +1913,15 @@ function commitCell(row, columnId, next = null) {
   props.emitEvent('edit', { key: row.id, column: columnId, value })
 }
 
-// What a cell holds as the editor would show it, read through the type registry so
-// a value a type supplied is compared against what was typed rather than against
-// nothing.
-function cellText(row, columnId) {
+// What a cell holds in the shape its own control holds it: a boolean for a checkbox
+// and text for everything else. Read through the type registry, so a value a type
+// supplied is what an edit of it is compared against rather than nothing, and shaped
+// per kind so a commit does not compare `false` against `"false"` and call it a
+// change every time.
+function cellValue(row, columnId) {
   const column = columnById(columnId)
   const value = fieldOf(row.original, column?.field ?? columnId)
+  if (editorKind(columnId) === 'checkbox') return value === true
   return value === undefined || value === null ? '' : String(value)
 }
 
@@ -3035,24 +3076,70 @@ function dropLineStyle(row) {
               ></span>
             </template>
             <!-- The editor sits inside the gridcell it belongs to, so the treegrid
-                 structure is exactly what it was while a value is being typed. Blur
-                 commits, which is what makes clicking away the same answer as
-                 Enter, and aria-invalid is what says a value came back refused. -->
-            <input
-              v-if="isEditing(row, cellIndex, cell)"
-              :ref="(element) => (editInput = element)"
-              class="pnl-tst-edit"
-              :class="{ 'pnl-tst-edit--invalid': editInvalid }"
-              type="text"
-              :value="editText"
-              :aria-label="editorLabel(row, cellIndex, cell)"
-              :aria-invalid="editInvalid ? 'true' : undefined"
-              @input="onEditInput($event.target.value)"
-              @click.stop
-              @dblclick.stop
-              @keydown.stop="onEditKeydown(row, $event)"
-              @blur="onEditorBlur(row, cellIndex, cell)"
-            />
+                 structure is exactly what it was while a value is being edited. All
+                 four kinds carry the same class, label, keydown and blur, because
+                 what differs between them is the control and not what the editor
+                 means: aria-invalid still says a value came back refused, and blur
+                 still makes clicking away the same answer as Enter.
+
+                 The two that commit on change do so because neither has a
+                 half-chosen state to hold. Escape before choosing still cancels. -->
+            <template v-if="isEditing(row, cellIndex, cell)">
+              <select
+                v-if="editorKind(editingColumn) === 'select'"
+                :ref="(element) => (editInput = element)"
+                class="pnl-tst-edit pnl-tst-edit--select"
+                :class="{ 'pnl-tst-edit--invalid': editInvalid }"
+                :value="editText"
+                :aria-label="editorLabel(row, cellIndex, cell)"
+                :aria-invalid="editInvalid ? 'true' : undefined"
+                @change="onEditChoice(row, editingColumn, $event.target.value)"
+                @click.stop
+                @dblclick.stop
+                @keydown.stop="onEditKeydown(row, $event)"
+                @blur="onEditorBlur(row, cellIndex, cell)"
+              >
+                <option v-for="choice in editorChoices(editingColumn)" :key="choice" :value="choice">
+                  {{ choice }}
+                </option>
+              </select>
+              <input
+                v-else-if="editorKind(editingColumn) === 'checkbox'"
+                :ref="(element) => (editInput = element)"
+                class="pnl-tst-edit pnl-tst-edit--check"
+                :class="{ 'pnl-tst-edit--invalid': editInvalid }"
+                type="checkbox"
+                :checked="editChecked"
+                :aria-label="editorLabel(row, cellIndex, cell)"
+                :aria-invalid="editInvalid ? 'true' : undefined"
+                @change="onEditChoice(row, editingColumn, $event.target.checked)"
+                @click.stop
+                @dblclick.stop
+                @keydown.stop="onEditKeydown(row, $event)"
+                @blur="onEditorBlur(row, cellIndex, cell)"
+              />
+              <!-- `step`, `min` and `max` are the input's own affordance. Python
+                   range checks the value again on the way in, because a hint is not
+                   a decision and an event built by hand carries neither. -->
+              <input
+                v-else
+                :ref="(element) => (editInput = element)"
+                class="pnl-tst-edit"
+                :class="{ 'pnl-tst-edit--invalid': editInvalid }"
+                :type="editorKind(editingColumn) === 'number' ? 'number' : 'text'"
+                :step="editorAttr(editingColumn, 'step')"
+                :min="editorAttr(editingColumn, 'min')"
+                :max="editorAttr(editingColumn, 'max')"
+                :value="editText"
+                :aria-label="editorLabel(row, cellIndex, cell)"
+                :aria-invalid="editInvalid ? 'true' : undefined"
+                @input="onEditInput($event.target.value)"
+                @click.stop
+                @dblclick.stop
+                @keydown.stop="onEditKeydown(row, $event)"
+                @blur="onEditorBlur(row, cellIndex, cell)"
+              />
+            </template>
             <span v-else class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>
         </div>

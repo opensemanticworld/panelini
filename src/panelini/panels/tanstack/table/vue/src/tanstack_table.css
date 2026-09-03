@@ -228,8 +228,29 @@
   outline: none;
 }
 
-/* A value Python refused. Colour alone would say nothing to a reader, so it is the
-   companion to aria-invalid on the same element rather than the whole message. */
+/* A select is a text editor that offers its values rather than taking them, so it
+   sizes like one. The height is pinned to the row's line box because a native select
+   is taller than an input by default and a taller control in one cell would push the
+   row out of the fixed height the windowed rowgroup measures every offset from. */
+.pnl-tst-edit--select {
+  height: 22px;
+  padding: 0;
+  line-height: 20px;
+}
+
+/* A checkbox has one size and no text, so it takes the space it needs and leaves the
+   rest of the cell alone rather than stretching across it. */
+.pnl-tst-edit--check {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  padding: 0;
+}
+
+/* A value that did not land, whether Python refused it or the column cannot hold it.
+   Colour alone would say nothing to a reader, so it is the companion to aria-invalid
+   on the same element rather than the whole message. */
 .pnl-tst-edit--invalid {
   border-color: var(--pnl-tst-invalid);
   box-shadow: inset 0 0 0 1px var(--pnl-tst-invalid);
