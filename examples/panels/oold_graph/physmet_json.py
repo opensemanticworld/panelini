@@ -76,6 +76,7 @@ EXTRA_IRI_FIELDS: dict = {
     "processedFrom": {"@id": "dcat:qualifiedRelation", "@type": "@id"},
     "rightsHolder": {"@id": "dcterms:rightsHolder", "@type": "@id"},
     "priorRelease": {"@id": "dcat:previousVersion", "@type": "@id"},
+    "project": {"@id": "HasProject", "@type": "@id"},
 }
 
 # ── Build entity_types registry ──────────────────────────────────────────────
