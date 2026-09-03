@@ -306,6 +306,25 @@
   cursor: default;
 }
 
+/* A branch waiting on its children. It fades rather than spins, because the row
+   already carries aria-busy and this only has to say the same thing to an eye. */
+.pnl-tst-twisty--busy {
+  animation: pnl-tst-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes pnl-tst-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Nothing moves for a reader who asked for that, and the state is still announced. */
+@media (prefers-reduced-motion: reduce) {
+  .pnl-tst-twisty--busy {
+    animation: none;
+  }
+}
+
 /* Icon markup is supplied by the app, so its intrinsic size is unknown. The size
    is pinned here rather than trusted from the SVG. */
 .pnl-tst-icon {

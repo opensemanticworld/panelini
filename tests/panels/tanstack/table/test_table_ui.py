@@ -3990,3 +3990,129 @@ def test_the_keyboard_survives_a_scroll_away_from_the_focused_row(page: Page, po
     wait_until(lambda: focused_title(page) == "node 0001", timeout=10)
 
     server.stop()
+
+
+# --- lazy children ---
+
+
+LAZY_SOURCE = [
+    {"key": "docs", "title": "docs", "lazy": True},
+    {"key": "readme", "title": "readme.md", "allow_children": False},
+]
+
+
+def twisty(page: Page, title: str):
+    return rows(page).filter(has_text=title).first.locator(".pnl-tst-twisty").first
+
+
+def test_a_lazy_branch_shows_a_twisty_although_it_holds_nothing(page: Page, port):
+    table = TanstackTable(source=LAZY_SOURCE)
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    # Expandable although the row model can see no children, and a real leaf is not.
+    expect(rows(page).nth(0)).to_have_attribute("aria-expanded", "false")
+    assert rows(page).nth(1).get_attribute("aria-expanded") is None
+
+    server.stop()
+
+
+def test_expanding_a_lazy_branch_asks_python_and_shows_what_comes_back(page: Page, port):
+    table = TanstackTable(
+        source=LAZY_SOURCE,
+        lazy_callback=lambda key, node: [{"key": "a", "title": "a.md", "allow_children": False}],
+    )
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    twisty(page, "docs").click()
+
+    # The branch is expanded as it asks, so the children appear without a second
+    # click, and the flag is gone so it never asks again.
+    wait_until(lambda: row_titles(page) == ["docs", "a.md", "readme.md"], timeout=10)
+    expect(rows(page).nth(0)).to_have_attribute("aria-expanded", "true")
+    assert rows(page).nth(0).get_attribute("aria-busy") is None
+
+    server.stop()
+
+
+def test_a_branch_waiting_on_its_children_reads_as_busy(page: Page, port):
+    """The callback answers None, so the load is still on its way."""
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=lambda key, node: None)
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    twisty(page, "docs").click()
+
+    wait_until(lambda: rows(page).nth(0).get_attribute("aria-busy") == "true", timeout=10)
+
+    # Answering later clears it, which is the path a network call takes.
+    table.set_children("docs", [{"key": "a", "title": "a.md"}])
+    wait_until(lambda: row_titles(page) == ["docs", "a.md", "readme.md"], timeout=10)
+    assert rows(page).nth(0).get_attribute("aria-busy") is None
+
+    server.stop()
+
+
+def test_the_keyboard_loads_a_lazy_branch_too(page: Page, port):
+    asked = []
+
+    def load(key, node):
+        asked.append(key)
+        return [{"key": "a", "title": "a.md"}]
+
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=load)
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowRight")
+
+    wait_until(lambda: row_titles(page) == ["docs", "a.md", "readme.md"], timeout=10)
+    assert asked == ["docs"]
+
+    # ArrowLeft closes it again rather than stepping out, which needs the branch to
+    # count as expandable through the loaded children.
+    page.keyboard.press("ArrowLeft")
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+
+    server.stop()
+
+
+def test_a_branch_is_asked_for_its_children_once(page: Page, port):
+    asked = []
+
+    def load(key, node):
+        asked.append(key)
+        return [{"key": "a", "title": "a.md"}]
+
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=load)
+    server = serve(table, page, port)
+
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    twisty(page, "docs").click()
+    wait_until(lambda: row_titles(page) == ["docs", "a.md", "readme.md"], timeout=10)
+    twisty(page, "docs").click()
+    wait_until(lambda: row_titles(page) == ["docs", "readme.md"], timeout=10)
+    twisty(page, "docs").click()
+    wait_until(lambda: row_titles(page) == ["docs", "a.md", "readme.md"], timeout=10)
+
+    assert asked == ["docs"]
+
+    server.stop()
+
+
+def test_a_table_with_no_lazy_node_is_untouched(page: Page, port):
+    """The flag is opt in, so an ordinary tree never emits the intent."""
+    seen = []
+    table = TanstackTable(source=SOURCE, event_callback=lambda name, params: seen.append(name))
+    server = serve(table, page, port)
+
+    wait_until(lambda: len(row_titles(page)) > 0, timeout=10)
+    rows(page).nth(0).focus()
+    page.keyboard.press("ArrowRight")
+
+    wait_until(lambda: len(row_titles(page)) > 1, timeout=10)
+    assert "lazy_load" not in seen
+
+    server.stop()

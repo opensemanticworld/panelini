@@ -2283,3 +2283,104 @@ def test_types_leave_the_tree_alone(typed):
     typed.set_type("file", {"icon": "document"})
 
     assert typed.source == before
+
+
+# --- lazy children ---
+
+
+LAZY_SOURCE = [
+    {"key": "root", "title": "root", "children": [{"key": "docs", "title": "docs", "lazy": True}]},
+]
+
+
+def test_lazy_load_asks_the_callback_and_writes_the_children():
+    asked = []
+
+    def load(key, node):
+        asked.append((key, node["title"]))
+        return [{"key": "docs/a", "title": "a.md"}]
+
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=load)
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    assert asked == [("docs", "docs")]
+    docs = tree.find_node(table.source, "docs")
+    assert docs is not None
+    assert [child["key"] for child in docs["children"]] == ["docs/a"]
+    assert "lazy" not in docs
+
+
+def test_lazy_load_reports_applied_to_the_event_callback():
+    seen = []
+    table = TanstackTable(
+        source=LAZY_SOURCE,
+        lazy_callback=lambda key, node: [],
+        event_callback=lambda name, params: seen.append((name, params)),
+    )
+
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    assert seen == [("lazy_load", {"key": "docs", "applied": True})]
+
+
+def test_a_callback_answering_none_leaves_the_branch_waiting():
+    """The application means to answer later, so nothing changes yet."""
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=lambda key, node: None)
+
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    docs = tree.find_node(table.source, "docs")
+    assert docs is not None
+    assert docs["lazy"] is True
+    assert "children" not in docs
+
+
+def test_lazy_load_without_a_callback_reaches_the_event_callback_alone():
+    seen = []
+    table = TanstackTable(source=LAZY_SOURCE, event_callback=lambda name, params: seen.append(params))
+
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    assert seen == [{"key": "docs", "applied": False}]
+
+
+def test_lazy_load_for_a_key_that_is_gone_applies_nothing():
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=lambda key, node: [{"key": "x", "title": "x"}])
+
+    table.handle_event("lazy_load", {"key": "vanished"})
+
+    assert table.get_source() == LAZY_SOURCE
+
+
+def test_a_load_records_no_undo_step():
+    """Ctrl+Z must not mean "hide that folder again"."""
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=lambda key, node: [{"key": "d1", "title": "a.md"}])
+
+    table.handle_event("lazy_load", {"key": "docs"})
+
+    assert table.can_undo is False
+
+
+def test_an_undo_past_a_load_leaves_the_branch_lazy_again():
+    """The tree that comes back has not been loaded, so expanding asks again."""
+    table = TanstackTable(source=LAZY_SOURCE, lazy_callback=lambda key, node: [{"key": "d1", "title": "a.md"}])
+
+    table.rename_node("root", "renamed")
+    table.handle_event("lazy_load", {"key": "docs"})
+    table.undo()
+
+    docs = tree.find_node(table.source, "docs")
+    assert docs is not None
+    assert docs["lazy"] is True
+
+
+def test_set_children_is_the_public_way_to_answer_later():
+    table = TanstackTable(source=LAZY_SOURCE)
+
+    assert table.set_children("docs", [{"key": "d1", "title": "a.md"}]) is True
+    assert table.set_children("nope", []) is False
+
+    docs = tree.find_node(table.source, "docs")
+    assert docs is not None
+    assert "lazy" not in docs
+    assert table.can_undo is False

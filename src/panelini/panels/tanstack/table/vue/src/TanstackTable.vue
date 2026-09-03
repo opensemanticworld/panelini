@@ -778,16 +778,66 @@ function setSize(row) {
   return siblingsOf(row).length
 }
 
+// A branch Python has not sent the children of. It holds no rows, so the row model
+// says it cannot expand, and this is the one place that is overruled.
+function isLazy(row) {
+  return fieldOf(row.original, 'lazy') === true
+}
+
 // While filtering the kept subset is shown in full, so a branch is expandable
-// exactly when it still has a visible child, and it is always open.
+// exactly when it still has a visible child, and it is always open. A lazy branch
+// is not expandable there: what it would open onto has not arrived, and a search
+// cannot claim to have looked inside it.
 function canExpand(row) {
-  if (!filtering.value) return row.getCanExpand()
+  if (!filtering.value) return row.getCanExpand() || isLazy(row)
   return (siblingGroups.value.get(row.id) ?? []).length > 0
 }
 
 function isExpanded(row) {
   return filtering.value ? canExpand(row) : row.getIsExpanded()
 }
+
+// Branches that have asked Python for their children and are still waiting. The
+// answer is `source` coming back without the `lazy` flag, so nothing has to be
+// cleared here for the row to stop reading as busy, and a key is only dropped so
+// the set does not grow for a session.
+const loadingKeys = ref(new Set())
+
+function isBusy(row) {
+  return loadingKeys.value.has(row.id) && isLazy(row)
+}
+
+// Every path that opens or closes a branch goes through here, so the ask for a
+// lazy branch's children is emitted once wherever the gesture came from: the
+// twisty, the keyboard, or a drop hovering over a closed folder. The branch is
+// expanded either way, so the rows appear the moment they land rather than
+// needing a second click.
+function setExpanded(row, open) {
+  if (open && isLazy(row) && !loadingKeys.value.has(row.id)) {
+    loadingKeys.value = new Set(loadingKeys.value).add(row.id)
+    props.emitEvent('lazy_load', { key: row.id })
+  }
+  // `row.toggleExpanded` refuses to open a row that has no subrows, which is every
+  // lazy branch, so the children would arrive into a branch that had quietly
+  // stayed shut. The expansion state is a ref this component owns, so the flag is
+  // written straight into it: the same store and the same shape, without the guard
+  // that has nothing to guard here. Closing needs none of this, and neither does
+  // the `true` sentinel, under which the branch already counts as open.
+  if (!isLazy(row) || !open || expanded.value === true) {
+    row.toggleExpanded(open)
+    return
+  }
+  expanded.value = { ...expanded.value, [row.id]: true }
+}
+
+// A key stops being interesting once its branch is loaded, which is the only way
+// a load ever ends. A branch Python marks lazy a second time is unloaded again,
+// and has to be able to ask again.
+watch(rows, (list) => {
+  if (loadingKeys.value.size === 0) return
+  const waiting = new Set(list.filter((row) => isBusy(row)).map((row) => row.id))
+  if (waiting.size !== loadingKeys.value.size) loadingKeys.value = waiting
+})
 
 // Widths reach the DOM as custom properties on the grid rather than as an inline
 // width per cell. A drag then writes a handful of values on one element per frame
@@ -1112,7 +1162,7 @@ function onKeydown(event) {
       if (!canExpand(row)) break
       if (isExpanded(row)) focusRowByIndex(index + 1)
       else {
-        row.toggleExpanded(true)
+        setExpanded(row, true)
         focusRowByKey(row.id)
       }
       break
@@ -1120,8 +1170,8 @@ function onKeydown(event) {
       // Collapse an open branch, otherwise step out to the parent. A filtered
       // view is always open, so there it is only ever the step out.
       event.preventDefault()
-      if (!filtering.value && row.getCanExpand() && row.getIsExpanded()) {
-        row.toggleExpanded(false)
+      if (!filtering.value && canExpand(row) && row.getIsExpanded()) {
+        setExpanded(row, false)
         focusRowByKey(row.id)
       } else if (row.parentId) {
         focusRowByKey(row.parentId)
@@ -1244,7 +1294,7 @@ function onToggle(row) {
   // A filtered branch is shown open whatever its stored state is, so toggling it
   // would only change what the tree looks like once the search box is cleared.
   if (filtering.value) return
-  row.toggleExpanded()
+  setExpanded(row, !row.getIsExpanded())
 }
 
 function isChecked(row) {
@@ -1779,7 +1829,7 @@ function emitMove(anchor, position) {
 function emitAdd(item) {
   const row = activeRow.value
   const position = row ? (fieldOf(row.original, 'allow_children') === false ? 'after' : 'child') : null
-  if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
+  if (row && position === 'child' && !filtering.value) setExpanded(row, true)
   refocus = { added: new Set(table.getCoreRowModel().flatRows.map((candidate) => candidate.id)) }
   props.emitEvent('add', { anchorKey: row?.id ?? null, position, node: item.node })
 }
@@ -1822,7 +1872,7 @@ function emitClipboard(action) {
 function emitPaste() {
   const row = activeRow.value
   const position = row ? (fieldOf(row.original, 'allow_children') === false ? 'after' : 'child') : null
-  if (row && position === 'child' && !filtering.value) row.toggleExpanded(true)
+  if (row && position === 'child' && !filtering.value) setExpanded(row, true)
   const held = clipboardKeys.value
   refocus =
     props.state.clipboard?.mode === 'cut'
@@ -1932,7 +1982,7 @@ function runAction(item) {
       const anchor = reorderAnchor(-1)
       // Opening the new parent is a view decision, so it is taken here rather
       // than asking Python to expand a branch on the browser's behalf.
-      if (anchor && !filtering.value) anchor.toggleExpanded(true)
+      if (anchor && !filtering.value) setExpanded(anchor, true)
       emitMove(anchor, 'child')
       break
     }
@@ -2311,7 +2361,7 @@ function scheduleAutoExpand(key, instruction) {
   autoExpandTimer = setTimeout(() => {
     autoExpandTimer = null
     const fresh = rowByKey(key)
-    if (fresh && fresh.getCanExpand() && !fresh.getIsExpanded()) fresh.toggleExpanded(true)
+    if (fresh && fresh.getCanExpand() && !fresh.getIsExpanded()) setExpanded(fresh, true)
   }, AUTO_EXPAND_MS)
 }
 
@@ -2668,6 +2718,7 @@ function dropLineStyle(row) {
           :aria-setsize="setSize(row)"
           :aria-rowindex="index + rowIndexOffset"
           :aria-expanded="canExpand(row) ? isExpanded(row) : undefined"
+          :aria-busy="isBusy(row) ? 'true' : undefined"
           :aria-selected="selectable ? row.getIsSelected() : undefined"
           :aria-haspopup="hasMenu ? 'menu' : undefined"
           :tabindex="!headerActive && row.id === focusKey ? 0 : -1"
@@ -2699,7 +2750,10 @@ function dropLineStyle(row) {
               <span
                 v-if="canExpand(row)"
                 class="pnl-tst-twisty"
-                :class="{ 'pnl-tst-twisty--open': isExpanded(row) }"
+                :class="{
+                  'pnl-tst-twisty--open': isExpanded(row),
+                  'pnl-tst-twisty--busy': isBusy(row),
+                }"
                 aria-hidden="true"
                 @click.stop="onToggle(row)"
               >

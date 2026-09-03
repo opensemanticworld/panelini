@@ -540,3 +540,49 @@ def test_apply_moves_rejects_the_batch_when_the_typed_anchor_takes_no_children()
 
     assert moved == []
     assert result is nodes
+
+
+# --- set_children ---
+
+
+def test_set_children_fills_a_lazy_branch():
+    source = [{"key": "a", "title": "A", "lazy": True}]
+
+    result = tree.set_children(source, "a", [{"key": "a1", "title": "A1"}])
+
+    assert result is not None
+    assert result[0]["children"] == [{"key": "a1", "title": "A1"}]
+    assert "lazy" not in result[0]
+    # The tree handed in is untouched, as every helper here leaves it.
+    assert source[0] == {"key": "a", "title": "A", "lazy": True}
+
+
+def test_set_children_clears_lazy_on_an_empty_answer():
+    """A branch that loaded and turned out empty is loaded, not still waiting."""
+    result = tree.set_children([{"key": "a", "title": "A", "lazy": True}], "a", [])
+
+    assert result is not None
+    assert result[0]["children"] == []
+    assert "lazy" not in result[0]
+
+
+def test_set_children_replaces_rather_than_appends():
+    source = [{"key": "a", "title": "A", "children": [{"key": "old", "title": "Old"}]}]
+
+    result = tree.set_children(source, "a", [{"key": "new", "title": "New"}])
+
+    assert result is not None
+    assert [child["key"] for child in result[0]["children"]] == ["new"]
+
+
+def test_set_children_on_a_missing_key_returns_none():
+    assert tree.set_children([{"key": "a", "title": "A"}], "nope", []) is None
+
+
+def test_set_children_reaches_a_nested_branch():
+    source = [{"key": "a", "title": "A", "children": [{"key": "b", "title": "B", "lazy": True}]}]
+
+    result = tree.set_children(source, "b", [{"key": "c", "title": "C"}])
+
+    assert result is not None
+    assert result[0]["children"][0]["children"] == [{"key": "c", "title": "C"}]

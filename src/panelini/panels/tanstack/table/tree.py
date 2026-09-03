@@ -30,6 +30,9 @@ ALLOW_CHILDREN = "allow_children"
 #: Node field naming an entry of the ``types`` param, whose fields the node then
 #: takes for every one it does not set itself.
 TYPE = "type"
+#: Node flag. Set it to True for a branch whose children are not loaded: it shows a
+#: twisty although it holds no children, and expanding it asks for them.
+LAZY = "lazy"
 #: Fields a type entry never supplies. A type that could name keys would be naming
 #: nodes it cannot see, and one that could bring children would put the same
 #: subtree in the tree once per node of that type.
@@ -214,6 +217,26 @@ def update_node(tree: Tree, key: str, values: dict[str, Any]) -> Tree | None:
     if node is None:
         return None
     node.update({name: copy.deepcopy(value) for name, value in values.items() if name not in (KEY, CHILDREN)})
+    return result
+
+
+def set_children(tree: Tree, key: str, children: Tree) -> Tree | None:
+    """Fill a lazy branch and stop it being lazy.
+
+    The children replace whatever the node held rather than joining it, because a
+    load answers for the whole branch. ``lazy`` is dropped whether the answer
+    brought anything or not: a branch that loaded and turned out to be empty is
+    loaded, and asking again would only find it empty a second time.
+
+    Returns:
+        A new tree, or None when the key is not in the tree.
+    """
+    result = copy.deepcopy(tree)
+    node = find_node(result, key)
+    if node is None:
+        return None
+    node[CHILDREN] = copy.deepcopy(list(children))
+    node.pop(LAZY, None)
     return result
 
 

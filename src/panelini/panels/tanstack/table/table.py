@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Optional
 from uuid import uuid4
@@ -85,8 +86,10 @@ class TanstackTable(AnyWidgetComponent):
             "Tree source data - list of node dicts with key, title, children, plus column fields. "
             "Optional per node: icon, naming an entry of the icons param, allow_children=False "
             "to make the node a leaf nothing can be dropped into, class for a CSS class on the "
-            "row, and type, naming an entry of the types param whose fields the node then takes "
-            "for every one it does not set itself."
+            "row, type, naming an entry of the types param whose fields the node then takes "
+            "for every one it does not set itself, and lazy=True for a branch whose children "
+            "are not loaded, which shows a twisty and asks for them the first time it is "
+            "expanded."
         ),
     )
     columns = param.List(
@@ -276,6 +279,7 @@ class TanstackTable(AnyWidgetComponent):
         move_callback: Optional[Callable[[str, str, str], bool]] = None,
         action_callback: Optional[Callable[[str, dict[str, Any]], bool]] = None,
         transfer_callback: Optional[Callable[[dict[str, Any]], bool]] = None,
+        lazy_callback: Optional[Callable[[str, dict[str, Any]], Optional[list[dict[str, Any]]]]] = None,
         **params: Any,
     ) -> None:
         """Initialize the TanstackTable component.
@@ -324,6 +328,12 @@ class TanstackTable(AnyWidgetComponent):
                 it, so the panel does nothing further. Returning False, or leaving
                 it unset, takes the ordinary path through the registry of live
                 tables.
+            lazy_callback: Supplies the children of a node marked ``lazy`` the
+                first time it is expanded. Receives ``(key, node)`` and returns
+                the child list, or None to answer later with
+                :meth:`set_children`, which is what a load that has to wait on a
+                network call does. Returning a list is the same as calling
+                :meth:`set_children` with it.
             **params: Additional parameters passed to AnyWidgetComponent.
         """
         super().__init__(**params)
@@ -369,6 +379,24 @@ class TanstackTable(AnyWidgetComponent):
         self._move_callback = move_callback
         self._action_callback = action_callback
         self._transfer_callback = transfer_callback
+        self._lazy_callback = lazy_callback
+
+        # The intents this panel answers itself, and the whole of that list. An
+        # event named here becomes a new tree before the application hears about
+        # it; every other event is forwarded untouched.
+        self._intents: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+            "move": self._apply_move_intent,
+            "add": self._apply_add_intent,
+            "rename": self._apply_rename_intent,
+            "delete": self._apply_delete_intent,
+            "cut": partial(self._apply_clipboard_intent, "cut"),
+            "copy": partial(self._apply_clipboard_intent, "copy"),
+            "paste": self._apply_paste_intent,
+            "transfer": self._apply_transfer_intent,
+            "undo": lambda _params: self._apply_history_intent("undo"),
+            "redo": lambda _params: self._apply_history_intent("redo"),
+            "lazy_load": self._apply_lazy_load_intent,
+        }
 
         self.param.watch(self._on_event_data_change, ["_event_data"])
         self.param.watch(self._on_undo_depth_change, ["undo_depth"])
@@ -415,31 +443,17 @@ class TanstackTable(AnyWidgetComponent):
     def handle_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a single event from the browser.
 
-        ``move``, ``add``, ``rename``, ``delete``, ``cut``, ``copy``, ``paste``,
-        ``transfer``, ``undo`` and ``redo`` are intercepted here: the browser only
-        reports what the user asked for, and this is where that intent becomes a
-        new tree. Every other event is forwarded untouched.
+        Every name in ``_intents`` is answered here: the browser only reports what
+        the user asked for, and this is where that intent becomes a new tree.
+        Every other event is forwarded untouched.
 
         Args:
             event_name: Name of the event, for example ``activate``.
             event_params: Event payload, always containing at least ``key``.
         """
-        if event_name == "move":
-            event_params = self._apply_move_intent(event_params)
-        elif event_name == "add":
-            event_params = self._apply_add_intent(event_params)
-        elif event_name == "rename":
-            event_params = self._apply_rename_intent(event_params)
-        elif event_name == "delete":
-            event_params = self._apply_delete_intent(event_params)
-        elif event_name in ("cut", "copy"):
-            event_params = self._apply_clipboard_intent(event_name, event_params)
-        elif event_name == "paste":
-            event_params = self._apply_paste_intent(event_params)
-        elif event_name == "transfer":
-            event_params = self._apply_transfer_intent(event_params)
-        elif event_name in ("undo", "redo"):
-            event_params = self._apply_history_intent(event_name)
+        applier = self._intents.get(event_name)
+        if applier is not None:
+            event_params = applier(event_params)
 
         if self._event_callback:
             self._event_callback(event_name, event_params)
@@ -791,6 +805,39 @@ class TanstackTable(AnyWidgetComponent):
 
         self._commit_source(updated)
         params["applied"] = True
+        return params
+
+    def _apply_lazy_load_intent(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Answer a browser asking for the children of a lazy branch.
+
+        The browser emits this once, the first time such a branch is expanded, and
+        shows the row as busy until the children arrive. Whether they arrive at all
+        is the application's business: ``lazy_callback`` returning a list answers
+        now, returning None answers later through :meth:`set_children`, and no
+        callback at all leaves the intent to ``event_callback``.
+
+        Nothing is vetoed here. A load reveals what the tree already contains
+        rather than changing it, so there is no decision for ``action_callback`` to
+        take, and the veto for what a load then makes reachable is the one every
+        other intent already answers to.
+
+        Args:
+            params: ``{"key": str}``, naming the branch.
+
+        Returns:
+            The payload with ``applied``, True once the children have been written.
+        """
+        key = params.get("key")
+        node = tree.find_node(self.source, str(key)) if key else None
+        params["applied"] = False
+        if node is None or not self._lazy_callback:
+            return params
+
+        children = self._lazy_callback(str(key), deepcopy(node))
+        if children is None:
+            return params
+
+        params["applied"] = self.set_children(str(key), children)
         return params
 
     def _typed_icon(self, node: dict[str, Any], title: str, previous_title: str) -> Optional[str]:
@@ -1611,6 +1658,34 @@ class TanstackTable(AnyWidgetComponent):
             True when the node existed.
         """
         return self.update_node(key, {"title": title})
+
+    def set_children(self, key: str, children: list[dict[str, Any]]) -> bool:
+        """Fill a lazy branch with the children it was waiting for.
+
+        This is the answer to a ``lazy_load`` intent, and the way an application
+        that has to wait on a network call replies once the call comes back.
+        ``lazy`` is dropped from the node, so the branch is loaded even when the
+        answer was empty and the browser stops showing it as busy.
+
+        No undo step is recorded. A load reveals part of the tree rather than
+        changing it, and a step here would make ``Ctrl+Z`` mean "hide that folder
+        again", which is not an edit anybody made. An undo taken back past the
+        load restores a tree in which the branch is lazy once more, and expanding
+        it simply asks again.
+
+        Args:
+            key: Key of the branch.
+            children: The nodes it holds. They replace whatever it held, because a
+                load answers for the whole branch.
+
+        Returns:
+            True when the key named a node.
+        """
+        updated = tree.set_children(self.source, key, children)
+        if updated is None:
+            return False
+        self.source = updated
+        return True
 
     def get_expanded(self) -> list[str]:
         """Return the keys of the currently expanded nodes."""
