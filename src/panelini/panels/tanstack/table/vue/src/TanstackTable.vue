@@ -75,8 +75,10 @@ const props = defineProps({
   setSelectedKeys: { type: Function, required: true },
   // Two-way sync of the view filter, written by the toolbar's search box.
   setFilterText: { type: Function, required: true },
-  // Two-way sync of the row the inline title editor is open on.
+  // Two-way sync of the row the inline editor is open on.
   setEditingKey: { type: Function, required: true },
+  // Two-way sync of the column it is open on, "" for the tree column.
+  setEditingColumn: { type: Function, required: true },
   // Two-way sync of the sort, as a list of {id, desc}.
   setSorting: { type: Function, required: true },
   // Two-way sync of the resized column widths, as a map of column id to pixels.
@@ -122,6 +124,21 @@ const foldersFirst = computed(() => props.state.options.sort_folders_first === t
 // Resizing is on once a table has columns, for the same reason sorting is: a
 // header is the handle, and a tree-only table has none.
 const resizingEnabled = computed(() => hasColumns.value && props.state.options.resizable !== false)
+
+// The columns whose cells open an editor, in the order they are rendered, which is
+// the order Tab walks them in. The first column is skipped whatever it declares:
+// it is the tree column, it holds the title, and a title is renamed rather than
+// edited, which is what keeps the file type warning on the one column a name means
+// something to.
+const editableColumns = computed(() =>
+  (props.state.columns || []).slice(1).filter((column) => column.editable === true),
+)
+
+const editableIds = computed(() => editableColumns.value.map((column) => String(column.id)))
+
+function columnById(id) {
+  return editableColumns.value.find((column) => String(column.id) === id) ?? null
+}
 
 // Python column defs are {id, header, field, width}. The first column is the
 // tree column: it carries the indent and the expand twisty.
@@ -1208,9 +1225,23 @@ function onKeydown(event) {
       event.preventDefault()
       focusRowByIndex(list.length - 1)
       break
-    case 'Enter':
+    case 'F2':
+      // The first editable cell when the table offers no rename, so F2 still means
+      // "edit this row" on a grid whose titles are fixed. Where rename is offered
+      // it was taken above, and Tab walks on from the title into these.
+      if (editableIds.value.length === 0) break
       event.preventDefault()
-      props.emitEvent('activate', { key: row.id })
+      startCellEdit(row.id, editableIds.value[0])
+      break
+    case 'Enter':
+      // A grid with editable columns edits on Enter, which is what a grid does. One
+      // with none activates, which is what this panel has always done, so no table
+      // that did not ask for editing changes at all. The title is not among them:
+      // it answers to F2, which is what leaves Enter alone on a table that only
+      // renames.
+      event.preventDefault()
+      if (editableIds.value.length > 0) startCellEdit(row.id, editableIds.value[0])
+      else props.emitEvent('activate', { key: row.id })
       break
     case ' ':
       // Space is the checkbox's key, so it cascades wherever the checkbox would.
@@ -1590,6 +1621,8 @@ function reorderAnchor(offset) {
 //          because minting keys is Python's job and the browser cannot know them
 //   pasted the keys a copy gained, diffed the same way, but landing on all of
 //          them and never opening the editor: a paste arrives already named
+//   editor the editor Tab has already walked on to, because the row it sits in is
+//          re-rendered under it by the very push its own commit caused
 let refocus = null
 
 watch(
@@ -1598,6 +1631,10 @@ watch(
     const request = refocus
     refocus = null
     if (!request) return
+    if (request.editor) {
+      nextTick(() => editInput.value?.focus())
+      return
+    }
     if (request.key !== undefined) {
       focusRowByKey(request.key)
       return
@@ -1648,14 +1685,20 @@ function focusPasted(before) {
   }
 }
 
-// The inline title editor. `editing_key` names the row it is open on and is
-// bidirectional for the same reason `filter_text` is: an application may open the
-// editor by writing a key, and the browser writes "" back when it closes. What is
-// typed stays local until it commits, so a rename is one intent and not one per
-// keystroke.
+// The inline editor. `editing_key` names the row it is open on and `editing_column`
+// which of its cells, "" being the tree column, and both are bidirectional for the
+// same reason `filter_text` is: an application may open the editor by writing them,
+// and the browser writes "" back when it closes. What is typed stays local until it
+// commits, so an edit is one intent and not one per keystroke.
 const editingKey = ref(null)
+const editingColumn = ref('')
 const editText = ref('')
 const editInput = ref(null)
+
+// Set when Python refuses a value, so the editor comes back holding what was typed
+// rather than making it be retyped, and says so through `aria-invalid`. Cleared by
+// the next keystroke, because a value being corrected is no longer the rejected one.
+const editInvalid = ref(false)
 
 // The pending answer to the file type warning, `{key, title}` while the dialog is
 // up and null otherwise. Python decides the icon and applies the rename; this only
@@ -1698,9 +1741,32 @@ function startEdit(key, fresh = false) {
   const row = rowByKey(key)
   if (!row) return
   freshKey = fresh ? key : null
-  editText.value = row.original.title ?? ''
+  openEditor(key, '', row.original.title ?? '')
+}
+
+// An editable column of a row that is rendered, or nothing at all. A column the
+// table did not declare editable is not a cell an editor can open on, however the
+// ask arrived: by key press, by double click, or from Python writing the pair.
+function startCellEdit(key, columnId) {
+  const row = rowByKey(key)
+  const column = columnById(columnId)
+  if (!row || !column) return
+  freshKey = null
+  const field = column.field ?? column.id
+  const value = fieldOf(row.original, field)
+  openEditor(key, columnId, value === undefined || value === null ? '' : String(value))
+}
+
+// The one place the editor opens, whichever cell it is. Selecting the text is what
+// makes typing replace rather than append, which is what an editor opened by a key
+// press has to do.
+function openEditor(key, columnId, text) {
+  editInvalid.value = false
+  editText.value = text
   editingKey.value = key
+  editingColumn.value = columnId
   props.setEditingKey(key)
+  props.setEditingColumn(columnId)
   nextTick(() => {
     editInput.value?.focus()
     editInput.value?.select()
@@ -1711,7 +1777,48 @@ function closeEdit() {
   freshKey = null
   confirmRename.value = null
   editingKey.value = null
+  editingColumn.value = ''
+  editInvalid.value = false
   props.setEditingKey('')
+  props.setEditingColumn('')
+}
+
+// The editor's own name for a rendered cell. The tree column is index 0 and answers
+// to "", so one pair of coordinates addresses every cell there is without the tree
+// column needing an id of its own.
+function columnIdAt(cellIndex, cell) {
+  return cellIndex === 0 ? '' : String(cell.column.id)
+}
+
+function isEditing(row, cellIndex, cell) {
+  return editingKey.value === row.id && editingColumn.value === columnIdAt(cellIndex, cell)
+}
+
+function isEditable(cellIndex, cell) {
+  return cellIndex > 0 && editableIds.value.includes(String(cell.column.id))
+}
+
+// Double click, never a single one. A single click selects and starts a drag, and
+// an editor opening in the middle of either would be in the way of both.
+function onCellDoubleClick(row, cellIndex, cell) {
+  if (!isEditable(cellIndex, cell)) return
+  startCellEdit(row.id, String(cell.column.id))
+}
+
+// Named for the column and the row, because a reader landing in an editor with no
+// label hears an edit box and nothing about which value it holds.
+function editorLabel(row, cellIndex, cell) {
+  const title = row.original.title ?? row.id
+  if (cellIndex === 0) return `Rename ${title}`
+  const column = columnById(String(cell.column.id))
+  return `${column?.header ?? cell.column.id} of ${title}`
+}
+
+// Typing is correcting, so whatever was refused stops being refused as soon as the
+// value changes and the invalid state goes with it.
+function onEditInput(value) {
+  editText.value = value
+  editInvalid.value = false
 }
 
 // Committing is a `rename` intent like any other: Python decides, rewrites `source`
@@ -1723,9 +1830,9 @@ function closeEdit() {
 // focused input and the blur that follows would otherwise commit a second time.
 // The first guard is the dialog's: focusing one of its buttons blurs the input, so
 // the blur handler runs again on a rename that is already waiting for an answer.
-function commitEdit(row) {
+function commitEdit(row, next = null) {
   if (confirmRename.value) return
-  if (editingKey.value !== row.id) return
+  if (editingKey.value !== row.id || editingColumn.value !== '') return
   const title = editText.value.trim()
   const changed = title.length > 0 && title !== (row.original.title ?? '')
   // A node created a moment ago is exempt: naming it for the first time is not a
@@ -1733,18 +1840,72 @@ function commitEdit(row) {
   // front of the ordinary way a file is made.
   if (changed && freshKey !== row.id && warnsAboutExtension(row.original, title)) {
     // The editor stays open behind the dialog, which is what lets `No` return to
-    // exactly what was typed instead of making the user start again.
+    // exactly what was typed instead of making the user start again. A walk stops
+    // here: the dialog is the question, and answering it is the next thing to do.
     confirmRename.value = { key: row.id, title, previous: row.original.title ?? row.id }
     nextTick(() => confirmNoButton.value?.focus())
     return
   }
-  closeEdit()
+  moveEditor(row, next)
   if (!changed) {
-    focusRowByKey(row.id)
+    if (next === null) focusRowByKey(row.id)
     return
   }
-  refocus = { key: row.id }
+  refocus = next === null ? { key: row.id } : { editor: true }
   props.emitEvent('rename', { key: row.id, title })
+}
+
+// Committing a cell is an `edit` intent: Python coerces the value to the type the
+// column declared, asks `action_callback`, writes it onto the node and pushes the
+// tree back. A value that did not change is not worth a round trip, and a refusal
+// comes back through `_edit_error` rather than through a tree that stayed the same.
+//
+// The same two guards the title editor carries, and for the same reason: closing
+// unmounts a focused input, and the blur that follows would commit a second time.
+function commitCell(row, columnId, next = null) {
+  if (editingKey.value !== row.id || editingColumn.value !== columnId) return
+  const value = editText.value
+  const changed = value !== cellText(row, columnId)
+  moveEditor(row, next)
+  if (!changed) {
+    if (next === null) focusRowByKey(row.id)
+    return
+  }
+  refocus = next === null ? { key: row.id } : { editor: true }
+  props.emitEvent('edit', { key: row.id, column: columnId, value })
+}
+
+// What a cell holds as the editor would show it, read through the type registry so
+// a value a type supplied is compared against what was typed rather than against
+// nothing.
+function cellText(row, columnId) {
+  const column = columnById(columnId)
+  const value = fieldOf(row.original, column?.field ?? columnId)
+  return value === undefined || value === null ? '' : String(value)
+}
+
+// Closing, or walking on to the next cell of the same row, which is the whole of
+// what Tab does here.
+function moveEditor(row, next) {
+  if (next === null) closeEdit()
+  else if (next === '') startEdit(row.id)
+  else startCellEdit(row.id, next)
+}
+
+function commitEditor(row, next = null) {
+  if (editingColumn.value === '') commitEdit(row, next)
+  else commitCell(row, editingColumn.value, next)
+}
+
+// Blur is bound to the cell the input was rendered for rather than to whichever cell
+// the editor is on now, because a Tab walk is the one case where those differ:
+// moving the editor unmounts the input it left, and removing a focused element blurs
+// it. Read through `editingColumn` that blur would commit against the cell just
+// arrived at, find it unchanged, and close the editor that had only opened.
+function onEditorBlur(row, cellIndex, cell) {
+  if (editingKey.value !== row.id) return
+  if (editingColumn.value !== columnIdAt(cellIndex, cell)) return
+  commitEditor(row)
 }
 
 function acceptRename() {
@@ -1802,32 +1963,91 @@ function cancelEdit(row) {
   props.emitEvent('delete', { key: row.id, keys: [row.id] })
 }
 
+// The cells Tab walks, in the order they are rendered. The tree column joins them
+// when the table offers `rename`, so one walk covers the whole row rather than a
+// rename and a separate walk of everything after it.
+function editorStops() {
+  return [...(allows('rename') ? [''] : []), ...editableIds.value]
+}
+
+// The cell Tab lands on next, or null at either end of the row, which is where Tab
+// stops being ours and goes back to being the way out of the grid.
+function nextStop(columnId, step) {
+  const stops = editorStops()
+  const index = stops.indexOf(columnId)
+  if (index < 0) return null
+  const next = stops[index + step]
+  return next === undefined ? null : next
+}
+
 // Bound on the input rather than left to the grid, and stopped there, so Escape,
 // Enter and the arrow keys mean what they mean in a text field while it is open.
+// That is also what leaves ArrowLeft and ArrowRight meaning collapse and expand
+// everywhere else: the editor is the navigation here, and there is no cell mode
+// for them to change meaning inside of.
 function onEditKeydown(row, event) {
   if (event.key === 'Enter') {
     event.preventDefault()
-    commitEdit(row)
+    commitEditor(row)
   } else if (event.key === 'Escape') {
     event.preventDefault()
-    cancelEdit(row)
+    if (editingColumn.value === '') cancelEdit(row)
+    else {
+      closeEdit()
+      focusRowByKey(row.id)
+    }
+  } else if (event.key === 'Tab') {
+    const next = nextStop(editingColumn.value, event.shiftKey ? -1 : 1)
+    // Past the last editor of the row, so Tab is Tab again: the blur it causes
+    // commits exactly as clicking away does, and focus leaves by the route the
+    // roving tabindex depends on being there.
+    if (next === null) return
+    event.preventDefault()
+    commitEditor(row, next)
   }
 }
 
-// Python writing the key is an application asking for the editor outright, so it is
+// Python writing the pair is an application asking for the editor outright, so it is
 // honoured whether or not the toolbar declared `rename`, the same way `set_source`
-// is not gated by what the toolbar offers.
+// is not gated by what the toolbar offers. Both are read together because neither
+// coordinate means anything on its own.
 watch(
-  () => props.state.editingKey,
-  (key) => {
-    if ((key || '') === (editingKey.value || '')) return
-    if (key) startEdit(key)
-    else closeEdit()
+  () => [props.state.editingKey || '', props.state.editingColumn || ''],
+  ([key, column]) => {
+    if (key === (editingKey.value || '') && column === editingColumn.value) return
+    if (!key) closeEdit()
+    else if (column) startCellEdit(key, column)
+    else startEdit(key)
+  },
+)
+
+// The sequence number of the refusal already shown. Opened at whatever Python holds,
+// so a table mounting against a table state that once refused an edit does not open
+// an editor nobody asked for.
+let shownEditError = props.state.editError?.seq ?? 0
+
+// A refused value is the one thing a tree cannot say, because refusing changes
+// nothing and so pushes nothing. The editor comes back on that cell holding what was
+// typed and marked invalid, which is what lets it be corrected rather than retyped.
+watch(
+  () => props.state.editError,
+  (error) => {
+    const seq = error?.seq ?? 0
+    if (!error?.key || seq === shownEditError) return
+    shownEditError = seq
+    const columnId = String(error.column || '')
+    if (!columnById(columnId)) return
+    startCellEdit(error.key, columnId)
+    if (editingKey.value !== error.key) return
+    editText.value = error.value === undefined || error.value === null ? '' : String(error.value)
+    editInvalid.value = true
   },
 )
 
 onMounted(() => {
-  if (props.state.editingKey) startEdit(props.state.editingKey)
+  if (!props.state.editingKey) return
+  if (props.state.editingColumn) startCellEdit(props.state.editingKey, props.state.editingColumn)
+  else startEdit(props.state.editingKey)
 })
 
 // The same `move` event a drop emits, with an explicit position in place of a
@@ -2762,10 +2982,14 @@ function dropLineStyle(row) {
             v-for="(cell, cellIndex) in row.getAllCells()"
             :key="cell.id"
             class="pnl-tst-cell"
-            :class="{ 'pnl-tst-cell--tree': cellIndex === 0 }"
+            :class="{
+              'pnl-tst-cell--tree': cellIndex === 0,
+              'pnl-tst-cell--editable': isEditable(cellIndex, cell),
+            }"
             role="gridcell"
             :aria-colindex="cellIndex + 1"
             :style="cellIndex === 0 ? treeCellStyle(row) : cellStyle(cellIndex)"
+            @dblclick="onCellDoubleClick(row, cellIndex, cell)"
           >
             <template v-if="cellIndex === 0">
               <!-- Decorative: expanded state is announced from the row's
@@ -2810,20 +3034,24 @@ function dropLineStyle(row) {
                 v-html="iconMarkup(row)"
               ></span>
             </template>
-            <!-- The editor sits inside the tree gridcell, so the treegrid structure
-                 is exactly what it was while a title is being typed. Blur commits,
-                 which is what makes clicking away the same answer as Enter. -->
+            <!-- The editor sits inside the gridcell it belongs to, so the treegrid
+                 structure is exactly what it was while a value is being typed. Blur
+                 commits, which is what makes clicking away the same answer as
+                 Enter, and aria-invalid is what says a value came back refused. -->
             <input
-              v-if="cellIndex === 0 && editingKey === row.id"
+              v-if="isEditing(row, cellIndex, cell)"
               :ref="(element) => (editInput = element)"
               class="pnl-tst-edit"
+              :class="{ 'pnl-tst-edit--invalid': editInvalid }"
               type="text"
               :value="editText"
-              :aria-label="`Rename ${row.original.title ?? row.id}`"
-              @input="editText = $event.target.value"
+              :aria-label="editorLabel(row, cellIndex, cell)"
+              :aria-invalid="editInvalid ? 'true' : undefined"
+              @input="onEditInput($event.target.value)"
               @click.stop
+              @dblclick.stop
               @keydown.stop="onEditKeydown(row, $event)"
-              @blur="commitEdit(row)"
+              @blur="onEditorBlur(row, cellIndex, cell)"
             />
             <span v-else class="pnl-tst-value">{{ cell.getValue() }}</span>
           </div>

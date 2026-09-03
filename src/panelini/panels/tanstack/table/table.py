@@ -120,7 +120,13 @@ class TanstackTable(AnyWidgetComponent):
             "nothing, and min_width and max_width bound what a resize may do to it, 20 and no limit "
             "by default. Optional per column: sortable=False to leave one column out of the sort "
             "while the rest stay in, and resizable=False to fix one column's width while the rest "
-            "can still be dragged."
+            "can still be dragged. editable=True opens an inline editor on the column's cells, and "
+            "editor names what kind, one of text, number, checkbox and select, text by default. A "
+            "select column lists what may be picked in choices. Committing writes the value onto "
+            "the node itself, never onto the type it names, and asks action_callback('edit', ...) "
+            "first. The tree column is the exception: it carries the title and is edited through "
+            "the rename intent it always was, which is what keeps the file type warning and the "
+            "icon rule on the one column a name means something to."
         ),
     )
     options = param.Dict(
@@ -203,6 +209,28 @@ class TanstackTable(AnyWidgetComponent):
             "the editor on that row, which is how an application can start a rename of its own. The "
             "browser clears it when the editor commits or is cancelled."
         ),
+    )
+
+    # A key names a row, so a second coordinate is what says which of its cells.
+    # Bidirectional beside editing_key and always read with it: neither means
+    # anything on its own.
+    editing_column = param.String(
+        default="",
+        doc=(
+            "Id of the column the inline editor is open on, empty for the tree column, which is "
+            "the title and is renamed rather than edited. Read together with editing_key, which "
+            "names the row: setting both opens the editor on one cell. A column that is not "
+            "editable is ignored rather than opened."
+        ),
+    )
+
+    # Python to JavaScript. The browser cannot know that a value it sent was
+    # refused, because a refusal leaves the tree exactly as it was and so pushes
+    # nothing, which is why this is a param of its own rather than something to be
+    # inferred from a tree that did not change.
+    _edit_error = param.Dict(
+        default={},
+        doc="The last edit action_callback refused, as {seq, key, column, value}, empty for none.",
     )
 
     # Bidirectional for the same reason filter_text is, and a view concern in the
@@ -294,6 +322,7 @@ class TanstackTable(AnyWidgetComponent):
         types: Optional[dict[str, dict[str, Any]]] = None,
         filter_text: Optional[str] = None,
         editing_key: Optional[str] = None,
+        editing_column: Optional[str] = None,
         expanded_keys: Optional[list[str]] = None,
         selected_keys: Optional[list[str]] = None,
         sorting: Optional[list[dict[str, Any]]] = None,
@@ -318,7 +347,9 @@ class TanstackTable(AnyWidgetComponent):
                 every node that names a type the fields it does not set itself.
             filter_text: Search text. Hides every row that neither matches nor
                 leads to a match.
-            editing_key: Key of the node to open the inline title editor on.
+            editing_key: Key of the node to open the inline editor on.
+            editing_column: Id of the column to open it on, empty for the tree
+                column, which is the title and is renamed rather than edited.
             expanded_keys: Keys of nodes to show expanded.
             selected_keys: Keys of nodes to show selected.
             sorting: The sort to open with, as ``[{"id", "desc"}]``. One entry at
@@ -337,7 +368,7 @@ class TanstackTable(AnyWidgetComponent):
                 the rest.
             action_callback: Veto hook for the toolbar's structural actions.
                 Receives ``(action, params)`` with action in ``add | rename |
-                delete | paste``, and returning False leaves ``source``
+                edit | delete | paste``, and returning False leaves ``source``
                 untouched. Called once for the whole action rather than per node,
                 because adding one node and deleting a batch are each a single
                 decision. Moves keep going through ``move_callback``, and so does
@@ -386,6 +417,7 @@ class TanstackTable(AnyWidgetComponent):
             ("types", types),
             ("filter_text", filter_text),
             ("editing_key", editing_key),
+            ("editing_column", editing_column),
             ("expanded_keys", expanded_keys),
             ("selected_keys", selected_keys),
             ("sorting", sorting),
@@ -419,6 +451,7 @@ class TanstackTable(AnyWidgetComponent):
             "move": self._apply_move_intent,
             "add": self._apply_add_intent,
             "rename": self._apply_rename_intent,
+            "edit": self._apply_edit_intent,
             "delete": self._apply_delete_intent,
             "cut": partial(self._apply_clipboard_intent, "cut"),
             "copy": partial(self._apply_clipboard_intent, "copy"),
@@ -909,6 +942,133 @@ class TanstackTable(AnyWidgetComponent):
         self._commit_source(updated)
         params["applied"] = True
         return params
+
+    def _column_def(self, column_id: str) -> Optional[dict[str, Any]]:
+        """Return the column def with this id, or None when nothing declares it."""
+        for column in self.columns or []:
+            if str(column.get("id") or "") == column_id:
+                return column
+        return None
+
+    @staticmethod
+    def _coerce_value(column: dict[str, Any], value: Any) -> Any:
+        """Return what a browser typed, in the type the column declared.
+
+        Everything crosses the socket as JSON, and a text editor sends text
+        whichever kind of column it is standing in, so this is where ``12``
+        becomes a number rather than the string ``"12"``. A column that declares
+        nothing is a text column and keeps what it was given.
+
+        Args:
+            column: The column def, read for ``editor`` and for ``choices``.
+            value: The raw value from the browser.
+
+        Returns:
+            The coerced value, or None when it is not one this column can hold,
+            which is a number column sent something unparseable or a select sent
+            a choice it does not offer.
+        """
+        editor = str(column.get("editor") or "text")
+        if editor == "number":
+            try:
+                number = float(str(value).strip())
+            except (TypeError, ValueError):
+                return None
+            # An integer stays one, so a size column does not turn every value
+            # into `12.0` the first time somebody edits it.
+            return int(number) if number.is_integer() else number
+        if editor == "checkbox":
+            return bool(value)
+        if editor == "select":
+            choices = [str(choice) for choice in column.get("choices") or []]
+            text = str(value)
+            return text if not choices or text in choices else None
+        return str(value)
+
+    def _apply_edit_intent(self, event_params: dict[str, Any]) -> dict[str, Any]:
+        """Write a cell value a browser editor committed and rewrite ``source``.
+
+        This is the tree column's ``rename`` for every other column, and it is
+        deliberately not the same intent. A title carries a file type, an icon and
+        a public :meth:`rename_node` behind it, and folding the two together would
+        either drag all of that onto every column or drop it from the one column a
+        name means something to.
+
+        The value lands on the node itself and never on the type it names.
+        ``types`` supplies a default for every node of a kind, so writing there
+        would turn one cell edit into a change to all of them, and a node's own
+        field is exactly what a per node override is.
+
+        A refusal from ``action_callback`` leaves the tree alone and is recorded in
+        ``_edit_error``, because a browser cannot tell a value that was refused
+        from one that was accepted unchanged: neither pushes a new tree. The
+        editor reopens on that cell holding what was typed, so it is corrected
+        rather than retyped.
+
+        Args:
+            event_params: Raw payload with ``key``, ``column`` and ``value``.
+
+        Returns:
+            The normalised payload, with ``field`` naming what was written,
+            ``value`` coerced to the column's declared type, ``previous`` holding
+            what the node showed before, and ``applied``.
+        """
+        key = str(event_params.get("key") or "")
+        column_id = str(event_params.get("column") or "")
+        column = self._column_def(column_id)
+        node = tree.find_node(self.source, key) if key else None
+
+        params: dict[str, Any] = {
+            "key": key,
+            "column": column_id,
+            "field": None,
+            "value": None,
+            "previous": None,
+            "applied": False,
+        }
+        if node is None or column is None or column.get("editable") is not True:
+            return params
+
+        # The field the column renders, which is the field it edits. A column that
+        # names none is read and written under its own id.
+        field = str(column.get("field") or column_id)
+        value = self._coerce_value(column, event_params.get("value"))
+        params["field"] = field
+        params["value"] = value
+        # Through the registry, so a value a type supplied is what an edit of it
+        # is measured against and setting a cell back to its inherited value is
+        # correctly nothing at all.
+        params["previous"] = tree.resolve_node(node, self.types).get(field)
+
+        if value is None or value == params["previous"]:
+            return params
+
+        if not self._allows_action("edit", params):
+            self._reject_edit(key, column_id, event_params.get("value"))
+            return params
+
+        updated = tree.update_node(self.source, key, {field: value})
+        if updated is None:
+            return params
+
+        self._commit_source(updated)
+        self._edit_error = {}
+        params["applied"] = True
+        return params
+
+    def _reject_edit(self, key: str, column_id: str, value: Any) -> None:
+        """Tell the browser to reopen the editor on a value that was refused.
+
+        The sequence number is what makes two identical refusals two events. A
+        dict equal to the one already there fires no param watcher, so typing the
+        same rejected value a second time would otherwise leave the editor closed.
+        """
+        self._edit_error = {
+            "seq": int(self._edit_error.get("seq") or 0) + 1,
+            "key": key,
+            "column": column_id,
+            "value": value,
+        }
 
     def _apply_lazy_load_intent(self, params: dict[str, Any]) -> dict[str, Any]:
         """Answer a browser asking for the children of a lazy branch.
@@ -1456,9 +1616,11 @@ class TanstackTable(AnyWidgetComponent):
         if remaining_selected != list(self.selected_keys):
             self.selected_keys = remaining_selected
         # An editor left open on a node that no longer exists would commit a
-        # rename against nothing when it closed.
+        # rename against nothing when it closed. The column goes with the key,
+        # since neither coordinate means anything without the other.
         if self.editing_key in stale:
             self.editing_key = ""
+            self.editing_column = ""
         # A cut node that has since been deleted cannot be pasted anywhere, and a
         # clipboard holding nothing else should stop offering the button.
         held = list(self.clipboard.get("keys") or [])
@@ -1780,6 +1942,32 @@ class TanstackTable(AnyWidgetComponent):
             True when the node existed.
         """
         return self.update_node(key, {"title": title})
+
+    def set_field(self, key: str, column_id: str, value: Any) -> bool:
+        """Write a column's value onto a node, the way its editor would.
+
+        The value is coerced to the type the column declared, so a number column
+        given ``"12"`` holds ``12``, and it lands on the node rather than on the
+        type the node names. ``action_callback`` is not asked: an application
+        writing a value is the decision that hook exists to take.
+
+        Args:
+            key: Key of the node.
+            column_id: Id of the column, which names the field unless the column
+                gives one of its own.
+            value: The value to write.
+
+        Returns:
+            True when the node exists, the column is editable and the value is
+            one the column can hold.
+        """
+        column = self._column_def(column_id)
+        if column is None or column.get("editable") is not True:
+            return False
+        coerced = self._coerce_value(column, value)
+        if coerced is None:
+            return False
+        return self.update_node(key, {str(column.get("field") or column_id): coerced})
 
     def set_children(self, key: str, children: list[dict[str, Any]]) -> bool:
         """Fill a lazy branch with the children it was waiting for.

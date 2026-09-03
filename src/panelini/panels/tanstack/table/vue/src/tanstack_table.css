@@ -11,6 +11,7 @@
   --pnl-tst-active: rgba(0, 0, 0, 0.07);
   --pnl-tst-focus: #2563eb;
   --pnl-tst-blocked: rgba(220, 38, 38, 0.08);
+  --pnl-tst-invalid: #dc2626;
 
   /* The containing block for the rename warning, which is placed over the panel
      rather than over the host page. */
@@ -201,9 +202,16 @@
   white-space: nowrap;
 }
 
-/* The inline title editor. It takes the width the title had rather than the whole
-   cell, so opening it does not shift the row, and it inherits the row's font so the
-   text does not jump as the editor appears. */
+/* An editable cell says so on hover, which is the only affordance a value in a grid
+   can carry without a control in every row of it. */
+.pnl-tst-cell--editable:hover {
+  cursor: text;
+  box-shadow: inset 0 0 0 1px var(--pnl-tst-border);
+}
+
+/* The inline editor. It takes the width the value had rather than the whole cell, so
+   opening it does not shift the row, and it inherits the row's font so the text does
+   not jump as the editor appears. */
 .pnl-tst-edit {
   flex: 1 1 0;
   min-width: 0;
@@ -218,6 +226,13 @@
 
 .pnl-tst-edit:focus-visible {
   outline: none;
+}
+
+/* A value Python refused. Colour alone would say nothing to a reader, so it is the
+   companion to aria-invalid on the same element rather than the whole message. */
+.pnl-tst-edit--invalid {
+  border-color: var(--pnl-tst-invalid);
+  box-shadow: inset 0 0 0 1px var(--pnl-tst-invalid);
 }
 
 /* The file type warning. Borrows the toolbar's tokens, so a restyled table

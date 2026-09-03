@@ -2602,3 +2602,304 @@ def test_pruning_takes_a_large_tree_off_the_wire():
 
     assert whole > 900_000
     assert view < 10_000
+
+
+# --- editable columns ---
+
+EDIT_SOURCE = [
+    {
+        "key": "a",
+        "title": "A",
+        "size": 12,
+        "kind": "python",
+        "done": False,
+        "children": [{"key": "b", "title": "B", "size": 3, "kind": "text", "done": True}],
+    },
+]
+
+EDIT_COLUMNS = [
+    {"id": "title", "header": "Name", "field": "title"},
+    {"id": "size", "header": "Size", "field": "size", "editable": True, "editor": "number"},
+    {"id": "note", "header": "Note", "editable": True},
+    {"id": "kind", "header": "Kind", "editable": True, "editor": "select", "choices": ["python", "text"]},
+    {"id": "done", "header": "Done", "editable": True, "editor": "checkbox"},
+    {"id": "locked", "header": "Locked", "field": "kind"},
+]
+
+
+def edit_table(**kwargs):
+    """A table whose columns declare what may be edited and how."""
+    return TanstackTable(source=EDIT_SOURCE, columns=EDIT_COLUMNS, **kwargs)
+
+
+def field_of(table, key, field):
+    """The value a node holds for one field, asserting the node is still there."""
+    node = tree.find_node(table.source, key)
+    assert node is not None
+    return node.get(field)
+
+
+def test_an_edit_writes_the_column_field_onto_the_node():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert field_of(table, "b", "size") == 42
+
+
+def test_an_edit_writes_the_column_id_when_the_column_names_no_field():
+    """`field` is optional, exactly as it is for rendering: the id is the fallback."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "note", "value": "hello"})
+
+    assert field_of(table, "b", "note") == "hello"
+
+
+def test_an_edit_reports_what_it_did():
+    events = []
+    table = edit_table(event_callback=lambda name, params: events.append((name, params)))
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert events == [
+        (
+            "edit",
+            {
+                "key": "b",
+                "column": "size",
+                "field": "size",
+                "value": 42,
+                "previous": 3,
+                "applied": True,
+            },
+        )
+    ]
+
+
+def test_a_number_column_keeps_numbers():
+    """Everything crosses as JSON and a text editor sends text, so this is where it
+    stops being text."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "7"})
+
+    assert field_of(table, "b", "size") == 7
+    assert not isinstance(field_of(table, "b", "size"), str)
+
+
+def test_a_number_column_keeps_a_fraction_a_fraction():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "7.5"})
+
+    assert field_of(table, "b", "size") == 7.5
+
+
+def test_a_number_column_refuses_what_is_not_a_number():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "twelve"})
+
+    assert field_of(table, "b", "size") == 3
+
+
+def test_a_select_column_refuses_a_choice_it_does_not_offer():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "kind", "value": "binary"})
+
+    assert field_of(table, "b", "kind") == "text"
+
+
+def test_a_select_column_takes_one_it_does():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "kind", "value": "python"})
+
+    assert field_of(table, "b", "kind") == "python"
+
+
+def test_a_checkbox_column_keeps_a_bool():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "done", "value": False})
+
+    assert field_of(table, "b", "done") is False
+
+
+def test_a_column_that_is_not_editable_is_left_alone():
+    events = []
+    table = edit_table(event_callback=lambda name, params: events.append((name, params)))
+
+    table.handle_event("edit", {"key": "b", "column": "locked", "value": "python"})
+
+    assert field_of(table, "b", "kind") == "text"
+    assert events[0][1]["applied"] is False
+
+
+def test_a_column_nothing_declares_is_left_alone():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "nothing", "value": "x"})
+
+    assert field_of(table, "b", "note") is None
+
+
+def test_an_edit_of_a_node_that_is_gone_changes_nothing():
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "nope", "column": "size", "value": "1"})
+
+    assert shape(table.source) == "a(b)"
+
+
+def test_an_unchanged_value_is_not_worth_a_round_trip():
+    """The same rule the rename intent follows, and for the same reason."""
+    table = edit_table()
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "3"})
+
+    assert table.can_undo is False
+
+
+def test_an_edit_records_one_undo_step():
+    table = edit_table(undo_depth=10)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+    table.undo()
+
+    assert field_of(table, "b", "size") == 3
+
+
+def test_the_veto_leaves_the_tree_untouched():
+    table = edit_table(action_callback=lambda action, params: action != "edit")
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert field_of(table, "b", "size") == 3
+
+
+def test_the_veto_is_asked_with_the_coerced_value_before_anything_is_written():
+    """Snapshotted rather than held, because the applier fills `applied` into the
+    same dict once it knows: what the hook is asked is a moment, not an object."""
+    seen = []
+    table = edit_table(action_callback=lambda action, params: seen.append((action, dict(params))) is None)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert seen == [
+        ("edit", {"key": "b", "column": "size", "field": "size", "value": 42, "previous": 3, "applied": False})
+    ]
+
+
+def test_a_refused_edit_is_reported_so_the_editor_can_reopen():
+    """A refusal changes no tree, so nothing else would ever reach the browser to
+    say the value did not land."""
+    table = edit_table(action_callback=lambda action, params: False)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert table._edit_error["key"] == "b"
+    assert table._edit_error["column"] == "size"
+    assert table._edit_error["value"] == "42"
+
+
+def test_two_identical_refusals_are_two_events():
+    """A dict equal to the one already there fires no watcher, so typing the same
+    rejected value twice would otherwise leave the editor closed."""
+    table = edit_table(action_callback=lambda action, params: False)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+    first = table._edit_error["seq"]
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+
+    assert table._edit_error["seq"] == first + 1
+
+
+def test_an_accepted_edit_clears_the_refusal():
+    table = edit_table(action_callback=lambda action, params: params["value"] != 42)
+
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "42"})
+    table.handle_event("edit", {"key": "b", "column": "size", "value": "7"})
+
+    assert table._edit_error == {}
+
+
+def test_an_edit_writes_the_node_and_never_the_type():
+    """A type is defaults for every node of a kind, so writing there would turn one
+    cell edit into a change to all of them."""
+    source = [{"key": "a", "title": "A", "type": "file"}, {"key": "b", "title": "B", "type": "file"}]
+    table = TanstackTable(source=source, columns=EDIT_COLUMNS, types={"file": {"size": 1}})
+
+    table.handle_event("edit", {"key": "a", "column": "size", "value": "9"})
+
+    assert field_of(table, "a", "size") == 9
+    assert field_of(table, "b", "size") is None
+    assert table.types == {"file": {"size": 1}}
+
+
+def test_a_value_a_type_supplied_is_what_an_edit_is_measured_against():
+    """Setting a cell back to the value it already shows is nothing at all, whether
+    the node holds it or inherits it."""
+    source = [{"key": "a", "title": "A", "type": "file"}]
+    table = TanstackTable(source=source, columns=EDIT_COLUMNS, types={"file": {"size": 1}}, undo_depth=5)
+
+    table.handle_event("edit", {"key": "a", "column": "size", "value": "1"})
+
+    assert table.can_undo is False
+    assert field_of(table, "a", "size") is None
+
+
+def test_set_field_writes_a_value_the_way_an_editor_would():
+    table = edit_table()
+
+    assert table.set_field("b", "size", "42") is True
+    assert field_of(table, "b", "size") == 42
+
+
+def test_set_field_refuses_a_column_that_is_not_editable():
+    table = edit_table()
+
+    assert table.set_field("b", "locked", "python") is False
+
+
+def test_set_field_refuses_a_value_the_column_cannot_hold():
+    table = edit_table()
+
+    assert table.set_field("b", "size", "twelve") is False
+    assert field_of(table, "b", "size") == 3
+
+
+def test_set_field_is_not_asked_of_the_veto():
+    """An application writing a value is the decision that hook exists to take."""
+    table = edit_table(action_callback=lambda action, params: False)
+
+    assert table.set_field("b", "size", 42) is True
+    assert field_of(table, "b", "size") == 42
+
+
+def test_the_editing_column_opens_beside_the_key():
+    table = edit_table(editing_key="b", editing_column="size")
+
+    assert table.editing_key == "b"
+    assert table.editing_column == "size"
+
+
+def test_deleting_the_edited_row_closes_the_editor_on_both_coordinates():
+    table = edit_table(editing_key="b", editing_column="size")
+
+    table.remove_node("b")
+
+    assert table.editing_key == ""
+    assert table.editing_column == ""
+
+
+def test_the_rename_intent_is_untouched_by_any_of_this():
+    """The title carries a file type, an icon and a public rename_node behind it, so
+    it keeps the intent all three already answer to."""
+    table = edit_table()
+
+    table.handle_event("rename", {"key": "b", "title": "B2"})
+
+    assert title_of(table, "b") == "B2"

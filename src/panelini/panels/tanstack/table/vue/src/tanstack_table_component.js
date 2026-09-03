@@ -39,6 +39,12 @@ export function render({ model, el }) {
     types: model.get("types") || {},
     filterText: model.get("filter_text") || "",
     editingKey: model.get("editing_key") || "",
+    // The other half of the editor's address: a key names a row, this names which
+    // of its cells, and "" means the tree column, which is the title.
+    editingColumn: model.get("editing_column") || "",
+    // The last edit Python refused. A refusal changes no tree, so nothing else
+    // would ever reach this side to say the value did not land.
+    editError: model.get("_edit_error") || {},
     expandedKeys: model.get("expanded_keys") || [],
     selectedKeys: model.get("selected_keys") || [],
     // A view concern like the filter, and bidirectional for the same reason: an
@@ -116,6 +122,13 @@ export function render({ model, el }) {
     model.save_changes();
   };
 
+  // The column half of the same address, guarded the same way.
+  const setEditingColumn = (value) => {
+    if ((model.get("editing_column") || "") === value) return;
+    model.set("editing_column", value);
+    model.save_changes();
+  };
+
   // `sorting` is a list of small flat dicts rather than a key set, so the guard
   // compares them field by field instead of by sorted value. The list holds one
   // entry at most, so this is a comparison of two things at worst.
@@ -149,6 +162,7 @@ export function render({ model, el }) {
     setSelectedKeys,
     setFilterText,
     setEditingKey,
+    setEditingColumn,
     setSorting,
     setColumnWidths,
   });
@@ -174,6 +188,12 @@ export function render({ model, el }) {
   });
   model.on("change:editing_key", () => {
     state.editingKey = model.get("editing_key") || "";
+  });
+  model.on("change:editing_column", () => {
+    state.editingColumn = model.get("editing_column") || "";
+  });
+  model.on("change:_edit_error", () => {
+    state.editError = model.get("_edit_error") || {};
   });
   model.on("change:expanded_keys", () => {
     state.expandedKeys = model.get("expanded_keys") || [];

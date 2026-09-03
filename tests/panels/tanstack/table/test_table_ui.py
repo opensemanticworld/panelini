@@ -4226,3 +4226,377 @@ def test_the_search_box_tells_python_once_the_typing_settles(page: Page, port):
     assert len(seen) == 1
 
     server.stop()
+
+
+# Editable columns. The title has had an editor since P9d; what is pinned down here
+# is that any column can have one, that Tab walks between them, and that a value
+# Python refused comes back rather than being lost.
+
+EDIT_SOURCE = [
+    {
+        "key": "a",
+        "title": "Folder A",
+        "children": [
+            {"key": "a1", "title": "File A1", "size": "1 kB", "owner": "ada"},
+            {"key": "a2", "title": "File A2", "size": "2 kB", "owner": "linus"},
+        ],
+    },
+]
+
+EDIT_COLUMNS = [
+    {"id": "title", "header": "Name"},
+    {"id": "size", "header": "Size", "width": 90, "editable": True},
+    {"id": "owner", "header": "Owner", "width": 90, "editable": True},
+    {"id": "locked", "header": "Locked", "field": "size", "width": 90},
+]
+
+
+def editable_table(action_callback=None, **options) -> TanstackTable:
+    return TanstackTable(
+        source=copy.deepcopy(EDIT_SOURCE),
+        columns=copy.deepcopy(EDIT_COLUMNS),
+        options={"expand_all": True, **options},
+        action_callback=action_callback,
+    )
+
+
+def cell(page: Page, row_index: int, cell_index: int):
+    return rows(page).nth(row_index).locator(".pnl-tst-cell").nth(cell_index)
+
+
+def field_of(table: TanstackTable, key: str, field: str):
+    return node_at(table.source, key).get(field)
+
+
+def test_double_click_opens_an_editor_on_an_editable_cell(page: Page, port):
+    """A single click selects and starts a drag, so opening on one would be in the
+    way of both."""
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()  # the Size of File A1
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).input_value() == "1 kB"
+    # Named for the column and the row, so a reader hears which value is open.
+    assert editor(page).get_attribute("aria-label") == "Size of File A1"
+    # The treegrid is unchanged while the editor is in it.
+    assert rows(page).nth(1).locator("[role='gridcell']").count() == 4
+    wait_until(lambda: (table.editing_key, table.editing_column) == ("a1", "size"), timeout=10)
+
+    server.stop()
+
+
+def test_double_click_on_a_column_that_is_not_editable_opens_nothing(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 3).dblclick()  # Locked, which declares no editor
+
+    page.wait_for_timeout(300)
+    expect(editor(page)).to_have_count(0)
+
+    server.stop()
+
+
+def test_an_edit_commits_on_enter_and_python_writes_it(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("9 kB")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: field_of(table, "a1", "size") == "9 kB", timeout=10)
+    expect(editor(page)).to_have_count(0)
+    wait_until(lambda: (table.editing_key, table.editing_column) == ("", ""), timeout=10)
+    # Focus comes back to the row, so the next key press acts on it.
+    wait_until(lambda: focused_title(page) == "File A1", timeout=10)
+
+    server.stop()
+
+
+def test_an_edit_commits_on_blur(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("9 kB")
+    rows(page).nth(2).click()
+
+    wait_until(lambda: field_of(table, "a1", "size") == "9 kB", timeout=10)
+    expect(editor(page)).to_have_count(0)
+
+    server.stop()
+
+
+def test_escape_leaves_a_cell_without_writing_it(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("9 kB")
+    page.keyboard.press("Escape")
+
+    expect(editor(page)).to_have_count(0, timeout=10000)
+    assert field_of(table, "a1", "size") == "1 kB"
+    wait_until(lambda: focused_title(page) == "File A1", timeout=10)
+
+    server.stop()
+
+
+def test_f2_opens_the_first_editable_cell(page: Page, port):
+    """F2 has meant `open the editor` since P9d. On a table with editable columns
+    and no rename it is the cell editor it opens."""
+    table = editable_table()
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()
+    page.keyboard.press("F2")
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).get_attribute("aria-label") == "Size of File A1"
+
+    server.stop()
+
+
+def test_enter_opens_the_first_editable_cell(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()
+    page.keyboard.press("Enter")
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).get_attribute("aria-label") == "Size of File A1"
+
+    server.stop()
+
+
+def test_enter_still_activates_a_table_with_nothing_editable(page: Page, port):
+    """The P9 behaviour, unchanged for every table that declares no editable
+    column, which is every table that exists today."""
+    seen = []
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=copy.deepcopy(COLUMNS),
+        options={"expand_all": True},
+        event_callback=lambda name, params: seen.append((name, params)),
+    )
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: ("activate", {"key": "a1"}) in seen, timeout=10)
+    expect(editor(page)).to_have_count(0)
+
+    server.stop()
+
+
+def test_tab_commits_and_walks_to_the_next_editor(page: Page, port):
+    """The roving tabindex is on rows, so there is no cell focus to walk. Tab in an
+    open editor is what moves along the row instead."""
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("9 kB")
+    page.keyboard.press("Tab")
+
+    wait_until(lambda: field_of(table, "a1", "size") == "9 kB", timeout=10)
+    # Still one editor, now on the next editable column rather than closed.
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Owner of File A1", timeout=10)
+    assert editor(page).input_value() == "ada"
+
+    server.stop()
+
+
+def test_shift_tab_walks_back(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 2).dblclick()  # Owner
+    page.keyboard.press("Shift+Tab")
+
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Size of File A1", timeout=10)
+
+    server.stop()
+
+
+def test_tab_off_the_last_editor_leaves_the_grid(page: Page, port):
+    """Tab has to stay the way out of a roving tabindex, so the walk does not wrap."""
+    table = editable_table()
+    server = serve(table, page, port)
+
+    cell(page, 1, 2).dblclick()  # Owner, the last editable column
+    page.keyboard.press("Tab")
+
+    expect(editor(page)).to_have_count(0, timeout=10000)
+
+    server.stop()
+
+
+def test_the_walk_starts_at_the_title_when_rename_is_offered(page: Page, port):
+    """A table with a toolbar that can rename has one more stop, and it is first."""
+    table = editable_table(toolbar=["rename"])
+    server = serve(table, page, port)
+
+    rows(page).nth(1).click()
+    button(page, "Rename").click()
+
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Rename File A1", timeout=10)
+    page.keyboard.press("Tab")
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Size of File A1", timeout=10)
+
+    server.stop()
+
+
+def test_a_refused_value_comes_back_marked_invalid(page: Page, port):
+    """A refusal changes no tree and so pushes nothing, which is why Python says so
+    on a channel of its own. What was typed is corrected rather than retyped."""
+    table = editable_table(action_callback=lambda action, params: action != "edit")
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("nope")
+    page.keyboard.press("Enter")
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    expect(editor(page)).to_have_attribute("aria-invalid", "true", timeout=10000)
+    assert editor(page).input_value() == "nope"
+    assert field_of(table, "a1", "size") == "1 kB"
+
+    server.stop()
+
+
+def test_the_same_value_refused_twice_still_comes_back(page: Page, port):
+    """Two identical refusals have to be two events, or the second one would be a
+    param write equal to the one already there and fire nothing."""
+    table = editable_table(action_callback=lambda action, params: action != "edit")
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("nope")
+    page.keyboard.press("Enter")
+    expect(editor(page)).to_have_attribute("aria-invalid", "true", timeout=10000)
+
+    page.keyboard.press("Escape")
+    expect(editor(page)).to_have_count(0, timeout=10000)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("nope")
+    page.keyboard.press("Enter")
+
+    expect(editor(page)).to_have_attribute("aria-invalid", "true", timeout=10000)
+
+    server.stop()
+
+
+def test_typing_clears_the_invalid_mark(page: Page, port):
+    table = editable_table(action_callback=lambda action, params: action != "edit")
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("nope")
+    page.keyboard.press("Enter")
+    expect(editor(page)).to_have_attribute("aria-invalid", "true", timeout=10000)
+
+    editor(page).press_sequentially("r", delay=20)
+
+    expect(editor(page)).not_to_have_attribute("aria-invalid", "true", timeout=10000)
+
+    server.stop()
+
+
+def test_python_can_open_a_cell_editor_by_writing_the_pair(page: Page, port):
+    table = editable_table()
+    server = serve(table, page, port)
+
+    table.editing_key = "a2"
+    table.editing_column = "owner"
+
+    wait_until(lambda: editor(page).get_attribute("aria-label") == "Owner of File A2", timeout=10)
+    assert editor(page).input_value() == "linus"
+
+    server.stop()
+
+
+def test_an_edit_is_one_undo_step(page: Page, port):
+    table = editable_table(toolbar=["undo", "redo"])
+    table.undo_depth = 10
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    editor(page).fill("9 kB")
+    page.keyboard.press("Enter")
+    wait_until(lambda: field_of(table, "a1", "size") == "9 kB", timeout=10)
+
+    button(page, "Undo").click()
+
+    wait_until(lambda: field_of(table, "a1", "size") == "1 kB", timeout=10)
+
+    server.stop()
+
+
+def test_an_editable_cell_says_so_on_hover(page: Page, port):
+    """The only affordance a cell editor has is the pointer, since nothing about a
+    span says it can be opened."""
+    table = editable_table()
+    server = serve(table, page, port)
+
+    assert "pnl-tst-cell--editable" in (cell(page, 1, 1).get_attribute("class") or "")
+    assert "pnl-tst-cell--editable" not in (cell(page, 1, 3).get_attribute("class") or "")
+    # The tree column keeps its rename and is never marked as an editable cell.
+    assert "pnl-tst-cell--editable" not in (cell(page, 1, 0).get_attribute("class") or "")
+
+    server.stop()
+
+
+def test_editing_a_value_a_type_supplied_writes_the_node_alone(page: Page, port):
+    """A type is defaults for every node of a kind, so writing there would turn one
+    cell edit into a change to all of them."""
+    table = TanstackTable(
+        source=[
+            {"key": "a", "title": "File A", "type": "doc"},
+            {"key": "b", "title": "File B", "type": "doc"},
+        ],
+        columns=copy.deepcopy(EDIT_COLUMNS),
+        types={"doc": {"size": "0 kB"}},
+    )
+    server = serve(table, page, port)
+
+    cell(page, 0, 1).dblclick()
+    assert editor(page).input_value() == "0 kB"
+    editor(page).fill("9 kB")
+    page.keyboard.press("Enter")
+
+    wait_until(lambda: field_of(table, "a", "size") == "9 kB", timeout=10)
+    assert field_of(table, "b", "size") is None
+    assert table.types == {"doc": {"size": "0 kB"}}
+    # The second row still shows what its type says, unchanged.
+    expect(cell(page, 1, 1)).to_have_text("0 kB")
+
+    server.stop()
+
+
+def test_an_open_cell_editor_does_not_start_a_drag(page: Page, port):
+    """`.pnl-tst-edit` is a row control, so selecting text inside it is selecting
+    text and nothing else."""
+    table = editable_table(enable_dnd=True)
+    server = serve(table, page, port)
+
+    cell(page, 1, 1).dblclick()
+    expect(editor(page)).to_have_count(1, timeout=10000)
+
+    box = editor(page).bounding_box()
+    page.mouse.move(box["x"] + 4, box["y"] + box["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] - 4, box["y"] + box["height"] / 2, steps=6)
+    page.mouse.up()
+
+    assert shape(table.source) == "a(a1,a2)"
+    expect(editor(page)).to_have_count(1)
+
+    server.stop()
