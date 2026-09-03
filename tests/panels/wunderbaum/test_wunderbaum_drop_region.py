@@ -125,6 +125,36 @@ def _root_keys(source: list[dict]) -> list[str]:
     return [n["key"] for n in source]
 
 
+def _client_root_keys(page: Page) -> list[str]:
+    """Root-level keys of the client-side wunderbaum tree."""
+    return page.evaluate(
+        """() => {
+        const found = [];
+        function search(root) {
+            root.querySelectorAll('.tree-container').forEach(el => found.push(el));
+            root.querySelectorAll('*').forEach(el => {
+                if (el.shadowRoot) search(el.shadowRoot);
+            });
+        }
+        search(document);
+        const container = found[0];
+        if (!container || !container._wunderbaum) return [];
+        return container._wunderbaum.root.children.map(c => c.key);
+    }"""
+    )
+
+
+def _below_last_row(page: Page) -> tuple[float, float]:
+    """A point in the blank area under the last row, still inside the tree."""
+    box = page.locator(".tree-container").first.bounding_box()
+    last = page.locator(".wb-row").last.bounding_box()
+    assert box is not None, "tree container is not visible"
+    assert last is not None, "no rows are visible"
+    y = last["y"] + last["height"] + 30
+    assert y < box["y"] + box["height"], "no blank area below the last row"
+    return box["x"] + box["width"] / 2, y
+
+
 def _drops() -> list:
     return [e for e in _events if e["name"] == "drop"]
 
@@ -197,6 +227,23 @@ def test_before_own_next_sibling_does_nothing(ready_page: Page):
 
     assert not _drops()
     assert _child_keys(tree.source, "a") == ["a/1", "a/2", "a/3"]
+
+
+def test_drop_in_the_blank_area_appends_at_root(ready_page: Page):
+    """The empty space under the last row is the only way back to root level.
+
+    Folder B is the last top-level node and is expanded, so its own bottom band
+    inserts as its first child and every row below it is one of its children.
+    No row is left whose band could mean "after Folder B".
+    """
+    page = ready_page
+
+    drag(page, wb_title_center(page, "File 4"), _below_last_row(page), steps=8)
+    wait_until(lambda: bool(_drops()))
+
+    assert _client_root_keys(page) == ["a", "b", "b/4"]
+    assert _root_keys(tree.source) == ["a", "b", "b/4"]
+    assert _child_keys(tree.source, "b") == ["b/5"]
 
 
 def test_multi_drop_below_an_expanded_parent_keeps_order(ready_page: Page):

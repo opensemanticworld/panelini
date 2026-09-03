@@ -315,6 +315,9 @@ export default {
             // back exactly where it was instead of appending it last.
             this._dragOrigParent = e.node.parent;
             this._dragOrigNext = e.node.getNextSibling();
+            // The container-level listeners get no sourceNode of their own, so
+            // a drop that misses every row can only find it here.
+            this._dragSourceNode = e.node;
             // Mark this tree as the drag origin so its own container-level
             // listeners can tell a same-tree drag from a cross-tree one.
             // dataTransfer is in protected mode during dragover, so the
@@ -583,7 +586,17 @@ export default {
       const isAcceptable = (e) =>
         !!e.dataTransfer && (e.dataTransfer.types.includes('Files') || isExternalNodeDrag(e));
 
+      // A drag from this tree that is currently over the blank area below the
+      // rows. Wunderbaum only ever sees drops that land on a row, so this one
+      // is ours to answer, see `isBelowLastRow`.
+      const isRootAreaDrag = (e) => this._dragActive && this.isBelowLastRow(e);
+
       container.addEventListener('dragenter', (e) => {
+        if (isRootAreaDrag(e)) {
+          e.preventDefault();
+          container.style.border = '2px solid #007bff';
+          return;
+        }
         // Only handle external file drops and cross-tree node drops.
         // A drag started in this tree is wunderbaum's own business.
         if (isAcceptable(e)) {
@@ -597,6 +610,16 @@ export default {
       });
 
       container.addEventListener('dragover', (e) => {
+        if (isRootAreaDrag(e)) {
+          // Without preventDefault the browser refuses the drop, and nothing
+          // else sets the badge out here: wunderbaum's dnd extension only runs
+          // over a row.
+          e.preventDefault();
+          if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = this._copyPressed ? 'copy' : 'move';
+          }
+          return;
+        }
         if (isAcceptable(e)) {
           e.preventDefault();
           if (isExternalNodeDrag(e)) {
@@ -613,6 +636,7 @@ export default {
       // cancelled drag does not leave the tree thinking it is still dragging.
       container.addEventListener('dragend', () => {
         this._dragActive = false;
+        this._dragSourceNode = null;
         container.style.border = '1px solid #ddd';
         const key = this._selectAfterDrag;
         this._selectAfterDrag = null;
@@ -630,6 +654,13 @@ export default {
           e.stopPropagation();
           container.style.border = '1px solid #ddd';
           this.handleFileDrop(e);
+          return;
+        }
+        if (isRootAreaDrag(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          container.style.border = '1px solid #ddd';
+          this.handleRootDrop();
           return;
         }
         if (isExternalNodeDrag(e)) {
@@ -846,6 +877,100 @@ export default {
       // move reads the same slot the user saw the arrow point at.
       if (rel > 0.75) return this.effectiveRegion('after', node);
       return 'over';
+    },
+
+    /**
+     * True when the pointer is inside the tree but below its last row.
+     *
+     * The blank area needs a meaning of its own because the slot after the last
+     * root node is otherwise unreachable: once that node is expanded its bottom
+     * band means 'first child' (see `effectiveRegion`), every row underneath it
+     * is one of its own descendants, and there is no next sibling whose top
+     * band could stand in for it.
+     */
+    isBelowLastRow(e) {
+      const container = this.$refs.treeContainer;
+      if (!container) return false;
+      const rows = container.querySelectorAll('.wb-row');
+      if (!rows.length) return false;
+      // The lowest edge, not the last element: wunderbaum recycles row divs
+      // while scrolling, so DOM order does not track screen order.
+      let lastBottom = -Infinity;
+      for (const row of rows) {
+        lastBottom = Math.max(lastBottom, row.getBoundingClientRect().bottom);
+      }
+      const box = container.getBoundingClientRect();
+      return (
+        e.clientY > lastBottom &&
+        e.clientY <= box.bottom &&
+        e.clientX >= box.left &&
+        e.clientX <= box.right
+      );
+    },
+
+    /**
+     * Append the dragged nodes at root level.
+     *
+     * There is no target row here, so wunderbaum's own drop callback never
+     * runs and the move has to be performed by hand.
+     */
+    handleRootDrop() {
+      // Read now, `dragend` clears it before the deferred part runs.
+      const sourceNode = this._dragSourceNode;
+      if (!sourceNode || !this.tree) return;
+      // Wunderbaum defers its own drop callback by 10ms so that drop actions
+      // cannot swallow `dragend`. Doing the same keeps this path in step with
+      // the row path: both read the selection after `dragend` has settled it,
+      // and both report the drop as the last event of the gesture.
+      setTimeout(() => {
+        if (!this.tree) return;
+        const nodes = this.getDragKeys(sourceNode)
+          .map((key) => this.tree.findKey(key))
+          .filter((n) => !!n);
+        // Only the descendant rule of `getDragNodes` applies without a target:
+        // a node whose ancestor is also being dragged travels with that
+        // ancestor, so moving it separately would pull it back out again.
+        const dragNodes = nodes.filter(
+          (n) => !nodes.some((other) => other !== n && n.isDescendantOf(other))
+        );
+        if (!dragNodes.length) return;
+        const nodeId = (n) => n.data?.node_id || n.key;
+        const isCopy = this._copyPressed || !!window.__wbForceCopy;
+
+        if (isCopy) {
+          // Nothing was auto-moved out here, so unlike the row path there is no
+          // move to undo. Nor is there anything to emit: the client tree still
+          // matches the one Python holds, and an emit would race the drop event
+          // and overwrite the copy the application inserted in its callback.
+          this.sendEvent('drop', {
+            sourceKey: sourceNode.key,
+            sourceKeys: dragNodes.map((n) => n.key),
+            targetKey: null,
+            region: 'appendChild',
+            copy: true,
+            copiedNodeId: nodeId(sourceNode),
+            copiedNodeIds: dragNodes.map(nodeId),
+            newParentNodeId: null,
+          });
+          return;
+        }
+
+        // Appending keeps inserting at the end in selection order, so unlike
+        // 'after' or 'prependChild' this needs no re-anchoring.
+        for (const node of dragNodes) {
+          node.moveTo(this.tree.root, 'appendChild');
+        }
+        this.sendEvent('drop', {
+          sourceKey: sourceNode.key,
+          sourceKeys: dragNodes.map((n) => n.key),
+          targetKey: null,
+          region: 'appendChild',
+          movedNodeId: nodeId(sourceNode),
+          movedNodeIds: dragNodes.map(nodeId),
+          newParentNodeId: null,
+        });
+        this.emitSource();
+      }, 10);
     },
 
     handleExternalDrop(dropEvent) {
