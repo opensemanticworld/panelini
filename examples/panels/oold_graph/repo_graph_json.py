@@ -256,13 +256,7 @@ FUNCTION_SCHEMA = {
     "defaultProperties": ["type", "name", "num_args", "lines_of_code"],
 }
 
-entity_types = {
-    "Entity": ENTITY_SCHEMA,
-    "Directory": DIRECTORY_SCHEMA,
-    "File": FILE_SCHEMA,
-    "Class": CLASS_SCHEMA,
-    "Function": FUNCTION_SCHEMA,
-}
+entity_types = [ENTITY_SCHEMA, DIRECTORY_SCHEMA, FILE_SCHEMA, CLASS_SCHEMA, FUNCTION_SCHEMA]
 
 # ── AST scanning ─────────────────────────────────────────────────────────────
 

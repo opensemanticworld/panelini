@@ -217,7 +217,7 @@ def json_social_network():
     charlie = _make_entity("Charlie", "Person.json", knows=[alice["id"], bob["id"]], age=28)
     alice["knows"] = [bob["id"], charlie["id"]]
 
-    entity_types = {"Entity": ENTITY_SCHEMA, "Person": PERSON_SCHEMA, "Hobby": HOBBY_SCHEMA}
+    entity_types = [ENTITY_SCHEMA, PERSON_SCHEMA, HOBBY_SCHEMA]
     entity_list = [alice, bob, charlie, sports, music]
 
     config = OOLDGraphConfig(
@@ -242,7 +242,7 @@ def json_social_network():
         "charlie": charlie,
         "sports": sports,
         "music": music,
-        "schemas": entity_types,
+        "schemas": {"Entity": ENTITY_SCHEMA, "Person": PERSON_SCHEMA, "Hobby": HOBBY_SCHEMA},
     }
 
 
@@ -263,11 +263,7 @@ def json_recipe():
         ingredients=[sugar, flour],
     )
 
-    entity_types = {
-        "Entity": ENTITY_SCHEMA,
-        "CookingProcessDocumentation": COOKING_PROCESS_SCHEMA,
-        "IngredientContent": INGREDIENT_CONTENT_SCHEMA,
-    }
+    entity_types = [ENTITY_SCHEMA, COOKING_PROCESS_SCHEMA, INGREDIENT_CONTENT_SCHEMA]
     config = OOLDGraphConfig(
         uuid=str(uuid.uuid4()),
         name="JSON Recipe",
@@ -275,7 +271,17 @@ def json_recipe():
         entity_types=entity_types,
     )
     tool = OOLDGraphDetailTool(config=config)
-    return {"tool": tool, "cake": cake, "sugar": sugar, "flour": flour, "schemas": entity_types}
+    return {
+        "tool": tool,
+        "cake": cake,
+        "sugar": sugar,
+        "flour": flour,
+        "schemas": {
+            "Entity": ENTITY_SCHEMA,
+            "CookingProcessDocumentation": COOKING_PROCESS_SCHEMA,
+            "IngredientContent": INGREDIENT_CONTENT_SCHEMA,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -289,11 +295,7 @@ def json_physics():
     unit_circle = _make_entity("Unit Circle", "https://example.com/circle", radius=1.0)
     disk = _make_entity("Disk (r=0.3)", "https://example.com/circle", radius=0.3)
 
-    entity_types = {
-        "Entity": ENTITY_SCHEMA,
-        "Geometry": GEOMETRY_SCHEMA,
-        "Circle": CIRCLE_SCHEMA,
-    }
+    entity_types = [ENTITY_SCHEMA, GEOMETRY_SCHEMA, CIRCLE_SCHEMA]
     config = OOLDGraphConfig(
         uuid=str(uuid.uuid4()),
         name="JSON Physics",
@@ -309,7 +311,12 @@ def json_physics():
         ),
     )
     tool = OOLDGraphDetailTool(config=config)
-    return {"tool": tool, "unit_circle": unit_circle, "disk": disk, "schemas": entity_types}
+    return {
+        "tool": tool,
+        "unit_circle": unit_circle,
+        "disk": disk,
+        "schemas": {"Entity": ENTITY_SCHEMA, "Geometry": GEOMETRY_SCHEMA, "Circle": CIRCLE_SCHEMA},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +376,7 @@ def minimal_json_tool():
     """A minimal JSON-based tool with 2 entities for quick tests."""
     a = _make_entity("A", "https://example.com/hobby_id")
     b = _make_entity("B", "https://example.com/hobby_id")
-    entity_types = {"Entity": ENTITY_SCHEMA, "Hobby": HOBBY_SCHEMA}
+    entity_types = [ENTITY_SCHEMA, HOBBY_SCHEMA]
     config = OOLDGraphConfig(
         uuid=str(uuid.uuid4()),
         name="Minimal",

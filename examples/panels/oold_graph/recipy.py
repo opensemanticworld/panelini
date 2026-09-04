@@ -64,11 +64,7 @@ my_cake_doc = CookingProcessDocumentation(
 )
 
 entity_list = [my_cake_doc]
-entity_types = {
-    "Entity": Entity,
-    "CookingProcessDocumentation": CookingProcessDocumentation,
-    "IngredientContent": IngredientContent,
-}
+entity_types = [Entity, CookingProcessDocumentation, IngredientContent]
 
 config = OOLDGraphConfig(
     uuid=str(uuid.uuid4()),

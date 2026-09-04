@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oo-ld.org/latest/meta/oold-ui-meta-schema.json",
+  "$dynamicAnchor": "meta",
+  "title": "OO-LD UI dialect meta-schema",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+    "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+    "https://json-schema.org/draft/2020-12/vocab/content": true,
+    "https://oo-ld.org/latest/vocab/oold-ui": false
+  },
+  "allOf": [
+    {
+      "$ref": "https://json-schema.org/draft/2020-12/schema"
+    },
+    {
+      "$ref": "#keywords"
+    }
+  ],
+  "$defs": {
+    "keywords": {
+      "$anchor": "keywords",
+      "properties": {
+        "x-oold-ui-widget": {
+          "type": "string"
+        },
+        "x-oold-ui-property-order": {
+          "type": "integer"
+        },
+        "x-oold-ui-property-group": {
+          "type": "string"
+        },
+        "x-oold-ui-form-hidden": {
+          "type": "boolean"
+        },
+        "x-oold-ui-render-hidden": {
+          "type": "boolean"
+        },
+        "x-oold-ui-enum-titles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "x-oold-multilang-ui-enum-titles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-oold-ui-hint": {
+          "type": "string"
+        },
+        "x-oold-multilang-ui-hint": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "x-oold-ui-default-property": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -79,21 +79,42 @@ EXTRA_IRI_FIELDS: dict = {
     "project": {"@id": "HasProject", "@type": "@id"},
 }
 
-# ── Build entity_types registry ──────────────────────────────────────────────
-# Each schema is registered under its title.  The shared context URL is
-# registered as a pseudo-schema so the introspector can resolve @context
-# string references.  Extra IRI fields are appended to each schema's @context.
+# ── Build entity_types list ─────────────────────────────────────────────────
+# Each schema is passed as-is; the constructor derives type names from title/$id.
+# Per-subtype schemas are created so each @type value has a dedicated schema
+# inheriting from the appropriate parent.
 
-# Wrap the fetched context as a pseudo-schema so registry resolution works
 context_inner = context_doc.get("@context", context_doc)
-context_pseudo_schema: dict = {"@context": {**context_inner, **EXTRA_IRI_FIELDS}}
+context_pseudo_schema: dict = {"$id": context_url, "@context": {**context_inner, **EXTRA_IRI_FIELDS}}
 
-# Map from @type values used by entities → schema title
-TYPE_TO_SCHEMA = {
+ENTITY_IRI = "https://w3id.org/2004/02/Entity"
+
+ENTITY_SCHEMA: dict = {
+    "$id": ENTITY_IRI,
+    "title": "Entity",
+    "type": "object",
+    "@context": {**context_inner, **EXTRA_IRI_FIELDS},
+    "properties": {},
+}
+
+for _name, schema in schemas.items():
+    existing_ctx = schema.get("@context")
+    if isinstance(existing_ctx, str):
+        schema["@context"] = [existing_ctx, EXTRA_IRI_FIELDS]
+    elif isinstance(existing_ctx, list):
+        schema["@context"] = [*existing_ctx, EXTRA_IRI_FIELDS]
+    elif isinstance(existing_ctx, dict):
+        schema["@context"] = [{**existing_ctx, **EXTRA_IRI_FIELDS}]
+
+    if "allOf" not in schema:
+        schema["allOf"] = [{"$ref": ENTITY_IRI}]
+
+SUBTYPE_TO_PARENT = {
     "foaf:Organization": "Organisations",
     "foaf:Person": "People",
     "foaf:Project": "Projects",
     "chameo:TransmissionElectronMicroscope": "Equipments",
+    "chameo:ScanningElectronMicroscope": "Equipments",
     "chameo:FocusedIonBeam": "Equipments",
     "chameo:Equipment": "Equipments",
     "chameo:Sample": "Samples",
@@ -109,49 +130,39 @@ TYPE_TO_SCHEMA = {
     "schema:SoftwareApplication": "Software",
 }
 
-ENTITY_IRI = "https://w3id.org/2004/02/Entity"
-
-ENTITY_SCHEMA: dict = {
-    "$id": ENTITY_IRI,
-    "title": "Entity",
-    "type": "object",
-    "@context": {**context_inner, **EXTRA_IRI_FIELDS},
-    "properties": {},
+CLASS_METADATA = {
+    "temgo:EDSMapping": {
+        "title": "EDS Mapping",
+        "description": "Energy Dispersive X-ray Spectroscopy mapping process.",
+    },
+    "temgo:SIMSProfiling": {
+        "title": "SIMS Profiling",
+        "description": "Secondary Ion Mass Spectrometry depth profiling.",
+    },
+    "temgo:FIBLiftout": {
+        "title": "FIB Liftout",
+        "description": "Focused Ion Beam liftout for TEM lamella preparation.",
+    },
+    "temgo:EDSMap": {"title": "EDS Map", "description": "Energy Dispersive X-ray Spectroscopy elemental map dataset."},
+    "temgo:SIMSProfile": {"title": "SIMS Profile", "description": "SIMS depth profile dataset."},
 }
 
-entity_types: dict[str, dict] = {"Entity": ENTITY_SCHEMA}
+sub_schemas: list[dict] = []
+for type_iri, parent_name in SUBTYPE_TO_PARENT.items():
+    parent = schemas[parent_name]
+    parent_id = parent.get("$id", parent_name)
+    meta = CLASS_METADATA.get(type_iri, {})
+    sub_schemas.append({
+        "$id": type_iri,
+        "title": meta.get("title", type_iri.split(":")[-1]),
+        "description": meta.get("description", ""),
+        "type": "object",
+        "@context": parent.get("@context", {}),
+        "allOf": [{"$ref": parent_id}],
+        "properties": {},
+    })
 
-for name, schema in schemas.items():
-    # Append extra IRI fields to each schema's @context
-    existing_ctx = schema.get("@context")
-    if isinstance(existing_ctx, str):
-        schema["@context"] = [existing_ctx, EXTRA_IRI_FIELDS]
-    elif isinstance(existing_ctx, list):
-        schema["@context"] = [*existing_ctx, EXTRA_IRI_FIELDS]
-    elif isinstance(existing_ctx, dict):
-        schema["@context"] = [{**existing_ctx, **EXTRA_IRI_FIELDS}]
-
-    if "allOf" not in schema:
-        schema["allOf"] = [{"$ref": ENTITY_IRI}]
-
-    entity_types[schema.get("title", name)] = schema
-    sid = schema.get("$id")
-    if sid:
-        entity_types[sid] = schema
-
-for type_iri, schema_name in TYPE_TO_SCHEMA.items():
-    if schema_name in schemas:
-        entity_types[type_iri] = schemas[schema_name]
-
-# Register context URL so introspector can resolve @context string refs
-entity_types[context_url] = context_pseudo_schema
-# Also register under the URL form used inside the schemas (may differ)
-for s in schemas.values():
-    ctx = s.get("@context")
-    if isinstance(ctx, list):
-        for entry in ctx:
-            if isinstance(entry, str) and entry not in entity_types:
-                entity_types[entry] = context_pseudo_schema
+entity_types: list[dict] = [ENTITY_SCHEMA, context_pseudo_schema, *schemas.values(), *sub_schemas]
 
 # ── Sample entities ──────────────────────────────────────────────────────────
 # A realistic materials-science scenario at NTNU / SINTEF.
@@ -251,35 +262,11 @@ lamella1 = {
     "processedFrom": "avb:JM11",
 }
 
-# Process classes
-eds_class = {
-    "@id": "temgo:EDSMapping",
-    "@type": "owl:Class",
-    "subClassOf": "chameo:CharacterisationProcess",
-    "prefLabel": "EDS Mapping",
-    "elucidation": "Energy Dispersive X-ray Spectroscopy mapping process.",
-    "hasInput": "chameo:Sample",
-    "hasOutput": "temgo:EDSMap",
-}
-sims_class = {
-    "@id": "temgo:SIMSProfiling",
-    "@type": "owl:Class",
-    "subClassOf": "chameo:CharacterisationProcess",
-    "prefLabel": "SIMS Profiling",
-    "elucidation": "Secondary Ion Mass Spectrometry depth profiling.",
-}
-fib_class = {
-    "@id": "temgo:FIBLiftout",
-    "@type": "owl:Class",
-    "subClassOf": "chameo:CharacterisationProcess",
-    "prefLabel": "FIB Liftout",
-    "elucidation": "Focused Ion Beam liftout for TEM lamella preparation.",
-}
-
 # Processes
 jm11_eds_proc = {
     "@id": "avb:JM11_EDS_process",
     "@type": "temgo:EDSMapping",
+    "name": "JM11_EDS_proc",
     "description": "EDS elemental mapping of JM11 lamella.",
     "hasInput": "avb:JM11_lamella1",
     "hasOutput": "avb:JM11_EDS",
@@ -289,6 +276,7 @@ jm11_eds_proc = {
 jm11_sims_proc = {
     "@id": "avb:JM11_SIMS_process",
     "@type": "temgo:SIMSProfiling",
+    "name": "JM11_SIMS_proc",
     "description": "SIMS depth profile of JM11 for boron concentration.",
     "hasInput": "avb:JM11",
     "hasOutput": "avb:JM11_SIMS",
@@ -297,27 +285,12 @@ jm11_sims_proc = {
 jm11_fib_proc = {
     "@id": "avb:JM11_FIB_process",
     "@type": "temgo:FIBLiftout",
+    "name": "JM11_FIB_proc",
     "description": "FIB liftout to extract TEM lamella from JM11.",
     "hasInput": "avb:JM11",
     "hasOutput": "avb:JM11_lamella1",
     "hasOperator": "pers:AndreasVollBugten",
     "performedWith": "tem-equip:HeliosG4",
-}
-
-# Dataset classes
-eds_map_class = {
-    "@id": "temgo:EDSMap",
-    "@type": "owl:Class",
-    "subClassOf": "dcat:Dataset",
-    "prefLabel": "EDS Map",
-    "elucidation": "Energy Dispersive X-ray Spectroscopy elemental map dataset.",
-}
-sims_profile_class = {
-    "@id": "temgo:SIMSProfile",
-    "@type": "owl:Class",
-    "subClassOf": "dcat:Dataset",
-    "prefLabel": "SIMS Profile",
-    "elucidation": "SIMS depth profile dataset.",
 }
 
 # Datasets
@@ -398,14 +371,9 @@ entity_list: list[dict] = [
     jm11,
     jm12,
     lamella1,
-    eds_class,
-    sims_class,
-    fib_class,
     jm11_eds_proc,
     jm11_sims_proc,
     jm11_fib_proc,
-    eds_map_class,
-    sims_profile_class,
     jm11_eds,
     jm11_sims,
     jm12_eds,

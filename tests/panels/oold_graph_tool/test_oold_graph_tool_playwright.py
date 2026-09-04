@@ -20,7 +20,7 @@ def _serve(tool, page, port):
 
 
 def test_click_node_shows_jsoneditor(page: Page, port):
-    """Clicking an entity node opens OO-LD Details with a visible JsonEditor."""
+    """Clicking an entity node opens OO-LD Form with a visible JsonEditor."""
     tool = OOLDGraphDetailTool(config=config)
     server = _serve(tool, page, port)
 
@@ -28,13 +28,13 @@ def test_click_node_shows_jsoneditor(page: Page, port):
     tool.show_node_details(cake_iri)
     time.sleep(3)
 
-    # OO-LD Details tab (index 2) must be active
+    # OO-LD Form tab (index 2) must be active
     tab = page.locator(".bk-tab.bk-active")
-    assert tab.inner_text() == "OO-LD Details"
+    assert tab.inner_text() == "OO-LD Form"
 
     # panelini JsonEditor (json-editor/json-editor) renders with .je-object__title
     je = page.locator(".je-object__title")
-    assert je.count() >= 1, "No .je-object__title element found — JsonEditor not rendered"
+    assert je.count() >= 1, "No .je-object__title element found - JsonEditor not rendered"
     assert je.first.is_visible(), "JsonEditor title is present but not visible"
 
     server.stop()

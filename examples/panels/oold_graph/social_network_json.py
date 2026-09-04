@@ -233,15 +233,10 @@ entity_list = [
     doctor,
     artist,
     scientist,
-    BIRTHDAY_SCHEMA,  # bare schema dict — promoted to entity_types
+    BIRTHDAY_SCHEMA,  # bare schema dict - promoted to entity_types
 ]
 
-entity_types = {
-    "Entity": ENTITY_SCHEMA,
-    "Person": PERSON_SCHEMA,
-    "Hobby": HOBBY_SCHEMA,
-    "Profession": PROFESSION_SCHEMA,
-}
+entity_types = [ENTITY_SCHEMA, PERSON_SCHEMA, HOBBY_SCHEMA, PROFESSION_SCHEMA]
 
 config = OOLDGraphConfig(
     uuid=str(uuid.uuid4()),

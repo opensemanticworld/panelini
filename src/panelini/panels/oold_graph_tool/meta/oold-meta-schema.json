@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+  "title": "OO-LD dialect meta-schema",
+  "$comment": "The $id uses the versioned hosting at oo-ld.org/. The OO-LD vocabulary is declared optional (false) so that generic JSON-Schema 2020-12 validators still process OO-LD schemas. Two-tier structure: this resource is what a schema's $schema points at, so it carries the DOCUMENT-level obligations (required: $id). The dialect body lives in oold-meta-schema-base.json, which holds $dynamicAnchor: \"meta\"; nested subschemas recurse into the base via the standard $dynamicRef and are therefore NOT required to carry $id.",
+  "@context": {
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "sssom": "https://w3id.org/sssom/"
+  },
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+    "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+    "https://json-schema.org/draft/2020-12/vocab/content": true,
+    "https://oo-ld.org/latest/vocab/oold": false
+  },
+  "$ref": "https://oo-ld.org/latest/meta/oold-meta-schema-base.json",
+  "required": [
+    "$id"
+  ]
+}

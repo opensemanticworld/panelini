@@ -93,7 +93,7 @@ class TestInstantiation:
             uuid=str(uuid.uuid4()),
             name="test",
             entity_list=[a, HOBBY_SCHEMA],
-            entity_types={"Entity": ENTITY_SCHEMA},
+            entity_types=[ENTITY_SCHEMA],
         )
         tool = OOLDGraphDetailTool(config=config)
         assert "Hobby" in tool.entity_types
@@ -1819,7 +1819,7 @@ class TestPropertyCreateForm:
             uuid=str(uuid.uuid4()),
             name="test",
             entity_list=[thing],
-            entity_types={"Entity": ENTITY_SCHEMA, "TaggedThing": schema},
+            entity_types=[ENTITY_SCHEMA, schema],
             expansion_policy=SingleNodeExpansionPolicy(
                 uuid=str(uuid.uuid4()),
                 name="p",

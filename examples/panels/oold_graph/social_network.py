@@ -212,12 +212,7 @@ entity_list = [
     Birthday,
 ]
 
-entity_types = {
-    "Person": Person,
-    "Hobby": Hobby,
-    "Profession": Profession,
-    "Entity": Entity,
-}
+entity_types = [Person, Hobby, Profession, Entity]
 
 
 config = OOLDGraphConfig(

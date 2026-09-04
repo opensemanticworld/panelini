@@ -199,10 +199,7 @@ PERSON_SCHEMA = {
     "defaultProperties": ["type", "name", "generation"],
 }
 
-entity_types = {
-    "Entity": ENTITY_SCHEMA,
-    "Person": PERSON_SCHEMA,
-}
+entity_types = [ENTITY_SCHEMA, PERSON_SCHEMA]
 
 # ── Generate 1000 persons across 6 generations ──────────────────────────────
 

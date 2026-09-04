@@ -258,7 +258,7 @@ class OOLDGraphConfig(Entity):
         },
     )
     entity_list: list[Any]  # Entity instances, plain dicts, or bare classes/schemas
-    entity_types: Optional[dict[str, Any]] = None
+    entity_types: Optional[list[Any]] = None
     type_colors: Optional[dict[str, str]] = None
     expansion_policy: Union[SingleNodeExpansionPolicy, MultiExpansionPolicy] = Field(
         None,
@@ -309,15 +309,26 @@ class OOLDGraphDetailTool(GraphDetailTool):
         converted_types: dict[str, dict] = {}
         _pydantic_classes: list[type] = []
         if entity_types is not None:
-            for name, type_input in entity_types.items():
+            for type_input in entity_types:
                 if isinstance(type_input, type) and hasattr(type_input, "export_schema"):
                     _pydantic_classes.append(type_input)
-                type_name, schema = adapt_type(type_input, name)
+                type_name, schema = adapt_type(type_input)
                 converted_types[type_name] = schema
                 self.schema_registry[type_name] = schema
                 iri = schema.get("$id") or schema.get("iri")
                 if iri:
                     self.schema_registry[iri] = schema
+
+            # Auto-register @context string URL aliases for schema resolution
+            for schema in converted_types.values():
+                ctx = schema.get("@context") if isinstance(schema, dict) else None
+                if isinstance(ctx, list):
+                    for entry in ctx:
+                        if isinstance(entry, str) and entry not in self.schema_registry:
+                            for s in converted_types.values():
+                                if (s.get("$id") or s.get("iri")) == entry:
+                                    self.schema_registry[entry] = s
+                                    break
 
         # ── Split entity_list into instances and bare classes/schemas ────
         _schema_extras: dict[str, dict] = {}
@@ -374,13 +385,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
         ]
 
         # Store entity_types as dict[str, dict] (schema dicts)
-        if not converted_types:
-            self.entity_types: dict[str, dict] = {}
-            for entity in self.entity_list:
-                if entity.type_name not in self.entity_types:
-                    self.entity_types[entity.type_name] = entity.schema
-        else:
-            self.entity_types = converted_types
+        self.entity_types: dict[str, dict] = dict(converted_types) if converted_types else {}
+        for entity in self.entity_list:
+            if entity.type_name not in self.entity_types and entity.schema:
+                self.entity_types[entity.type_name] = entity.schema
         for name, schema in _schema_extras.items():
             self.entity_types.setdefault(name, schema)
 
@@ -5176,12 +5184,7 @@ if __name__ == "__main__":
     ]
 
     # Define available entity types for creation
-    available_entity_types = {
-        "Person": Person,
-        "Hobby": Hobby,
-        "Profession": Profession,
-        "Entity": Entity,
-    }
+    available_entity_types = [Person, Hobby, Profession, Entity]
 
     # Optional: Define custom colors for entity types
     # If not provided, colors will be generated automatically
@@ -5193,9 +5196,12 @@ if __name__ == "__main__":
     }
 
     # build graph tool and show it
-    graph_detail_panel = OOLDGraphDetailTool(
+    config = OOLDGraphConfig(
+        uuid="demo",
+        name="Demo Social Network",
         entity_list=example_oold_list,
         entity_types=available_entity_types,
-        # type_colors=custom_type_colors  # Uncomment to use custom colors
+        # type_colors=custom_type_colors,  # Uncomment to use custom colors
     )
+    graph_detail_panel = OOLDGraphDetailTool(config=config)
     pn.serve(graph_detail_panel, threaded=True)

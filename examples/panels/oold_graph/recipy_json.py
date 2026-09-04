@@ -132,11 +132,7 @@ my_cake_doc = make_entity(
 
 entity_list = [my_cake_doc]
 
-entity_types = {
-    "Entity": ENTITY_SCHEMA,
-    "CookingProcessDocumentation": COOKING_PROCESS_SCHEMA,
-    "IngredientContent": INGREDIENT_CONTENT_SCHEMA,
-}
+entity_types = [ENTITY_SCHEMA, COOKING_PROCESS_SCHEMA, INGREDIENT_CONTENT_SCHEMA]
 
 config = OOLDGraphConfig(
     uuid=str(uuid.uuid4()),

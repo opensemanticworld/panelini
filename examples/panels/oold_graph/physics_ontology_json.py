@@ -263,15 +263,15 @@ entity_list = [
     block_pat,
 ]
 
-entity_types = {
-    "Entity": ENTITY_SCHEMA,
-    "Geometry": GEOMETRY_SCHEMA,
-    "Circle": CIRCLE_SCHEMA,
-    "Rectangle": RECTANGLE_SCHEMA,
-    "PhysicalObject": PHYSICAL_OBJECT_SCHEMA,
-    "MomentOfInertia": MOMENT_OF_INERTIA_SCHEMA,
-    "ParallelAxisTheorem": PARALLEL_AXIS_THEOREM_SCHEMA,
-}
+entity_types = [
+    ENTITY_SCHEMA,
+    GEOMETRY_SCHEMA,
+    CIRCLE_SCHEMA,
+    RECTANGLE_SCHEMA,
+    PHYSICAL_OBJECT_SCHEMA,
+    MOMENT_OF_INERTIA_SCHEMA,
+    PARALLEL_AXIS_THEOREM_SCHEMA,
+]
 
 config = OOLDGraphConfig(
     uuid=str(uuid.uuid4()),
