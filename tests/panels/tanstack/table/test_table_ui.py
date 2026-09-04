@@ -10,7 +10,6 @@ below are the contract that must not regress.
 """
 
 import copy
-import socket
 
 import panel as pn
 import pytest
@@ -18,6 +17,23 @@ from playwright.sync_api import Page, expect
 
 from panelini.panels.tanstack.table import TanstackTable, tree
 from panelini.testing import wait_until
+from tests.panels.tanstack.table.helpers import (
+    a_file,
+    drag_across,
+    drag_row,
+    drop_files_onto,
+    focused_title,
+    hover_files_over,
+    node_at,
+    pane_rows,
+    panes,
+    release_files,
+    row_titles,
+    rows,
+    serve,
+    shape,
+    start,
+)
 
 SOURCE = [
     {
@@ -39,108 +55,6 @@ COLUMNS = [
     {"id": "title", "header": "Name"},
     {"id": "size", "header": "Size", "width": 90},
 ]
-
-
-def accepts(port: int) -> bool:
-    """True once something is listening on *port*."""
-    with socket.socket() as probe:
-        probe.settimeout(0.2)
-        return probe.connect_ex(("localhost", port)) == 0
-
-
-def start(component, page: Page, port: int):
-    """Serve *component* and open it.
-
-    ``pn.serve(threaded=True)`` returns before the tornado loop is accepting, so
-    the port is polled first; navigating straight away is a connection refused
-    race.
-    """
-    server = pn.serve(component, port=port, threaded=True, show=False)
-    wait_until(lambda: accepts(port), timeout=15)
-    page.goto(f"http://localhost:{port}")
-    return server
-
-
-def serve(table: TanstackTable, page: Page, port: int):
-    """Serve *table*, open it and wait for the first rendered row."""
-    server = start(table, page, port)
-    page.locator(".pnl-tst-row").first.wait_for(state="visible", timeout=15000)
-    return server
-
-
-def rows(page: Page):
-    return page.locator(".pnl-tst-row")
-
-
-def row_titles(page: Page) -> list[str]:
-    return page.locator(".pnl-tst-cell--tree .pnl-tst-value").all_text_contents()
-
-
-def focused_title(page: Page) -> str:
-    """Title of the row that currently has focus.
-
-    Panel renders the component into a shadow root, so ``document.activeElement``
-    stops at the host and has to be followed down through the shadow boundaries.
-    """
-    return page.evaluate(
-        """() => {
-            let element = document.activeElement
-            while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement
-            return element?.querySelector('.pnl-tst-value')?.textContent.trim() ?? null
-        }"""
-    )
-
-
-def shape(nodes) -> str:
-    """Render a tree compactly, for example ``a(a1,a2),b(b1)``."""
-    return ",".join(node["key"] + (f"({shape(node['children'])})" if node.get("children") else "") for node in nodes)
-
-
-def node_at(nodes, key):
-    """``find_node`` plus a presence assertion, so callers can subscript freely."""
-    found = tree.find_node(nodes, key)
-    assert found is not None, f"{key} is not in the tree"
-    return found
-
-
-def drag_row(
-    page: Page,
-    source_index: int,
-    target_index: int,
-    y_frac: float = 0.5,
-    expect_session: bool = True,
-    expect_blocked: bool = False,
-    expect_dragging: int = 1,
-) -> None:
-    """Drag one row onto another, releasing at *y_frac* of the target's height.
-
-    The vertical fraction picks the hitbox instruction: the middle band of a row
-    is ``make-child``, the outer bands reorder. pdnd batches its ``onDrag``
-    bookkeeping into an animation frame, so the pointer has to settle on the
-    target before the button comes back up or the drop reads a stale hitbox.
-
-    ``expect_session`` asserts that a drag actually started. Without it a test
-    that expects no move event passes just as happily when drag and drop is
-    broken outright. ``expect_blocked`` asserts the no-drop affordance while the
-    pointer is still held down, since the class only exists during the drag.
-    ``expect_dragging`` is how many rows should be marked as travelling, which is
-    the whole selection when the grabbed row is part of it.
-    """
-    src = rows(page).nth(source_index).bounding_box()
-    dst = rows(page).nth(target_index).bounding_box()
-    assert src and dst
-
-    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2)
-    page.mouse.down()
-    # A short first move starts the drag session before the long travel.
-    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2 + 6, steps=2)
-    if expect_session:
-        expect(page.locator(".pnl-tst-row--dragging")).to_have_count(expect_dragging, timeout=2000)
-    page.mouse.move(dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] * y_frac, steps=12)
-    page.wait_for_timeout(120)
-    if expect_blocked:
-        expect(page.locator(".pnl-tst-row--blocked")).to_have_count(1, timeout=2000)
-    page.mouse.up()
 
 
 def test_treegrid_roles_and_levels(page: Page, port):
@@ -2351,12 +2265,14 @@ def test_the_selected_answer_is_visible_and_moves_with_the_arrows(page: Page, po
     page.keyboard.press("Enter")
     expect(dialog(page)).to_have_count(1, timeout=10000)
 
-    # No on open, which is the answer that changes nothing.
-    assert outlined(page, "No")
+    # No on open, which is the answer that changes nothing. Waited for rather than
+    # read at once, because the dialog is in the DOM a tick before the focus that
+    # follows it: `to_have_count` returns as soon as the element exists.
+    wait_until(lambda: outlined(page, "No"), timeout=10)
     assert not outlined(page, "Yes")
 
     page.keyboard.press("ArrowLeft")
-    assert outlined(page, "Yes")
+    wait_until(lambda: outlined(page, "Yes"), timeout=10)
     assert not outlined(page, "No")
 
     server.stop()
@@ -2946,46 +2862,12 @@ OTHER = [
 ]
 
 
-def panes(page: Page):
-    """The grids on the page, in layout order."""
-    return page.locator(".pnl-tst-root")
-
-
-def pane_rows(page: Page, index: int):
-    """Rows of one pane. Each table renders into its own shadow root."""
-    return panes(page).nth(index).locator(".pnl-tst-row")
-
-
 def serve_panes(left: TanstackTable, right: TanstackTable, page: Page, port: int):
     """Serve two tables side by side and wait for both to render."""
     server = start(pn.Row(left, right), page, port)
     expect(panes(page)).to_have_count(2, timeout=15000)
     pane_rows(page, 1).first.wait_for(state="visible", timeout=15000)
     return server
-
-
-def drag_across(page: Page, src_row, dst_row, modifier: str = "") -> None:
-    """Drag a row of one pane onto a row of another.
-
-    This cannot reuse ``drag_row``: its indices address one grid, and the two
-    panes here are two pdnd hosts in two shadow roots. ``modifier`` is held down
-    over the drop, which is what turns the transfer into a copy.
-    """
-    src = src_row.bounding_box()
-    dst = dst_row.bounding_box()
-    assert src and dst
-
-    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2 + 6, steps=2)
-    expect(page.locator(".pnl-tst-row--dragging")).to_have_count(1, timeout=2000)
-    page.mouse.move(dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2, steps=12)
-    page.wait_for_timeout(120)
-    if modifier:
-        page.keyboard.down(modifier)
-    page.mouse.up()
-    if modifier:
-        page.keyboard.up(modifier)
 
 
 def test_a_drag_into_the_other_pane_transfers_the_node(page: Page, port):
@@ -4835,72 +4717,14 @@ def dropping_table(events=None, action_callback=None, **options):
     )
 
 
-# Playwright cannot drag from the desktop, so the drag is synthesised: a real
-# `DataTransfer` carrying real `File`s, dispatched as the `dragenter`, `dragover`
-# and `drop` a browser would send. pdnd binds those on `window` and reads
-# `clientX` and `clientY` off them, which is exactly what the panel resolves the
-# row from, so nothing about the path under test is stubbed.
-#
-# The transfer is stashed on `window` between the two halves because a drop has
-# to carry the same one the drag did, and because a test wanting to assert the
-# hover affordance has to look while the drag is still in flight.
-_HOVER_FILES = """
-async ({ x, y, files }) => {
-  const transfer = new DataTransfer()
-  for (const file of files) {
-    transfer.items.add(new File([file.body ?? ''], file.name, { type: file.type }))
-  }
-  window.__pnlTransfer = { transfer, x, y }
-  const target = document.elementFromPoint(x, y)
-  const fire = (type) => target.dispatchEvent(new DragEvent(type, {
-    bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, dataTransfer: transfer,
-  }))
-  // pdnd batches its bookkeeping into an animation frame, so each event needs a
-  // painted frame before the next one is worth sending.
-  const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
-  fire('dragenter')
-  await frame()
-  fire('dragover')
-  await frame()
-  fire('dragover')
-  await frame()
-}
-"""
-
-_RELEASE_FILES = """
-async () => {
-  const held = window.__pnlTransfer
-  const target = document.elementFromPoint(held.x, held.y)
-  target.dispatchEvent(new DragEvent('drop', {
-    bubbles: true, cancelable: true, composed: true,
-    clientX: held.x, clientY: held.y, dataTransfer: held.transfer,
-  }))
-}
-"""
-
-
 def hover_files(page: Page, row_index: int, files: list[dict], y_frac: float = 0.5) -> None:
     """Bring a file drag over a row and leave it there."""
-    box = rows(page).nth(row_index).bounding_box()
-    assert box
-    page.evaluate(
-        _HOVER_FILES,
-        {"x": box["x"] + box["width"] / 2, "y": box["y"] + box["height"] * y_frac, "files": files},
-    )
+    hover_files_over(page, rows(page).nth(row_index), files, y_frac)
 
 
 def drop_files(page: Page, row_index: int, files: list[dict], y_frac: float = 0.5) -> None:
-    """Drop files onto a row, releasing at *y_frac* of its height.
-
-    The vertical fraction picks the hitbox instruction exactly as it does for a
-    row drag: the middle band is ``make-child`` and the outer bands reorder.
-    """
-    hover_files(page, row_index, files, y_frac)
-    page.evaluate(_RELEASE_FILES)
-
-
-def a_file(name: str, mime: str = "text/plain", body: str = "hello") -> dict:
-    return {"name": name, "type": mime, "body": body}
+    """Drop files onto a row, releasing at *y_frac* of its height."""
+    drop_files_onto(page, rows(page).nth(row_index), files, y_frac)
 
 
 def test_a_dropped_file_becomes_a_node(page: Page, port):
@@ -4960,7 +4784,7 @@ def test_a_file_held_over_a_folder_shows_the_drop_indicator(page: Page, port):
 
     assert "pnl-tst-row--child-target" in row_classes(page, 0)
 
-    page.evaluate(_RELEASE_FILES)
+    release_files(page)
     # The indicator is not left behind once the drop has been handled.
     wait_until(lambda: "pnl-tst-row--child-target" not in row_classes(page, 0))
 
@@ -4989,7 +4813,7 @@ def test_a_leaf_refuses_a_file_dropped_into_it(page: Page, port):
     hover_files(page, 2, [a_file("plan.md")])
     assert "pnl-tst-row--blocked" in row_classes(page, 2)
 
-    page.evaluate(_RELEASE_FILES)
+    release_files(page)
     page.wait_for_timeout(300)
     assert shape(table.source) == "docs(readme),notes"
     assert events == []
