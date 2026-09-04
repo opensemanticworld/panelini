@@ -88,7 +88,7 @@ class TestEntityNodes:
 
 class TestClassNodes:
     def test_class_node_count(self, tool):
-        assert len(nodes_by_kind(tool, "class")) == 31
+        assert len(nodes_by_kind(tool, "class")) == 42
 
     def test_entity_class_present(self, tool):
         ids = node_ids(tool)
@@ -99,11 +99,13 @@ class TestClassNodes:
 
 
 class TestStructuralEdges:
-    def test_has_type_count(self, tool):
-        assert len(edges_by_label(tool, "HasType")) == 580
+    def test_has_schema_type_count(self, tool):
+        assert len(edges_by_label(tool, "HasSchemaType")) == 580
 
-    def test_isa_count(self, tool):
-        assert len(edges_by_label(tool, "IsA")) == 29
+    def test_hierarchy_count(self, tool):
+        extends = len(edges_by_label(tool, "ExtendsSchema"))
+        subclass = len(edges_by_label(tool, "SubClassOf"))
+        assert extends + subclass == 40
 
 
 # ── 5. RDF Edges ───────────────────────────────────────────────────────────
@@ -181,10 +183,10 @@ class TestExpansionPolicy:
 
 class TestTotals:
     def test_total_node_count(self, tool):
-        assert len(tool._full_visjs_nodes) == 2213
+        assert len(tool._full_visjs_nodes) == 2227
 
     def test_total_edge_count(self, tool):
-        assert len(tool._full_visjs_edges) == 4119
+        assert len(tool._full_visjs_edges) == 4713
 
     def test_build_panel_succeeds(self, tool):
         tool.build_panel()

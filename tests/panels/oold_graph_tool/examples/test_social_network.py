@@ -108,22 +108,22 @@ class TestClassNodes:
 
 class TestIsAEdges:
     def test_isa_edge_count(self, tool):
-        assert len(edges_by_label(tool, "IsA")) == 5
+        assert len(edges_by_label(tool, "ExtendsSchema")) == 5
 
     def test_person_isa_entity(self, tool):
-        assert (PERSON_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PERSON_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_hobby_isa_entity(self, tool):
-        assert (HOBBY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (HOBBY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_profession_isa_entity(self, tool):
-        assert (PROFESSION_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PROFESSION_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_birthday_isa_entity(self, tool):
-        assert (BIRTHDAY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (BIRTHDAY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_entity_isa_linked_base_model(self, tool):
-        assert (ENTITY_NID, LBM_NID, "IsA") in edge_triples(tool)
+        assert (ENTITY_NID, LBM_NID, "ExtendsSchema") in edge_triples(tool)
 
 
 # =====================================================================
@@ -133,22 +133,22 @@ class TestIsAEdges:
 
 class TestHasTypeEdges:
     def test_has_type_count(self, tool):
-        assert len(edges_by_label(tool, "HasType")) == 13
+        assert len(edges_by_label(tool, "HasSchemaType")) == 13
 
     def test_persons_have_type_person(self, tool):
         triples = edge_triples(tool)
         for p in [alice, bob, charlie, david, eve]:
-            assert (p.get_iri(), PERSON_NID, "HasType") in triples
+            assert (p.get_iri(), PERSON_NID, "HasSchemaType") in triples
 
     def test_hobbies_have_type_hobby(self, tool):
         triples = edge_triples(tool)
         for h in [sports, music, art]:
-            assert (h.get_iri(), HOBBY_NID, "HasType") in triples
+            assert (h.get_iri(), HOBBY_NID, "HasSchemaType") in triples
 
     def test_professions_have_type_profession(self, tool):
         triples = edge_triples(tool)
         for p in [engineer, teacher, doctor, artist, scientist]:
-            assert (p.get_iri(), PROFESSION_NID, "HasType") in triples
+            assert (p.get_iri(), PROFESSION_NID, "HasSchemaType") in triples
 
 
 # =====================================================================
@@ -398,4 +398,4 @@ class TestTotalCounts:
         assert len(tool._full_visjs_nodes) == 137
 
     def test_total_edge_count(self, tool):
-        assert len(tool._full_visjs_edges) == 158
+        assert len(tool._full_visjs_edges) == 166

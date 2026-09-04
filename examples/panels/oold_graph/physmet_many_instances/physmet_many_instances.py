@@ -30,6 +30,7 @@ from examples.panels.oold_graph.physmet_json import (
     ENTITY_SCHEMA as ENTITY_SCHEMA,
 )
 from examples.panels.oold_graph.physmet_json import (
+    SUBTYPE_TO_PARENT,
     entity_types,
 )
 from panelini.panels.oold_graph_tool.oold_graph_tool import (
@@ -392,6 +393,7 @@ config = OOLDGraphConfig(
     name="PhysMet Many Instances (Mock Data)",
     entity_list=entity_list,
     entity_types=entity_types,
+    schema_aliases=SUBTYPE_TO_PARENT,
     expansion_policy=SingleNodeExpansionPolicy(
         uuid="physmet-many-expand",
         name="Expand processes of single researcher",

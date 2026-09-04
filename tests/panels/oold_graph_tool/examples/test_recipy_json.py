@@ -77,13 +77,13 @@ class TestClassNodes:
 
 class TestIsAEdges:
     def test_isa_edge_count(self, tool):
-        assert len(edges_by_label(tool, "IsA")) == 2
+        assert len(edges_by_label(tool, "ExtendsSchema")) == 2
 
     def test_recipy_isa_entity(self, tool):
-        assert (RECIPY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (RECIPY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_ingredient_isa_entity(self, tool):
-        assert (INGREDIENT_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (INGREDIENT_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
 
 # =====================================================================
@@ -93,10 +93,10 @@ class TestIsAEdges:
 
 class TestHasTypeEdges:
     def test_has_type_count(self, tool):
-        assert len(edges_by_label(tool, "HasType")) == 1
+        assert len(edges_by_label(tool, "HasSchemaType")) == 1
 
     def test_cake_has_type_recipy(self, tool):
-        assert (my_cake_doc["id"], RECIPY_NID, "HasType") in edge_triples(tool)
+        assert (my_cake_doc["id"], RECIPY_NID, "HasSchemaType") in edge_triples(tool)
 
 
 # =====================================================================
@@ -318,4 +318,4 @@ class TestTotalCounts:
         assert len(tool._full_visjs_nodes) == 34
 
     def test_total_edge_count(self, tool):
-        assert len(tool._full_visjs_edges) == 34
+        assert len(tool._full_visjs_edges) == 35

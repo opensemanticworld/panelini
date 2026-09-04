@@ -217,7 +217,9 @@ config = OOLDGraphConfig(
         name="Alice policy",
         root_node=Entity,
         expansion_steps=[
-            ExpansionStep(uuid=str(uuid.uuid4()), name="step1", relations=["-HasType", "-IsA"], iter_limit=10)
+            ExpansionStep(
+                uuid=str(uuid.uuid4()), name="step1", relations=["-HasSchemaType", "-ExtendsSchema"], iter_limit=10
+            )
         ],
     ),
 )

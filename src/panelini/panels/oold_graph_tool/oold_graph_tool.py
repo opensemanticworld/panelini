@@ -47,8 +47,8 @@ _OOLD_META_SCHEMA: dict = (
 _CLS_NODE_COLOR = "#9B59B6"  # purple  --LinkedBaseModel subclass
 _FIELD_NODE_COLOR = "#BDC3C7"  # silver  --field descriptor
 _ATTR_VAL_NODE_COLOR = "#F39C12"  # orange  --default / description / constraint values
-_ISA_EDGE_COLOR = "#e74c3c"  # red     --IsA / HasRange
-_HAS_TYPE_EDGE_COLOR = "#888888"  # gray    --HasType
+_ISA_EDGE_COLOR = "#e74c3c"  # red     --ExtendsSchema / SubClassOf / HasRange
+_HAS_TYPE_EDGE_COLOR = "#888888"  # gray    --HasSchemaType / HasRdfType
 
 _PRIMITIVES_OOLD = (str, int, float, bool, type(None), dict, list, tuple, set)
 _MAX_LABEL = 80
@@ -259,6 +259,7 @@ class OOLDGraphConfig(Entity):
     )
     entity_list: list[Any]  # Entity instances, plain dicts, or bare classes/schemas
     entity_types: Optional[list[Any]] = None
+    schema_aliases: Optional[dict[str, str]] = None
     type_colors: Optional[dict[str, str]] = None
     expansion_policy: Union[SingleNodeExpansionPolicy, MultiExpansionPolicy] = Field(
         None,
@@ -329,6 +330,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                                 if (s.get("$id") or s.get("iri")) == entry:
                                     self.schema_registry[entry] = s
                                     break
+
+        # ── Apply schema_aliases overrides ────────────────────────────────
+        self._schema_alias_keys: set[str] = set()
+        if config.schema_aliases:
+            self._schema_alias_keys = set(config.schema_aliases.keys())
+            for alias, target_name in config.schema_aliases.items():
+                target = self.schema_registry.get(target_name)
+                if target:
+                    self.schema_registry[alias] = target
 
         # ── Split entity_list into instances and bare classes/schemas ────
         _schema_extras: dict[str, dict] = {}
@@ -470,7 +480,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         available_ids = {node["id"] for node in self.visjs_nodes}
         self._build_rdf_edges(available_ids)
 
-        # Add class hierarchy (IsA / definesProperty / HasType) on top of instance graph
+        # Add class hierarchy (ExtendsSchema / SubClassOf / definesProperty / HasSchemaType)
         self._build_class_graph()
 
         # Store the complete (fully-expanded) graph for expand-menu computation
@@ -478,7 +488,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._full_visjs_edges: list[dict] = [dict(e) for e in self.visjs_edges]
 
         # Compute visibility after _full_visjs_edges is built so policy BFS can
-        # traverse any edge label (IsA, HasType, knows, …) generically.
+        # traverse any edge label (ExtendsSchema, HasSchemaType, knows, ...) generically.
         # _visible_edge_keys restricts which edges are shown --only those
         # traversed by the BFS, not all edges between visible nodes.
         vis_nodes, vis_edges = self._compute_initial_visibility()
@@ -1738,6 +1748,26 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return val["@id"]
         return None
 
+    def _register_curie(
+        self,
+        compact: str,
+        ctx: dict | list | None,
+        prefix_cache: dict[str, str | None],
+    ) -> None:
+        """Expand a single CURIE and store it in the bidirectional IRI maps."""
+        if compact.startswith(("http://", "https://", "urn:")) or ":" not in compact:
+            return
+        if compact in self._iri_expand_map:
+            return
+        prefix, local = compact.split(":", 1)
+        if prefix not in prefix_cache:
+            prefix_cache[prefix] = self._resolve_prefix_ns(ctx, prefix)
+        ns = prefix_cache[prefix]
+        if ns:
+            expanded = ns + local
+            self._iri_expand_map[compact] = expanded
+            self._iri_compact_map[expanded] = compact
+
     def _build_iri_maps(self) -> None:
         """Build bidirectional maps between compact and expanded IRIs.
 
@@ -1757,23 +1787,21 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 self._iri_compact_map[compact] = compact
                 self._iri_expand_map[compact] = compact
                 continue
-            if ":" not in compact:
+            ctx = build_context_from_schema(entity.schema, self.schema_registry)
+            self._register_curie(compact, ctx, prefix_cache)
+
+        for schema in (self.entity_types or {}).values():
+            sid = schema.get("$id") or schema.get("iri")
+            if not sid or not isinstance(sid, str):
                 continue
-            prefix, local = compact.split(":", 1)
-            if prefix not in prefix_cache:
-                ctx = build_context_from_schema(entity.schema, self.schema_registry)
-                prefix_cache[prefix] = self._resolve_prefix_ns(ctx, prefix)
-            ns = prefix_cache[prefix]
-            if ns:
-                expanded = ns + local
-                self._iri_expand_map[compact] = expanded
-                self._iri_compact_map[expanded] = compact
+            ctx = build_context_from_schema(schema, self.schema_registry)
+            self._register_curie(sid, ctx, prefix_cache)
 
     def _build_rdf_edges(self, source_ids: set[str]) -> None:
         """Append RDF-derived edges (and literal nodes) to self.visjs_nodes / self.visjs_edges.
 
         For each triple (s, p, o) where s is in source_ids:
-        - rdf:type triples: skip (handled by _build_class_graph as HasType edges).
+        - rdf:type triples: create HasRdfType edge if object matches a class node.
         - Literal o: create an orange literal node (ID = <entity_iri>#<field_name>) + add edge.
         - URIRef o in source_ids or matching a known class node ID: add edge.
         - Other external URI: skip (would clutter the graph).
@@ -1794,6 +1822,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 continue
             s_compact = compact_map.get(s_str, s_str)
             if p == RDF.type:
+                o_str = str(o)
+                o_compact = compact_map.get(o_str, o_str)
+                if o_compact in class_node_ids or o_str in class_node_ids:
+                    self.visjs_edges.append({
+                        "from": s_compact,
+                        "to": o_compact,
+                        "label": "HasRdfType",
+                        "arrows": "to",
+                        "color": _HAS_TYPE_EDGE_COLOR,
+                    })
                 continue
             pred_label = str(p).split("/")[-1].split("#")[-1]
             if isinstance(o, RDFLiteral):
@@ -2003,7 +2041,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if (e.get("from", ""), e.get("to", ""), e.get("label", "")) in self._visible_edge_keys
             ]
 
-        _structural_labels = {"IsA", "definesProperty", "HasType", "HasRange"}
+        _structural_labels = {
+            "ExtendsSchema",
+            "SubClassOf",
+            "definesProperty",
+            "HasSchemaType",
+            "HasRdfType",
+            "HasRange",
+        }
         for edge in self.visjs_edges:
             frm, to, lbl = edge.get("from", ""), edge.get("to", ""), edge.get("label", "")
             edge["id"] = f"{frm}|{lbl}|{to}"
@@ -2188,8 +2233,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
     def _reveal_property_definition(self, entity_iri: str, pred_label: str) -> None:
         """Reveal the field node that defines the schema property behind an edge.
 
-        Shows the connected chain: entity --HasType--> type_class --IsA-->...
-        --IsA--> defining_class --definesProperty--> field_node.
+        Shows the connected chain: entity --HasSchemaType--> type_class --ExtendsSchema-->...
+        --ExtendsSchema--> defining_class --definesProperty--> field_node.
         Only classes between the entity's type and the defining class are
         revealed, not ancestors beyond the defining class.
         """
@@ -2219,15 +2264,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         type_cls_nid = _cls_node_id(entity.schema)
         self._visible_node_ids.add(type_cls_nid)
-        self._visible_edge_keys.add((entity_iri, type_cls_nid, "HasType"))
+        self._visible_edge_keys.add((entity_iri, type_cls_nid, "HasSchemaType"))
 
         self._reveal_isa_chain_to(entity.schema, defining_schema)
 
     def _reveal_isa_chain_to(self, schema: dict, target: dict) -> None:
-        """Walk IsA chain from schema up to target, revealing each step."""
+        """Walk ExtendsSchema/SubClassOf chain from schema up to target, revealing each step."""
         target_nid = _cls_node_id(target)
         while _cls_node_id(schema) != target_nid:
             schema_nid = _cls_node_id(schema)
+            schema_id = schema.get("$id") or schema.get("iri") or ""
+            isa_label = "SubClassOf" if schema_id in self._schema_alias_keys else "ExtendsSchema"
             parent_refs = self.introspector.get_parent_schema_refs(schema)
             if not parent_refs:
                 break
@@ -2236,7 +2283,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if parent is not None and self._is_ancestor_of(parent, target):
                     parent_nid = _cls_node_id(parent)
                     self._visible_node_ids.add(parent_nid)
-                    self._visible_edge_keys.add((schema_nid, parent_nid, "IsA"))
+                    self._visible_edge_keys.add((schema_nid, parent_nid, isa_label))
             first_parent = self.introspector.resolve_ref(parent_refs[0])
             if first_parent is None:
                 break
@@ -2511,7 +2558,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.oold_detail_col.clear()
 
     def _delete_class_node(self, node_id: str) -> None:
-        """Delete a class from entity_types, retying HasType instances and checking IRI refs."""
+        """Delete a class from entity_types, retying HasSchemaType instances and checking IRI refs."""
         cls = self._get_class_for_node_id(node_id)
         if cls is None:
             return
@@ -3167,7 +3214,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         all_entity_ids = set(self.entity_dict.keys())
         self._build_rdf_edges(all_entity_ids)
 
-        # Add class hierarchy (IsA / definesProperty / HasType)
+        # Add class hierarchy (ExtendsSchema / SubClassOf / definesProperty / HasSchemaType)
         self._build_class_graph()
 
         # Persist full graph (class nodes may have been added by _build_class_graph)
@@ -3215,12 +3262,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
         for schema in self.entity_types.values():
             cls_nid = _ensure_node(schema)
 
-            # IsA edges via allOf $ref
+            # ExtendsSchema / SubClassOf edges via allOf $ref
+            schema_id = schema.get("$id") or schema.get("iri") or ""
+            isa_label = "SubClassOf" if schema_id in self._schema_alias_keys else "ExtendsSchema"
             for ref in self.introspector.get_parent_schema_refs(schema):
                 parent = self.introspector.resolve_ref(ref)
                 if parent is not None:
                     parent_nid = _ensure_node(parent)
-                    _add_edge(cls_nid, parent_nid, "IsA", color=_ISA_EDGE_COLOR)
+                    _add_edge(cls_nid, parent_nid, isa_label, color=_ISA_EDGE_COLOR)
 
             # definesProperty edges (own fields only)
             own_field_names = self.introspector.get_own_properties(schema)
@@ -3318,7 +3367,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
                             existing_node_ids.add(constraint_nid)
                         _add_edge(field_nid, constraint_nid, attr_label)
 
-        # HasType edges from all instances to their class
+        # HasSchemaType edges from all instances to their class
         all_node_ids = {n["id"] for n in self.visjs_nodes}
         for entity in self.entity_list:
             type_name = entity.type_name
@@ -3328,7 +3377,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
             instance_iri = entity.get_iri()
             if instance_iri not in all_node_ids or cls_nid not in all_node_ids:
                 continue
-            _add_edge(instance_iri, cls_nid, "HasType", color=_HAS_TYPE_EDGE_COLOR)
+            _add_edge(instance_iri, cls_nid, "HasSchemaType", color=_HAS_TYPE_EDGE_COLOR)
 
     def _sync_entity_to_visjs(self, entity: EntityAdapter) -> None:
         """Sync a single entity's data to its corresponding visjs node.

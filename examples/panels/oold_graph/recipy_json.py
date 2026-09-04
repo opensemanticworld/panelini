@@ -147,7 +147,7 @@ config = OOLDGraphConfig(
             ExpansionStep(
                 uuid=str(uuid.uuid4()),
                 name="step1",
-                relations=["-HasType", "-IsA"],
+                relations=["-HasSchemaType", "-ExtendsSchema"],
                 iter_limit=10,
             )
         ],

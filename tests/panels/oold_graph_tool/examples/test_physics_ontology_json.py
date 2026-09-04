@@ -107,25 +107,25 @@ class TestClassNodes:
 
 class TestIsAEdges:
     def test_isa_edge_count(self, tool):
-        assert len(edges_by_label(tool, "IsA")) == 6
+        assert len(edges_by_label(tool, "ExtendsSchema")) == 6
 
     def test_circle_isa_geometry(self, tool):
-        assert (CIRCLE_NID, GEOMETRY_NID, "IsA") in edge_triples(tool)
+        assert (CIRCLE_NID, GEOMETRY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_rectangle_isa_geometry(self, tool):
-        assert (RECTANGLE_NID, GEOMETRY_NID, "IsA") in edge_triples(tool)
+        assert (RECTANGLE_NID, GEOMETRY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_geometry_isa_entity(self, tool):
-        assert (GEOMETRY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (GEOMETRY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_physical_object_isa_entity(self, tool):
-        assert (PHYSICAL_OBJECT_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PHYSICAL_OBJECT_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_moment_of_inertia_isa_entity(self, tool):
-        assert (MOMENT_OF_INERTIA_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (MOMENT_OF_INERTIA_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_parallel_axis_theorem_isa_entity(self, tool):
-        assert (PAT_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PAT_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
 
 # =====================================================================
@@ -135,31 +135,31 @@ class TestIsAEdges:
 
 class TestHasTypeEdges:
     def test_has_type_edge_count(self, tool):
-        assert len(edges_by_label(tool, "HasType")) == 8
+        assert len(edges_by_label(tool, "HasSchemaType")) == 8
 
     def test_unit_circle_has_type_circle(self, tool):
-        assert (unit_circle["id"], CIRCLE_NID, "HasType") in edge_triples(tool)
+        assert (unit_circle["id"], CIRCLE_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_unit_rect_has_type_rectangle(self, tool):
-        assert (unit_rect["id"], RECTANGLE_NID, "HasType") in edge_triples(tool)
+        assert (unit_rect["id"], RECTANGLE_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_a_circle_has_type_circle(self, tool):
-        assert (a_circle["id"], CIRCLE_NID, "HasType") in edge_triples(tool)
+        assert (a_circle["id"], CIRCLE_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_block_has_type_rectangle(self, tool):
-        assert (block["id"], RECTANGLE_NID, "HasType") in edge_triples(tool)
+        assert (block["id"], RECTANGLE_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_disk_obj_has_type_physical_object(self, tool):
-        assert (disk_obj["id"], PHYSICAL_OBJECT_NID, "HasType") in edge_triples(tool)
+        assert (disk_obj["id"], PHYSICAL_OBJECT_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_block_obj_has_type_physical_object(self, tool):
-        assert (block_obj["id"], PHYSICAL_OBJECT_NID, "HasType") in edge_triples(tool)
+        assert (block_obj["id"], PHYSICAL_OBJECT_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_disk_inertia_has_type_moi(self, tool):
-        assert (disk_inertia["id"], MOMENT_OF_INERTIA_NID, "HasType") in edge_triples(tool)
+        assert (disk_inertia["id"], MOMENT_OF_INERTIA_NID, "HasSchemaType") in edge_triples(tool)
 
     def test_block_pat_has_type_pat(self, tool):
-        assert (block_pat["id"], PAT_NID, "HasType") in edge_triples(tool)
+        assert (block_pat["id"], PAT_NID, "HasSchemaType") in edge_triples(tool)
 
 
 # =====================================================================

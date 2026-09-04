@@ -113,19 +113,19 @@ class TestClassNodes:
 
 class TestIsAEdges:
     def test_isa_edge_count(self, tool):
-        assert len(edges_by_label(tool, "IsA")) == 4
+        assert len(edges_by_label(tool, "ExtendsSchema")) == 4
 
     def test_person_isa_entity(self, tool):
-        assert (PERSON_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PERSON_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_hobby_isa_entity(self, tool):
-        assert (HOBBY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (HOBBY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_profession_isa_entity(self, tool):
-        assert (PROFESSION_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (PROFESSION_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_birthday_isa_entity(self, tool):
-        assert (BIRTHDAY_NID, ENTITY_NID, "IsA") in edge_triples(tool)
+        assert (BIRTHDAY_NID, ENTITY_NID, "ExtendsSchema") in edge_triples(tool)
 
     def test_exact_isa_set(self, tool):
         expected = {
@@ -134,7 +134,7 @@ class TestIsAEdges:
             (PROFESSION_NID, ENTITY_NID),
             (BIRTHDAY_NID, ENTITY_NID),
         }
-        actual = set(edges_by_label(tool, "IsA"))
+        actual = set(edges_by_label(tool, "ExtendsSchema"))
         assert expected == actual
 
 
@@ -143,22 +143,22 @@ class TestIsAEdges:
 
 class TestHasTypeEdges:
     def test_has_type_count(self, tool):
-        assert len(edges_by_label(tool, "HasType")) == 13
+        assert len(edges_by_label(tool, "HasSchemaType")) == 13
 
     def test_persons_have_type_person(self, tool):
         triples = edge_triples(tool)
         for p in PERSONS:
-            assert (p["id"], PERSON_NID, "HasType") in triples, f"{p['name']} missing HasType"
+            assert (p["id"], PERSON_NID, "HasSchemaType") in triples, f"{p['name']} missing HasType"
 
     def test_hobbies_have_type_hobby(self, tool):
         triples = edge_triples(tool)
         for h in HOBBIES:
-            assert (h["id"], HOBBY_NID, "HasType") in triples, f"{h['name']} missing HasType"
+            assert (h["id"], HOBBY_NID, "HasSchemaType") in triples, f"{h['name']} missing HasType"
 
     def test_professions_have_type_profession(self, tool):
         triples = edge_triples(tool)
         for p in PROFESSIONS:
-            assert (p["id"], PROFESSION_NID, "HasType") in triples, f"{p['name']} missing HasType"
+            assert (p["id"], PROFESSION_NID, "HasSchemaType") in triples, f"{p['name']} missing HasType"
 
 
 # ── 5. Field Nodes ───────────────────────────────────────────────────────────
@@ -312,8 +312,8 @@ class TestRdfEdges:
 
     def test_total_rdf_edge_count(self, tool):
         class_labels = {
-            "IsA",
-            "HasType",
+            "ExtendsSchema",
+            "HasSchemaType",
             "definesProperty",
             "HasRange",
             "default",
@@ -327,7 +327,7 @@ class TestRdfEdges:
             "multiple_of",
         }
         rdf_edges = [e for e in tool._full_visjs_edges if e["label"] not in class_labels]
-        assert len(rdf_edges) == 42
+        assert len(rdf_edges) == 50
 
 
 # ── 8. Description Nodes ────────────────────────────────────────────────────

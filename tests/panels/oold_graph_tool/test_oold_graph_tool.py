@@ -131,12 +131,12 @@ class TestGraphStructure:
 
     def test_has_type_edges(self, json_social_network):
         tool = json_social_network["tool"]
-        has_type_edges = [e for e in tool._full_visjs_edges if e["label"] == "HasType"]
+        has_type_edges = [e for e in tool._full_visjs_edges if e["label"] == "HasSchemaType"]
         assert len(has_type_edges) > 0
 
     def test_isa_edges(self, json_social_network):
         tool = json_social_network["tool"]
-        isa_edges = [e for e in tool._full_visjs_edges if e["label"] == "IsA"]
+        isa_edges = [e for e in tool._full_visjs_edges if e["label"] == "ExtendsSchema"]
         person_nid = _cls_node_id(json_social_network["schemas"]["Person"])
         entity_nid = _cls_node_id(json_social_network["schemas"]["Entity"])
         isa_pairs = {(e["from"], e["to"]) for e in isa_edges}
@@ -172,7 +172,7 @@ class TestGraphStructure:
 
     def test_physics_inheritance_chain(self, json_physics):
         tool = json_physics["tool"]
-        isa_edges = [(e["from"], e["to"]) for e in tool._full_visjs_edges if e["label"] == "IsA"]
+        isa_edges = [(e["from"], e["to"]) for e in tool._full_visjs_edges if e["label"] == "ExtendsSchema"]
         circle_nid = _cls_node_id(json_physics["schemas"]["Circle"])
         geometry_nid = _cls_node_id(json_physics["schemas"]["Geometry"])
         assert (circle_nid, geometry_nid) in isa_edges
@@ -1129,9 +1129,9 @@ class TestExpansionPolicy:
         assert alice_iri in tool._visible_node_ids
         assert bob_iri in tool._visible_node_ids
         assert charlie_iri in tool._visible_node_ids
-        # Expand "HasType" from Alice only
-        tool._on_context_menu_item("node", alice_iri, "expand_HasType")
-        has_type_edges = [(e["from"], e["to"]) for e in tool.visjs_edges if e["label"] == "HasType"]
+        # Expand "HasSchemaType" from Alice only
+        tool._on_context_menu_item("node", alice_iri, "expand_HasSchemaType")
+        has_type_edges = [(e["from"], e["to"]) for e in tool.visjs_edges if e["label"] == "HasSchemaType"]
         # Alice -> Person class edge should exist
         assert any(frm == alice_iri for frm, _ in has_type_edges), "Alice's HasType edge should be visible"
         # Bob and Charlie should NOT have HasType edges
@@ -1198,10 +1198,10 @@ class TestEdgeContextMenu:
         tool._hide_node(bob_iri)
         assert bob_iri not in tool._visible_node_ids
         # Expand All: HasType -- all visible entities have HasType, Bob does not
-        fake_id = "x|HasType|y"
+        fake_id = "x|HasSchemaType|y"
         tool._on_edge_context_menu(fake_id, "edge_expand_all")
         # HasType edges from visible entities are revealed
-        vis_hastype = [e for e in tool.visjs_edges if e["label"] == "HasType"]
+        vis_hastype = [e for e in tool.visjs_edges if e["label"] == "HasSchemaType"]
         assert len(vis_hastype) > 0
         # Bob's HasType edge should NOT be present (he was hidden)
         assert not any(e["from"] == bob_iri for e in vis_hastype)
@@ -2118,7 +2118,7 @@ class TestSchemaPropertyCreation:
         new_has_type = [
             (e.get("from"), e.get("to"), e.get("label"))
             for e in tool.visjs_edges
-            if e.get("label") == "HasType" and (e.get("from"), e.get("to"), "HasType") not in edges_before
+            if e.get("label") == "HasSchemaType" and (e.get("from"), e.get("to"), "HasSchemaType") not in edges_before
         ]
         assert not new_has_type, f"No new HasType edges should appear, got {new_has_type}"
 
@@ -2237,7 +2237,7 @@ class TestSchemaSubclassCreation:
         isa_edges = [
             e
             for e in tool._full_visjs_edges
-            if e["label"] == "IsA" and e["from"] == "https://example.com/Student" and e["to"] == person_nid
+            if e["label"] == "ExtendsSchema" and e["from"] == "https://example.com/Student" and e["to"] == person_nid
         ]
         assert isa_edges, "Expected IsA edge from Student to Person"
 
@@ -2293,14 +2293,14 @@ class TestSchemaSubclassCreation:
         isa_visible = [
             e
             for e in tool.visjs_edges
-            if e["from"] == "https://example.com/Student" and e["to"] == person_nid and e["label"] == "IsA"
+            if e["from"] == "https://example.com/Student" and e["to"] == person_nid and e["label"] == "ExtendsSchema"
         ]
         assert isa_visible, "IsA edge should be visible in rendered graph"
 
         new_has_type = [
             (e.get("from"), e.get("to"), e.get("label"))
             for e in tool.visjs_edges
-            if e.get("label") == "HasType" and (e.get("from"), e.get("to"), "HasType") not in edges_before
+            if e.get("label") == "HasSchemaType" and (e.get("from"), e.get("to"), "HasSchemaType") not in edges_before
         ]
         assert not new_has_type, f"No new HasType edges should leak, got {new_has_type}"
 
@@ -2786,7 +2786,7 @@ class TestPydanticBackwardCompat:
 
     def test_pydantic_class_hierarchy_in_graph(self, pydantic_physics):
         tool = pydantic_physics["tool"]
-        isa_edges = [e for e in tool._full_visjs_edges if e["label"] == "IsA"]
+        isa_edges = [e for e in tool._full_visjs_edges if e["label"] == "ExtendsSchema"]
         assert len(isa_edges) > 0
 
     def test_pydantic_rdf_graph_populated(self, pydantic_social_network):
@@ -2878,7 +2878,9 @@ class TestRevealDefinition:
         tool = json_social_network["tool"]
         tool.build_panel()
         structural_edges = [
-            e for e in tool._full_visjs_edges if e.get("label") in {"IsA", "definesProperty", "HasType", "HasRange"}
+            e
+            for e in tool._full_visjs_edges
+            if e.get("label") in {"ExtendsSchema", "definesProperty", "HasSchemaType", "HasRange"}
         ]
         for edge in structural_edges:
             cb = edge.get("callback_name_dict", {})
@@ -2937,7 +2939,7 @@ class TestRevealDefinition:
         edge_id = f"{alice_iri}|knows|{bob_iri}"
         tool._on_edge_context_menu(edge_id, "edge_reveal_definition")
 
-        assert (alice_iri, person_nid, "HasType") in tool._visible_edge_keys
+        assert (alice_iri, person_nid, "HasSchemaType") in tool._visible_edge_keys
 
     def test_reveal_own_property_no_ancestors_beyond_definer(self, json_social_network):
         """For a property defined on the entity's own type, ancestors should NOT be revealed."""
@@ -2969,7 +2971,7 @@ class TestRevealDefinition:
         assert geometry_nid in tool._visible_node_ids
         assert (geometry_nid, field_nid, "definesProperty") in tool._visible_edge_keys
         # HasType connects the entity to its direct type class
-        assert (circle_iri, circle_nid, "HasType") in tool._visible_edge_keys
+        assert (circle_iri, circle_nid, "HasSchemaType") in tool._visible_edge_keys
 
     def test_reveal_inherited_property_shows_chain_to_definer(self, json_physics):
         """The IsA chain from entity type up to (but not beyond) the defining class should be visible."""
@@ -2991,11 +2993,11 @@ class TestRevealDefinition:
         # Circle --HasType--> Circle class --IsA--> Geometry --definesProperty--> field
         assert circle_nid in tool._visible_node_ids
         assert geometry_nid in tool._visible_node_ids
-        assert (circle_iri, circle_nid, "HasType") in tool._visible_edge_keys
-        assert (circle_nid, geometry_nid, "IsA") in tool._visible_edge_keys
+        assert (circle_iri, circle_nid, "HasSchemaType") in tool._visible_edge_keys
+        assert (circle_nid, geometry_nid, "ExtendsSchema") in tool._visible_edge_keys
 
         # The reveal should NOT add Geometry→Entity IsA (beyond the definer)
-        assert (geometry_nid, entity_nid, "IsA") not in added_edges
+        assert (geometry_nid, entity_nid, "ExtendsSchema") not in added_edges
 
     def test_reveal_definition_updates_visjs(self, json_social_network):
         """After Reveal Definition, the visjs_nodes/edges should include the revealed items."""
