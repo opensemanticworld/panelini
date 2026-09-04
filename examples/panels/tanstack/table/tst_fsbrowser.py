@@ -8,7 +8,7 @@ bytes the browser is actually sent, and the number of rows in the DOM. Install a
 run:
 
     uv sync
-    uv run python examples/panels/tanstack/table/filesystem_browser.py
+    uv run python examples/panels/tanstack/table/tst_fsbrowser.py
 """
 
 import json

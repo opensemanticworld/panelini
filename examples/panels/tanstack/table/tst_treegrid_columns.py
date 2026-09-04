@@ -5,7 +5,7 @@ toolbar that rewrites it; this one is a grid whose structure never changes and
 whose cells do. Install and run:
 
     uv sync
-    uv run python examples/panels/tanstack/table/treegrid_columns.py
+    uv run python examples/panels/tanstack/table/tst_treegrid_columns.py
 """
 
 import copy

@@ -4,7 +4,7 @@ Two panes side by side share one ``transfer_group``, so a row dragged out of eit
 one lands in the other. Install and run:
 
     uv sync
-    uv run python examples/panels/tanstack/table/tanstack_table_vfs_explorer.py
+    uv run python examples/panels/tanstack/table/tst_vfsexplorer_extfiledrop.py
 """
 
 from functools import partial
