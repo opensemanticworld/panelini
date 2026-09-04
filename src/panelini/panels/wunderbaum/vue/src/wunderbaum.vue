@@ -142,11 +142,20 @@ export default {
 
         click: (e) => {
           if (!e.node) return;
+          const action = this.clickAction(e);
           this.sendEvent('click', {
             key: e.node.key,
             title: e.node.title,
             data: e.node.data || {},
+            region: e.info ? String(e.info.region || '') : '',
+            colIdx: e.info ? e.info.colIdx : -1,
+            colId: e.info && e.info.colId ? e.info.colId : undefined,
+            action: action || undefined,
           });
+          // Clicks on a [data-action] element are commands, not navigation:
+          // suppress the default activate/focus handling, and leave the
+          // selection alone so a row action never doubles as a selection click.
+          if (action) return false;
           // The expander is navigation, not selection - leave it to wunderbaum.
           if (e.info?.region === 'expander') return;
           // Everything else is Windows Explorer selection, which wunderbaum does
@@ -162,6 +171,8 @@ export default {
             key: e.node.key,
             title: e.node.title,
             data: e.node.data || {},
+            region: e.info ? String(e.info.region || '') : '',
+            colIdx: e.info ? e.info.colIdx : -1,
           });
         },
 
@@ -211,6 +222,9 @@ export default {
 
         // Render event for treegrid columns
         render: (e) => {
+          // Per-row action icons from node.data.actions (see renderRowActions)
+          this.renderRowActions(e);
+
           // Populate treegrid columns from node.data
           // (non-reserved source properties are auto-moved to node.data)
           for (const col of Object.values(e.renderColInfosById || {})) {
@@ -236,7 +250,8 @@ export default {
               lines.push(`id: ${nodeId}`);
             }
             for (const [k, v] of Object.entries(data)) {
-              if (k === 'node_id' || k.startsWith('_')) continue;
+              // actions is wrapper machinery (renderRowActions), not payload
+              if (k === 'node_id' || k === 'actions' || k.startsWith('_')) continue;
               if (v !== '' && v !== undefined && v !== null) {
                 lines.push(`${k}: ${v}`);
               }
@@ -1082,6 +1097,49 @@ export default {
         || this.tree.findFirst((node) => node.data?.node_id === key);
     },
 
+    clickAction(e) {
+      // Nearest [data-action] ancestor of the click target, if any: lets
+      // row action icons (renderRowActions) report which one was hit.
+      const target = e.info && e.info.event ? e.info.event.target : null;
+      const holder = target && target.closest ? target.closest('[data-action]') : null;
+      return holder ? holder.dataset.action : null;
+    },
+
+    renderRowActions(e) {
+      // Nodes may declare data.actions = [{action, icon, tooltip}]; they are
+      // rendered as right-aligned icons revealed on row hover. Clicks on
+      // them arrive as click events with an `action` param (see clickAction).
+      const nodeElem = e.nodeElem;
+      if (!nodeElem) return;
+      const actions = (e.node.data && e.node.data.actions) || [];
+      let bar = nodeElem.querySelector('.wb-row-actions');
+      if (!actions.length) {
+        if (bar) bar.remove();
+        return;
+      }
+      if (!bar) {
+        bar = document.createElement('span');
+        bar.className = 'wb-row-actions';
+        nodeElem.appendChild(bar);
+      }
+      bar.textContent = '';
+      for (const item of actions) {
+        const icon = document.createElement('i');
+        icon.className = item.icon || '';
+        icon.setAttribute('data-action', item.action);
+        if (item.tooltip) icon.title = item.tooltip;
+        bar.appendChild(icon);
+      }
+    },
+
+    startEditTitle(key) {
+      const node = this.findByKey(key);
+      if (node) {
+        node.setActive(true);
+        node.startEditTitle();
+      }
+    },
+
     sendEvent(eventName, params) {
       // Strip undefined values to avoid JSON serialization errors
       const clean = JSON.parse(JSON.stringify(params));
@@ -1219,6 +1277,9 @@ export default {
           break;
         case 'setActiveNode':
           this.setActiveNode(payload.key);
+          break;
+        case 'startEditTitle':
+          this.startEditTitle(typeof payload === 'object' ? payload.key : payload);
           break;
         case 'filterNodes':
           this.filterNodes(payload.filter, payload.options);

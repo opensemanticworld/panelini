@@ -197,6 +197,7 @@ def _media_record(request):
     Browser.new_context = _recording_new_context
 
     page = request.getfixturevalue("page")
+
     restore_glide = None
     if animate:
         # Cursor + glide only for animations; keep screenshots cursor-free.

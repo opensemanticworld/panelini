@@ -144,6 +144,7 @@ _INTERACTIONS = {
     ("ai", "chat_min"): _chat_exchange,
     ("ai", "chat_custom_tool"): _chat_exchange,
     ("ai", "chat_no_preview_no_tools"): _chat_exchange,
+    ("ai", "chat_local_storage"): _chat_exchange,
 }
 
 

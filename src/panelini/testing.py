@@ -30,6 +30,18 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def stop_server(server: Any) -> None:
+    """Stop a threaded ``pn.serve()`` and wait for its thread to die.
+
+    ``stop()`` only schedules the shutdown, so the thread is still alive when it
+    returns. A following ``pn.state.reset()`` would then call ``stop()`` again on
+    that live thread and raise "Thread already stopping"; joining first makes the
+    teardown deterministic.
+    """
+    server.stop()
+    server.join()
+
+
 def disable_panelini_backgrounds() -> None:
     """Drop the heavy base64 background-image CSS from Panelini.
 

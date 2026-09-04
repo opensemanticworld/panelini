@@ -1,88 +1,325 @@
-"""Playwright UI tests for examples/panels/ai/chat_min.py."""
+"""Playwright UI tests for examples/panels/ai/chat_min.py.
+
+The standard chat opens with the folder tree; the same suite covers the
+tree flows, the runtime toggle, and the list flows behind it.
+"""
 
 import importlib
+import os
 import time
+import warnings
+from collections.abc import Callable
+from unittest.mock import patch
 
 import panel as pn
 import pytest
+from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+from panelini.ai_testing import StubChatModel
+from panelini.testing import stop_server, wait_until
 
 _PORT = 6310
 
 
 @pytest.fixture(scope="module")
-def panel_server(mock_langchain):
-    """Serve the real example module with mocked LangChain."""
-    p1, p2 = mock_langchain
-    with p1, p2:
-        module = importlib.reload(importlib.import_module("examples.panels.ai.chat_min"))
-        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
-        time.sleep(0.5)
-        yield server, _PORT
-        server.stop()
+def panel_server(mock_langchain, tmp_path_factory):
+    """Serve the example with a stubbed model and a temp history database."""
+    db_path = tmp_path_factory.mktemp("history") / "history.sqlite3"
+    previous = os.environ.get("PANELINI_HISTORY_DB")
+    os.environ["PANELINI_HISTORY_DB"] = str(db_path)
+    config_patch, _ = mock_langchain
+    model_patch = patch(
+        "panelini.panels.ai.utils.ai_interface.AiInterface._initialize_model",
+        return_value=StubChatModel(),
+    )
+    try:
+        with warnings.catch_warnings(), config_patch, model_patch:
+            # tripwire: any double-attached component fails the suite
+            warnings.simplefilter("error", BokehUserWarning)
+            module = importlib.reload(importlib.import_module("examples.panels.ai.chat_min"))
+            server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
+            time.sleep(0.5)
+            yield server, _PORT
+            stop_server(server)
+    finally:
+        if previous is None:
+            os.environ.pop("PANELINI_HISTORY_DB", None)
+        else:
+            os.environ["PANELINI_HISTORY_DB"] = previous
 
 
 @pytest.fixture(scope="module")
 def ready_page(browser, panel_server):
-    """Browser page navigated and ready."""
+    """Browser page with the sidebar opened."""
     _, port = panel_server
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    page.locator("text=Hello! 👋").first.wait_for()
+    # no welcome message: the prompt box is the ready signal
+    page.locator(".chat-interface textarea").first.wait_for()
+    page.locator(".left-navbar-button").first.click()
+    page.locator("text=Conversations").first.wait_for()
     yield page
     page.goto("about:blank")
     context.close()
 
 
+def _send_message(page: Page, text: str) -> None:
+    # inactive session feeds stay mounted but hidden; target the visible one
+    box = page.locator("textarea:visible").first
+    box.click()
+    box.fill(text)
+    box.press("Enter")
+    page.locator("text=simulated reply >> visible=true").first.wait_for(timeout=20000)
+
+
+def _chat_rows(page: Page, title: str = "New Chat") -> int:
+    # an empty tree renders one blank placeholder .wb-row; count real chats
+    return page.locator(".wb-row", has_text=title).count()
+
+
+def _row_action(page: Page, title: str, action: str, applied: Callable[[], None]) -> None:
+    """Hover a conversation row and hit one of its icons, retrying a lost click.
+
+    A refresh rebuilds every row, so a click landing mid-rebuild misses the
+    icon, hits the row underneath and is dropped. ``applied`` must raise on a
+    bounded timeout; it is what tells the two cases apart.
+    """
+    for _ in range(5):
+        row = page.locator(".wb-row", has_text=title).first
+        row.hover()
+        row.locator(f"[data-action={action}]").click()
+        try:
+            applied()
+        except PlaywrightTimeoutError:
+            continue
+        return
+    msg = f"{action} on {title!r} never took effect"
+    raise AssertionError(msg)
+
+
 def test_chat_min_renders(ready_page: Page):
-    """Verify the minimal AI chat example renders its main UI elements."""
+    """Chat card, empty feed, the empty-tree hint, and both sidebar tabs."""
     page = ready_page
 
-    # Chat and Preview cards are visible. Exact heading match: a plain
-    # text=Chat/text=Preview locator also matches unrelated sidebar
-    # substrings ("Chat Management", "Update Preview" checkbox label).
+    # Exact heading match: a plain text=Chat locator also matches unrelated
+    # sidebar substrings.
     assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
-    assert page.get_by_role("heading", name="Preview", exact=True).is_visible()
+    # the chat fills the main area: no preview pane unless asked for
+    assert page.get_by_role("heading", name="Preview", exact=True).count() == 0
+    # the chat starts empty: no greeting is posted
+    assert page.locator(".chat-interface .chat-message").count() == 0
 
-    # Welcome message is shown
-    assert page.locator("text=Hello! 👋").first.is_visible()
+    # a fresh tree shows the hint, not a blank placeholder row
+    page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+    assert page.locator(".wunderbaum-wrapper:visible").count() == 0
 
-    # The left sidebar starts collapsed (Panelini's sidebar_visible defaults
-    # to False), so it must be opened before its contents are interactable.
-    # ready_page is module-scoped and shared with other tests in this file,
-    # so only toggle if it's still closed. Wait for the open transition to
-    # finish; is_visible() checks instantaneously and does not auto-wait.
-    general_setup = page.locator("text=General Setup").first
-    if not general_setup.is_visible():
-        page.locator(".left-navbar-button").first.click()
-        general_setup.wait_for()
-
-    # Sidebar: General Setup card is present
-    assert page.locator("text=General Setup").first.is_visible()
-
-    # Sidebar: Provider Settings card is present
-    assert page.locator("text=Provider Settings").first.is_visible()
+    # Sidebar: conversations tab is the one shown, setup sits next to it
+    page.locator(".bk-tab", has_text="⚙️").first.click()
+    page.locator("text=Provider Settings").first.wait_for()
+    page.locator(".bk-tab", has_text="💬").first.click()
+    page.locator("text=Conversations").first.wait_for()
 
 
-def test_chat_min_clear_chat(ready_page: Page):
-    """Verify the Clear Chat button works."""
+def test_new_chat_button_creates_and_selects_node(ready_page: Page):
+    page = ready_page
+    assert _chat_rows(page) == 0
+
+    page.locator(".history-new-chat:visible").first.click()
+
+    # the chat is materialized immediately and selected; the hint yields
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+    page.locator(".wb-row.wb-active", has_text="New Chat").first.wait_for(timeout=10000)
+    assert page.locator(".history-empty:visible").count() == 0
+
+
+def test_message_goes_into_selected_chat(ready_page: Page):
+    page = ready_page
+    # header shows the current (anonymous) user
+    assert page.locator(".user-chip", has_text="Guest").first.is_visible()
+
+    _send_message(page, "Hello history")
+
+    # persisted into the already-selected chat, which the message renamed
+    wait_until(lambda: _chat_rows(page, "Hello history") == 1)
+    assert _chat_rows(page) == 0
+
+
+def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     page = ready_page
 
-    # Welcome message should be visible before clearing
-    assert page.locator("text=Hello! 👋").first.is_visible()
+    page.locator(".history-new-chat:visible").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+    # the previous conversation's feed stays mounted but hidden
+    hidden = page.locator(".chat-interface").locator("text=Hello history").first
+    hidden.wait_for(state="hidden")
 
-    # Clear Chat lives in the sidebar's General Setup card, which starts
-    # collapsed (Panelini's sidebar_visible defaults to False). ready_page is
-    # module-scoped and shared with test_chat_min_renders, which may have
-    # already opened it, so only toggle if it's still closed.
-    clear_chat_button = page.locator("button:has-text('Clear Chat')")
-    if not clear_chat_button.is_visible():
-        page.locator(".left-navbar-button").first.click()
+    # reopen the original by activating its node; messages replay
+    page.locator(".wb-row", has_text="Hello history").first.click()
+    page.locator(".chat-interface").locator("text=Hello history >> visible=true").first.wait_for()
+    reply = page.get_by_text("simulated reply", exact=False).first
+    reply.wait_for()
+    assert reply.is_visible()
 
-    # Click clear chat button
-    clear_chat_button.click()
 
-    # System message about clearing should appear
-    page.locator("text=Chat and conversation history cleared").first.wait_for()
-    assert page.locator("text=Chat and conversation history cleared").first.is_visible()
+def test_trash_delete_offers_undo(ready_page: Page):
+    """The hover trash deletes without switching chats; Undo re-puts it."""
+    page = ready_page
+
+    # right-click must NOT open a menu (the context menu is disabled)
+    page.locator(".wb-row", has_text="New Chat").first.click(button="right")
+    time.sleep(0.3)
+    assert page.locator(".wb-context-menu:visible").count() == 0
+
+    _row_action(
+        page,
+        "New Chat",
+        "delete",
+        lambda: page.locator(".wb-row", has_text="New Chat").first.wait_for(state="detached", timeout=5000),
+    )
+
+    wait_until(lambda: _chat_rows(page) == 0)
+    # the trash click did not activate the row: the open chat is unchanged
+    assert page.locator(".wb-row.wb-active", has_text="Hello history").first.is_visible()
+    # the undo icon in the New Chat row becomes clickable
+    undo = page.locator(".history-undo button:not([disabled])").first
+    undo.wait_for()
+    undo.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+    # undo drained, redo armed: redo re-deletes, undo brings it back
+    page.locator(".history-undo button[disabled]").first.wait_for()
+    page.locator(".history-redo button:not([disabled])").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(state="detached")
+    page.locator(".history-undo button:not([disabled])").first.click()
+    page.locator(".wb-row", has_text="New Chat").first.wait_for(timeout=10000)
+
+
+def test_import_export_icons_sit_in_the_new_chat_row(ready_page: Page):
+    """Both icons share the Conversations card's first row, same size."""
+    page = ready_page
+
+    new_chat = page.locator(".history-new-chat button:visible").first.bounding_box()
+    upload = page.locator(".chat-upload input:visible").first.bounding_box()
+    download = page.locator(".chat-download button:visible").first.bounding_box()
+    assert new_chat and upload and download
+
+    # same row: the icons overlap the New Chat button vertically
+    assert upload["y"] < new_chat["y"] + new_chat["height"]
+    assert download["y"] == upload["y"]
+    # matched icon boxes, download to the right of upload
+    assert (upload["width"], upload["height"]) == (download["width"], download["height"])
+    assert download["x"] > upload["x"]
+
+
+def test_toggle_to_list_for_rename_and_delete(ready_page: Page):
+    """The list view behind the toggle keeps its rename/delete flows."""
+    page = ready_page
+
+    page.locator(".history-view-toggle button:visible").first.click()
+    page.locator(".history-title:visible").first.wait_for()
+    assert page.locator("text=Today").first.is_visible()
+    assert page.locator(".history-title:visible").count() == 2
+
+    page.locator(".history-rename").first.click()
+    rename_input = page.locator(".history-rename-input input").first
+    rename_input.wait_for()
+    rename_input.fill("Renamed chat")
+    rename_input.press("Enter")
+    page.locator(".history-title", has_text="Renamed chat").first.wait_for()
+
+    # two-click delete: first click arms, second deletes
+    page.locator(".history-delete").first.click()
+    time.sleep(0.3)
+    assert page.locator(".history-title:visible").count() == 2
+    page.locator(".history-delete").first.click()
+    page.locator(".history-title", has_text="Renamed chat").first.wait_for(state="detached")
+    assert page.locator(".history-title:visible").count() == 1
+
+    # back to the tree; the surviving conversation is there
+    page.locator(".history-view-toggle button:visible").first.click()
+    page.locator(".wb-row", has_text="Hello history").first.wait_for()
+    assert page.locator(".history-title:visible").count() == 0
+
+
+def test_card_collapse_survives_tab_switch(ready_page: Page):
+    """Regression: dynamic tabs broke Card expand bindings after a round-trip.
+
+    The Conversations card is not collapsible, so this rides on a card in
+    the setup tab that still is.
+    """
+    page = ready_page
+
+    page.locator(".bk-tab", has_text="⚙️").first.click()
+    provider_label = page.get_by_text("Provider", exact=True)
+    provider_label.wait_for()
+
+    page.locator("text=Provider Settings").first.click()  # collapse
+    provider_label.wait_for(state="hidden")
+
+    page.locator(".bk-tab", has_text="💬").first.click()
+    # both view cards carry this title; wait for the visible one
+    page.locator("text=Conversations >> visible=true").first.wait_for()
+    page.locator(".bk-tab", has_text="⚙️").first.click()
+
+    page.locator("text=Provider Settings").first.click()  # expand again
+    provider_label.wait_for(state="visible")
+    page.locator(".bk-tab", has_text="💬").first.click()  # leave the tab as found
+
+
+def test_history_is_per_user(browser, panel_server, ready_page: Page):
+    """A second browser context (own cookie jar) sees its own empty history."""
+    _, port = panel_server
+
+    _send_message(ready_page, "Private note of user A")
+    ready_page.locator(".wb-row", has_text="Hello history").first.wait_for()
+
+    context_b = browser.new_context()
+    try:
+        page_b = context_b.new_page()
+        page_b.goto(f"http://localhost:{port}")
+        page_b.locator(".chat-interface textarea").first.wait_for()
+        page_b.locator(".left-navbar-button").first.click()
+        page_b.locator("text=Conversations").first.wait_for()
+        page_b.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+        assert page_b.locator(".wunderbaum-wrapper:visible").count() == 0
+        assert page_b.locator("text=Private note of user A").count() == 0
+    finally:
+        context_b.close()
+
+
+def test_row_actions_rename_delete_and_empty_end_state(ready_page: Page):
+    """Pencil renames inline; deleting the last chat leaves NO ghost row.
+
+    Runs last: it renames and finally deletes the surviving conversation.
+    """
+    page = ready_page
+
+    _row_action(
+        page,
+        "Hello history",
+        "rename",
+        lambda: page.locator("input.wb-input-edit").first.wait_for(timeout=5000),
+    )
+    edit = page.locator("input.wb-input-edit").first
+    edit.fill("Renamed via icon")
+    edit.press("Enter")
+    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(timeout=10000)
+
+    # delete the last (active) conversation: no "New Chat" row respawns,
+    # the empty hint returns, and undo is still offered
+    _row_action(
+        page,
+        "Renamed via icon",
+        "delete",
+        lambda: page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(state="detached", timeout=5000),
+    )
+    page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
+    assert _chat_rows(page) == 0  # no ghost "New Chat" node
+
+    undo = page.locator(".history-undo button:not([disabled])").first
+    undo.wait_for()
+    undo.click()
+    page.locator(".wb-row", has_text="Renamed via icon").first.wait_for(timeout=10000)
+    assert page.locator(".history-empty:visible").count() == 0

@@ -13,6 +13,6 @@
 :titlesonly:
 :maxdepth: 1
 
-panelini.panels.ai.plot.utils.osw_env
 panelini.panels.ai.plot.utils.sandbox
+panelini.panels.ai.plot.utils.osw_env
 ```

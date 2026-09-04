@@ -112,6 +112,41 @@ def test_wunderbaum_table_mode():
     assert len(tree.columns) == 2
 
 
+def test_event_batches_dispatch_in_order():
+    """A {seq, events} batch delivers every event; same-gesture pairs survive."""
+    events_received: list = []
+
+    def on_event(name: str, params: dict) -> None:
+        events_received.append((name, params))
+
+    tree = Wunderbaum(tree_event_callback=on_event)
+    tree._event_data = {
+        "seq": 1,
+        "events": [
+            {"event_name": "click", "event_params": {"key": "1", "action": "delete"}},
+            {"event_name": "activate", "event_params": {"key": "1"}},
+        ],
+    }
+    assert events_received == [
+        ("click", {"key": "1", "action": "delete"}),
+        ("activate", {"key": "1"}),
+    ]
+
+
+def test_legacy_single_event_shape_still_dispatches():
+    events_received: list = []
+    tree = Wunderbaum(tree_event_callback=lambda name, params: events_received.append(name))
+    tree._event_data = {"event_name": "click", "event_params": {"key": "1"}}
+    assert events_received == ["click"]
+
+
+def test_start_edit_title_sends_the_tree_action():
+    tree = Wunderbaum()
+    tree.start_edit_title("node-1")
+    assert tree._tree_action["action"] == "startEditTitle"
+    assert tree._tree_action["payload"] == {"key": "node-1"}
+
+
 def test_wunderbaum_tree_id_default_is_empty():
     """Test that tree_id defaults to an empty string."""
     tree = Wunderbaum()
