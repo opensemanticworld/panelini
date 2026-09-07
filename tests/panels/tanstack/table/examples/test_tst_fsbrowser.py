@@ -135,11 +135,11 @@ def test_a_load_records_no_undo_step(page: Page, port, example):
 def test_the_synthetic_tree_is_the_size_the_knob_asks_for(page: Page, port, example):
     """The one exact count in the file, because this tree is minted rather than read."""
     server = serve_both(example, page, port)
-    assert node_count(example.bench.source) == example.SIZES["1,000 nodes"]
+    assert node_count(example.bench.source) == example.SIZES[example.INITIAL]
 
-    page.get_by_role("button", name="100 nodes").click()
+    page.get_by_role("button", name="100", exact=True).click()
 
-    wait_until(lambda: node_count(example.bench.source) == example.SIZES["100 nodes"], timeout=15)
+    wait_until(lambda: node_count(example.bench.source) == example.SIZES["100"], timeout=15)
 
     server.stop()
 

@@ -2,16 +2,17 @@
 
 Two things that are hard to show on a tree that fits in a file. The left pane walks
 this repository with ``pathlib`` behind ``lazy_callback``, so nothing is read until
-a folder is opened and nothing is ever written. The right pane mints 100, 1,000 or
-10,000 nodes on demand and reports what that costs: the bytes ``source`` holds, the
-bytes the browser is actually sent, and the number of rows in the DOM. Install and
-run:
+a folder is opened and nothing is ever written. The right pane mints anything from
+one node to a million on demand and reports what that costs: how long the mint and
+the push took, the bytes ``source`` holds, the bytes the browser is actually sent,
+and the number of rows in the DOM. Install and run:
 
     uv sync
     uv run python examples/panels/tanstack/table/tst_fsbrowser.py
 """
 
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -218,7 +219,14 @@ preload_button.on_click(preload)
 
 # --- The right pane: a tree of a chosen size, and what it costs. ----------------
 
-SIZES = {"100 nodes": 100, "1,000 nodes": 1000, "10,000 nodes": 10000}
+# Six orders of magnitude, from a tree of one to a tree of a million. The labels
+# are short because six of them share the width of one pane, and because a reader
+# comparing them is comparing the exponent rather than reading a number.
+SIZES = {"1": 1, "100": 100, "1k": 1_000, "10k": 10_000, "100k": 100_000, "1M": 1_000_000}
+
+# What the tree the readout describes starts at: large enough to be a tree, small
+# enough that opening the page costs nothing.
+INITIAL = "1k"
 
 # Ten files per folder, which is the shape that prunes worst of the three measured
 # in the plan: a shallow tree of huge folders would flatter these numbers.
@@ -268,7 +276,7 @@ def wire_bytes(table: TanstackTable) -> tuple[int, int]:
 
 
 bench = TanstackTable(
-    source=synthetic(SIZES["1,000 nodes"]),
+    source=[],
     columns=[
         {"id": "title", "header": "Name", "width": 260, "min_width": 160},
         {"id": "size", "header": "Size", "width": 100},
@@ -288,6 +296,27 @@ bench = TanstackTable(
 
 readout = pn.pane.Markdown("", sizing_mode="stretch_width")
 
+# What the last mint and the last push cost, in seconds. Python's half of the
+# answer: building the dicts, then rewriting the pruned view the browser is sent.
+# The browser's half, receiving that view and building a row model from it, is on
+# top of this and is not something Python can time.
+timing = {"mint": 0.0, "push": 0.0}
+
+
+def clock(seconds: float) -> str:
+    """A duration a reader can compare at a glance."""
+    return f"{seconds * 1000:.0f} ms" if seconds < 1 else f"{seconds:.2f} s"
+
+
+def mint(count: int) -> None:
+    """Build a tree of exactly *count* nodes, push it, and time both halves."""
+    started = time.perf_counter()
+    nodes = synthetic(count)
+    built = time.perf_counter()
+    bench.set_source(nodes)
+    timing["mint"] = built - started
+    timing["push"] = time.perf_counter() - built
+
 
 def report(*_events: Any) -> None:
     """Publish what the current synthetic tree weighs on each side of the wire."""
@@ -295,22 +324,25 @@ def report(*_events: Any) -> None:
     ratio = f"{held / sent:.0f}x" if sent else "n/a"
     nodes = sum(1 for _ in tree.iter_nodes(bench.source))
     readout.object = (
-        f"| | bytes |\n| --- | --- |\n"
+        f"| measure | value |\n| --- | --- |\n"
         f"| nodes in `source` | {nodes:,} |\n"
-        f"| `source` holds | {held:,} |\n"
-        f"| the browser is sent | {sent:,} |\n"
+        f"| `source` holds | {held:,} bytes |\n"
+        f"| the browser is sent | {sent:,} bytes |\n"
         f"| saved by `prune` | **{ratio}** |\n"
+        f"| minted in Python | {clock(timing['mint'])} |\n"
+        f"| pruned and pushed | **{clock(timing['push'])}** |\n"
     )
 
 
 def resize(event: Any) -> None:
     """Mint a new tree of the chosen size."""
-    bench.set_source(synthetic(SIZES[event.new]))
+    mint(SIZES[event.new])
     report()
 
 
-size_choice = pn.widgets.RadioButtonGroup(name="Size", options=list(SIZES), value="1,000 nodes", button_type="default")
+size_choice = pn.widgets.RadioButtonGroup(name="Size", options=list(SIZES), value=INITIAL, button_type="default")
 size_choice.param.watch(resize, "value")
+mint(SIZES[INITIAL])
 # The view is rebuilt whenever a branch opens or closes, which is exactly when the
 # number moves, so the readout follows the same param the pruning does.
 bench.param.watch(report, "expanded_keys")
@@ -338,8 +370,21 @@ dom_rows = pn.pane.HTML(
     }
     return found;
   }
+  // This pane is in a shadow root of its own, so the element the count is written
+  // into is no more reachable from the document than the rows are.
+  function find(root, selector) {
+    const here = root.querySelector(selector);
+    if (here) return here;
+    for (const el of root.querySelectorAll('*')) {
+      if (el.shadowRoot) {
+        const found = find(el.shadowRoot, selector);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
   window.__pnlRowCounter = setInterval(function () {
-    const out = document.getElementById('pnl-dom-rows');
+    const out = find(document, '#pnl-dom-rows');
     if (!out) return;
     const counts = walk(document, []);
     out.textContent = counts.length ? counts.join(' + ') + ' = ' + counts.reduce((a, b) => a + b, 0) : '0';
@@ -376,9 +421,17 @@ notes = pn.pane.Markdown(
 - **Close a folder** on either pane and watch the byte count on the right. With
   `prune: "collapsed"` a closed branch stops crossing the wire, and re-opening it
   is answered out of Python's own tree rather than by reading the disk again.
-- **Pick 10,000 nodes** and expand everything. `source` holds about a megabyte, the
-  browser is sent a fraction of it, and the row count stays near a screenful
-  however far you scroll: the rows below the fold are not in the DOM at all.
+- **Pick 10k** and expand everything. `source` holds about a megabyte, the browser
+  is sent a fraction of it, and the row count stays near a screenful however far
+  you scroll: the rows below the fold are not in the DOM at all.
+- **Walk the sizes from 1 to 1M** and watch the two times. Minting is Python
+  building dicts and pruning is Python rewriting the view, and both stay linear:
+  ten times the tree is about ten times the work, all the way up.
+- **1M is the honest ceiling.** `source` holds about a hundred megabytes and half a
+  gigabyte of Python objects, the pruned view is still ten megabytes, and the
+  browser needs a few seconds to receive it and build a row model of the ninety
+  thousand folders that survive the prune. The two times below are Python's half
+  only; the wall clock is longer, and that gap is the browser's.
 - The row count is the example's own JavaScript walking the shadow roots. The panel
   exposes no such number, and this is the one place it is worth having.
 """,
@@ -408,7 +461,11 @@ app.main_set(
             ),
             framed(
                 pn.pane.Markdown("#### Synthetic tree", margin=(0, 0, 5, 5)),
-                size_choice,
+                pn.Row(
+                    pn.pane.Markdown("Nodes", margin=(0, 8, 0, 5)),
+                    size_choice,
+                    sizing_mode="stretch_width",
+                ),
                 bench,
             ),
             pn.Column(
