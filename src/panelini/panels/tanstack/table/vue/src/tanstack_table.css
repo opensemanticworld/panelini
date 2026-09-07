@@ -188,8 +188,12 @@
   outline-offset: -2px;
 }
 
+/* Stretched to the row rather than sized by its content, because a cell holding
+   nothing is otherwise zero high and an editable column with no value in it has
+   nothing to double click on. The cell centres its own children either way. */
 .pnl-tst-cell {
   display: flex;
+  align-self: stretch;
   align-items: center;
   overflow: hidden;
   gap: 4px;

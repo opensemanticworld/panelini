@@ -4169,6 +4169,31 @@ def test_double_click_opens_an_editor_on_an_editable_cell(page: Page, port):
     server.stop()
 
 
+def test_an_empty_cell_of_an_editable_column_opens_too(page: Page, port):
+    """A cell with no value in it is still a cell.
+
+    It is the one a value has to be typed into first, and a cell sized by its
+    content is zero high when it holds nothing, so there is nothing to double click
+    on. The row's height is the height every cell in it takes.
+    """
+    table = editable_table()
+    server = serve(table, page, port)
+
+    empty = cell(page, 0, 1)  # the Size of Folder A, which carries no size
+    assert empty.inner_text().strip() == ""
+    box, row_box = empty.bounding_box(), rows(page).nth(0).bounding_box()
+    assert box is not None and row_box is not None
+    assert box["height"] == row_box["height"]
+
+    empty.dblclick()
+
+    expect(editor(page)).to_have_count(1, timeout=10000)
+    assert editor(page).input_value() == ""
+    wait_until(lambda: (table.editing_key, table.editing_column) == ("a", "size"), timeout=10)
+
+    server.stop()
+
+
 def test_double_click_on_a_column_that_is_not_editable_opens_nothing(page: Page, port):
     table = editable_table()
     server = serve(table, page, port)
