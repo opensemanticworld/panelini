@@ -33,6 +33,13 @@ Interactive network graphs with context menus and drag interactions.
 Trees and tree-grids - columns, checkboxes, lazy loading, drag-and-drop, and more.
 :::
 
+:::{grid-item-card} TanStack Table
+:link: tanstack/index
+:link-type: doc
+:img-top: /_static/media/tanstack/tst_vfsexplorer_extfiledrop_overview.webp
+Accessible treegrids - cell editors, undo, cross-pane drag, external file drop, lazy loading.
+:::
+
 :::{grid-item-card} Terminal Mirror
 :link: terminalmirror/index
 :link-type: doc
