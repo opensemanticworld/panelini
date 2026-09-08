@@ -1,18 +1,14 @@
-"""A real filesystem, loaded a directory at a time, beside a tree with a size knob.
+"""A real filesystem, loaded one directory at a time and never written to.
 
-Two things that are hard to show on a tree that fits in a file. The left pane walks
-this repository with ``pathlib`` behind ``lazy_callback``, so nothing is read until
-a folder is opened and nothing is ever written. The right pane mints anything from
-one node to a million on demand and reports what that costs: how long the mint and
-the push took, the bytes ``source`` holds, the bytes the browser is actually sent,
-and the number of rows in the DOM. Install and run:
+This walks the repository it lives in with ``pathlib`` behind ``lazy_callback``:
+the whole tree starts as a single node, nothing is read until a folder is opened,
+and both Python hooks refuse every change. A tree of a size no file could hold is
+in ``tst_bigtree.py``. Install and run:
 
     uv sync
     uv run python examples/panels/tanstack/table/tst_fsbrowser.py
 """
 
-import json
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -159,10 +155,10 @@ browser = TanstackTable(
         "select_mode": "single",
         "show_checkboxes": False,
         "sort_folders_first": True,
-        # A branch that is closed again stops crossing, so a session that has been
-        # opened wide costs what is on screen rather than everything ever read.
-        # Re-opening it is answered out of Python's own tree without asking the
-        # loader a second time.
+        # Only the folders that have been opened cross the wire, so walking three
+        # directories deep costs those three rather than the repository. Closing
+        # one again leaves it with the browser, and re-opening it is answered out
+        # of Python's own tree without asking the loader a second time.
         "prune": "collapsed",
         # No add, no delete, no rename, and because the list gates the shortcuts
         # too, no `Insert`, `Delete` or `F2` either. `expand-all` is absent for a
@@ -217,194 +213,16 @@ def preload(_event: Any) -> None:
 preload_button = pn.widgets.Button(name="Preload 2 levels", button_type="primary", width=150)
 preload_button.on_click(preload)
 
-# --- The right pane: a tree of a chosen size, and what it costs. ----------------
-
-# Six orders of magnitude, from a tree of one to a tree of a million. The labels
-# are short because six of them share the width of one pane, and because a reader
-# comparing them is comparing the exponent rather than reading a number.
-SIZES = {"1": 1, "100": 100, "1k": 1_000, "10k": 10_000, "100k": 100_000, "1M": 1_000_000}
-
-# What the tree the readout describes starts at: large enough to be a tree, small
-# enough that opening the page costs nothing.
-INITIAL = "1k"
-
-# Ten files per folder, which is the shape that prunes worst of the three measured
-# in the plan: a shallow tree of huge folders would flatter these numbers.
-PER_FOLDER = 10
-
-
-def synthetic(count: int) -> list[dict[str, Any]]:
-    """A tree of exactly `count` nodes, folders of ten files each."""
-    nodes: list[dict[str, Any]] = []
-    minted = 0
-    index = 0
-    while minted < count:
-        minted += 1
-        children: list[dict[str, Any]] = []
-        while len(children) < PER_FOLDER and minted < count:
-            child = len(children)
-            children.append({
-                "key": f"f{index}-{child}",
-                "title": f"item-{index}-{child}.txt",
-                "type": "file",
-                "size": f"{(index * 37 + child * 11) % 9000:,}",
-                "modified": "2026-01-01 00:00",
-            })
-            minted += 1
-        nodes.append({
-            "key": f"f{index}",
-            "title": f"folder-{index:04d}",
-            "type": "folder",
-            "size": "",
-            "modified": "2026-01-01 00:00",
-            "children": children,
-        })
-        index += 1
-    return nodes
-
-
-def wire_bytes(table: TanstackTable) -> tuple[int, int]:
-    """What the tree weighs, and what the browser is actually sent.
-
-    `_view` is private on purpose: it is derived from `source` and nothing outside
-    the panel should ever write it. Reading it is how this example puts a number on
-    what pruning is worth, and is not something an application needs to do.
-    """
-    held = len(json.dumps(table.source, separators=(",", ":")))
-    sent = len(json.dumps(table._view, separators=(",", ":")))
-    return held, sent
-
-
-bench = TanstackTable(
-    source=[],
-    columns=[
-        {"id": "title", "header": "Name", "width": 260, "min_width": 160},
-        {"id": "size", "header": "Size", "width": 100},
-        {"id": "modified", "header": "Modified", "width": 150},
-    ],
-    types={"folder": FOLDER_TYPE, "file": FILE_TYPE},
-    options={
-        "aria_label": "Synthetic tree",
-        "enable_dnd": False,
-        "select_mode": "single",
-        "show_checkboxes": False,
-        "prune": "collapsed",
-        "toolbar": ["expand-all", "collapse-all", "|", "search"],
-    },
-    sizing_mode="stretch_both",
-)
-
-readout = pn.pane.Markdown("", sizing_mode="stretch_width")
-
-# What the last mint and the last push cost, in seconds. Python's half of the
-# answer: building the dicts, then rewriting the pruned view the browser is sent.
-# The browser's half, receiving that view and building a row model from it, is on
-# top of this and is not something Python can time.
-timing = {"mint": 0.0, "push": 0.0}
-
-
-def clock(seconds: float) -> str:
-    """A duration a reader can compare at a glance."""
-    return f"{seconds * 1000:.0f} ms" if seconds < 1 else f"{seconds:.2f} s"
-
-
-def mint(count: int) -> None:
-    """Build a tree of exactly *count* nodes, push it, and time both halves."""
-    started = time.perf_counter()
-    nodes = synthetic(count)
-    built = time.perf_counter()
-    bench.set_source(nodes)
-    timing["mint"] = built - started
-    timing["push"] = time.perf_counter() - built
-
-
-def report(*_events: Any) -> None:
-    """Publish what the current synthetic tree weighs on each side of the wire."""
-    held, sent = wire_bytes(bench)
-    ratio = f"{held / sent:.0f}x" if sent else "n/a"
-    nodes = sum(1 for _ in tree.iter_nodes(bench.source))
-    readout.object = (
-        f"| measure | value |\n| --- | --- |\n"
-        f"| nodes in `source` | {nodes:,} |\n"
-        f"| `source` holds | {held:,} bytes |\n"
-        f"| the browser is sent | {sent:,} bytes |\n"
-        f"| saved by `prune` | **{ratio}** |\n"
-        f"| minted in Python | {clock(timing['mint'])} |\n"
-        f"| pruned and pushed | **{clock(timing['push'])}** |\n"
-    )
-
-
-def resize(event: Any) -> None:
-    """Mint a new tree of the chosen size."""
-    mint(SIZES[event.new])
-    report()
-
-
-size_choice = pn.widgets.RadioButtonGroup(name="Size", options=list(SIZES), value=INITIAL, button_type="default")
-size_choice.param.watch(resize, "value")
-mint(SIZES[INITIAL])
-# The view is rebuilt whenever a branch opens or closes, which is exactly when the
-# number moves, so the readout follows the same param the pruning does.
-bench.param.watch(report, "expanded_keys")
-report()
-
-# The panel counts no rows for anybody, so this walks the shadow roots and counts
-# them here. It is the one number that shows P15 doing its job: expand every folder
-# of the 10,000 node tree and the DOM still holds a screenful.
-dom_rows = pn.pane.HTML(
-    """
-<div style="font-size:13px">rows in the DOM:
-  <strong id="pnl-dom-rows" style="font-family:monospace">counting</strong>
-</div>
-<script>
-(function () {
-  if (window.__pnlRowCounter) return;
-  // Panel renders each table into a nested shadow root, so a plain
-  // querySelectorAll from the document sees none of the rows.
-  function walk(root, found) {
-    for (const el of root.querySelectorAll('*')) {
-      if (el.shadowRoot) walk(el.shadowRoot, found);
-    }
-    for (const group of root.querySelectorAll('.pnl-tst-body')) {
-      found.push(group.querySelectorAll('[role="row"]').length);
-    }
-    return found;
-  }
-  // This pane is in a shadow root of its own, so the element the count is written
-  // into is no more reachable from the document than the rows are.
-  function find(root, selector) {
-    const here = root.querySelector(selector);
-    if (here) return here;
-    for (const el of root.querySelectorAll('*')) {
-      if (el.shadowRoot) {
-        const found = find(el.shadowRoot, selector);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  window.__pnlRowCounter = setInterval(function () {
-    const out = find(document, '#pnl-dom-rows');
-    if (!out) return;
-    const counts = walk(document, []);
-    out.textContent = counts.length ? counts.join(' + ') + ' = ' + counts.reduce((a, b) => a + b, 0) : '0';
-  }, 500);
-})();
-</script>
-""",
-    sizing_mode="stretch_width",
-)
-
 # --- Notes ----------------------------------------------------------------------
 
 notes = pn.pane.Markdown(
     """
 ### Try it
 
-- **Open a folder on the left.** Nothing under it existed a moment ago: the node
-  was marked `lazy`, the twisty asked Python for its contents, and `pathlib` read
-  exactly one directory. The row is `aria-busy` while it waits, which a screen
-  reader announces.
+- **Open a folder.** Nothing under it existed a moment ago: the node was marked
+  `lazy`, the twisty asked Python for its contents, and `pathlib` read exactly one
+  directory. The row is `aria-busy` while it waits, which a screen reader
+  announces.
 - The whole repository starts as **one node**. A tree that had to arrive complete
   could not be handed over at all.
 - **Preload 2 levels** fills every folder under the selected one at once. Each fill
@@ -418,22 +236,11 @@ notes = pn.pane.Markdown(
 - **Search reads what is loaded.** That is the honest cost of a lazy tree: Python
   cannot search a directory it has not read. Preload a branch and its contents join
   the search.
-- **Close a folder** on either pane and watch the byte count on the right. With
-  `prune: "collapsed"` a closed branch stops crossing the wire, and re-opening it
-  is answered out of Python's own tree rather than by reading the disk again.
-- **Pick 10k** and expand everything. `source` holds about a megabyte, the browser
-  is sent a fraction of it, and the row count stays near a screenful however far
-  you scroll: the rows below the fold are not in the DOM at all.
-- **Walk the sizes from 1 to 1M** and watch the two times. Minting is Python
-  building dicts and pruning is Python rewriting the view, and both stay linear:
-  ten times the tree is about ten times the work, all the way up.
-- **1M is the honest ceiling.** `source` holds about a hundred megabytes and half a
-  gigabyte of Python objects, the pruned view is still ten megabytes, and the
-  browser needs a few seconds to receive it and build a row model of the ninety
-  thousand folders that survive the prune. The two times below are Python's half
-  only; the wall clock is longer, and that gap is the browser's.
-- The row count is the example's own JavaScript walking the shadow roots. The panel
-  exposes no such number, and this is the one place it is worth having.
+- **What crosses is what you opened.** With `prune: "collapsed"` a folder nobody
+  has opened arrives as a twisty and nothing more, so the wire carries the path you
+  walked rather than the repository. Closing one again leaves it with the browser,
+  which is what makes re-opening it instant and free of a second read.
+  `tst_bigtree.py` puts a number on the saving.
 """,
     sizing_mode="stretch_width",
 )
@@ -459,18 +266,7 @@ app.main_set(
                 preload_button,
                 browser,
             ),
-            framed(
-                pn.pane.Markdown("#### Synthetic tree", margin=(0, 0, 5, 5)),
-                pn.Row(
-                    pn.pane.Markdown("Nodes", margin=(0, 8, 0, 5)),
-                    size_choice,
-                    sizing_mode="stretch_width",
-                ),
-                bench,
-            ),
             pn.Column(
-                readout,
-                dom_rows,
                 log,
                 notes,
                 styles=PANE_STYLES,
