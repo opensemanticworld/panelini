@@ -1,53 +1,41 @@
 """What the filesystem browser example promises, asserted as invariants.
 
-The left pane walks this repository, so nothing here names a file, counts a
+The example walks this repository, so nothing here names a file, counts a
 directory or assumes a depth: what is pinned down is that one node becomes a tree
-one directory at a time, that a preload is a single push, and that a collapsed
-branch stops crossing the wire. Only the right pane's synthetic tree is exact,
-because the example mints it.
+one directory at a time, that a preload is a single push, and that only the
+folders somebody opened cross the wire. The exact counts live in the big tree
+example, which mints its tree rather than reading it.
 """
 
 import importlib
+import json
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Page
 
-from panelini.panels.tanstack.table import tree
 from panelini.testing import wait_until
-from tests.panels.tanstack.table.helpers import node_at, pane_rows, panes, start
+from tests.panels.tanstack.table.helpers import node_at, rows, serve
 
 MODULE = "examples.panels.tanstack.table.tst_fsbrowser"
-
-# The left pane is the repository, the right one the synthetic tree, in the order
-# the example lays them out.
-BROWSER, BENCH = 0, 1
 
 
 @pytest.fixture
 def example():
-    """A fresh import per test: both trees are module level and both are mutated."""
+    """A fresh import per test: the tree is module level and every test mutates it."""
     return importlib.reload(importlib.import_module(MODULE))
 
 
-def serve_both(example, page: Page, port: int):
-    """Serve the example and wait for both panes to render."""
-    server = start(example.app, page, port)
-    expect(panes(page)).to_have_count(2, timeout=15000)
-    pane_rows(page, BENCH).first.wait_for(state="visible", timeout=15000)
-    pane_rows(page, BROWSER).first.wait_for(state="visible", timeout=15000)
-    return server
-
-
-def twisty(page: Page, pane: int, row_index: int):
-    return pane_rows(page, pane).nth(row_index).locator(".pnl-tst-twisty")
+def twisty(page: Page, row_index: int):
+    return rows(page).nth(row_index).locator(".pnl-tst-twisty")
 
 
 def children_of(example, key: str) -> list:
     return node_at(example.browser.source, key).get("children") or []
 
 
-def node_count(nodes) -> int:
-    return sum(1 for _ in tree.iter_nodes(nodes))
+def weigh(nodes) -> int:
+    """The bytes a tree takes on the wire, which is how `source` crosses."""
+    return len(json.dumps(nodes, separators=(",", ":")))
 
 
 def test_the_whole_repository_starts_as_one_lazy_node(example):
@@ -63,9 +51,9 @@ def test_the_whole_repository_starts_as_one_lazy_node(example):
 def test_expanding_the_root_reads_exactly_one_directory(page: Page, port, example):
     """The twisty asks Python for the contents, `pathlib` reads one level, and the
     branches below it are still unread."""
-    server = serve_both(example, page, port)
+    server = serve(example.app, page, port)
 
-    twisty(page, BROWSER, 0).click()
+    twisty(page, 0).click()
 
     wait_until(lambda: bool(children_of(example, example.ROOT_KEY)), timeout=15)
     loaded = children_of(example, example.ROOT_KEY)
@@ -81,14 +69,14 @@ def test_expanding_the_root_reads_exactly_one_directory(page: Page, port, exampl
 def test_a_folder_below_the_root_expands_on_its_own(page: Page, port, example):
     """Row 1 is the first entry of the root, and `read_dir` puts the folders first,
     so this is a folder for as long as the repository has one."""
-    server = serve_both(example, page, port)
-    twisty(page, BROWSER, 0).click()
+    server = serve(example.app, page, port)
+    twisty(page, 0).click()
     wait_until(lambda: bool(children_of(example, example.ROOT_KEY)), timeout=15)
 
     first = children_of(example, example.ROOT_KEY)[0]
     assert first["type"] == "folder", "the repository root holds no directory"
 
-    twisty(page, BROWSER, 1).click()
+    twisty(page, 1).click()
 
     wait_until(lambda: "children" in node_at(example.browser.source, first["key"]), timeout=15)
     # A branch that has been read is a branch, not a promise of one.
@@ -101,8 +89,8 @@ def test_a_folder_below_the_root_expands_on_its_own(page: Page, port, example):
 def test_a_preload_is_one_push_however_many_folders_it_reads(page: Page, port, example):
     """Each `set_children` is its own write, so a batch is the difference between
     one push of the tree and one push per folder."""
-    server = serve_both(example, page, port)
-    twisty(page, BROWSER, 0).click()
+    server = serve(example.app, page, port)
+    twisty(page, 0).click()
     wait_until(lambda: bool(children_of(example, example.ROOT_KEY)), timeout=15)
 
     pushes = []
@@ -121,10 +109,10 @@ def test_a_preload_is_one_push_however_many_folders_it_reads(page: Page, port, e
 
 def test_a_load_records_no_undo_step(page: Page, port, example):
     """Revealing part of the tree is not a change to it, so `Ctrl+Z` has nothing to
-    take back and the read only pane stays read only."""
-    server = serve_both(example, page, port)
+    take back and the read only tree stays read only."""
+    server = serve(example.app, page, port)
 
-    twisty(page, BROWSER, 0).click()
+    twisty(page, 0).click()
     wait_until(lambda: bool(children_of(example, example.ROOT_KEY)), timeout=15)
 
     assert example.browser.can_undo is False
@@ -132,39 +120,27 @@ def test_a_load_records_no_undo_step(page: Page, port, example):
     server.stop()
 
 
-def test_the_synthetic_tree_is_the_size_the_knob_asks_for(page: Page, port, example):
-    """The one exact count in the file, because this tree is minted rather than read."""
-    server = serve_both(example, page, port)
-    assert node_count(example.bench.source) == example.SIZES[example.INITIAL]
+def test_only_the_folders_that_were_opened_cross_the_wire(page: Page, port, example):
+    """A preload reads two levels into `source`. Only the level that is open is in
+    the view, and every folder below it crosses as a twisty and nothing more."""
+    server = serve(example.app, page, port)
+    twisty(page, 0).click()
+    wait_until(lambda: bool(children_of(example, example.ROOT_KEY)), timeout=15)
 
-    page.get_by_role("button", name="100", exact=True).click()
+    page.get_by_role("button", name="Preload 2 levels").click()
+    wait_until(lambda: any("preloaded" in line for line in example.messages), timeout=30)
 
-    wait_until(lambda: node_count(example.bench.source) == example.SIZES["100"], timeout=15)
-
-    server.stop()
-
-
-def test_pruning_sends_the_browser_a_fraction_of_what_python_holds(example):
-    """`prune: "collapsed"` is what the right pane is for. Read through the
-    example's own `wire_bytes`, which is where it puts the number on screen."""
-    held, sent = example.wire_bytes(example.bench)
-
+    held = weigh(example.browser.source)
+    sent = weigh(example.browser._view)
     assert 0 < sent < held
-    # A thousand nodes of ten files each is the shape that prunes worst of the
-    # three the plan measured, and it still saves an order of magnitude.
-    assert held / sent > 10
 
-
-def test_a_branch_that_opens_stops_being_pruned(page: Page, port, example):
-    """The view is rebuilt when a branch opens, so what crosses grows only by what
-    was opened rather than by the whole tree."""
-    server = serve_both(example, page, port)
-    _, before = example.wire_bytes(example.bench)
-
-    twisty(page, BENCH, 0).click()
-
-    wait_until(lambda: example.wire_bytes(example.bench)[1] > before, timeout=15)
-    held, after = example.wire_bytes(example.bench)
-    assert after < held
+    # The root is open, so its entries crossed. Nothing under them did.
+    view_root = node_at(example.browser._view, example.ROOT_KEY)
+    for child in view_root["children"]:
+        assert "children" not in child
+        if child["type"] == "folder":
+            # A pruned branch is a lazy one, which is why the browser can ask for
+            # it and why the panel answers out of the tree it already holds.
+            assert child["lazy"] is True
 
     server.stop()

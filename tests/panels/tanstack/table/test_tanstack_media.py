@@ -1,4 +1,8 @@
-"""Docs media for the three TanstackTable examples: one clip and one still each.
+"""Docs media for the four TanstackTable examples: a clip and a still each, bar one.
+
+The filesystem browser records a still alone. It reads whatever repository it is run
+in, so a clip of it is a clip of one machine's directory names, and the one gesture
+it has to show, a folder opening on demand, is a thing a still shows as well.
 
 The gestures are the ones the example tests already assert, paced for a reader
 rather than for a runner: a clip waits between steps so a change can be seen, which
@@ -19,10 +23,9 @@ from playwright.sync_api import Page
 
 from tests.panels.tanstack.table.helpers import a_file, drag_across, drop_files_onto, pane_rows, rows, start
 
-# Two panes side by side, and the filesystem example has three, so the frame is wider
-# than the 1280x720 default. Bigger costs bytes in the clip, and the budget is 150 kB.
+# Two panes side by side, so the frame is wider than the 1280x720 default. Bigger
+# costs bytes in the clip, and the budget is 150 kB.
 TWO_PANE = (1400, 800)
-THREE_PANE = (1600, 860)
 
 # What the clips and the stills are written at. The frames come out of a lossy
 # video, so a full width still is mostly compression noise a PNG has to store
@@ -46,7 +49,7 @@ STILL_QUALITY = 80
 # says nothing, and the budget is 4 to 6 seconds of something happening.
 TREEGRID_CLIP = "gif@1.0"
 VFS_CLIP = "gif@0.3"
-FSBROWSER_CLIP = "gif@1.1"
+BIGTREE_CLIP = "gif@1.1"
 
 EXAMPLES = "examples.panels.tanstack.table."
 
@@ -198,34 +201,51 @@ def test_vfsexplorer_media(page: Page, port):
 
 
 @pytest.mark.media(
-    role="overview",
-    capture=FSBROWSER_CLIP,
+    role="feature",
+    # Late enough that the preload has landed, so the picture is a tree two levels
+    # deep rather than the one directory the first click read.
+    capture="screenshot@5.4",
     name="tst_fsbrowser",
-    viewport=THREE_PANE,
+    viewport=TWO_PANE,
+    width=STILL_WIDTH,
+    quality=STILL_QUALITY,
+)
+def test_fsbrowser_media(page: Page, port):
+    """Read the root on demand, then fill two levels under it in one push."""
+    open_example("tst_fsbrowser", page, port)
+
+    rows(page).nth(0).locator(".pnl-tst-twisty").click()  # the repository root
+    time.sleep(1.6)
+
+    page.get_by_role("button", name="Preload 2 levels").click()
+    time.sleep(1.6)
+
+
+@pytest.mark.media(
+    role="overview",
+    capture=BIGTREE_CLIP,
+    name="tst_bigtree",
+    viewport=TWO_PANE,
     width=CLIP_WIDTH,
     quality=CLIP_QUALITY,
 )
 @pytest.mark.media(
     role="feature",
-    # Late enough that the example has finished counting rows in the DOM, which is
-    # the number the whole pane exists to show.
-    capture="screenshot@5.6",
-    name="tst_fsbrowser",
-    viewport=THREE_PANE,
+    # Late enough that the hundred thousand nodes have arrived and the example has
+    # finished counting the rows of them that reached the DOM, which is the number
+    # the whole pane exists to show.
+    capture="screenshot@5.4",
+    name="tst_bigtree",
+    viewport=TWO_PANE,
     width=STILL_WIDTH,
     quality=STILL_QUALITY,
 )
-def test_fsbrowser_media(page: Page, port):
-    """Read a directory on demand, then put a number on what pruning saves.
+def test_bigtree_media(page: Page, port):
+    """Open one branch, then mint a hundred thousand nodes and read what it cost."""
+    open_example("tst_bigtree", page, port)
 
-    One expansion rather than two: the pointer crosses three panes here, and every
-    glide across them is about nine frames of pure travel. Two directories read
-    instead of one says nothing the first one did not.
-    """
-    open_example("tst_fsbrowser", page, port)
-
-    rows(page).nth(0).locator(".pnl-tst-twisty").click()  # the repository root
-    time.sleep(1.4)
+    rows(page).nth(0).locator(".pnl-tst-twisty").click()
+    time.sleep(1.2)
 
     # 100k rather than the 1M the knob also offers: a million costs the browser about
     # five seconds to receive and lay out, which is the whole clip spent on one wait.
