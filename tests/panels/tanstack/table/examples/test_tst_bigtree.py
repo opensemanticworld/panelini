@@ -96,7 +96,10 @@ def test_expanding_everything_is_pythons_to_do(page: Page, port, example):
 
     page.get_by_role("button", name="Expand all").click()
 
-    wait_until(lambda: len(example.bench.expanded_keys) == len(example.bench.source), timeout=15)
+    # Wait on the wire and not on `expanded_keys`: param stores the new key list before
+    # it runs the watcher that rebuilds the view, so a poll from the test thread can
+    # land in between and read the view the button has not widened yet.
+    wait_until(lambda: example.wire_bytes(example.bench)[1] > before, timeout=15)
     held, after = example.wire_bytes(example.bench)
     # Every branch open is the whole tree on the wire, which is what pruning buys
     # back and what this button is here to make visible.
@@ -109,12 +112,14 @@ def test_the_dom_holds_a_screenful_of_an_expanded_thousand_node_tree(page: Page,
     """The windowed rowgroup, counted by the example's own JavaScript walking the
     shadow roots, which is the number the page puts on screen."""
     server = serve(example.app, page, port)
+    held, _ = example.wire_bytes(example.bench)
 
     page.get_by_role("button", name="Expand all").click()
 
     # Every branch open means every node crossed, so what follows is a whole tree
-    # rendered into a window rather than a tree the browser never received.
-    wait_until(lambda: len(example.bench.expanded_keys) == len(example.bench.source), timeout=15)
+    # rendered into a window rather than a tree the browser never received. Read that
+    # off the wire rather than off `expanded_keys`, which goes true a watcher early.
+    wait_until(lambda: example.wire_bytes(example.bench)[1] == held, timeout=15)
     assert node_count(example.bench.source) == example.SIZES[example.INITIAL]
 
     wait_until(lambda: rows(page).count() < 100, timeout=15)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from panelini.panels.tanstack.table import extension_of, icon_for, icons
+from panelini.panels.tanstack.table import extension_of, icon_for, icons, load_icons
 
 COMPONENT = Path(icons.__file__).parent / "vue" / "src" / "TanstackTable.vue"
 DEFAULT_FILE_ICON = icons.DEFAULT_FILE_ICON
@@ -74,6 +74,40 @@ def test_extra_extends_and_overrides_the_map():
     assert icon_for("budget.csv", extra) == "document"
     # Merged rather than mutated, so the next call is unaffected.
     assert icon_for("budget.csv") == "table"
+
+
+@pytest.fixture
+def icon_dir(tmp_path):
+    """A directory of SVGs, one of them padded with the whitespace a file ends on."""
+    (tmp_path / "gauge.svg").write_text("<svg>gauge</svg>\n", encoding="utf-8")
+    (tmp_path / "valve.svg").write_text("  <svg>valve</svg>  \n", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("not an icon", encoding="utf-8")
+    return tmp_path
+
+
+def test_load_icons_reads_the_whole_directory_under_the_file_stems(icon_dir):
+    """Without ``names`` the stems are the icon names, and only SVGs are read."""
+    assert load_icons(icon_dir) == {"gauge": "<svg>gauge</svg>", "valve": "<svg>valve</svg>"}
+
+
+def test_load_icons_takes_only_what_is_named_and_renames_it(icon_dir):
+    """``names`` is what keeps a large icon set from crossing the wire wholesale."""
+    assert load_icons(icon_dir, {"sensor": "gauge"}) == {"sensor": "<svg>gauge</svg>"}
+
+
+def test_load_icons_accepts_a_string_path(icon_dir):
+    assert load_icons(str(icon_dir), {"sensor": "gauge"}) == {"sensor": "<svg>gauge</svg>"}
+
+
+def test_load_icons_says_which_directory_is_missing(tmp_path):
+    with pytest.raises(FileNotFoundError, match="icon directory not found"):
+        load_icons(tmp_path / "nowhere")
+
+
+def test_load_icons_says_which_named_file_is_missing(icon_dir):
+    """A named file that is not there is an error, not a silently absent icon."""
+    with pytest.raises(FileNotFoundError, match="pump.svg"):
+        load_icons(icon_dir, {"gauge": "gauge", "pump": "pump"})
 
 
 def test_every_mapped_name_is_bundled_by_the_component():

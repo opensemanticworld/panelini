@@ -10,6 +10,7 @@ below are the contract that must not regress.
 """
 
 import copy
+from typing import Literal
 
 import panel as pn
 import pytest
@@ -557,9 +558,19 @@ def test_filtering_leaves_the_source_alone(page: Page, port):
     server.stop()
 
 
-def click_row(page: Page, index: int, *modifiers) -> None:
-    """Click a row on its title, well clear of the checkbox and the twisty."""
-    page.locator(".pnl-tst-cell--tree .pnl-tst-value").nth(index).click(modifiers=list(modifiers))
+Modifier = Literal["Alt", "Control", "ControlOrMeta", "Meta", "Shift"]
+
+
+def click_row(page: Page, index: int, *modifiers: Modifier) -> None:
+    """Click a row on its title, well clear of the checkbox and the twisty.
+
+    `"Control"` is sent as Playwright's `"ControlOrMeta"`, which is Control everywhere
+    and Meta on macOS. There a Ctrl+left-click is a secondary click, so the panel would
+    receive a `contextmenu` rather than the modified click the test means: the panel
+    reads `ctrlKey || metaKey`, so the platform is the tests' to know about.
+    """
+    keys: list[Modifier] = ["ControlOrMeta" if key == "Control" else key for key in modifiers]
+    page.locator(".pnl-tst-cell--tree .pnl-tst-value").nth(index).click(modifiers=keys)
 
 
 def test_plain_click_selects_one_row_and_marks_it_active(page: Page, port):

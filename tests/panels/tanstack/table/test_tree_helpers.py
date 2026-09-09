@@ -81,6 +81,12 @@ def test_find_parent_of_root_node_is_none(sample):
     assert tree.find_parent(sample, "a") is None
 
 
+def test_find_parent_of_a_missing_key_is_none(sample):
+    """Same answer as a root node gives, which is why the docstring says to ask
+    `find_node` first when the two have to be told apart."""
+    assert tree.find_parent(sample, "nope") is None
+
+
 def test_node_depth(sample):
     assert tree.node_depth(sample, "a") == 0
     assert tree.node_depth(sample, "b") == 1
@@ -652,6 +658,14 @@ def test_matching_keys_treats_a_blank_search_as_no_search():
 
 def test_matching_keys_matches_nothing_when_no_field_is_read():
     assert tree.matching_keys(PRUNE_TREE, "guide", []) == set()
+
+
+def test_matching_keys_skips_a_node_that_has_no_key():
+    """A match is reported as a key, so a node without one has nothing to report
+    and must not stop the search reaching its siblings."""
+    nodes = [{"title": "guide"}, {"key": "b", "title": "guide"}]
+
+    assert tree.matching_keys(nodes, "guide", ["title"]) == {"b"}
 
 
 def test_prune_drops_the_children_of_a_branch_outside_the_keep_set():
