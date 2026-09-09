@@ -172,8 +172,12 @@ def test_one_undo_reaches_the_edit_past_the_roll_up(page: Page, port, example):
     open_editor(page, example, "eu-fra-api", INSTANCES).fill(str(was + 3))
     page.keyboard.press("Enter")
     wait_until(lambda: field_of(example, "eu-fra-api", "instances") == was + 3, timeout=10)
-    # The commit hands focus back to the row, which is what the next key acts on.
     wait_until(lambda: example.table.can_undo, timeout=10)
+    # The commit hands focus back to the row, which is what the next key acts on, and
+    # that happens a websocket round trip after Python settles. Pressing on `can_undo`
+    # alone lands the key in the editor, which stops its own keydowns so that Ctrl+Z
+    # there means undoing typing, so the undo would never reach the grid.
+    expect(editor(page)).to_have_count(0, timeout=10000)
 
     page.keyboard.press("Control+z")
 
