@@ -36,7 +36,8 @@ def test_context_menu_add_child(page: Page, port):
     item.click()
     wait_until(lambda: page.locator(".wb-row").count() > rows_before)
 
-    # A child was added under "src" and the status reflects it.
-    assert "Added" in status.object
+    # A child was added under "src" and the status reflects it. The row appears
+    # while the callback is still running, so wait for the status separately.
+    wait_until(lambda: "Added" in status.object)
 
     server.stop()
