@@ -1288,22 +1288,34 @@ def test_toolbar_outdents_to_after_the_parent(page: Page, port):
 
 
 def test_toolbar_move_shortcuts_work_from_the_grid(page: Page, port):
-    """Alt plus arrow, so Tab stays the way out of the grid."""
+    """Alt plus arrow, so Tab stays the way out of the grid.
+
+    Every step waits for the grid as well as for Python. An action resolves its
+    anchor against the rows the browser is showing, so a key pressed the moment
+    `source` settles is answered from the tree the push has not replaced yet, and
+    `indent` in particular then reads a different previous sibling and asks for a
+    move that lands somewhere else entirely.
+    """
     table = TanstackTable(source=copy.deepcopy(SOURCE), options={"expand_all": True, "toolbar": True})
     server = serve(table, page, port)
 
     rows(page).nth(1).click()  # File A1
     page.keyboard.press("Alt+ArrowDown")
     wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A2", "File A1", "Folder B", "File B1"])
 
     page.keyboard.press("Alt+ArrowLeft")
     wait_until(lambda: shape(table.source) == "a(a2),a1,b(b1)", timeout=10)
+    # An outdent leaves the rendered order alone, so the level is what says it arrived.
+    expect(rows(page).nth(2)).to_have_attribute("aria-level", "1", timeout=10000)
 
     page.keyboard.press("Alt+ArrowRight")
     wait_until(lambda: shape(table.source) == "a(a2,a1),b(b1)", timeout=10)
+    expect(rows(page).nth(2)).to_have_attribute("aria-level", "2", timeout=10000)
 
     page.keyboard.press("Alt+ArrowUp")
     wait_until(lambda: shape(table.source) == "a(a1,a2),b(b1)", timeout=10)
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
 
     server.stop()
 
