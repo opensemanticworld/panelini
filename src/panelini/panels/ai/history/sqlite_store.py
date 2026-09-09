@@ -1,7 +1,7 @@
 """SQLite backend for :class:`~.store.ChatHistoryStore`.
 
 One ``documents`` row per conversation or folder; the body column holds the
-JSON document from ``chat_history_schema_v2.json``. Short-lived connections
+JSON document from ``chat_history_schema.json``. Short-lived connections
 per call (thread-safe on the tornado loop), WAL journal mode. Single-machine
 storage: file locking covers ``--num-procs``, but not NFS or multi-host; use
 another ``ChatHistoryStore`` implementation for those.
@@ -19,7 +19,7 @@ from typing import Any
 
 from .document import SCHEMA_VERSION, DocumentHistoryStore
 
-_SCHEMA_PATH = Path(__file__).parent / f"chat_history_schema_v{SCHEMA_VERSION}.sql"
+_SCHEMA_PATH = Path(__file__).parent / "chat_history_schema.sql"
 
 
 class SqliteHistoryStore(DocumentHistoryStore):

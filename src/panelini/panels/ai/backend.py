@@ -1,12 +1,12 @@
 """Backend logic for AI interface management and message processing."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from .history.store import DEFAULT_TITLE, ChatHistoryStore, derive_title
+from .history.store import DEFAULT_TITLE, Attachment, ChatHistoryStore, MessageRecord, derive_title
 from .utils.ai_interface import AiInterface, create_interface
 from .utils.config import ModelConfig, ProviderConfig, load_config
 
@@ -177,11 +177,18 @@ class AiBackend:
             return None
         return self.history_store.create_conversation(self.user_id).id
 
-    def persist_exchange(self, user_text: str, ai_text: str, conversation_id: str | None = None) -> None:
+    def persist_exchange(
+        self,
+        user_text: str,
+        ai_text: str,
+        conversation_id: str | None = None,
+        attachments: Sequence[Attachment] = (),
+    ) -> None:
         """Persist one user/assistant exchange; no-op without a store.
 
         ``conversation_id`` pins the exchange to the conversation active at
         send time, so switching chats mid-response cannot reroute it.
+        ``attachments`` are stored with the user message.
         """
         if self.history_store is None or self.user_id is None:
             return
@@ -190,7 +197,7 @@ class AiBackend:
             return
         if conversation_id is None:
             self.conversation_id = target_id
-        self.history_store.append_message(self.user_id, target_id, "human", user_text)
+        self.history_store.append_message(self.user_id, target_id, "human", user_text, attachments=attachments)
         self.history_store.append_message(self.user_id, target_id, "ai", ai_text)
         self._autotitle(target_id, user_text)
 
@@ -208,12 +215,20 @@ class AiBackend:
         Returns:
             ``(role, content)`` pairs (human/ai only) for UI replay.
         """
+        records = self.load_conversation_records(conversation_id)
+        return [(r.role, r.content) for r in records if r.role in ("human", "ai")]
+
+    def load_conversation_records(self, conversation_id: str) -> list[MessageRecord]:
+        """Mark a stored conversation active and return its message records.
+
+        Like :meth:`load_conversation`, but keeping every role and the
+        messages' attachments.
+        """
         if self.history_store is None or self.user_id is None:
             return []
         records = self.history_store.load_messages(self.user_id, conversation_id)
-        pairs = [(r.role, r.content) for r in records if r.role in ("human", "ai")]
         self.conversation_id = conversation_id
-        return pairs
+        return records
 
     @staticmethod
     def history_from_pairs(pairs: list[tuple[str, str]]) -> list[Any]:
@@ -227,12 +242,31 @@ class AiBackend:
         self.conversation_id = None
         self.clear_history()
 
-    def persist_imported_history(self, title: str) -> None:
-        """Persist the current in-memory history as a new conversation."""
-        if self.history_store is None or self.user_id is None or self.ai_interface is None:
+    def persist_imported_history(self, title: str, messages: Sequence[dict[str, Any]] = ()) -> None:
+        """Persist an imported chat as a new conversation.
+
+        ``messages`` are conversation-document message dicts, so roles and
+        attachments survive the round trip; without them the current
+        in-memory history is persisted instead.
+        """
+        if self.history_store is None or self.user_id is None:
             return
         conversation = self.history_store.create_conversation(self.user_id, title=title)
         self.conversation_id = conversation.id
+        if messages:
+            from .history.document import attachment_from_dict
+
+            for message in messages:
+                self.history_store.append_message(
+                    self.user_id,
+                    conversation.id,
+                    message["role"],
+                    message["content"],
+                    attachments=[attachment_from_dict(item) for item in message.get("attachments", [])],
+                )
+            return
+        if self.ai_interface is None:
+            return
         for message in self.ai_interface.conversation_history:
             role = "human" if isinstance(message, HumanMessage) else "ai"
             content = message.content if isinstance(message.content, str) else str(message.content)
@@ -422,7 +456,7 @@ class AiBackend:
         return tool_results
 
     def export_chat_data(self, provider: str, model: str, temperature: float) -> dict[str, Any]:
-        """Export the active conversation as a v2 conversation document.
+        """Export the active conversation as a conversation document.
 
         The persisted conversation is exported when one is active; otherwise
         the document is composed from the in-memory model context. The owner
@@ -434,14 +468,14 @@ class AiBackend:
             temperature: Current temperature.
 
         Returns:
-            A ``chat_history_schema_v2.json`` conversation document.
+            A ``chat_history_schema.json`` conversation document.
         """
         from .history.document import (
             conversation_to_document,
             document_context,
             validate_conversation_document,
         )
-        from .history.store import ConversationRecord, MessageRecord, new_id, utcnow
+        from .history.store import ConversationRecord, new_id, utcnow
 
         record = None
         messages: list[MessageRecord] = []
@@ -459,7 +493,7 @@ class AiBackend:
                 title=DEFAULT_TITLE,
                 pinned=False,
                 archived=False,
-                folder_id=None,
+                folder_ids=(),
                 current_message_id=None,
                 created_at=now,
                 updated_at=now,

@@ -99,7 +99,7 @@
 
 ````
 
-````{py:method} persist_exchange(user_text: str, ai_text: str, conversation_id: str | None = None) -> None
+````{py:method} persist_exchange(user_text: str, ai_text: str, conversation_id: str | None = None, attachments: collections.abc.Sequence[panelini.panels.ai.history.store.Attachment] = ()) -> None
 :canonical: panelini.panels.ai.backend.AiBackend.persist_exchange
 
 ```{autodoc2-docstring} panelini.panels.ai.backend.AiBackend.persist_exchange
@@ -111,6 +111,14 @@
 :canonical: panelini.panels.ai.backend.AiBackend.load_conversation
 
 ```{autodoc2-docstring} panelini.panels.ai.backend.AiBackend.load_conversation
+```
+
+````
+
+````{py:method} load_conversation_records(conversation_id: str) -> list[panelini.panels.ai.history.store.MessageRecord]
+:canonical: panelini.panels.ai.backend.AiBackend.load_conversation_records
+
+```{autodoc2-docstring} panelini.panels.ai.backend.AiBackend.load_conversation_records
 ```
 
 ````
@@ -132,7 +140,7 @@
 
 ````
 
-````{py:method} persist_imported_history(title: str) -> None
+````{py:method} persist_imported_history(title: str, messages: collections.abc.Sequence[dict[str, typing.Any]] = ()) -> None
 :canonical: panelini.panels.ai.backend.AiBackend.persist_imported_history
 
 ```{autodoc2-docstring} panelini.panels.ai.backend.AiBackend.persist_imported_history

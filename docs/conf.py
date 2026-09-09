@@ -1,6 +1,9 @@
 """Sphinx configuration for panelini documentation."""
 
 import importlib.metadata
+import shutil
+from pathlib import Path
+from typing import Any
 
 # -- Project information -----------------------------------------------------
 project = "panelini"
@@ -109,3 +112,24 @@ mermaid_init_js = (
 
 root_doc = "index"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "portfolio"]
+
+# -- Published schemas -------------------------------------------------------
+# Documents carry a ``$id`` under <site>/schemas/, so the schemas are copied
+# out of the package at build time: one source of truth, no committed copy.
+published_schemas = ["../src/panelini/panels/ai/history/chat_history_schema.json"]
+
+
+def _publish_schemas(app: Any, exception: Exception | None) -> None:
+    """Copy the published schemas next to the built HTML."""
+    if exception is not None or app.builder.format != "html":
+        return
+    target = Path(app.outdir) / "schemas"
+    target.mkdir(parents=True, exist_ok=True)
+    for schema in published_schemas:
+        source = (Path(app.confdir) / schema).resolve()
+        shutil.copyfile(source, target / source.name)
+
+
+def setup(app: Any) -> None:
+    """Register the schema publishing hook."""
+    app.connect("build-finished", _publish_schemas)

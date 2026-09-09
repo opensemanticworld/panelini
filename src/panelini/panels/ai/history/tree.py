@@ -1,8 +1,10 @@
 """Drag-and-drop folder tree view for the AI chat history.
 
 Wraps the Wunderbaum panel: folders as nestable ``folder:<id>`` nodes,
-conversations as ``conv:<id>`` leaves. Drops persist through the store,
-which stays the source of truth; every change rebuilds the tree from it.
+conversations as ``conv:<id>`` leaves. Folders are virtual, so a
+conversation filed under several of them appears once per folder, keyed
+``conv:<id>@<folder id>``. Drops persist through the store, which stays
+the source of truth; every change rebuilds the tree from it.
 """
 
 from __future__ import annotations
@@ -17,23 +19,43 @@ from panelini.panels.wunderbaum import Wunderbaum
 from .icons import (
     CHAT_MASK,
     FOLDER_PLUS_MASK,
+    FORK_MASK,
     NEW_CHAT_MASK,
     PENCIL_MASK,
     TRASH_MASK,
+    UNLINK_MASK,
     icon_button_css,
 )
-from .store import ChatHistoryStore
+from .store import ChatHistoryStore, ConversationRecord
 
 _CONV = "conv:"
 _FOLDER = "folder:"
+# separates a conversation id from the folder it is shown in
+_PLACEMENT = "@"
 
 # Hover icons on every row (rendered by the Wunderbaum wrapper from node
 # data; clicks come back as click events with an `action` param). The
 # classes are styled as tabler masks in _TREE_CSS, matching the list view.
-_ROW_ACTIONS = [
-    {"action": "rename", "icon": "history-action-rename", "tooltip": "Rename"},
-    {"action": "delete", "icon": "history-action-delete", "tooltip": "Delete"},
-]
+_RENAME_ACTION = {"action": "rename", "icon": "history-action-rename", "tooltip": "Rename"}
+_DELETE_ACTION = {"action": "delete", "icon": "history-action-delete", "tooltip": "Delete"}
+_FORK_ACTION = {"action": "fork", "icon": "history-action-fork", "tooltip": "Fork into a new chat"}
+_UNLINK_ACTION = {"action": "unlink", "icon": "history-action-unlink", "tooltip": "Remove from this folder"}
+_FOLDER_ACTIONS = [_RENAME_ACTION, _DELETE_ACTION]
+_CONV_ACTIONS = [_RENAME_ACTION, _FORK_ACTION, _DELETE_ACTION]
+
+
+def conv_key(conversation_id: str, folder_id: str | None = None) -> str:
+    """Node key for one placement of a conversation (``None``: the root)."""
+    if folder_id is None:
+        return f"{_CONV}{conversation_id}"
+    return f"{_CONV}{conversation_id}{_PLACEMENT}{folder_id}"
+
+
+def placement(key: str) -> tuple[str, str | None]:
+    """Split a conversation node key into its conversation and folder id."""
+    conversation_id, _, folder_id = key[len(_CONV) :].partition(_PLACEMENT)
+    return conversation_id, folder_id or None
+
 
 # The component inlines fixed 800x500 defaults on the container; override so
 # the tree hugs the sidebar width and grows with content, with a vertical
@@ -68,7 +90,8 @@ i.history-icon-chat {{
     -webkit-mask: url("{CHAT_MASK}") center / 13px no-repeat;
     mask: url("{CHAT_MASK}") center / 13px no-repeat;
 }}
-i.history-action-rename, i.history-action-delete {{
+i.history-action-rename, i.history-action-delete,
+i.history-action-fork, i.history-action-unlink {{
     display: inline-block;
     width: 15px;
     height: 15px;
@@ -78,6 +101,14 @@ i.history-action-rename, i.history-action-delete {{
 i.history-action-rename {{
     -webkit-mask: url("{PENCIL_MASK}") center / contain no-repeat;
     mask: url("{PENCIL_MASK}") center / contain no-repeat;
+}}
+i.history-action-fork {{
+    -webkit-mask: url("{FORK_MASK}") center / contain no-repeat;
+    mask: url("{FORK_MASK}") center / contain no-repeat;
+}}
+i.history-action-unlink {{
+    -webkit-mask: url("{UNLINK_MASK}") center / contain no-repeat;
+    mask: url("{UNLINK_MASK}") center / contain no-repeat;
 }}
 i.history-action-delete, i.history-action-delete-armed {{
     -webkit-mask: url("{TRASH_MASK}") center / contain no-repeat;
@@ -128,12 +159,15 @@ class HistoryTree:
     New chat / new folder: header buttons; delete: hover trash icon (no
     context menu), routed through the chat's shared undo/redo stack when
     ``on_delete`` is wired. Deleting a non-empty folder arms a red trash
-    and the second click removes the folder, its subfolders, and every
-    chat inside (chats move to the root first, so undo restores them
-    there). Drops persist where the node landed. Generating chats show a
-    spinner icon, finished ones a green check until opened; an empty tree
-    shows a hint instead of a blank row, also after the last conversation
-    is deleted.
+    and the second click removes the folder, its subfolders, and the chats
+    filed nowhere else (they move to the root first, so undo restores them
+    there); chats that also live in another folder only lose this one.
+    Dragging moves a chat between folders, dragging with the copy modifier
+    files it under the target as well, and the hover unlink icon takes it
+    back out. The fork icon copies a chat into a new one. Generating chats
+    show a spinner icon, finished ones a green check until opened; an empty
+    tree shows a hint instead of a blank row, also after the last
+    conversation is deleted.
     """
 
     def __init__(
@@ -149,6 +183,7 @@ class HistoryTree:
         on_reset: Callable[[], None] | None = None,
         trailing: Sequence[pn.viewable.Viewable] = (),
         on_delete: Callable[[str], None] | None = None,
+        on_fork: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._user_id = user_id
@@ -158,12 +193,17 @@ class HistoryTree:
         self._on_reset = on_reset or on_new_chat
         # conversation deletes route here when provided (shared undo/redo)
         self._on_delete = on_delete
+        # forks route here when provided, so the chat opens in its own feed
+        self._on_fork = on_fork
         # non-empty folder deletes arm and ask for a second click
         self._pending_folder_delete: str | None = None
         self._get_active_id = get_active_id
         self._get_busy_ids = get_busy_ids or (lambda: set())
         self._get_ready_ids = get_ready_ids or (lambda: set())
         self._query = ""
+        # placement key per conversation, filled while building the source:
+        # which of a multi-folder chat's rows the active marker goes on
+        self._placement_keys: dict[str, str] = {}
 
         # The whole action row is frameless icon buttons for consistency
         self.new_chat_button = pn.widgets.Button(
@@ -260,12 +300,17 @@ class HistoryTree:
 
     # -- rendering ------------------------------------------------------------
 
-    def _conv_node(self, conversation: Any) -> dict[str, Any]:
+    def _conv_node(self, conversation: ConversationRecord, folder_id: str | None) -> dict[str, Any]:
+        actions = list(_CONV_ACTIONS)
+        if folder_id is not None and len(conversation.folder_ids) > 1:
+            # only a chat filed elsewhere too can lose this folder without
+            # disappearing from the tree; dragging it out covers the rest
+            actions.insert(2, _UNLINK_ACTION)
         node: dict[str, Any] = {
             "title": conversation.title,
-            "key": f"{_CONV}{conversation.id}",
+            "key": conv_key(conversation.id, folder_id),
             "type": "conv",
-            "actions": _ROW_ACTIONS,
+            "actions": actions,
         }
         classes = []
         if conversation.id in self._get_busy_ids():
@@ -283,13 +328,21 @@ class HistoryTree:
 
     def _build_source(self) -> list[dict[str, Any]]:
         conversations = self._store.search_conversations(self._user_id, self._query)
-        convs_by_folder: dict[str | None, list[dict[str, Any]]] = {}
-        for conversation in conversations:
-            convs_by_folder.setdefault(conversation.folder_id, []).append(self._conv_node(conversation))
-
         folders_by_parent: dict[str | None, list[Any]] = {}
+        known_folder_ids = set()
         for folder in self._store.list_folders(self._user_id):
             folders_by_parent.setdefault(folder.parent_id, []).append(folder)
+            known_folder_ids.add(folder.id)
+
+        convs_by_folder: dict[str | None, list[dict[str, Any]]] = {}
+        self._placement_keys = {}
+        for conversation in conversations:
+            # a membership in a folder that is gone (a restored delete) falls
+            # back to the root, so the chat is never invisible
+            folder_ids: list[str | None] = [f for f in conversation.folder_ids if f in known_folder_ids]
+            for folder_id in folder_ids or [None]:
+                convs_by_folder.setdefault(folder_id, []).append(self._conv_node(conversation, folder_id))
+                self._placement_keys.setdefault(conversation.id, conv_key(conversation.id, folder_id))
 
         # while searching, folders without a match would be empty noise
         filtering = bool(self._query.strip())
@@ -300,16 +353,16 @@ class HistoryTree:
             if filtering and not children:
                 return None
             armed = folder.id == self._pending_folder_delete
-            actions = _ROW_ACTIONS
+            actions = _FOLDER_ACTIONS
             if armed:
-                count = len(self._folder_conversations(folder.id))
+                # only the chats filed nowhere else are lost with the folder
+                count = len(self._exclusive_conversations(folder.id))
+                tooltip = "Click again to delete this folder"
+                if count:
+                    tooltip = f"{tooltip} and {count} chat{'s' if count > 1 else ''}"
                 actions = [
-                    _ROW_ACTIONS[0],
-                    {
-                        "action": "delete",
-                        "icon": "history-action-delete-armed",
-                        "tooltip": f"Click again to delete this folder and {count} chats",
-                    },
+                    _RENAME_ACTION,
+                    {"action": "delete", "icon": "history-action-delete-armed", "tooltip": tooltip},
                 ]
             node = {
                 "title": folder.name,
@@ -342,7 +395,7 @@ class HistoryTree:
         self._sync_empty_state(source)
         active_id = self._get_active_id()
         if active_id is not None:
-            self.tree.set_active_node(f"{_CONV}{active_id}")
+            self.tree.set_active_node(self._placement_keys.get(active_id, conv_key(active_id)))
 
     # -- events ---------------------------------------------------------------
 
@@ -378,7 +431,7 @@ class HistoryTree:
         # client, indistinguishable from a user click.
         key = params.get("key", "")
         if event_name == "activate" and key.startswith(_CONV):
-            conversation_id = key[len(_CONV) :]
+            conversation_id, _ = placement(key)
             was_ready = conversation_id in self._get_ready_ids()
             self._on_open(conversation_id)
             if was_ready:
@@ -393,7 +446,7 @@ class HistoryTree:
             self._handle_rename(key, str(params.get("newValue", "")))
 
     def _handle_row_action(self, action: str, key: str) -> None:
-        """Dispatch a hover icon click (the row's rename or delete)."""
+        """Dispatch a hover icon click (rename, fork, unlink or delete)."""
         if action != "delete" or key != f"{_FOLDER}{self._pending_folder_delete}":
             self._pending_folder_delete = None  # any other action disarms
         if action == "delete":
@@ -401,10 +454,30 @@ class HistoryTree:
             self.refresh()
         elif action == "rename":
             self.tree.start_edit_title(key)
+        elif action == "fork":
+            self._handle_fork(key)
+        elif action == "unlink":
+            self._handle_unlink(key)
+
+    def _handle_fork(self, key: str) -> None:
+        """Copy a conversation into a new one and open it."""
+        conversation_id, _ = placement(key)
+        if self._on_fork is not None:
+            self._on_fork(conversation_id)
+        else:
+            self._on_open(self._store.fork_conversation(self._user_id, conversation_id).id)
+        self.refresh()
+
+    def _handle_unlink(self, key: str) -> None:
+        """Take a conversation out of the folder its row sits in."""
+        conversation_id, folder_id = placement(key)
+        if folder_id is not None:
+            self._store.unlink_conversation(self._user_id, conversation_id, folder_id)
+        self.refresh()
 
     def _delete_by_key(self, key: str) -> None:
         if key.startswith(_CONV):
-            conversation_id = key[len(_CONV) :]
+            conversation_id, _ = placement(key)
             if self._on_delete is not None:
                 self._on_delete(conversation_id)  # shared undo/redo path
                 return
@@ -423,10 +496,22 @@ class HistoryTree:
             self._pending_folder_delete = None
             self._delete_folder_subtree(folder_id)
 
+    def _subtree_ids(self, folder_id: str) -> set[str]:
+        return {folder_id, *self._subfolder_ids(folder_id)}
+
     def _folder_conversations(self, folder_id: str) -> list[str]:
-        """Conversation ids inside the folder, subfolders included."""
-        folder_ids = {folder_id} | set(self._subfolder_ids(folder_id))
-        return [c.id for c in self._store.list_conversations(self._user_id) if c.folder_id in folder_ids]
+        """Conversation ids filed in the folder or one of its subfolders."""
+        folder_ids = self._subtree_ids(folder_id)
+        return [c.id for c in self._store.list_conversations(self._user_id) if folder_ids & set(c.folder_ids)]
+
+    def _exclusive_conversations(self, folder_id: str) -> list[str]:
+        """Conversation ids filed in the subtree and in no folder outside it."""
+        folder_ids = self._subtree_ids(folder_id)
+        return [
+            c.id
+            for c in self._store.list_conversations(self._user_id)
+            if c.folder_ids and not set(c.folder_ids) - folder_ids
+        ]
 
     def _subfolder_ids(self, folder_id: str) -> list[str]:
         children: dict[str | None, list[str]] = {}
@@ -441,14 +526,16 @@ class HistoryTree:
         return collected
 
     def _delete_folder_subtree(self, folder_id: str) -> None:
-        """Delete the folder, its subfolders, and every chat inside.
+        """Delete the folder, its subfolders, and the chats filed nowhere else.
 
-        Chats are moved to the root first so an undo restores them there
-        (the folder structure itself is not restorable); the active chat
-        goes last so the open-fallback runs once, at the end.
+        Those chats are moved to the root first so an undo restores them
+        there (the folder structure itself is not restorable); the active
+        chat goes last so the open-fallback runs once, at the end. Chats
+        also filed outside the subtree survive, losing only the memberships
+        that :meth:`ChatHistoryStore.delete_folder` drops.
         """
         active_id = self._get_active_id()
-        conversation_ids = sorted(self._folder_conversations(folder_id), key=lambda cid: cid == active_id)
+        conversation_ids = sorted(self._exclusive_conversations(folder_id), key=lambda cid: cid == active_id)
         for conversation_id in conversation_ids:
             self._store.move_conversation(self._user_id, conversation_id, None)
             if self._on_delete is not None:
@@ -465,30 +552,48 @@ class HistoryTree:
         # newParentNodeId is where the node actually landed client-side
         source_key = str(params.get("sourceKey", ""))
         new_parent = str(params.get("newParentNodeId") or "")
+        target_folder_id = self._drop_folder_id(new_parent)
         try:
             if source_key.startswith(_CONV):
-                self._store.move_conversation(self._user_id, source_key[len(_CONV) :], self._drop_folder_id(new_parent))
+                conversation_id, from_folder_id = placement(source_key)
+                if params.get("copy"):
+                    # copy modifier held: file the chat under the target as
+                    # well instead of moving it (a root drop adds nothing)
+                    if target_folder_id is not None:
+                        self._store.link_conversation(self._user_id, conversation_id, target_folder_id)
+                else:
+                    self._move_placement(conversation_id, from_folder_id, target_folder_id)
             elif source_key.startswith(_FOLDER):
+                # folders nest rather than being filed, so a copy-drag moves
                 parent_id = new_parent[len(_FOLDER) :] if new_parent.startswith(_FOLDER) else None
                 self._store.move_folder(self._user_id, source_key[len(_FOLDER) :], parent_id)
         except ValueError:
             pass  # invalid target (e.g. cycle): refresh snaps the node back
         self.refresh()
 
+    def _move_placement(self, conversation_id: str, from_folder_id: str | None, to_folder_id: str | None) -> None:
+        """Move the dragged row's folder membership, leaving the others."""
+        if from_folder_id == to_folder_id:
+            return
+        if to_folder_id is not None:
+            # link first: a rejected target must not leave the chat nowhere
+            self._store.link_conversation(self._user_id, conversation_id, to_folder_id)
+        if from_folder_id is not None:
+            self._store.unlink_conversation(self._user_id, conversation_id, from_folder_id)
+
     def _drop_folder_id(self, new_parent_key: str) -> str | None:
         if new_parent_key.startswith(_FOLDER):
             return new_parent_key[len(_FOLDER) :]
         if new_parent_key.startswith(_CONV):
-            # landed under a conversation: adopt that conversation's folder
-            target = self._store.get_conversation(self._user_id, new_parent_key[len(_CONV) :])
-            return target.folder_id if target is not None else None
+            # landed under a conversation: adopt the folder of that row
+            return placement(new_parent_key)[1]
         return None
 
     def _handle_rename(self, key: str, title: str) -> None:
         title = title.strip()
         if title:
             if key.startswith(_CONV):
-                self._store.rename_conversation(self._user_id, key[len(_CONV) :], title)
+                self._store.rename_conversation(self._user_id, placement(key)[0], title)
             elif key.startswith(_FOLDER):
                 self._store.rename_folder(self._user_id, key[len(_FOLDER) :], title)
         self.refresh()

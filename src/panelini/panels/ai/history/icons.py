@@ -43,6 +43,18 @@ TRASH_MASK = tabler_mask(
     "<path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3'/>"
 )
 UNDO_MASK = tabler_mask("<path d='M9 14l-4 -4l4 -4'/><path d='M5 10h11a4 4 0 1 1 0 8h-1'/>")
+FORK_MASK = tabler_mask(
+    "<path d='M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0'/>"
+    "<path d='M7 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0'/>"
+    "<path d='M17 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0'/>"
+    "<path d='M7 8v8'/><path d='M9 18h6a2 2 0 0 0 2 -2v-5'/><path d='M14 14l3 -3l3 3'/>"
+)
+UNLINK_MASK = tabler_mask(
+    "<path d='M17 22v-2'/><path d='M9 15l6 -6'/>"
+    "<path d='M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464'/>"
+    "<path d='M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463'/>"
+    "<path d='M20 17h2'/><path d='M2 7h2'/><path d='M7 2v2'/>"
+)
 
 
 def icon_button_css(mask: str) -> str:

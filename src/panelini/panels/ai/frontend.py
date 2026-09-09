@@ -1,6 +1,7 @@
 """Frontend UI layer for the AI chat panel."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from panelini.user import UserResolver, ensure_anonymous_cookie, resolve_user
 
 from .backend import AiBackend
 from .history.default import default_history_store
-from .history.store import ChatHistoryStore
+from .history.store import Attachment, ChatHistoryStore, attachment_from_bytes
 from .tools.basic_tools import AVAILABLE_TOOLS
 
 # No focus outline on the sidebar icon tabs (browsers draw a dotted frame)
@@ -33,6 +34,9 @@ def _tabler_mask(paths: str) -> str:
 _ARROW_BASE = "<path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2'/><path d='M12 4v12'/>"
 _DOWNLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 11l5 5l5 -5'/>")
 _UPLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 9l5 -5l5 5'/>")
+_PAPERCLIP_MASK = _tabler_mask(
+    "<path d='M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5'/>"
+)
 
 # Import/export icons in the New Chat row. min-height 0 is needed because
 # bokeh gives inputs and buttons a text-sized minimum that would otherwise
@@ -69,29 +73,77 @@ def _icon_action_css(mask: str) -> str:
 """
 
 
-# Icon-only file picker: the input loses its own chrome, font-size 0
-# collapses the native "no file chosen" label, and the file-selector
-# button is left as a bare upload glyph
-# margin-left auto right-aligns the icon group inside the flex row
-# (!important: Panel's margin param is applied as an inline style)
-_FILE_ICON_CSS = f"""
-:host {{ width: 28px; margin: 0; margin-left: auto !important; }}
+def _file_icon_css(mask: str, right_align: bool = False) -> str:
+    """Icon-only file picker: the input loses its own chrome, font-size 0
+    collapses the native "no file chosen" label, and the file-selector
+    button is left as a bare glyph.
+
+    ``right_align`` pushes the icon group to the end of its flex row
+    (!important: Panel's margin param is applied as an inline style).
+    """
+    host_margin = "margin: 0; margin-left: auto !important;" if right_align else "margin: 0;"
+    return f"""
+:host {{ width: 28px; {host_margin} }}
 input[type="file"] {{
     {_ICON_BOX}
     font-size: 0; overflow: hidden; background: transparent; box-shadow: none; color: inherit;
 }}
-input[type="file"]::file-selector-button {{ {_glyph_css(_UPLOAD_MASK)} }}
+input[type="file"]::file-selector-button {{ {_glyph_css(mask)} }}
 input[type="file"]::file-selector-button:hover {{ opacity: 1; }}
 """
 
 
+_FILE_ICON_CSS = _file_icon_css(_UPLOAD_MASK, right_align=True)
+_ATTACH_ICON_CSS = _file_icon_css(_PAPERCLIP_MASK)
+
+# Pending attachments, listed next to the paperclip until they are sent
+_PENDING_TEMPLATE = '<span style="font-size: 0.78em; opacity: 0.65;">📎 {names}</span>'
+
+
+def attachment_markdown(attachments: Sequence[Attachment]) -> str:
+    """Markdown listing a message's attachments (links where stored inline)."""
+    items = [
+        f"[{attachment.name}]({attachment.url})" if attachment.url else f"{attachment.name} (payload not stored)"
+        for attachment in attachments
+    ]
+    return "📎 " + ", ".join(items)
+
+
+def attachment_prompt(attachments: Sequence[Attachment]) -> str:
+    """The attachment context appended to the model prompt."""
+    return "\n\n".join(
+        f"--- attached file: {attachment.name} ---\n{attachment.text}"
+        if attachment.text
+        else f"--- attached file: {attachment.name} ({attachment.media_type}) ---"
+        for attachment in attachments
+    )
+
+
 class _ChatSession:
-    """One conversation's feed and model context."""
+    """One conversation's feed, model context and pending attachments."""
 
     def __init__(self, feed: pn.chat.ChatInterface, conversation_id: str | None = None) -> None:
         self.feed = feed
         self.conversation_id = conversation_id
         self.history: list[Any] = []
+        # files picked but not yet sent along with a message
+        self.pending: list[Attachment] = []
+        self.attach_input = pn.widgets.FileInput(
+            multiple=True,
+            width=28,
+            margin=(0, 0, 4, 0),
+            align="center",
+            stylesheets=[_ATTACH_ICON_CSS],
+            css_classes=["chat-attach"],
+        )
+        self.pending_pane = pn.pane.HTML("", sizing_mode="stretch_width", margin=(0, 0, 4, 6), align="center")
+        # the feed's own container: the chat card swaps whole session views
+        self.view = pn.Column(
+            pn.Row(self.attach_input, self.pending_pane, sizing_mode="stretch_width", margin=0),
+            feed,
+            sizing_mode="stretch_both",
+            margin=0,
+        )
 
 
 def _resolve_history_user(user_resolver: UserResolver | None) -> tuple[str, pn.viewable.Viewable | None]:
@@ -396,7 +448,7 @@ class AiChat:
         self._chat_card = pn.Card(
             title="Chat",
             collapsible=False,
-            objects=[self._active_session.feed],
+            objects=[self._active_session.view],
             sizing_mode="stretch_both",
             min_height=350,
             styles={"padding": "15px", "margin-right": "10px"},
@@ -645,6 +697,7 @@ class AiChat:
             "on_reset": lambda: self.start_new_chat(materialize=False),
             # deletes route through the shared undo/redo stack
             "on_delete": self.delete_conversation,
+            "on_fork": self.fork_conversation,
         }
         if history_view == "tree":
             from .history.tree import HistoryTree
@@ -687,6 +740,7 @@ class AiChat:
         if welcome and self._welcome_message:
             feed.send(value=self._welcome_message, user="🤖 Assistant", respond=False)
         session = _ChatSession(feed=feed, conversation_id=conversation_id)
+        session.attach_input.param.watch(partial(self._on_attach, session), "value")
         self._sessions[feed] = session
         return session
 
@@ -696,13 +750,51 @@ class AiChat:
         if session.conversation_id is not None:
             self._ready_ids.discard(session.conversation_id)  # viewed
         if hasattr(self, "_chat_card"):
-            # Feeds stay mounted and only toggle visibility: re-attaching an
-            # already-registered component triggers Bokeh "reference already
-            # known" warnings and re-renders on every switch
-            if session.feed not in self._chat_card.objects:
-                self._chat_card.append(session.feed)
-            for feed in self._chat_card.objects:
-                feed.visible = feed is session.feed
+            # Session views stay mounted and only toggle visibility:
+            # re-attaching an already-registered component triggers Bokeh
+            # "reference already known" warnings and re-renders on every switch
+            if session.view not in self._chat_card.objects:
+                self._chat_card.append(session.view)
+            for view in self._chat_card.objects:
+                view.visible = view is session.view
+
+    # ── Attachments ──────────────────────────────────────────────────────
+
+    def _on_attach(self, session: "_ChatSession", event: Any) -> None:
+        """Turn picked files into attachments pending for the next message."""
+        if not event.new:
+            return
+        widget = session.attach_input
+        payloads = event.new if isinstance(event.new, list) else [event.new]
+        names = widget.filename if isinstance(widget.filename, list) else [widget.filename]
+        media_types = widget.mime_type if isinstance(widget.mime_type, list) else [widget.mime_type]
+        for index, data in enumerate(payloads):
+            name = (names[index] if index < len(names) else None) or f"attachment-{index + 1}"
+            media_type = media_types[index] if index < len(media_types) else None
+            session.pending.append(attachment_from_bytes(name, data, media_type))
+        self._refresh_pending(session)
+        # clear the widget, or picking the same file again fires no event
+        pn.state.execute(lambda: setattr(widget, "value", None))
+
+    def _refresh_pending(self, session: "_ChatSession") -> None:
+        """Mirror a session's pending attachments next to its paperclip."""
+        names = ", ".join(attachment.name for attachment in session.pending)
+        session.pending_pane.object = _PENDING_TEMPLATE.format(names=names) if names else ""
+
+    def _take_pending(self, session: "_ChatSession") -> tuple[Attachment, ...]:
+        """Detach and return the attachments waiting in a session."""
+        attachments = tuple(session.pending)
+        session.pending.clear()
+        self._refresh_pending(session)
+        return attachments
+
+    @staticmethod
+    def _show_attachments(instance: pn.chat.ChatInterface, contents: str, attachments: Sequence[Attachment]) -> None:
+        """List the attachments under the message the feed just posted."""
+        for message in reversed(instance.objects):
+            if message.object == contents:
+                message.object = f"{contents}\n\n{attachment_markdown(attachments)}"
+                return
 
     def _session_for_conversation(self, conversation_id: str) -> "_ChatSession | None":
         for session in self._sessions.values():
@@ -834,15 +926,28 @@ class AiChat:
             session.conversation_id = self.backend.create_conversation_id()
         self._activate_session(session)
 
+    def fork_conversation(self, conversation_id: str) -> None:
+        """Copy a stored conversation into a new one and open it."""
+        store = self.backend.history_store
+        user = self.backend.user_id
+        if store is None or user is None:
+            return
+        fork = store.fork_conversation(user, conversation_id)
+        self.open_conversation(fork.id)
+        self._notify_history_changed()
+
     def open_conversation(self, conversation_id: str) -> None:
         """Show a stored conversation in its own feed (created on first open)."""
         session = self._session_for_conversation(conversation_id)
         if session is None:
-            pairs = self.backend.load_conversation(conversation_id)
+            records = [r for r in self.backend.load_conversation_records(conversation_id) if r.role in ("human", "ai")]
             session = self._new_session(conversation_id=conversation_id)
-            session.history = self.backend.history_from_pairs(pairs)
-            for role, content in pairs:
-                user = "🧑 User" if role == "human" else "🤖 Assistant"
+            session.history = self.backend.history_from_pairs([(r.role, r.content) for r in records])
+            for record in records:
+                user = "🧑 User" if record.role == "human" else "🤖 Assistant"
+                content = record.content
+                if record.attachments:
+                    content = f"{content}\n\n{attachment_markdown(record.attachments)}"
                 session.feed.send(content, user=user, respond=False)
         self._activate_session(session)
 
@@ -902,6 +1007,8 @@ class AiChat:
         """Handle chat upload from JSON file (v2 document or legacy format)."""
         import json
 
+        from .history.document import attachment_from_dict
+
         if not event.new:
             return
 
@@ -911,14 +1018,19 @@ class AiChat:
 
             chat_data = json.loads(event.new.decode("utf-8"))
             pairs = self.backend.restore_chat_data(chat_data)
+            # attachments ride on the document messages, not on the pairs
+            documents = [m for m in chat_data.get("messages", []) if m.get("role") in ("human", "ai")]
 
             self.chat_interface.clear()
-            for role, content in pairs:
+            for index, (role, content) in enumerate(pairs):
                 user = "🧑 User" if role == "human" else "🤖 Assistant"
+                attachments = documents[index].get("attachments") if index < len(documents) else None
+                if attachments:
+                    content = f"{content}\n\n{attachment_markdown([attachment_from_dict(a) for a in attachments])}"
                 self.chat_interface.send(content, user=user, respond=False)
 
             title = chat_data.get("title") or f"Imported: {filename}"
-            self.backend.persist_imported_history(title=title)
+            self.backend.persist_imported_history(title=title, messages=documents)
             self._active_session.history = list(self.backend.get_conversation_history())
             self._active_session.conversation_id = self.backend.conversation_id
             self._notify_history_changed()
@@ -969,23 +1081,34 @@ class AiChat:
             if session is self._active_session:
                 self.backend.conversation_id = session.conversation_id
 
+        # the files picked since the last message belong to this one
+        attachments = self._take_pending(session)
+        prompt = contents
+        if attachments:
+            prompt = f"{contents}\n\n{attachment_prompt(attachments)}"
+            self._show_attachments(instance, contents, attachments)
+
         if session.conversation_id is not None:
             self._generating_ids.add(session.conversation_id)
             self._notify_history_changed()  # row appears with its busy indicator
         try:
             if not use_tools and self.backend.ai_interface:
                 full = ""
-                async for chunk in self.backend.stream_message(contents, history=session.history):
+                async for chunk in self.backend.stream_message(prompt, history=session.history):
                     full += chunk
                     yield (f"<details>\n<summary>Generating response...</summary>\n\n{full}\n\n</details>")
                 yield full
-                self.backend.persist_exchange(contents, full, conversation_id=session.conversation_id)
+                self.backend.persist_exchange(
+                    contents, full, conversation_id=session.conversation_id, attachments=attachments
+                )
             else:
-                result = await self.backend.process_message(contents, use_tools=use_tools, history=session.history)
+                result = await self.backend.process_message(prompt, use_tools=use_tools, history=session.history)
                 for preview_update in result.get("preview_updates", []):
                     self._update_preview_content(preview_update["title"], preview_update["content"])
                 yield result["response"]
-                self.backend.persist_exchange(contents, result["response"], conversation_id=session.conversation_id)
+                self.backend.persist_exchange(
+                    contents, result["response"], conversation_id=session.conversation_id, attachments=attachments
+                )
         finally:
             if session.conversation_id is not None:
                 self._generating_ids.discard(session.conversation_id)

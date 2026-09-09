@@ -55,6 +55,14 @@
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.UNDO_MASK
     :summary:
     ```
+* - {py:obj}`FORK_MASK <panelini.panels.ai.history.icons.FORK_MASK>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.FORK_MASK
+    :summary:
+    ```
+* - {py:obj}`UNLINK_MASK <panelini.panels.ai.history.icons.UNLINK_MASK>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.UNLINK_MASK
+    :summary:
+    ```
 * - {py:obj}`REDO_MASK <panelini.panels.ai.history.icons.REDO_MASK>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.REDO_MASK
     :summary:
@@ -134,6 +142,26 @@
    'tabler_mask(...)'
 
 ```{autodoc2-docstring} panelini.panels.ai.history.icons.UNDO_MASK
+```
+
+````
+
+````{py:data} FORK_MASK
+:canonical: panelini.panels.ai.history.icons.FORK_MASK
+:value: >
+   'tabler_mask(...)'
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.FORK_MASK
+```
+
+````
+
+````{py:data} UNLINK_MASK
+:canonical: panelini.panels.ai.history.icons.UNLINK_MASK
+:value: >
+   'tabler_mask(...)'
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.UNLINK_MASK
 ```
 
 ````

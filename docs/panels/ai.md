@@ -204,7 +204,7 @@ default) holds a single card:
 - **Conversations** -- New chat, new folder, import/export chat as JSON,
   a tree/list view toggle, search over titles and messages, and the
   user's conversations in a drag-and-drop folder tree (inline rename,
-  delete with undo); the list view groups them by date instead
+  fork, delete with undo); the list view groups them by date instead
 
 The setup tab (⚙️) holds the model controls:
 
@@ -237,16 +237,43 @@ again, and a typed search filter carries over the switch). Conversations
 are owned by the resolved user id (see `user_resolver`); anonymous
 visitors get a cookie-backed id.
 
+#### Folders, forks and attachments
+
+Folders are virtual, so a chat can be filed under several at once: drag it
+between folders to move it, hold the copy modifier (Ctrl, Option on macOS)
+while dropping to file it under the target as well, and use the hover
+unlink icon to take it back out of one folder. A chat filed nowhere sits at
+the root. Deleting a folder removes its subfolders and the chats filed
+nowhere else; chats that also live outside the subtree stay and only lose
+that membership.
+
+The hover fork icon (also a button in the list view) copies a chat with all
+its messages into a new one that records the source in `parent_id`, so a
+conversation can branch without touching the original.
+
+The paperclip left of the chat input attaches files to the next message.
+Their extracted text is appended to the model prompt, while the message
+itself keeps only what the user typed; the files are stored alongside it and
+listed under the message when the chat is replayed. Text-ish files carry
+their decoded content, every file its payload as a `data:` URI. The
+localStorage backend drops payloads over its quota and keeps the attachment
+as a reference marked `omitted`.
+
 #### Document model
 
 Each conversation is stored as one JSON document with embedded messages,
 defined by the bundled
-[`chat_history_schema_v2.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema_v2.json).
+[`chat_history_schema.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema.json),
+published at its `$id`
+<https://opensemanticworld.github.io/panelini/schemas/chat_history_schema.json>.
 The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: a
 plain JSON-Schema carrying a JSON-LD `@context` that maps properties to
-vocabulary terms (schema.org where a term exists). The same document is the
-import/export format of the sidebar icons, so a downloaded chat re-imports
-losslessly here or in any other store.
+vocabulary terms (schema.org where a term exists). It defines the two stored
+kinds, `Conversation` (with embedded `Message` and `Attachment` objects) and
+`Folder`; instances stay open to foreign properties so documents from other
+chat apps survive a round trip. The same document is the import/export format
+of the sidebar icons, so a downloaded chat re-imports losslessly here or in
+any other store.
 
 All backends implement a shared document contract
 (`DocumentHistoryStore`): SQLite keeps one `documents` row per conversation
@@ -328,8 +355,8 @@ panelini/panels/ai/
 │   ├── default.py                    # Shared default store
 │   ├── panel.py                      # Date-grouped sidebar list
 │   ├── tree.py                       # Wunderbaum folder tree
-│   ├── chat_history_schema_v2.json   # Conversation document schema (OO-LD)
-│   └── chat_history_schema_v2.sql    # SQLite document table DDL
+│   ├── chat_history_schema.json      # Conversation document schema (OO-LD)
+│   └── chat_history_schema.sql       # SQLite document table DDL
 ├── tools/
 │   ├── __init__.py
 │   └── basic_tools.py   # Built-in tools

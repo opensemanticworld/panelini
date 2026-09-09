@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 
 from panelini.panels.ai.history import InMemoryHistoryStore
-from panelini.panels.ai.history.tree import HistoryTree
+from panelini.panels.ai.history.document import KIND_FOLDER
+from panelini.panels.ai.history.tree import HistoryTree, conv_key
 
 pytestmark = pytest.mark.ai
 
@@ -19,6 +20,7 @@ class _Callbacks:
         self.opened: list[str] = []
         self.new_chats = 0
         self.active_id: str | None = None
+        self.forked: list[str] = []
 
     def on_open(self, conversation_id: str) -> None:
         self.opened.append(conversation_id)
@@ -58,27 +60,67 @@ def _source(tree: HistoryTree) -> list[dict[str, Any]]:
 class TestSourceMapping:
     def test_folders_hold_their_conversations(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         folder = store.create_folder(USER, "Projects")
-        inside = store.create_conversation(USER, title="inside", folder_id=folder.id)
+        inside = store.create_conversation(USER, title="inside", folder_ids=[folder.id])
         root = store.create_conversation(USER, title="root")
 
         source = _source(tree_under_test)
 
         folder_node = next(n for n in source if n["key"] == f"folder:{folder.id}")
-        assert [c["key"] for c in folder_node["children"]] == [f"conv:{inside.id}"]
+        assert [c["key"] for c in folder_node["children"]] == [conv_key(inside.id, folder.id)]
         assert folder_node["expanded"]
-        assert any(n["key"] == f"conv:{root.id}" for n in source)
+        assert any(n["key"] == conv_key(root.id) for n in source)
 
     def test_nested_folders_render_recursively(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
         child = store.create_folder(USER, "Child", parent_id=parent.id)
-        conv = store.create_conversation(USER, folder_id=child.id)
+        conv = store.create_conversation(USER, folder_ids=[child.id])
 
         source = _source(tree_under_test)
 
         parent_node = next(n for n in source if n["key"] == f"folder:{parent.id}")
         child_node = parent_node["children"][0]
         assert child_node["key"] == f"folder:{child.id}"
-        assert [c["key"] for c in child_node["children"]] == [f"conv:{conv.id}"]
+        assert [c["key"] for c in child_node["children"]] == [conv_key(conv.id, child.id)]
+
+    def test_multi_folder_chat_renders_once_per_folder(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        work = store.create_folder(USER, "Work")
+        ideas = store.create_folder(USER, "Ideas")
+        conv = store.create_conversation(USER, title="shared", folder_ids=[work.id, ideas.id])
+
+        source = _source(tree_under_test)
+
+        nodes = {n["key"]: n for n in source}
+        # one row per folder, each with its own key, and none at the root
+        assert [c["key"] for c in nodes[f"folder:{work.id}"]["children"]] == [conv_key(conv.id, work.id)]
+        assert [c["key"] for c in nodes[f"folder:{ideas.id}"]["children"]] == [conv_key(conv.id, ideas.id)]
+        assert conv_key(conv.id) not in nodes
+
+    def test_membership_in_a_deleted_folder_falls_back_to_the_root(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, title="orphan", folder_ids=[folder.id])
+        # the folder vanishes behind the store's back (another session)
+        store._delete(USER, KIND_FOLDER, folder.id)
+
+        source = _source(tree_under_test)
+
+        assert [n["key"] for n in source] == [conv_key(conv.id)]
+
+    def test_active_marker_lands_on_a_placement_row(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, title="filed", folder_ids=[folder.id])
+        callbacks.active_id = conv.id
+
+        tree_under_test.refresh()
+
+        action = tree_under_test.tree._tree_action
+        assert action["action"] == "setActiveNode"
+        assert action["payload"] == {"key": conv_key(conv.id, folder.id)}
 
     def test_empty_store_yields_empty_source(self, tree_under_test: HistoryTree) -> None:
         assert _source(tree_under_test) == []
@@ -107,38 +149,86 @@ class TestEvents:
         tree_under_test._on_tree_event(
             "drop",
             {
-                "sourceKey": f"conv:{conv.id}",
+                "sourceKey": conv_key(conv.id),
                 "targetKey": f"folder:{folder.id}",
                 "region": "appendChild",
-                "movedNodeId": f"conv:{conv.id}",
+                "movedNodeId": conv_key(conv.id),
                 "newParentNodeId": f"folder:{folder.id}",
             },
         )
         moved = store.get_conversation(USER, conv.id)
-        assert moved is not None and moved.folder_id == folder.id
+        assert moved is not None and moved.folder_ids == (folder.id,)
+
+    def test_drop_moves_only_the_dragged_placement(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        work = store.create_folder(USER, "Work")
+        ideas = store.create_folder(USER, "Ideas")
+        archive = store.create_folder(USER, "Archive")
+        conv = store.create_conversation(USER, folder_ids=[work.id, ideas.id])
+
+        tree_under_test._on_tree_event(
+            "drop", {"sourceKey": conv_key(conv.id, work.id), "newParentNodeId": f"folder:{archive.id}"}
+        )
+
+        moved = store.get_conversation(USER, conv.id)
+        assert moved is not None and set(moved.folder_ids) == {ideas.id, archive.id}
+
+    def test_copy_drop_files_the_chat_under_the_target_as_well(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        work = store.create_folder(USER, "Work")
+        ideas = store.create_folder(USER, "Ideas")
+        conv = store.create_conversation(USER, folder_ids=[work.id])
+
+        tree_under_test._on_tree_event(
+            "drop",
+            {"sourceKey": conv_key(conv.id, work.id), "newParentNodeId": f"folder:{ideas.id}", "copy": True},
+        )
+
+        linked = store.get_conversation(USER, conv.id)
+        assert linked is not None and set(linked.folder_ids) == {work.id, ideas.id}
+
+    def test_copy_drop_at_the_root_changes_nothing(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, folder_ids=[folder.id])
+
+        tree_under_test._on_tree_event(
+            "drop", {"sourceKey": conv_key(conv.id, folder.id), "newParentNodeId": None, "copy": True}
+        )
+
+        kept = store.get_conversation(USER, conv.id)
+        assert kept is not None and kept.folder_ids == (folder.id,)
 
     def test_drop_next_to_conversation_adopts_its_folder(
         self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
     ) -> None:
         folder = store.create_folder(USER, "Projects")
-        anchor = store.create_conversation(USER, folder_id=folder.id)
+        anchor = store.create_conversation(USER, folder_ids=[folder.id])
         conv = store.create_conversation(USER)
         # defensive fallback: some drops report the sibling as the new parent
+        anchor_key = conv_key(anchor.id, folder.id)
         tree_under_test._on_tree_event(
-            "drop",
-            {"sourceKey": f"conv:{conv.id}", "targetKey": f"conv:{anchor.id}", "newParentNodeId": f"conv:{anchor.id}"},
+            "drop", {"sourceKey": conv_key(conv.id), "targetKey": anchor_key, "newParentNodeId": anchor_key}
         )
         moved = store.get_conversation(USER, conv.id)
-        assert moved is not None and moved.folder_id == folder.id
+        assert moved is not None and moved.folder_ids == (folder.id,)
 
     def test_drop_without_parent_lands_at_root(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         folder = store.create_folder(USER, "Projects")
-        conv = store.create_conversation(USER, folder_id=folder.id)
+        conv = store.create_conversation(USER, folder_ids=[folder.id])
         tree_under_test._on_tree_event(
-            "drop", {"sourceKey": f"conv:{conv.id}", "targetKey": f"folder:{folder.id}", "newParentNodeId": None}
+            "drop",
+            {
+                "sourceKey": conv_key(conv.id, folder.id),
+                "targetKey": f"folder:{folder.id}",
+                "newParentNodeId": None,
+            },
         )
         moved = store.get_conversation(USER, conv.id)
-        assert moved is not None and moved.folder_id is None
+        assert moved is not None and moved.folder_ids == ()
 
     def test_folder_drop_nests_folder(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
@@ -247,11 +337,11 @@ class TestSearch:
     ) -> None:
         keeper = store.create_folder(USER, "Work")
         store.create_folder(USER, "Empty")
-        conv = store.create_conversation(USER, title="Budget planning", folder_id=keeper.id)
+        conv = store.create_conversation(USER, title="Budget planning", folder_ids=[keeper.id])
         tree_under_test.search_input.value_input = "budget"
         source = tree_under_test.tree.get_source()
         assert [n["key"] for n in source] == [f"folder:{keeper.id}"]
-        assert [c["key"] for c in source[0]["children"]] == [f"conv:{conv.id}"]
+        assert [c["key"] for c in source[0]["children"]] == [conv_key(conv.id, keeper.id)]
 
     def test_empty_folders_stay_visible_without_a_query(
         self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
@@ -319,8 +409,8 @@ class TestFolderDeletion:
     ) -> None:
         folder = store.create_folder(USER, "Projects")
         child = store.create_folder(USER, "Sub", parent_id=folder.id)
-        inside = store.create_conversation(USER, title="inside", folder_id=folder.id)
-        nested = store.create_conversation(USER, title="nested", folder_id=child.id)
+        inside = store.create_conversation(USER, title="inside", folder_ids=[folder.id])
+        nested = store.create_conversation(USER, title="nested", folder_ids=[child.id])
         outside = store.create_conversation(USER, title="outside")
 
         key = f"folder:{folder.id}"
@@ -344,7 +434,7 @@ class TestFolderDeletion:
         self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
     ) -> None:
         folder = store.create_folder(USER, "Projects")
-        store.create_conversation(USER, folder_id=folder.id)
+        store.create_conversation(USER, folder_ids=[folder.id])
         other = store.create_conversation(USER, title="other")
 
         tree_under_test._on_tree_event("click", {"key": f"folder:{folder.id}", "action": "delete"})
@@ -371,7 +461,7 @@ class TestFolderDeletion:
             on_delete=owner_delete,
         )
         folder = store.create_folder(USER, "Projects")
-        inside = store.create_conversation(USER, title="inside", folder_id=folder.id)
+        inside = store.create_conversation(USER, title="inside", folder_ids=[folder.id])
 
         key = f"folder:{folder.id}"
         tree._on_tree_event("click", {"key": key, "action": "delete"})
@@ -380,6 +470,27 @@ class TestFolderDeletion:
         assert deleted == [inside.id]
         # moved to the root before deletion, so an undo restores it there
         assert store.list_folders(USER) == []
+
+    def test_chats_filed_elsewhere_survive_the_folder_delete(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        doomed = store.create_folder(USER, "Doomed")
+        keeper = store.create_folder(USER, "Keeper")
+        shared = store.create_conversation(USER, title="shared", folder_ids=[doomed.id, keeper.id])
+        only_here = store.create_conversation(USER, title="only here", folder_ids=[doomed.id])
+
+        key = f"folder:{doomed.id}"
+        tree_under_test._on_tree_event("click", {"key": key, "action": "delete"})
+
+        # only the exclusive chat is counted as lost
+        armed = next(n for n in tree_under_test.tree.get_source() if n["key"] == key)
+        assert "1 chat" in armed["actions"][1]["tooltip"]
+
+        tree_under_test._on_tree_event("click", {"key": key, "action": "delete"})
+
+        survivor = store.get_conversation(USER, shared.id)
+        assert survivor is not None and survivor.folder_ids == (keeper.id,)
+        assert store.get_conversation(USER, only_here.id) is None
 
 
 class TestEmptyState:
@@ -413,10 +524,25 @@ class TestRowActions:
 
         source = _source(tree_under_test)
 
-        conv_node = next(n for n in source if n["key"] == f"conv:{conv.id}")
+        conv_node = next(n for n in source if n["key"] == conv_key(conv.id))
         folder_node = next(n for n in source if n["key"] == f"folder:{folder.id}")
-        for node in (conv_node, folder_node):
-            assert [a["action"] for a in node["actions"]] == ["rename", "delete"]
+        assert [a["action"] for a in conv_node["actions"]] == ["rename", "fork", "delete"]
+        assert [a["action"] for a in folder_node["actions"]] == ["rename", "delete"]
+
+    def test_unlink_only_on_a_chat_filed_more_than_once(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        work = store.create_folder(USER, "Work")
+        ideas = store.create_folder(USER, "Ideas")
+        shared = store.create_conversation(USER, title="shared", folder_ids=[work.id, ideas.id])
+        alone = store.create_conversation(USER, title="alone", folder_ids=[work.id])
+
+        source = _source(tree_under_test)
+
+        rows = {n["key"]: n for n in next(f for f in source if f["key"] == f"folder:{work.id}")["children"]}
+        assert "unlink" in [a["action"] for a in rows[conv_key(shared.id, work.id)]["actions"]]
+        # unlinking the last membership would only hide the row, so no icon
+        assert "unlink" not in [a["action"] for a in rows[conv_key(alone.id, work.id)]["actions"]]
 
     def test_trash_click_deletes(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER, title="via icon")
@@ -438,6 +564,68 @@ class TestRowActions:
         conv = store.create_conversation(USER, title="stay")
         tree_under_test._on_tree_event("click", {"key": f"conv:{conv.id}", "region": "title"})
         assert store.get_conversation(USER, conv.id) is not None
+
+
+class TestUnlinkAction:
+    def test_unlink_drops_only_the_clicked_row(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        ideas = store.create_folder(USER, "Ideas")
+        conv = store.create_conversation(USER, title="shared", folder_ids=[work.id, ideas.id])
+
+        tree_under_test._on_tree_event("click", {"key": conv_key(conv.id, work.id), "action": "unlink"})
+
+        kept = store.get_conversation(USER, conv.id)
+        assert kept is not None and kept.folder_ids == (ideas.id,)
+
+    def test_unlink_at_the_root_is_a_no_op(self, tree_under_test: HistoryTree, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="root chat")
+
+        tree_under_test._on_tree_event("click", {"key": conv_key(conv.id), "action": "unlink"})
+
+        assert store.get_conversation(USER, conv.id) is not None
+
+
+class TestForkAction:
+    def test_fork_copies_the_chat_and_opens_it(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        conv = store.create_conversation(USER, title="original")
+        store.append_message(USER, conv.id, "human", "hello")
+
+        tree_under_test._on_tree_event("click", {"key": conv_key(conv.id), "action": "fork"})
+
+        fork = next(c for c in store.list_conversations(USER) if c.id != conv.id)
+        assert fork.parent_id == conv.id
+        assert [m.content for m in store.load_messages(USER, fork.id)] == ["hello"]
+        assert callbacks.opened == [fork.id]
+
+    def test_fork_routes_through_on_fork_when_wired(self, store: InMemoryHistoryStore, callbacks: _Callbacks) -> None:
+        tree = HistoryTree(
+            store=store,
+            user_id=USER,
+            on_open=callbacks.on_open,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            on_fork=callbacks.forked.append,
+        )
+        conv = store.create_conversation(USER, title="original")
+
+        tree._on_tree_event("click", {"key": conv_key(conv.id), "action": "fork"})
+
+        # the tree does not touch the store itself; the owner forks
+        assert callbacks.forked == [conv.id]
+        assert len(store.list_conversations(USER)) == 1
+
+    def test_fork_of_a_filed_chat_keeps_its_folders(
+        self, tree_under_test: HistoryTree, store: InMemoryHistoryStore
+    ) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, title="filed", folder_ids=[folder.id])
+
+        tree_under_test._on_tree_event("click", {"key": conv_key(conv.id, folder.id), "action": "fork"})
+
+        fork = next(c for c in store.list_conversations(USER) if c.id != conv.id)
+        assert fork.folder_ids == (folder.id,)
 
 
 class TestReadyIndicator:

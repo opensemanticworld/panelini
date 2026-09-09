@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from panelini.panels.ai.backend import AiBackend
 from panelini.panels.ai.frontend import AiChat
-from panelini.panels.ai.history import InMemoryHistoryStore
+from panelini.panels.ai.history import InMemoryHistoryStore, attachment_from_bytes
 from panelini.panels.ai.utils.config import AppConfig, ModelConfig, ProviderConfig
 
 pytestmark = pytest.mark.ai
@@ -136,6 +136,16 @@ class TestBackendPersistence:
         backend.persist_exchange("a question", "answer")
         renamed = store.get_conversation(USER, conv.id)
         assert renamed is not None and renamed.title == "My own name"
+
+    def test_exchange_carries_attachments_on_the_human_message(
+        self, backend: AiBackend, store: InMemoryHistoryStore
+    ) -> None:
+        attachment = attachment_from_bytes("notes.txt", b"hello", "text/plain")
+        backend.persist_exchange("question", "answer", attachments=[attachment])
+        conv_id = backend.conversation_id or ""
+        human, ai = store.load_messages(USER, conv_id)
+        assert human.attachments == (attachment,)
+        assert ai.attachments == ()  # only what the user sent
 
     def test_persist_imported_history(self, backend: AiBackend, store: InMemoryHistoryStore) -> None:
         assert backend.ai_interface is not None
@@ -382,6 +392,44 @@ class TestChatHistoryWiring:
         chat.open_conversation(origin_session.conversation_id)
         assert chat._ready_ids == set()
 
+    def test_fork_conversation_opens_the_copy(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        chat.backend.persist_exchange("original question", "original answer")
+        source_id = chat.backend.conversation_id
+        assert source_id is not None
+        notified: list[bool] = []
+        chat.on_history_changed = lambda: notified.append(True)
+
+        chat.fork_conversation(source_id)
+
+        fork_id = chat.backend.conversation_id
+        assert fork_id is not None and fork_id != source_id
+        fork = store.get_conversation(USER, fork_id)
+        assert fork is not None and fork.parent_id == source_id
+        # the copy is open in its own feed, replayed from the store
+        assert chat._active_session.conversation_id == fork_id
+        assert [str(m.object) for m in chat.chat_interface.objects] == [
+            "original question",
+            "original answer",
+        ]
+        assert notified == [True]
+
+    def test_fork_without_a_store_is_a_no_op(self, _mock_backend_env: None) -> None:
+        bare = AiChat(show_tools=False)
+        bare.backend.history_store = None
+        bare.fork_conversation("missing")  # must not raise
+
+    def test_the_tree_forks_through_the_chat(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        from panelini.panels.ai.history.tree import conv_key
+
+        chat.backend.persist_exchange("q", "a")
+        conv_id = chat.backend.conversation_id
+        assert conv_id is not None
+
+        chat._history_panel._on_tree_event("click", {"key": conv_key(conv_id), "action": "fork"})
+
+        assert len(store.list_conversations(USER)) == 2
+        assert chat.backend.conversation_id != conv_id
+
     def test_open_conversation_reuses_session_feed(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER)
         store.append_message(USER, conv.id, "human", "question")
@@ -481,6 +529,74 @@ class TestChatHistoryWiring:
         assert chat_tab[0].title == "Conversations"
         assert not chat_tab[0].collapsible  # the tab has nothing else to show
         assert app._ai_frontend.backend.user_id == USER
+
+    def test_attached_files_reach_the_prompt_the_feed_and_the_store(
+        self, chat: AiChat, store: InMemoryHistoryStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        prompts: list[str] = []
+
+        async def fake_stream(message: str, history: list | None = None) -> AsyncGenerator[str, None]:
+            _ = history
+            prompts.append(message)
+            yield "reply"
+
+        chat.batch_update_tools(set())
+        monkeypatch.setattr(chat.backend, "stream_message", fake_stream)
+        session = chat._active_session
+        session.attach_input.filename = ["notes.txt"]
+        session.attach_input.mime_type = ["text/plain"]
+        session.attach_input.value = [b"file body"]
+        assert "notes.txt" in str(session.pending_pane.object)
+
+        async def consume() -> list[str]:
+            return [chunk async for chunk in chat._handle_message("question", "user", session.feed)]
+
+        _run_async(consume)
+
+        # the file content rides along in the prompt, not in the stored text
+        assert "--- attached file: notes.txt ---\nfile body" in prompts[0]
+        stored = store.load_messages(USER, session.conversation_id or "")
+        assert stored[0].content == "question"
+        assert [a.name for a in stored[0].attachments] == ["notes.txt"]
+        assert stored[0].attachments[0].text == "file body"
+        # sent files clear the pending list
+        assert session.pending == []
+        assert session.pending_pane.object == ""
+
+    def test_stored_attachments_are_listed_on_replay(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        attachment = attachment_from_bytes("notes.txt", b"body", "text/plain")
+        store.append_message(USER, conv.id, "human", "see attached", attachments=[attachment])
+
+        chat.open_conversation(conv.id)
+
+        assert "[notes.txt](data:text/plain;base64," in str(chat.chat_interface.objects[0].object)
+
+    def test_export_import_carries_attachments(self, chat: AiChat, store: InMemoryHistoryStore) -> None:
+        import json
+        from types import SimpleNamespace
+
+        attachment = attachment_from_bytes("notes.txt", b"body", "text/plain")
+        chat.backend.persist_exchange("question", "answer", attachments=[attachment])
+        document = chat.backend.export_chat_data(provider="Test", model="m", temperature=0.7)
+        assert [a["name"] for a in document["messages"][0]["attachments"]] == ["notes.txt"]
+
+        chat._on_upload_chat(SimpleNamespace(new=json.dumps(document).encode(), obj=chat.upload_chat_input))
+
+        imported = store.load_messages(USER, chat.backend.conversation_id or "")
+        assert [a.name for a in imported[0].attachments] == ["notes.txt"]
+        assert imported[0].attachments[0].text == "body"
+
+    def test_chat_card_holds_session_views(self, chat: AiChat) -> None:
+        first = chat._active_session
+        chat.start_new_chat()
+        second = chat._active_session
+
+        # each session brings its own paperclip row above its feed
+        assert list(chat._chat_card.objects) == [first.view, second.view]
+        assert not first.view.visible
+        assert second.view.visible
+        assert list(second.view)[1] is second.feed
 
     def test_streamed_exchange_is_persisted(
         self, chat: AiChat, store: InMemoryHistoryStore, monkeypatch: pytest.MonkeyPatch

@@ -3,8 +3,8 @@
 Pure Panel widgets styled for the narrow (~264px) Panelini sidebar: a
 "New Chat" button, search over titles and message content, conversations
 grouped by last activity (Pinned, Today, Yesterday, Last 7 days, Last 30
-days, Older), inline rename, and two-click delete. Rebuilt from the store
-on every ``refresh()``.
+days, Older), inline rename, fork, and two-click delete. Rebuilt from the
+store on every ``refresh()``.
 """
 
 from __future__ import annotations
@@ -133,6 +133,7 @@ class HistoryPanel:
         on_reset: Callable[[], None] | None = None,
         trailing: Sequence[pn.viewable.Viewable] = (),
         on_delete: Callable[[str], None] | None = None,
+        on_fork: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._user_id = user_id
@@ -142,6 +143,8 @@ class HistoryPanel:
         self._on_reset = on_reset or on_new_chat
         # deletes route here when provided (shared undo/redo)
         self._on_delete = on_delete
+        # forks route here when provided, so the copy opens in its own feed
+        self._on_fork = on_fork
         self._get_active_id = get_active_id
         self._get_busy_ids = get_busy_ids or (lambda: set())
         self._get_ready_ids = get_ready_ids or (lambda: set())
@@ -246,6 +249,15 @@ class HistoryPanel:
         self._renaming_id = None
         self.refresh()
 
+    def _handle_fork(self, conversation_id: str) -> None:
+        self._renaming_id = None
+        self._pending_delete_id = None
+        if self._on_fork is not None:
+            self._on_fork(conversation_id)
+        else:
+            self._on_open(self._store.fork_conversation(self._user_id, conversation_id).id)
+        self.refresh()
+
     def _handle_delete(self, conversation_id: str) -> None:
         if self._pending_delete_id != conversation_id:
             self._pending_delete_id = conversation_id  # arm, second click deletes
@@ -335,6 +347,17 @@ class HistoryPanel:
         )
         rename_button.on_click(lambda event, cid=conversation.id: self._handle_rename_start(cid))
 
+        fork_button = pn.widgets.Button(
+            icon="git-branch",
+            width=26,
+            margin=0,
+            stylesheets=[_ICON_CSS],
+            css_classes=["history-fork"],
+            description="Fork into a new chat",
+            disabled=busy,
+        )
+        fork_button.on_click(lambda event, cid=conversation.id: self._handle_fork(cid))
+
         armed = self._pending_delete_id == conversation.id
         delete_button = pn.widgets.Button(
             icon="trash-x" if armed else "trash",
@@ -351,6 +374,7 @@ class HistoryPanel:
         return pn.Row(
             title_widget,
             rename_button,
+            fork_button,
             delete_button,
             sizing_mode="stretch_width",
             margin=(1, 0),

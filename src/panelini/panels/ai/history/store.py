@@ -9,9 +9,12 @@ Backends are implemented over the document layer in :mod:`.document`.
 
 from __future__ import annotations
 
+import base64
+import mimetypes
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,18 +45,75 @@ def new_id() -> str:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """One file sent with a message.
+
+    ``url`` carries the payload inline as a ``data:`` URI or points at it;
+    ``text`` is what was extracted from the file for model context. A store
+    too small for the payload keeps the reference and sets ``omitted``.
+    """
+
+    id: str
+    name: str
+    media_type: str | None = None
+    size: int | None = None
+    url: str | None = None
+    text: str | None = None
+    width: int | None = None
+    height: int | None = None
+    omitted: bool = False
+
+
+# Media types read as text although their top-level type is not "text"
+TEXT_MEDIA_TYPES = frozenset({
+    "application/json",
+    "application/xml",
+    "application/x-yaml",
+    "application/yaml",
+    "image/svg+xml",
+})
+
+
+def attachment_from_bytes(name: str, data: bytes, media_type: str | None = None) -> Attachment:
+    """Build an attachment from an uploaded file.
+
+    The payload is carried inline as a ``data:`` URI; text-ish files keep
+    their decoded content in ``text`` as well, so a model can read them.
+    """
+    media_type = media_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+    text = None
+    if media_type.startswith("text/") or media_type in TEXT_MEDIA_TYPES:
+        text = data.decode("utf-8", errors="replace")
+    return Attachment(
+        id=new_id(),
+        name=name,
+        media_type=media_type,
+        size=len(data),
+        url=f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}",
+        text=text,
+    )
+
+
+@dataclass(frozen=True)
 class ConversationRecord:
-    """One chat conversation owned by a user."""
+    """One chat conversation owned by a user.
+
+    Folders are virtual: ``folder_ids`` holds every folder the conversation
+    is filed under, empty for the root. ``parent_id`` is set on a fork and
+    names the conversation it branched off.
+    """
 
     id: str
     user_id: str
     title: str
     pinned: bool
     archived: bool
-    folder_id: str | None
+    folder_ids: tuple[str, ...]
     current_message_id: str | None
     created_at: datetime
     updated_at: datetime
+    parent_id: str | None = None
+    forked_from_message_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +128,7 @@ class MessageRecord:
     extra: dict[str, Any] | None
     parent_message_id: str | None
     created_at: datetime
+    attachments: tuple[Attachment, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -107,9 +168,9 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def create_conversation(
-        self, user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None
+        self, user_id: str, title: str = DEFAULT_TITLE, folder_ids: Sequence[str] = ()
     ) -> ConversationRecord:
-        """Create and return a new conversation.
+        """Create and return a new conversation, filed under ``folder_ids``.
 
         Raises:
             ValueError: On a folder the user does not own.
@@ -125,10 +186,39 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def move_conversation(self, user_id: str, conversation_id: str, folder_id: str | None) -> None:
-        """Move a conversation into a folder (``None`` moves it to the root).
+        """File a conversation under ``folder_id`` only (``None``: the root).
+
+        Replaces every existing membership; :meth:`link_conversation` adds
+        one instead.
 
         Raises:
             ValueError: On a folder the user does not own.
+        """
+
+    @abstractmethod
+    def link_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        """File a conversation under one more folder (already there: no-op).
+
+        Raises:
+            ValueError: On a folder the user does not own.
+        """
+
+    @abstractmethod
+    def unlink_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        """Remove one folder membership; the conversation itself stays.
+
+        Dropping the last one leaves the conversation at the root.
+        """
+
+    @abstractmethod
+    def fork_conversation(self, user_id: str, conversation_id: str, title: str | None = None) -> ConversationRecord:
+        """Copy a conversation into a new one branching off its last message.
+
+        The fork carries the source's messages (with fresh ids) and folders,
+        and records the source in ``parent_id``.
+
+        Raises:
+            ValueError: On a conversation the user does not own.
         """
 
     @abstractmethod
@@ -150,10 +240,13 @@ class ChatHistoryStore(ABC):
         content: str,
         extra: dict[str, Any] | None = None,
         parent_message_id: str | None = None,
+        attachments: Sequence[Attachment] = (),
     ) -> MessageRecord:
         """Append a message; bumps ``updated_at`` and ``current_message_id``.
 
         ``parent_message_id`` defaults to the previous ``current_message_id``.
+        Backends may store ``attachments`` without their payload (see
+        :class:`Attachment`).
 
         Raises:
             ValueError: On invalid ``role`` or unowned conversation.
@@ -192,7 +285,11 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def delete_folder(self, user_id: str, folder_id: str) -> None:
-        """Delete a folder; its conversations and subfolders move to the root."""
+        """Delete a folder; its subfolders move to the root.
+
+        Conversations lose this membership only, so one filed under another
+        folder as well stays there.
+        """
 
     # -- lifecycle ----------------------------------------------------------
 

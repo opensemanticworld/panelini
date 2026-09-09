@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 import panel as pn
@@ -11,6 +12,33 @@ from panelini.components.local_storage import LocalStoragePane
 from .document import InMemoryHistoryStore
 
 DEFAULT_NAMESPACE = "panelini-ai-history"
+
+# localStorage grants an origin roughly 5MB in total, so an attachment
+# carrying more than this inline is mirrored as a reference only. The
+# session's in-memory copy keeps the payload either way.
+ATTACHMENT_PAYLOAD_LIMIT = 64 * 1024
+
+
+def strip_oversized_attachments(document: dict[str, Any], limit: int = ATTACHMENT_PAYLOAD_LIMIT) -> dict[str, Any]:
+    """Return the document with attachment payloads above ``limit`` dropped.
+
+    Stripped attachments keep their identity (name, media type, size) and
+    are flagged ``omitted``; the document is returned unchanged when every
+    payload fits.
+    """
+    oversized = [
+        (message_index, attachment_index)
+        for message_index, message in enumerate(document.get("messages", []))
+        for attachment_index, attachment in enumerate(message.get("attachments", []))
+        if len(attachment.get("url") or "") + len(attachment.get("text") or "") > limit
+    ]
+    if not oversized:
+        return document
+    stripped = copy.deepcopy(document)
+    for message_index, attachment_index in oversized:
+        attachment = stripped["messages"][message_index]["attachments"][attachment_index]
+        attachment.update({"url": None, "text": None, "omitted": True})
+    return stripped
 
 
 class LocalStorageHistoryStore(InMemoryHistoryStore):
@@ -22,7 +50,9 @@ class LocalStorageHistoryStore(InMemoryHistoryStore):
     the mirror on page load, mirror entries winning on conflict, and
     :attr:`on_loaded` fires so the sidebar can refresh. Without a rendered
     pane the store behaves exactly like :class:`InMemoryHistoryStore`.
-    History is per browser: no cross-device access, roughly 5MB quota.
+    History is per browser: no cross-device access, roughly 5MB quota, so
+    large attachment payloads are mirrored as references only (see
+    :func:`strip_oversized_attachments`).
     """
 
     def __init__(self, namespace: str = DEFAULT_NAMESPACE) -> None:
@@ -38,7 +68,11 @@ class LocalStorageHistoryStore(InMemoryHistoryStore):
     def _push(self) -> None:
         """Mirror every document into the pane (and thus localStorage)."""
         with self._lock:
-            entries = {f"{kind}:{doc_id}": doc for kind, docs in self._docs.items() for doc_id, doc in docs.items()}
+            entries = {
+                f"{kind}:{doc_id}": strip_oversized_attachments(doc)
+                for kind, docs in self._docs.items()
+                for doc_id, doc in docs.items()
+            }
         self.pane.entries = entries
 
     def _put(self, user_id: str, kind: str, document: dict[str, Any]) -> None:

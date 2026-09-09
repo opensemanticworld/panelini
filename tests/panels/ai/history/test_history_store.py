@@ -24,6 +24,7 @@ from panelini.panels.ai.history import (
     InMemoryHistoryStore,
     LocalStorageHistoryStore,
     SqliteHistoryStore,
+    attachment_from_bytes,
     derive_title,
 )
 
@@ -54,7 +55,9 @@ class TestConversations:
         conv = store.create_conversation(USER)
         assert conv.title == DEFAULT_TITLE
         assert conv.user_id == USER
-        assert conv.folder_id is None
+        assert conv.folder_ids == ()
+        assert conv.parent_id is None
+        assert conv.forked_from_message_id is None
         assert conv.current_message_id is None
         assert not conv.pinned
         assert not conv.archived
@@ -107,6 +110,50 @@ class TestConversations:
         assert [c.id for c in store.list_conversations(USER, include_archived=True)] == [conv.id]
 
 
+# ── forking ───────────────────────────────────────────────────────────────
+
+
+class TestForkConversation:
+    def test_fork_copies_messages_with_fresh_ids(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER, title="Source")
+        first = store.append_message(USER, conv.id, "human", "question")
+        second = store.append_message(USER, conv.id, "ai", "answer")
+
+        fork = store.fork_conversation(USER, conv.id)
+
+        assert fork.id != conv.id
+        assert fork.title == "Source (fork)"
+        assert fork.parent_id == conv.id
+        assert fork.forked_from_message_id == second.id
+        copied = store.load_messages(USER, fork.id)
+        assert [m.content for m in copied] == ["question", "answer"]
+        assert {m.id for m in copied}.isdisjoint({first.id, second.id})
+        # the parent chain is remapped onto the copies
+        assert copied[0].parent_message_id is None
+        assert copied[1].parent_message_id == copied[0].id
+        after = store.get_conversation(USER, fork.id)
+        assert after is not None and after.current_message_id == copied[1].id
+
+    def test_fork_inherits_folders_and_takes_a_title(self, store: ChatHistoryStore) -> None:
+        folder = store.create_folder(USER, "Projects")
+        conv = store.create_conversation(USER, title="Source", folder_ids=[folder.id])
+        fork = store.fork_conversation(USER, conv.id, title="Branch")
+        assert fork.title == "Branch"
+        assert fork.folder_ids == (folder.id,)
+
+    def test_fork_is_independent_of_the_source(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        store.append_message(USER, conv.id, "human", "shared")
+        fork = store.fork_conversation(USER, conv.id)
+        store.append_message(USER, fork.id, "human", "only in the fork")
+        assert [m.content for m in store.load_messages(USER, conv.id)] == ["shared"]
+
+    def test_fork_of_a_foreign_conversation_raises(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        with pytest.raises(ValueError, match="conversation"):
+            store.fork_conversation(OTHER, conv.id)
+
+
 # ── messages ──────────────────────────────────────────────────────────────
 
 
@@ -136,6 +183,26 @@ class TestMessages:
         store.append_message(USER, conv.id, "ai", "done", extra=extra)
         loaded = store.load_messages(USER, conv.id)
         assert loaded[0].extra == extra
+
+    def test_attachments_roundtrip(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        attachment = attachment_from_bytes("notes.txt", b"read me", "text/plain")
+        store.append_message(USER, conv.id, "human", "see the file", attachments=[attachment])
+        loaded = store.load_messages(USER, conv.id)
+        assert loaded[0].attachments == (attachment,)
+
+    def test_attachment_from_bytes_extracts_text_and_payload(self) -> None:
+        attachment = attachment_from_bytes("notes.txt", b"read me")
+        assert attachment.media_type == "text/plain"
+        assert attachment.size == 7
+        assert attachment.text == "read me"
+        assert attachment.url is not None and attachment.url.startswith("data:text/plain;base64,")
+        assert not attachment.omitted
+
+    def test_attachment_from_bytes_keeps_binaries_opaque(self) -> None:
+        attachment = attachment_from_bytes("chart.png", b"\x89PNG\r\n")
+        assert attachment.media_type == "image/png"
+        assert attachment.text is None
 
     def test_invalid_role_raises(self, store: ChatHistoryStore) -> None:
         conv = store.create_conversation(USER)
@@ -178,30 +245,58 @@ class TestFolders:
         conv = store.create_conversation(USER)
         store.move_conversation(USER, conv.id, folder.id)
         moved = store.get_conversation(USER, conv.id)
-        assert moved is not None and moved.folder_id == folder.id
+        assert moved is not None and moved.folder_ids == (folder.id,)
         store.move_conversation(USER, conv.id, None)
         back = store.get_conversation(USER, conv.id)
-        assert back is not None and back.folder_id is None
+        assert back is not None and back.folder_ids == ()
+
+    def test_move_replaces_every_membership(self, store: ChatHistoryStore) -> None:
+        first = store.create_folder(USER, "First")
+        second = store.create_folder(USER, "Second")
+        conv = store.create_conversation(USER, folder_ids=[first.id, second.id])
+        store.move_conversation(USER, conv.id, first.id)
+        after = store.get_conversation(USER, conv.id)
+        assert after is not None and after.folder_ids == (first.id,)
+
+    def test_link_and_unlink_keep_other_memberships(self, store: ChatHistoryStore) -> None:
+        first = store.create_folder(USER, "First")
+        second = store.create_folder(USER, "Second")
+        conv = store.create_conversation(USER, folder_ids=[first.id])
+        store.link_conversation(USER, conv.id, second.id)
+        store.link_conversation(USER, conv.id, second.id)  # already filed: no-op
+        linked = store.get_conversation(USER, conv.id)
+        assert linked is not None and set(linked.folder_ids) == {first.id, second.id}
+        store.unlink_conversation(USER, conv.id, first.id)
+        unlinked = store.get_conversation(USER, conv.id)
+        assert unlinked is not None and unlinked.folder_ids == (second.id,)
+
+    def test_link_to_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        with pytest.raises(ValueError, match="folder"):
+            store.link_conversation(USER, conv.id, "missing")
 
     def test_move_to_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
         conv = store.create_conversation(USER)
         with pytest.raises(ValueError, match="folder"):
             store.move_conversation(USER, conv.id, "missing")
 
-    def test_delete_folder_moves_contents_to_root(self, store: ChatHistoryStore) -> None:
+    def test_delete_folder_drops_only_its_own_membership(self, store: ChatHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
         child = store.create_folder(USER, "Child", parent_id=parent.id)
-        conv = store.create_conversation(USER, folder_id=parent.id)
+        other = store.create_folder(USER, "Other")
+        conv = store.create_conversation(USER, folder_ids=[parent.id])
+        shared = store.create_conversation(USER, folder_ids=[parent.id, other.id])
         store.delete_folder(USER, parent.id)
         conv_after = store.get_conversation(USER, conv.id)
-        assert conv_after is not None and conv_after.folder_id is None
-        folders = store.list_folders(USER)
-        assert [f.id for f in folders] == [child.id]
-        assert folders[0].parent_id is None
+        assert conv_after is not None and conv_after.folder_ids == ()
+        shared_after = store.get_conversation(USER, shared.id)
+        assert shared_after is not None and shared_after.folder_ids == (other.id,)
+        folders = {f.id: f.parent_id for f in store.list_folders(USER)}
+        assert folders == {child.id: None, other.id: None}
 
     def test_create_conversation_in_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
         with pytest.raises(ValueError, match="folder"):
-            store.create_conversation(USER, folder_id="missing")
+            store.create_conversation(USER, folder_ids=["missing"])
 
     def test_move_folder_nests_and_returns_to_root(self, store: ChatHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
@@ -442,6 +537,28 @@ class TestLocalStorageSpecifics:
         backend.pane.loaded = False
         backend.pane.loaded = True
         assert loaded == [True]
+
+    def test_oversized_attachments_are_mirrored_as_references(self) -> None:
+        """The quota is ~5MB, so big payloads stay out of the browser copy."""
+        from panelini.panels.ai.history.local_storage_store import ATTACHMENT_PAYLOAD_LIMIT
+
+        backend = LocalStorageHistoryStore()
+        conv = backend.create_conversation(USER)
+        small = attachment_from_bytes("small.txt", b"tiny", "text/plain")
+        large = attachment_from_bytes("large.txt", b"x" * (ATTACHMENT_PAYLOAD_LIMIT + 1), "text/plain")
+        backend.append_message(USER, conv.id, "human", "files", attachments=[small, large])
+
+        mirrored = backend.pane.entries[f"conversation:{conv.id}"]["messages"][0]["attachments"]
+        assert mirrored[0]["url"] == small.url
+        assert not mirrored[0]["omitted"]
+        assert mirrored[1]["name"] == "large.txt"
+        assert mirrored[1]["size"] == large.size
+        assert mirrored[1]["url"] is None
+        assert mirrored[1]["text"] is None
+        assert mirrored[1]["omitted"]
+
+        # the session's own copy keeps the payload
+        assert backend.load_messages(USER, conv.id)[0].attachments == (small, large)
 
 
 # ── restore (delete undo) ─────────────────────────────────────────────────

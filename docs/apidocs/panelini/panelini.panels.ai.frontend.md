@@ -21,7 +21,37 @@
     ```
 ````
 
+### Functions
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`attachment_markdown <panelini.panels.ai.frontend.attachment_markdown>`
+  - ```{autodoc2-docstring} panelini.panels.ai.frontend.attachment_markdown
+    :summary:
+    ```
+* - {py:obj}`attachment_prompt <panelini.panels.ai.frontend.attachment_prompt>`
+  - ```{autodoc2-docstring} panelini.panels.ai.frontend.attachment_prompt
+    :summary:
+    ```
+````
+
 ### API
+
+````{py:function} attachment_markdown(attachments: collections.abc.Sequence[panelini.panels.ai.history.store.Attachment]) -> str
+:canonical: panelini.panels.ai.frontend.attachment_markdown
+
+```{autodoc2-docstring} panelini.panels.ai.frontend.attachment_markdown
+```
+````
+
+````{py:function} attachment_prompt(attachments: collections.abc.Sequence[panelini.panels.ai.history.store.Attachment]) -> str
+:canonical: panelini.panels.ai.frontend.attachment_prompt
+
+```{autodoc2-docstring} panelini.panels.ai.frontend.attachment_prompt
+```
+````
 
 `````{py:class} AiChat(system_message: str = 'You are a helpful assistant.', welcome_message: str | None = None, config_path: pathlib.Path | None = None, tools: list | None = None, show_tools: bool = True, show_preview: bool = False, history_store: panelini.panels.ai.history.store.ChatHistoryStore | str | None = None, history_view: str = 'tree', user_resolver: panelini.user.UserResolver | None = None, user_id: str | None = None, cookie_pane: panel.viewable.Viewable | None = None)
 :canonical: panelini.panels.ai.frontend.AiChat
@@ -82,6 +112,14 @@
 :canonical: panelini.panels.ai.frontend.AiChat.start_new_chat
 
 ```{autodoc2-docstring} panelini.panels.ai.frontend.AiChat.start_new_chat
+```
+
+````
+
+````{py:method} fork_conversation(conversation_id: str) -> None
+:canonical: panelini.panels.ai.frontend.AiChat.fork_conversation
+
+```{autodoc2-docstring} panelini.panels.ai.frontend.AiChat.fork_conversation
 ```
 
 ````

@@ -46,11 +46,16 @@ class TestBucketLabel:
 # ── HistoryPanel ──────────────────────────────────────────────────────────
 
 
+# positions of the widgets in one history row
+TITLE, RENAME, FORK, DELETE = 0, 1, 2, 3
+
+
 class _Callbacks:
     def __init__(self) -> None:
         self.opened: list[str] = []
         self.new_chats = 0
         self.active_id: str | None = None
+        self.forked: list[str] = []
 
     def on_open(self, conversation_id: str) -> None:
         self.opened.append(conversation_id)
@@ -94,7 +99,7 @@ def _row_for(panel: HistoryPanel, title: str) -> pn.Row:
     """Locate a row by title. Conversations created in the same clock tick sort
     by insertion order, which is coarse enough to tie on Windows."""
     for row in _rows(panel):
-        if _widget(row, 0).name == title:
+        if _widget(row, TITLE).name == title:
             return row
     msg = f"no history row titled {title!r}"
     raise AssertionError(msg)
@@ -136,7 +141,7 @@ class TestHistoryPanel:
     ) -> None:
         conv = store.create_conversation(USER, title="chat")
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 0))
+        _click(_widget(_rows(panel_under_test)[0], TITLE))
         assert callbacks.opened == [conv.id]
 
     def test_active_conversation_uses_highlight_style(
@@ -145,7 +150,7 @@ class TestHistoryPanel:
         conv = store.create_conversation(USER, title="chat")
         callbacks.active_id = conv.id
         panel_under_test.refresh()
-        title_button = _widget(_rows(panel_under_test)[0], 0)
+        title_button = _widget(_rows(panel_under_test)[0], TITLE)
         assert "font-weight: 600" in title_button.stylesheets[0]
 
     def test_new_chat_button_fires_callback(self, panel_under_test: HistoryPanel, callbacks: _Callbacks) -> None:
@@ -155,29 +160,29 @@ class TestHistoryPanel:
     def test_rename_flow(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER, title="old title")
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 1))  # pencil icon
-        rename_input = _widget(_rows(panel_under_test)[0], 0)
+        _click(_widget(_rows(panel_under_test)[0], RENAME))  # pencil icon
+        rename_input = _widget(_rows(panel_under_test)[0], TITLE)
         assert isinstance(rename_input, pn.widgets.TextInput)
         rename_input.value = "new title"
         renamed = store.get_conversation(USER, conv.id)
         assert renamed is not None and renamed.title == "new title"
-        assert isinstance(_widget(_rows(panel_under_test)[0], 0), pn.widgets.Button)
+        assert isinstance(_widget(_rows(panel_under_test)[0], TITLE), pn.widgets.Button)
 
     def test_rename_to_blank_is_ignored(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER, title="kept")
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 1))
-        _widget(_rows(panel_under_test)[0], 0).value = "   "
+        _click(_widget(_rows(panel_under_test)[0], RENAME))
+        _widget(_rows(panel_under_test)[0], TITLE).value = "   "
         kept = store.get_conversation(USER, conv.id)
         assert kept is not None and kept.title == "kept"
 
     def test_delete_requires_two_clicks(self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore) -> None:
         conv = store.create_conversation(USER, title="doomed")
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 2))  # arm
+        _click(_widget(_rows(panel_under_test)[0], DELETE))  # arm
         assert store.get_conversation(USER, conv.id) is not None
-        assert _widget(_rows(panel_under_test)[0], 2).button_type == "danger"
-        _click(_widget(_rows(panel_under_test)[0], 2))  # confirm
+        assert _widget(_rows(panel_under_test)[0], DELETE).button_type == "danger"
+        _click(_widget(_rows(panel_under_test)[0], DELETE))  # confirm
         assert store.get_conversation(USER, conv.id) is None
         assert _rows(panel_under_test) == []
 
@@ -188,8 +193,8 @@ class TestHistoryPanel:
         active = store.create_conversation(USER, title="active")
         callbacks.active_id = active.id
         panel_under_test.refresh()
-        _click(_widget(_row_for(panel_under_test, "active"), 2))  # arm
-        _click(_widget(_row_for(panel_under_test, "active"), 2))  # confirm
+        _click(_widget(_row_for(panel_under_test, "active"), DELETE))  # arm
+        _click(_widget(_row_for(panel_under_test, "active"), DELETE))  # confirm
         assert callbacks.opened == [remaining.id]
         assert callbacks.new_chats == 0
 
@@ -199,9 +204,40 @@ class TestHistoryPanel:
         conv = store.create_conversation(USER, title="active")
         callbacks.active_id = conv.id
         panel_under_test.refresh()
-        _click(_widget(_rows(panel_under_test)[0], 2))
-        _click(_widget(_rows(panel_under_test)[0], 2))
+        _click(_widget(_rows(panel_under_test)[0], DELETE))
+        _click(_widget(_rows(panel_under_test)[0], DELETE))
         assert callbacks.new_chats == 1
+
+    def test_fork_button_copies_the_chat_and_opens_it(
+        self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore, callbacks: _Callbacks
+    ) -> None:
+        conv = store.create_conversation(USER, title="original")
+        store.append_message(USER, conv.id, "human", "hello")
+        panel_under_test.refresh()
+
+        _click(_widget(_row_for(panel_under_test, "original"), FORK))
+
+        fork = next(c for c in store.list_conversations(USER) if c.id != conv.id)
+        assert fork.parent_id == conv.id
+        assert callbacks.opened == [fork.id]
+        assert len(_rows(panel_under_test)) == 2
+
+    def test_fork_routes_through_on_fork_when_wired(self, store: InMemoryHistoryStore, callbacks: _Callbacks) -> None:
+        conv = store.create_conversation(USER, title="original")
+        panel = HistoryPanel(
+            store=store,
+            user_id=USER,
+            on_open=callbacks.on_open,
+            on_new_chat=callbacks.on_new_chat,
+            get_active_id=lambda: callbacks.active_id,
+            on_fork=callbacks.forked.append,
+        )
+
+        _click(_widget(_rows(panel)[0], FORK))
+
+        # the panel does not touch the store itself; the owner forks
+        assert callbacks.forked == [conv.id]
+        assert len(store.list_conversations(USER)) == 1
 
     def test_other_users_conversations_hidden(
         self, panel_under_test: HistoryPanel, store: InMemoryHistoryStore
@@ -224,19 +260,19 @@ class TestHistoryPanel:
             get_busy_ids=lambda: busy_ids,
         )
         row = _rows(panel)[0]
-        title = _widget(row, 0)
+        title = _widget(row, TITLE)
         assert title.icon == "loader-2"  # spinner while generating
-        assert _widget(row, 1).disabled
-        assert _widget(row, 2).disabled
+        assert _widget(row, RENAME).disabled
+        assert _widget(row, DELETE).disabled
         _click(title)  # the row must stay clickable while generating
         assert callbacks.opened == [conv.id]
 
         busy_ids.clear()
         panel.refresh()
         row = _rows(panel)[0]
-        assert _widget(row, 0).icon is None
-        assert not _widget(row, 1).disabled
-        assert not _widget(row, 2).disabled
+        assert _widget(row, TITLE).icon is None
+        assert not _widget(row, RENAME).disabled
+        assert not _widget(row, DELETE).disabled
 
     def test_ready_conversation_shows_check_until_opened(
         self, store: InMemoryHistoryStore, callbacks: _Callbacks
@@ -252,15 +288,15 @@ class TestHistoryPanel:
             get_busy_ids=lambda: set(),
             get_ready_ids=lambda: ready_ids,
         )
-        assert _widget(_rows(panel)[0], 0).icon == "circle-check"
+        assert _widget(_rows(panel)[0], TITLE).icon == "circle-check"
 
         ready_ids.clear()
         panel.refresh()
-        assert _widget(_rows(panel)[0], 0).icon is None
+        assert _widget(_rows(panel)[0], TITLE).icon is None
 
 
 def _titles(panel: HistoryPanel) -> list[str]:
-    return [_widget(row, 0).name for row in _rows(panel)]
+    return [_widget(row, TITLE).name for row in _rows(panel)]
 
 
 class TestSearch:

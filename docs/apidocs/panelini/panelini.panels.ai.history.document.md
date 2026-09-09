@@ -43,6 +43,18 @@
   - ```{autodoc2-docstring} panelini.panels.ai.history.document.validate_conversation_document
     :summary:
     ```
+* - {py:obj}`validate_folder_document <panelini.panels.ai.history.document.validate_folder_document>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.document.validate_folder_document
+    :summary:
+    ```
+* - {py:obj}`attachment_to_dict <panelini.panels.ai.history.document.attachment_to_dict>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.document.attachment_to_dict
+    :summary:
+    ```
+* - {py:obj}`attachment_from_dict <panelini.panels.ai.history.document.attachment_from_dict>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.document.attachment_from_dict
+    :summary:
+    ```
 * - {py:obj}`message_to_dict <panelini.panels.ai.history.document.message_to_dict>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.document.message_to_dict
     :summary:
@@ -142,6 +154,27 @@
 ```
 ````
 
+````{py:function} validate_folder_document(document: dict[str, typing.Any]) -> None
+:canonical: panelini.panels.ai.history.document.validate_folder_document
+
+```{autodoc2-docstring} panelini.panels.ai.history.document.validate_folder_document
+```
+````
+
+````{py:function} attachment_to_dict(attachment: panelini.panels.ai.history.store.Attachment) -> dict[str, typing.Any]
+:canonical: panelini.panels.ai.history.document.attachment_to_dict
+
+```{autodoc2-docstring} panelini.panels.ai.history.document.attachment_to_dict
+```
+````
+
+````{py:function} attachment_from_dict(data: dict[str, typing.Any]) -> panelini.panels.ai.history.store.Attachment
+:canonical: panelini.panels.ai.history.document.attachment_from_dict
+
+```{autodoc2-docstring} panelini.panels.ai.history.document.attachment_from_dict
+```
+````
+
 ````{py:function} message_to_dict(record: panelini.panels.ai.history.store.MessageRecord) -> dict[str, typing.Any]
 :canonical: panelini.panels.ai.history.document.message_to_dict
 
@@ -207,7 +240,7 @@ Bases: {py:obj}`panelini.panels.ai.history.store.ChatHistoryStore`
 
 ````
 
-````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_ids: collections.abc.Sequence[str] = ()) -> panelini.panels.ai.history.store.ConversationRecord
 :canonical: panelini.panels.ai.history.document.DocumentHistoryStore.create_conversation
 
 ````
@@ -227,6 +260,21 @@ Bases: {py:obj}`panelini.panels.ai.history.store.ChatHistoryStore`
 
 ````
 
+````{py:method} link_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.document.DocumentHistoryStore.link_conversation
+
+````
+
+````{py:method} unlink_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.document.DocumentHistoryStore.unlink_conversation
+
+````
+
+````{py:method} fork_conversation(user_id: str, conversation_id: str, title: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+:canonical: panelini.panels.ai.history.document.DocumentHistoryStore.fork_conversation
+
+````
+
 ````{py:method} set_pinned(user_id: str, conversation_id: str, pinned: bool) -> None
 :canonical: panelini.panels.ai.history.document.DocumentHistoryStore.set_pinned
 
@@ -237,7 +285,7 @@ Bases: {py:obj}`panelini.panels.ai.history.store.ChatHistoryStore`
 
 ````
 
-````{py:method} append_message(user_id: str, conversation_id: str, role: str, content: str, extra: dict[str, typing.Any] | None = None, parent_message_id: str | None = None) -> panelini.panels.ai.history.store.MessageRecord
+````{py:method} append_message(user_id: str, conversation_id: str, role: str, content: str, extra: dict[str, typing.Any] | None = None, parent_message_id: str | None = None, attachments: collections.abc.Sequence[panelini.panels.ai.history.store.Attachment] = ()) -> panelini.panels.ai.history.store.MessageRecord
 :canonical: panelini.panels.ai.history.document.DocumentHistoryStore.append_message
 
 ````

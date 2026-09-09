@@ -15,6 +15,10 @@
 :class: autosummary longtable
 :align: left
 
+* - {py:obj}`Attachment <panelini.panels.ai.history.store.Attachment>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment
+    :summary:
+    ```
 * - {py:obj}`ConversationRecord <panelini.panels.ai.history.store.ConversationRecord>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord
     :summary:
@@ -51,6 +55,10 @@
   - ```{autodoc2-docstring} panelini.panels.ai.history.store.new_id
     :summary:
     ```
+* - {py:obj}`attachment_from_bytes <panelini.panels.ai.history.store.attachment_from_bytes>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.store.attachment_from_bytes
+    :summary:
+    ```
 * - {py:obj}`validate_role <panelini.panels.ai.history.store.validate_role>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.store.validate_role
     :summary:
@@ -73,6 +81,10 @@
     ```
 * - {py:obj}`TITLE_MAX_LENGTH <panelini.panels.ai.history.store.TITLE_MAX_LENGTH>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.store.TITLE_MAX_LENGTH
+    :summary:
+    ```
+* - {py:obj}`TEXT_MEDIA_TYPES <panelini.panels.ai.history.store.TEXT_MEDIA_TYPES>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.store.TEXT_MEDIA_TYPES
     :summary:
     ```
 ````
@@ -127,6 +139,130 @@
 :canonical: panelini.panels.ai.history.store.new_id
 
 ```{autodoc2-docstring} panelini.panels.ai.history.store.new_id
+```
+````
+
+`````{py:class} Attachment
+:canonical: panelini.panels.ai.history.store.Attachment
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment
+```
+
+````{py:attribute} id
+:canonical: panelini.panels.ai.history.store.Attachment.id
+:type: str
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.id
+```
+
+````
+
+````{py:attribute} name
+:canonical: panelini.panels.ai.history.store.Attachment.name
+:type: str
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.name
+```
+
+````
+
+````{py:attribute} media_type
+:canonical: panelini.panels.ai.history.store.Attachment.media_type
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.media_type
+```
+
+````
+
+````{py:attribute} size
+:canonical: panelini.panels.ai.history.store.Attachment.size
+:type: int | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.size
+```
+
+````
+
+````{py:attribute} url
+:canonical: panelini.panels.ai.history.store.Attachment.url
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.url
+```
+
+````
+
+````{py:attribute} text
+:canonical: panelini.panels.ai.history.store.Attachment.text
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.text
+```
+
+````
+
+````{py:attribute} width
+:canonical: panelini.panels.ai.history.store.Attachment.width
+:type: int | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.width
+```
+
+````
+
+````{py:attribute} height
+:canonical: panelini.panels.ai.history.store.Attachment.height
+:type: int | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.height
+```
+
+````
+
+````{py:attribute} omitted
+:canonical: panelini.panels.ai.history.store.Attachment.omitted
+:type: bool
+:value: >
+   False
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.Attachment.omitted
+```
+
+````
+
+`````
+
+````{py:data} TEXT_MEDIA_TYPES
+:canonical: panelini.panels.ai.history.store.TEXT_MEDIA_TYPES
+:value: >
+   'frozenset(...)'
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.TEXT_MEDIA_TYPES
+```
+
+````
+
+````{py:function} attachment_from_bytes(name: str, data: bytes, media_type: str | None = None) -> panelini.panels.ai.history.store.Attachment
+:canonical: panelini.panels.ai.history.store.attachment_from_bytes
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.attachment_from_bytes
 ```
 ````
 
@@ -191,13 +327,13 @@
 
 ````
 
-````{py:attribute} folder_id
-:canonical: panelini.panels.ai.history.store.ConversationRecord.folder_id
-:type: str | None
+````{py:attribute} folder_ids
+:canonical: panelini.panels.ai.history.store.ConversationRecord.folder_ids
+:type: tuple[str, ...]
 :value: >
    None
 
-```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.folder_id
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.folder_ids
 ```
 
 ````
@@ -231,6 +367,28 @@
    None
 
 ```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.updated_at
+```
+
+````
+
+````{py:attribute} parent_id
+:canonical: panelini.panels.ai.history.store.ConversationRecord.parent_id
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.parent_id
+```
+
+````
+
+````{py:attribute} forked_from_message_id
+:canonical: panelini.panels.ai.history.store.ConversationRecord.forked_from_message_id
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.forked_from_message_id
 ```
 
 ````
@@ -327,6 +485,17 @@
    None
 
 ```{autodoc2-docstring} panelini.panels.ai.history.store.MessageRecord.created_at
+```
+
+````
+
+````{py:attribute} attachments
+:canonical: panelini.panels.ai.history.store.MessageRecord.attachments
+:type: tuple[panelini.panels.ai.history.store.Attachment, ...]
+:value: >
+   'field(...)'
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.MessageRecord.attachments
 ```
 
 ````
@@ -442,7 +611,7 @@ Bases: {py:obj}`abc.ABC`
 
 ````
 
-````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_ids: collections.abc.Sequence[str] = ()) -> panelini.panels.ai.history.store.ConversationRecord
 :canonical: panelini.panels.ai.history.store.ChatHistoryStore.create_conversation
 :abstractmethod:
 
@@ -478,6 +647,33 @@ Bases: {py:obj}`abc.ABC`
 
 ````
 
+````{py:method} link_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.store.ChatHistoryStore.link_conversation
+:abstractmethod:
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.link_conversation
+```
+
+````
+
+````{py:method} unlink_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.store.ChatHistoryStore.unlink_conversation
+:abstractmethod:
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.unlink_conversation
+```
+
+````
+
+````{py:method} fork_conversation(user_id: str, conversation_id: str, title: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+:canonical: panelini.panels.ai.history.store.ChatHistoryStore.fork_conversation
+:abstractmethod:
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.fork_conversation
+```
+
+````
+
 ````{py:method} set_pinned(user_id: str, conversation_id: str, pinned: bool) -> None
 :canonical: panelini.panels.ai.history.store.ChatHistoryStore.set_pinned
 :abstractmethod:
@@ -496,7 +692,7 @@ Bases: {py:obj}`abc.ABC`
 
 ````
 
-````{py:method} append_message(user_id: str, conversation_id: str, role: str, content: str, extra: dict[str, typing.Any] | None = None, parent_message_id: str | None = None) -> panelini.panels.ai.history.store.MessageRecord
+````{py:method} append_message(user_id: str, conversation_id: str, role: str, content: str, extra: dict[str, typing.Any] | None = None, parent_message_id: str | None = None, attachments: collections.abc.Sequence[panelini.panels.ai.history.store.Attachment] = ()) -> panelini.panels.ai.history.store.MessageRecord
 :canonical: panelini.panels.ai.history.store.ChatHistoryStore.append_message
 :abstractmethod:
 

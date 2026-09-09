@@ -9,6 +9,7 @@ __all__ = [
     "COOKIE_NAME",
     "DEFAULT_TITLE",
     "LOCAL_USER_ID",
+    "Attachment",
     "ChatHistoryStore",
     "ConversationRecord",
     "CookieSetterPane",
@@ -21,6 +22,7 @@ __all__ = [
     "MessageRecord",
     "SqliteHistoryStore",
     "UserResolver",
+    "attachment_from_bytes",
     "default_history_store",
     "default_user_resolver",
     "derive_title",
@@ -46,10 +48,12 @@ from .local_storage_store import LocalStorageHistoryStore
 from .panel import HistoryPanel
 from .store import (
     DEFAULT_TITLE,
+    Attachment,
     ChatHistoryStore,
     ConversationRecord,
     FolderRecord,
     MessageRecord,
+    attachment_from_bytes,
     derive_title,
 )
 from .tree import HistoryTree
