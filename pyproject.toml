@@ -84,6 +84,7 @@ dev = [
     "sphinx-design>=0.6.0",
     "sphinxcontrib-mermaid>=1.0.0",
     "pytest-playwright>=0.7.2",
+    "pytest-xdist>=3.6.1",
     "pytest-asyncio>=0.23",
     "osw>=1.0.1",
     "python-semantic-release>=10.6,<11",

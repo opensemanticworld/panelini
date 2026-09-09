@@ -206,9 +206,16 @@ else:
 # Panels excluded from the Pyodide portfolio (server/sandbox-backed, can't run in WASM).
 # ``drawai_beautify`` drives the Anthropic SDK directly and renders through the hosted
 # drawio viewer, so the LangChain stand-ins do not cover it; it stays media-only.
+# ``tst_fsbrowser`` walks the real repository directory tree with ``pathlib``, and there
+# is no repository in the Pyodide WASM filesystem, so it stays media-only too.
 # ``chat_sqlite_history`` opens a file-backed SQLite store at module level, and Pyodide
 # ships no ``sqlite3``; only the localStorage and in-memory backends run under WASM.
-_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify", "chat_sqlite_history"}
+_EXCLUDE_STEMS = {
+    "plot_by_code",
+    "drawai_beautify",
+    "tst_fsbrowser",
+    "chat_sqlite_history",
+}
 _EXCLUDE_CATEGORIES: set[str] = set()
 
 # Per-category accent colour (background gradient base) + short human label.
@@ -217,6 +224,7 @@ _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
     "jsoneditor": ((13, 148, 136), "JSON Editor"),
     "visnetwork": ((37, 99, 235), "VisNetwork"),
     "wunderbaum": ((217, 119, 6), "Wunderbaum"),
+    "tanstack": ((5, 150, 105), "TanStack Table"),
     "usecases": ((190, 24, 93), "Use cases"),
 }
 

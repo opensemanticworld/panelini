@@ -1,5 +1,6 @@
 # pytest test_wunderbaum_visnetwork.py --headed --slowmo 1000
 
+import contextlib
 import copy
 import time
 
@@ -208,6 +209,12 @@ def _find_in_source(source, key):
     return search(source)
 
 
+def _parent_in_source(key):
+    """Parent key of ``key`` in the server's copy of the tree, or None when absent."""
+    result = _find_in_source(tree.source, key)
+    return None if result is None else result[1]
+
+
 def _get_client_children(page, parent_key):
     """Get child keys of a node in the client-side wunderbaum tree."""
     return page.evaluate(
@@ -246,7 +253,14 @@ def test_dnd_move_node(ready_page: Page):
     src = page.locator(".wb-row .wb-title", has_text="Truck").first
     tgt = page.locator(".wb-row .wb-title", has_text="Animal").first
     src.drag_to(tgt)
-    wait_until(lambda: get_parent("Truck") == "Animal")
+    wait_until(lambda: get_parent("Truck") == "Animal", timeout=10)
+
+    # The server's copy of the tree arrives on a message of its own. The component
+    # sends the drop event straight away and defers `emitSource` by a task, so the
+    # data model having moved says nothing about `tree.source` having caught up.
+    # Wait for it and assert anyway, so a real failure still names the parent it found.
+    with contextlib.suppress(TimeoutError):
+        wait_until(lambda: _parent_in_source("Thing/Vehicle/Truck") == "Thing/Animal", timeout=10)
 
     # Server-side tree: Truck moved under Animal
     result = _find_in_source(

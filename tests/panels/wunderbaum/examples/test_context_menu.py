@@ -42,7 +42,8 @@ def test_context_menu_add_child(page: Page, port):
     page.get_by_text("Added", exact=False).first.wait_for(timeout=10000)
     time.sleep(1.5)  # hold on the added node
 
-    # A child was added under "src" and the status reflects it.
-    assert "Added" in status.object
+    # A child was added under "src" and the status reflects it. The row appears
+    # while the callback is still running, so wait for the status separately.
+    wait_until(lambda: "Added" in status.object)
 
     stop_server(server)

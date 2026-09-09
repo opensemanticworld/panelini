@@ -8556,16 +8556,21 @@ const rf = (t, e) => {
         preventVoidMoves: !1,
         dragStart: (c) => {
           var f;
-          this._dragOrigParent = c.node.parent, this._dragActive = !0, this._selectAfterDrag = c.node.isSelected() ? null : c.node.key;
+          this._dragOrigParent = c.node.parent, this._dragOrigNext = c.node.getNextSibling(), this._dragSourceNode = c.node, this._dragActive = !0, this._selectAfterDrag = c.node.isSelected() ? null : c.node.key;
           const a = this.getDragKeys(c.node);
           return (f = c.event) != null && f.dataTransfer && (c.event.dataTransfer.setData("text/plain", a.join(`
 `)), c.event.dataTransfer.setData(Un, JSON.stringify(a)), c.event.dataTransfer.setData(go, this.treeId || ""), c.event.dataTransfer.effectAllowed = "copyMove"), this.sendEvent("dragStart", { key: c.node.key, keys: a }), !0;
         },
         dragEnter: (c) => c.node === c.sourceNode ? !1 : ["before", "after", "over"],
-        dragOver: (c) => {
-          var a;
-          (a = c.event) != null && a.dataTransfer && (c.event.dataTransfer.dropEffect = "move");
-        },
+        // No dragOver callback on purpose. Wunderbaum sets
+        // dataTransfer.dropEffect from its own guessDropEffect right before
+        // calling us, and that guess is already platform-correct: Option
+        // copies on macOS, Ctrl elsewhere. Overwriting it here is what used
+        // to show a move badge during a copy. Nothing in the library cancels
+        // a drop over the value, so leaving it alone is safe.
+        //
+        // The copy decision itself still comes from our own key tracking,
+        // because modifier flags are not reliable on the drop event.
         drop: (c) => {
           var g, k;
           const a = c.sourceNode, f = c.node, b = this.effectiveRegion(c.suggestedDropMode, f), h = this._copyPressed || !!window.__wbForceCopy;
@@ -8580,7 +8585,7 @@ const rf = (t, e) => {
             const V = b === "over" || b === "appendChild" || b === "prependChild" ? f : f.parent;
             this.sendEvent("drop", {
               sourceKey: a.key,
-              sourceKeys: p.map((I) => I.key),
+              sourceKeys: p.map((W) => W.key),
               targetKey: f.key,
               region: b,
               copy: !0,
@@ -8588,8 +8593,8 @@ const rf = (t, e) => {
               copiedNodeIds: p.map(m),
               newParentNodeId: ((g = V == null ? void 0 : V.data) == null ? void 0 : g.node_id) || (V == null ? void 0 : V.key) || null
             });
-            const M = this._dragOrigParent;
-            M && a.parent !== M && a.moveTo(M, "appendChild"), this.emitSource();
+            const M = this._dragOrigParent, I = this._dragOrigNext;
+            M && (I && I.parent === M ? a.moveTo(I, "before") : a.moveTo(M, "appendChild"));
           } else {
             let q = f, V = b;
             for (const I of p)
@@ -8671,26 +8676,38 @@ const rf = (t, e) => {
       }), this._intersectionObserver.observe(t);
     },
     setupDragDrop() {
-      const t = this.$refs.treeContainer, e = (i) => !!i.dataTransfer && i.dataTransfer.types.includes(Un) && !this._dragActive, n = (i) => !!i.dataTransfer && (i.dataTransfer.types.includes("Files") || e(i));
-      t.addEventListener("dragenter", (i) => {
-        n(i) && (i.preventDefault(), t.style.border = "2px solid #007bff");
-      }), t.addEventListener("dragleave", (i) => {
-        t.style.border = "1px solid #ddd";
-      }), t.addEventListener("dragover", (i) => {
-        n(i) && (i.preventDefault(), e(i) && (i.dataTransfer.dropEffect = "move"));
-      }), t.addEventListener("dragend", () => {
-        var r, s;
-        this._dragActive = !1, t.style.border = "1px solid #ddd";
-        const i = this._selectAfterDrag;
-        if (this._selectAfterDrag = null, !i) return;
-        const o = (s = (r = this.tree) == null ? void 0 : r.findKey) == null ? void 0 : s.call(r, i);
-        o && (this.deselectAll(), this.setSubtreeSelected(o, !0), this._anchorKey = i);
-      }), t.addEventListener("drop", (i) => {
-        if (i.dataTransfer && i.dataTransfer.files.length > 0) {
-          i.preventDefault(), i.stopPropagation(), t.style.border = "1px solid #ddd", this.handleFileDrop(i);
+      const t = this.$refs.treeContainer, e = (o) => !!o.dataTransfer && o.dataTransfer.types.includes(Un) && !this._dragActive, n = (o) => !!o.dataTransfer && (o.dataTransfer.types.includes("Files") || e(o)), i = (o) => this._dragActive && this.isBelowLastRow(o);
+      t.addEventListener("dragenter", (o) => {
+        if (i(o)) {
+          o.preventDefault(), t.style.border = "2px solid #007bff";
           return;
         }
-        e(i) && (i.preventDefault(), i.stopPropagation(), t.style.border = "1px solid #ddd", this.handleExternalDrop(i));
+        n(o) && (o.preventDefault(), t.style.border = "2px solid #007bff");
+      }), t.addEventListener("dragleave", (o) => {
+        t.style.border = "1px solid #ddd";
+      }), t.addEventListener("dragover", (o) => {
+        if (i(o)) {
+          o.preventDefault(), o.dataTransfer && (o.dataTransfer.dropEffect = this._copyPressed ? "copy" : "move");
+          return;
+        }
+        n(o) && (o.preventDefault(), e(o) && (o.dataTransfer.dropEffect = this._copyPressed ? "copy" : "move"));
+      }), t.addEventListener("dragend", () => {
+        var s, l;
+        this._dragActive = !1, this._dragSourceNode = null, t.style.border = "1px solid #ddd";
+        const o = this._selectAfterDrag;
+        if (this._selectAfterDrag = null, !o) return;
+        const r = (l = (s = this.tree) == null ? void 0 : s.findKey) == null ? void 0 : l.call(s, o);
+        r && (this.deselectAll(), this.setSubtreeSelected(r, !0), this._anchorKey = o);
+      }), t.addEventListener("drop", (o) => {
+        if (o.dataTransfer && o.dataTransfer.files.length > 0) {
+          o.preventDefault(), o.stopPropagation(), t.style.border = "1px solid #ddd", this.handleFileDrop(o);
+          return;
+        }
+        if (i(o)) {
+          o.preventDefault(), o.stopPropagation(), t.style.border = "1px solid #ddd", this.handleRootDrop();
+          return;
+        }
+        e(o) && (o.preventDefault(), o.stopPropagation(), t.style.border = "1px solid #ddd", this.handleExternalDrop(o));
       });
     },
     /**
@@ -8825,6 +8842,70 @@ const rf = (t, e) => {
       if (!n || !n.height) return "over";
       const i = (t.clientY - n.top) / n.height;
       return i < 0.25 ? "before" : i > 0.75 ? this.effectiveRegion("after", e) : "over";
+    },
+    /**
+     * True when the pointer is inside the tree but below its last row.
+     *
+     * The blank area needs a meaning of its own because the slot after the last
+     * root node is otherwise unreachable: once that node is expanded its bottom
+     * band means 'first child' (see `effectiveRegion`), every row underneath it
+     * is one of its own descendants, and there is no next sibling whose top
+     * band could stand in for it.
+     */
+    isBelowLastRow(t) {
+      const e = this.$refs.treeContainer;
+      if (!e) return !1;
+      const n = e.querySelectorAll(".wb-row");
+      if (!n.length) return !1;
+      let i = -1 / 0;
+      for (const r of n)
+        i = Math.max(i, r.getBoundingClientRect().bottom);
+      const o = e.getBoundingClientRect();
+      return t.clientY > i && t.clientY <= o.bottom && t.clientX >= o.left && t.clientX <= o.right;
+    },
+    /**
+     * Append the dragged nodes at root level.
+     *
+     * There is no target row here, so wunderbaum's own drop callback never
+     * runs and the move has to be performed by hand.
+     */
+    handleRootDrop() {
+      const t = this._dragSourceNode;
+      !t || !this.tree || setTimeout(() => {
+        if (!this.tree) return;
+        const e = this.getDragKeys(t).map((r) => this.tree.findKey(r)).filter((r) => !!r), n = e.filter(
+          (r) => !e.some((s) => s !== r && r.isDescendantOf(s))
+        );
+        if (!n.length) return;
+        const i = (r) => {
+          var s;
+          return ((s = r.data) == null ? void 0 : s.node_id) || r.key;
+        };
+        if (this._copyPressed || !!window.__wbForceCopy) {
+          this.sendEvent("drop", {
+            sourceKey: t.key,
+            sourceKeys: n.map((r) => r.key),
+            targetKey: null,
+            region: "appendChild",
+            copy: !0,
+            copiedNodeId: i(t),
+            copiedNodeIds: n.map(i),
+            newParentNodeId: null
+          });
+          return;
+        }
+        for (const r of n)
+          r.moveTo(this.tree.root, "appendChild");
+        this.sendEvent("drop", {
+          sourceKey: t.key,
+          sourceKeys: n.map((r) => r.key),
+          targetKey: null,
+          region: "appendChild",
+          movedNodeId: i(t),
+          movedNodeIds: n.map(i),
+          newParentNodeId: null
+        }), this.emitSource();
+      }, 10);
     },
     handleExternalDrop(t) {
       const e = t.dataTransfer, n = e.getData(Un);

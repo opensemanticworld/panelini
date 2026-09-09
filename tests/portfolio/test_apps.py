@@ -38,6 +38,10 @@ _CATEGORY_SELECTOR = {
     # instead of the xterm widget (.xterm), which cannot load in WASM.
     "terminalmirror": ".tm-console, .xterm",
     "usecases": ".vis-network canvas",
+    # A rendered row, which is what the panel's own example tests wait for. The
+    # treegrid element exists before any data reaches it, so a row is the one thing
+    # that says the tree arrived rather than that the component mounted.
+    "tanstack": ".pnl-tst-row",
     # The chat runs against the LangChain stand-ins (see panelini.ai_testing); its
     # prompt box is the signature widget.
     "ai": "textarea",
@@ -71,22 +75,22 @@ def _rows(page: Page) -> int:
     return page.locator(".wb-row").count()
 
 
-def _await_more_rows(page: Page, before: int) -> int:
+def _await_more_rows(page: Page, before: int, count=_rows) -> int:
     """Poll until the tree grows past *before*, or the round-trip budget runs out.
 
     Polling (rather than one fixed sleep) keeps the check fast when the round trip is
     quick and still tolerant when the worker is busy, which is what made a fixed wait
-    flaky under load.
+    flaky under load. *count* is how a panel counts its own rows.
     """
     deadline, step = _ROUND_TRIP_MS, 250
     waited = 0
     while waited < deadline:
         page.wait_for_timeout(step)
         waited += step
-        after = _rows(page)
+        after = count(page)
         if after > before:
             return after
-    return _rows(page)
+    return count(page)
 
 
 def _wb_add_via_context_menu(page: Page, node: str, item: str) -> tuple[int, int]:
@@ -118,6 +122,59 @@ def _wb_expand_lazy(page: Page, node: str) -> tuple[int, int]:
     return before, _await_more_rows(page, before)
 
 
+def _tst_rows(page: Page) -> int:
+    """Rows in the tree, summed over the panes on the page.
+
+    Read from `aria-rowcount` and never from the DOM: the rowgroup is windowed, so
+    counting row elements measures the viewport height rather than the tree. The
+    explorer has two panes, and a node moving between them changes neither total.
+    """
+    counts = page.locator("[role='treegrid']").evaluate_all(
+        "grids => grids.map(grid => Number(grid.getAttribute('aria-rowcount') || 0))"
+    )
+    return sum(counts)
+
+
+def _tst_expand_pruned(page: Page) -> tuple[int, int]:
+    """Open the first branch of a pruned tree.
+
+    Under ``prune: "collapsed"`` an unopened branch crosses as a twisty holding
+    nothing, so its children can only appear if the browser's intent reached Python
+    and Python rebuilt the view. Nothing about this is a local expand.
+    """
+    before = _tst_rows(page)
+    page.locator(".pnl-tst-twisty").first.click()
+    return before, _await_more_rows(page, before, _tst_rows)
+
+
+def _tst_toolbar_add(page: Page, label: str) -> tuple[int, int]:
+    """Mint a node from the toolbar. Python owns the key, the insert and the push."""
+    before = _tst_rows(page)
+    page.get_by_role("button", name=label).first.click()
+    return before, _await_more_rows(page, before, _tst_rows)
+
+
+def _tst_rename(page: Page, name: str) -> tuple[int, int]:
+    """Rename the first row through the toolbar and wait for the title to come back.
+
+    This tree's shape cannot change, so there is no row count to grow. What grows is
+    the number of rows carrying the new name, from none to one, and the name is only
+    there because Python wrote it and pushed the tree back.
+    """
+    page.locator(".pnl-tst-row").first.click()
+    page.get_by_role("button", name="Rename").first.click()
+    editor = page.locator(".pnl-tst-edit").first
+    editor.wait_for(state="visible", timeout=_ROUND_TRIP_MS)
+    editor.fill(name)
+    editor.press("Enter")
+    renamed = page.locator(".pnl-tst-cell--tree .pnl-tst-value", has_text=name).first
+    try:
+        renamed.wait_for(timeout=_ROUND_TRIP_MS)
+    except PlaywrightTimeoutError:
+        return 0, 0
+    return 0, 1
+
+
 def _chat_exchange(page: Page) -> tuple[int, int]:
     """Send a prompt and wait for the stubbed reply to stream back.
 
@@ -141,6 +198,9 @@ _INTERACTIONS = {
     ("wunderbaum", "context_menu"): lambda p: _wb_add_via_context_menu(p, "src", "Add Child"),
     ("wunderbaum", "lazy_loading"): lambda p: _wb_expand_lazy(p, "Root 1"),
     ("wunderbaum", "incremental_tree_demo"): lambda p: _wb_click_button(p, "Next Step"),
+    ("tanstack", "tst_bigtree"): _tst_expand_pruned,
+    ("tanstack", "tst_vfsexplorer_extfiledrop"): lambda p: _tst_toolbar_add(p, "New folder"),
+    ("tanstack", "tst_treegrid_columns"): lambda p: _tst_rename(p, "Renamed in the browser"),
     ("ai", "chat_min"): _chat_exchange,
     ("ai", "chat_custom_tool"): _chat_exchange,
     ("ai", "chat_no_preview_no_tools"): _chat_exchange,
