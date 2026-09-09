@@ -23,6 +23,7 @@ panelini.components
 :titlesonly:
 :maxdepth: 1
 
+panelini.user
 panelini.main
 panelini.ai_testing
 panelini.testing

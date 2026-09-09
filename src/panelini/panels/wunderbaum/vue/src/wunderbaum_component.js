@@ -38,6 +38,28 @@ export function render({ model, el }) {
   // JS emitSource -> Python source update -> change:source -> setSource (would reload tree)
   let sourceFromJS = false;
 
+  // Tree events are batched per tick and sent as {seq, events: [...]}.
+  // Consecutive model.set on the same property coalesce to the last value,
+  // which used to drop the click of a click+activate gesture; the batch
+  // keeps every event and the seq makes each flush a distinct change.
+  let eventBatch = [];
+  let eventSeq = 0;
+  let flushScheduled = false;
+  const queueEvent = (eventData) => {
+    eventData.timestamp = Date.now();
+    eventBatch.push(eventData);
+    if (!flushScheduled) {
+      flushScheduled = true;
+      queueMicrotask(() => {
+        flushScheduled = false;
+        eventSeq += 1;
+        model.set("_event_data", { seq: eventSeq, events: eventBatch });
+        eventBatch = [];
+        model.save_changes();
+      });
+    }
+  };
+
   // Get initial values from model
   const source = model.get("source") || [];
   const columns = model.get("columns") || [];
@@ -65,20 +87,15 @@ export function render({ model, el }) {
 
     'onTree-event': (eventData) => {
       console.debug("TREE-EVENT", eventData);
-      eventData.timestamp = Date.now();
-      model.set("_event_data", eventData);
-      model.save_changes();
+      queueEvent(eventData);
     },
 
     'onFile-drop': (dropData) => {
       console.debug("FILE-DROP", dropData);
-      const eventData = {
+      queueEvent({
         event_name: "fileDrop",
         event_params: dropData,
-        timestamp: Date.now()
-      };
-      model.set("_event_data", eventData);
-      model.save_changes();
+      });
     },
 
     'onLazy-load': (requestData) => {

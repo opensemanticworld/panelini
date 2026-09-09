@@ -272,6 +272,56 @@ Bases: {py:obj}`panel.viewable.Viewer`
 
 ````
 
+````{py:attribute} ai_show_preview
+:canonical: panelini.main.Panelini.ai_show_preview
+:value: >
+   'Boolean(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_show_preview
+```
+
+````
+
+````{py:attribute} ai_history_store
+:canonical: panelini.main.Panelini.ai_history_store
+:value: >
+   'Parameter(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_history_store
+```
+
+````
+
+````{py:attribute} ai_history_view
+:canonical: panelini.main.Panelini.ai_history_view
+:value: >
+   'Selector(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.ai_history_view
+```
+
+````
+
+````{py:attribute} show_user
+:canonical: panelini.main.Panelini.show_user
+:value: >
+   'Boolean(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.show_user
+```
+
+````
+
+````{py:attribute} user_resolver
+:canonical: panelini.main.Panelini.user_resolver
+:value: >
+   'Callable(...)'
+
+```{autodoc2-docstring} panelini.main.Panelini.user_resolver
+```
+
+````
+
 ````{py:method} sidebar_right_set(objects: list[panel.viewable.Viewable]) -> None
 :canonical: panelini.main.Panelini.sidebar_right_set
 

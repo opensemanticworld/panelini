@@ -10,6 +10,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
+from panelini.testing import stop_server
+
 pytest.importorskip("anthropic")
 pytest.importorskip("PIL")
 
@@ -33,7 +35,7 @@ def panel_server(mock_langchain, mock_anthropic_sdk):
         server = pn.serve(app.servable(), port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT, module
-        server.stop()
+        stop_server(server)
 
 
 @pytest.fixture(scope="module")
@@ -51,9 +53,8 @@ def ready_page(browser, panel_server):
 def test_drawai_renders_layout(ready_page: Page):
     """Chat card + Original + Beautified labels are all visible."""
     page = ready_page
-    # Exact heading match: a plain text=Chat locator also matches the
-    # sidebar's "Chat Management" card, which is hidden by default
-    # (Panelini's sidebar_visible defaults to False).
+    # Exact heading match: a plain text=Chat locator also matches sidebar
+    # text, which is hidden by default (sidebar_visible defaults to False).
     assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
     assert page.locator("text=Original").first.is_visible()
     assert page.locator("text=Beautified").first.is_visible()

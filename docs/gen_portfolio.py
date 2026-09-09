@@ -208,7 +208,14 @@ else:
 # drawio viewer, so the LangChain stand-ins do not cover it; it stays media-only.
 # ``tst_fsbrowser`` walks the real repository directory tree with ``pathlib``, and there
 # is no repository in the Pyodide WASM filesystem, so it stays media-only too.
-_EXCLUDE_STEMS = {"plot_by_code", "drawai_beautify", "tst_fsbrowser"}
+# ``chat_sqlite_history`` opens a file-backed SQLite store at module level, and Pyodide
+# ships no ``sqlite3``; only the localStorage and in-memory backends run under WASM.
+_EXCLUDE_STEMS = {
+    "plot_by_code",
+    "drawai_beautify",
+    "tst_fsbrowser",
+    "chat_sqlite_history",
+}
 _EXCLUDE_CATEGORIES: set[str] = set()
 
 # Per-category accent colour (background gradient base) + short human label.

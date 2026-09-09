@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.incremental_tree_demo import SEQUENCE, app
-from panelini.testing import wb_wait
+from panelini.testing import stop_server, wb_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -37,4 +37,4 @@ def test_incremental_build(page: Page, port):
     # The playbook builds ~12 nodes (files/folders across src, models, tests).
     assert page.locator(".wb-row").count() >= 8
 
-    server.stop()
+    stop_server(server)

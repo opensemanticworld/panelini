@@ -14,6 +14,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
+from panelini.testing import stop_server
+
 _VIEWPORT = (1500, 900)
 
 
@@ -35,4 +37,4 @@ def test_drawai_media(page: Page, port, mock_langchain, mock_anthropic_sdk):
         page.locator("text=Original").first.wait_for(timeout=20000)
         time.sleep(1.5)
         assert page.locator("text=Original").first.is_visible()
-        server.stop()
+        stop_server(server)

@@ -126,7 +126,10 @@ app = Panelini(
   - System message for the AI backend (default: `"You are a helpful assistant."`).
 * - `ai_welcome_message`
   - `String`
-  - Initial greeting shown in the chat. Uses a built-in default if `None`.
+  - Optional greeting posted into a new chat. `None` (the default) starts it empty.
+* - `ai_show_preview`
+  - `Boolean`
+  - Show the markdown preview pane next to the chat (default: `False`).
 * - `ai_config_path`
   - `str | Path`
   - Path to a custom `config.yml`. Auto-discovered if `None`.
@@ -195,19 +198,60 @@ When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
 
 ### Sidebar Controls
 
-The left sidebar receives a **General Setup** card containing:
+The left sidebar receives two icon tabs. The conversations tab (💬, active by
+default) holds a single card:
+
+- **Conversations** -- New chat, new folder, import/export chat as JSON,
+  a tree/list view toggle, search over titles and messages, and the
+  user's conversations in a drag-and-drop folder tree (inline rename,
+  delete with undo); the list view groups them by date instead
+
+The setup tab (⚙️) holds the model controls:
 
 - **Provider Settings** -- Select the LLM provider
 - **Model Settings** -- Select the model and adjust temperature
 - **Basic Tools** -- Toggle available tools on/off
-- **Chat Management** -- Clear history, export/import chat as JSON
 
 ### Main Content
 
-The main area receives a two-column layout:
+The main area receives the chat interface with streaming responses. With
+`ai_show_preview=True` (`show_preview=True` on `AiChat`) it turns into a
+two-column layout:
 
 - **Chat** (left) -- The chat interface with streaming responses
 - **Preview** (right) -- A markdown preview pane updated by the `update_preview` tool
+
+### Conversation History
+
+Every chat keeps its conversations per user. Without configuration they live
+in memory for the lifetime of the process; set `PANELINI_HISTORY_DB` to a file
+path to persist them in SQLite, pass your own store as `ai_history_store`, or
+pass `ai_history_store="browser"` to keep each user's history in their
+browser's localStorage (per-browser persistence across reloads and restarts,
+no server-side database, ~5MB quota).
+`ai_history_view` picks the initial sidebar style: `"tree"` (a
+drag-and-drop folder tree, the default: organize chats like a filesystem)
+or `"list"` (date-grouped); an icon in the New Chat row switches between
+the two at runtime (per session; a reload starts from `ai_history_view`
+again, and a typed search filter carries over the switch). Conversations
+are owned by the resolved user id (see `user_resolver`); anonymous
+visitors get a cookie-backed id.
+
+#### Document model
+
+Each conversation is stored as one JSON document with embedded messages,
+defined by the bundled
+[`chat_history_schema_v2.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema_v2.json).
+The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: a
+plain JSON-Schema carrying a JSON-LD `@context` that maps properties to
+vocabulary terms (schema.org where a term exists). The same document is the
+import/export format of the sidebar icons, so a downloaded chat re-imports
+losslessly here or in any other store.
+
+All backends implement a shared document contract
+(`DocumentHistoryStore`): SQLite keeps one `documents` row per conversation
+or folder, the in-memory store keeps plain dicts, and the shape maps 1:1
+onto a Postgres JSONB column or a browser object store.
 
 ## Tools
 
@@ -269,12 +313,23 @@ See ``examples/panels/ai/ai_chat_custom_tool.py`` for a complete working example
 
 ## Module Structure
 
-```
+```text
 panelini/panels/ai/
 ├── __init__.py
 ├── frontend.py          # UI layer (AiChat class)
 ├── backend.py           # Business logic (AiBackend class)
 ├── default_config.yml   # Bundled default provider config
+├── history/
+│   ├── __init__.py
+│   ├── store.py                      # Records + ChatHistoryStore interface
+│   ├── document.py                   # Document layer + in-memory backend
+│   ├── sqlite_store.py               # SQLite backend
+│   ├── local_storage_store.py        # Browser localStorage backend
+│   ├── default.py                    # Shared default store
+│   ├── panel.py                      # Date-grouped sidebar list
+│   ├── tree.py                       # Wunderbaum folder tree
+│   ├── chat_history_schema_v2.json   # Conversation document schema (OO-LD)
+│   └── chat_history_schema_v2.sql    # SQLite document table DDL
 ├── tools/
 │   ├── __init__.py
 │   └── basic_tools.py   # Built-in tools
@@ -334,10 +389,10 @@ Business logic layer managing providers, models, tools, and message processing.
   - Async generator yielding response token chunks.
 * - `clear_history()`
   - Clear conversation history.
-* - `export_chat_data(...)`
-  - Export chat to a JSON-serializable dict.
+* - `export_chat_data(provider, model, temperature)`
+  - Export the active conversation as a v2 conversation document.
 * - `restore_chat_data(chat_data)`
-  - Restore conversation from exported JSON.
+  - Restore the model context from a v2 document (or legacy export).
 ```
 
 ### `AiInterface`

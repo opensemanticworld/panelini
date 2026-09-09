@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opensemanticworld.github.io/panelini/schemas/chat_history_schema_v2.json",
+  "title": "Conversation",
+  "description": "One AI chat conversation with embedded messages. An OO-LD document: the JSON-Schema validates instances while the @context maps properties to vocabulary terms.",
+  "@context": {
+    "schema": "https://schema.org/",
+    "panelini": "https://opensemanticworld.github.io/panelini/vocab#",
+    "id": "@id",
+    "type": "@type",
+    "Conversation": "schema:Conversation",
+    "Message": "schema:Message",
+    "schema_version": "schema:version",
+    "user_id": "panelini:userId",
+    "title": "schema:name",
+    "pinned": "panelini:pinned",
+    "archived": "panelini:archived",
+    "folder_id": "panelini:folderId",
+    "current_message_id": "panelini:currentMessageId",
+    "created_at": "schema:dateCreated",
+    "updated_at": "schema:dateModified",
+    "settings": "panelini:settings",
+    "messages": "schema:hasPart",
+    "role": "panelini:role",
+    "content": "schema:text",
+    "extra": "panelini:extra",
+    "parent_message_id": "panelini:parentMessageId"
+  },
+  "type": "object",
+  "required": [
+    "schema_version",
+    "type",
+    "id",
+    "title",
+    "created_at",
+    "updated_at",
+    "messages"
+  ],
+  "properties": {
+    "@context": {
+      "type": [
+        "object",
+        "string",
+        "array"
+      ]
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "type": {
+      "const": "Conversation"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "pinned": {
+      "type": "boolean"
+    },
+    "archived": {
+      "type": "boolean"
+    },
+    "folder_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "current_message_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": "number"
+        }
+      }
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Message"
+      }
+    }
+  },
+  "$defs": {
+    "Message": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "content",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "human",
+            "ai",
+            "tool",
+            "system"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "extra": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "parent_message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

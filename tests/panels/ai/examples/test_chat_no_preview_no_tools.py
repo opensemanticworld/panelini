@@ -7,6 +7,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
+from panelini.testing import stop_server
+
 _PORT = 6340
 
 
@@ -16,10 +18,10 @@ def panel_server(mock_langchain):
     p1, p2 = mock_langchain
     with p1, p2:
         module = importlib.reload(importlib.import_module("examples.panels.ai.chat_no_preview_no_tools"))
-        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
+        server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
         time.sleep(0.5)
         yield server, _PORT
-        server.stop()
+        stop_server(server)
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +31,8 @@ def ready_page(browser, panel_server):
     context = browser.new_context()
     page = context.new_page()
     page.goto(f"http://localhost:{port}")
-    page.locator("text=Hello! 👋").first.wait_for()
+    # no welcome message any more: the prompt box is the ready signal
+    page.locator(".chat-interface textarea").first.wait_for()
     yield page
     page.goto("about:blank")
     context.close()
@@ -40,8 +43,7 @@ def test_chat_renders_without_preview(ready_page: Page):
     page = ready_page
 
     assert page.locator("text=Chat").first.is_visible()
-    assert page.locator("text=Hello! 👋").first.is_visible()
-    # exact=True avoids matching "previews" in the welcome message body
+    assert page.locator(".chat-interface textarea").first.is_visible()
     assert page.get_by_text("Preview", exact=True).count() == 0
 
 

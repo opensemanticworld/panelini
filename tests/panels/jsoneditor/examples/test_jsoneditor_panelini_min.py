@@ -8,15 +8,8 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-# Build the editor stretched so the form fills the card (matches how the
-# example is served standalone); restore the global afterwards.
-_prev_sizing = pn.config.sizing_mode
-pn.config.sizing_mode = "stretch_width"
-from examples.panels.jsoneditor.jsoneditor_panelini_min import app, jsoneditor_panel  # noqa: E402
-
-pn.config.sizing_mode = _prev_sizing
-
-from panelini.testing import wait_until  # noqa: E402
+from examples.panels.jsoneditor.jsoneditor_panelini_min import app, jsoneditor_panel
+from panelini.testing import stop_server, wait_until
 
 
 @pytest.mark.media(role="feature", capture="screenshot", viewport=(1100, 760))
@@ -53,4 +46,4 @@ def test_component(page: Page, port):
     # assert that the input field has the value "new value"
     wait_until(lambda: page.locator("#root\\[testxy\\]").input_value() == "new value")
 
-    server.stop()
+    stop_server(server)

@@ -189,15 +189,18 @@ class AiInterface:
         """Clear the conversation history."""
         self.conversation_history = []
 
-    def _build_messages(self, user_message: str) -> list[BaseMessage]:
+    def _build_messages(self, user_message: str, history: list[BaseMessage] | None = None) -> list[BaseMessage]:
         """Build the message list for the model.
 
         Args:
             user_message: The user's message
+            history: Conversation context; defaults to the instance history.
 
         Returns:
             List of messages including system, history, and current user message
         """
+        if history is None:
+            history = self.conversation_history
         messages: list[BaseMessage] = []
 
         # Add system message if provided
@@ -205,19 +208,24 @@ class AiInterface:
             messages.append(SystemMessage(content=self.system_message))
 
         # Add conversation history
-        messages.extend(self.conversation_history)
+        messages.extend(history)
 
         # Add current user message
         messages.append(HumanMessage(content=user_message))
 
         return messages
 
-    async def get_response(self, user_message: str, stream: bool = True) -> str | AsyncGenerator[str, None]:
+    async def get_response(
+        self, user_message: str, stream: bool = True, history: list[BaseMessage] | None = None
+    ) -> str | AsyncGenerator[str, None]:
         """Get a response from the AI model.
 
         Args:
             user_message: The user's input message
             stream: Whether to stream the response
+            history: Conversation context to read and append to; defaults to
+                the instance history. Passing an explicit list keeps
+                concurrent conversations isolated from each other.
 
         Returns:
             Either a complete response string or an async generator for streaming
@@ -225,33 +233,41 @@ class AiInterface:
         Raises:
             Exception: If the model invocation fails
         """
+        if history is None:
+            history = self.conversation_history
+
         # Build messages
-        messages = self._build_messages(user_message)
+        messages = self._build_messages(user_message, history=history)
 
         # Add user message to history
-        self.conversation_history.append(HumanMessage(content=user_message))
+        history.append(HumanMessage(content=user_message))
 
         if stream:
-            return self._stream_response(messages)
+            return self._stream_response(messages, history=history)
         else:
             # Non-streaming response
             response = await self.model.ainvoke(messages)
             response_text = response.content if isinstance(response.content, str) else str(response.content)
 
             # Add AI response to history
-            self.conversation_history.append(AIMessage(content=response_text))
+            history.append(AIMessage(content=response_text))
 
             return response_text
 
-    async def _stream_response(self, messages: list[BaseMessage]) -> AsyncGenerator[str, None]:
+    async def _stream_response(
+        self, messages: list[BaseMessage], history: list[BaseMessage] | None = None
+    ) -> AsyncGenerator[str, None]:
         """Stream response from the model.
 
         Args:
             messages: List of messages to send to the model
+            history: Conversation context the response is appended to.
 
         Yields:
             Chunks of the response text
         """
+        if history is None:
+            history = self.conversation_history
         full_response = ""
 
         async for chunk in self.model.astream(messages):
@@ -261,13 +277,16 @@ class AiInterface:
                 yield content
 
         # Add complete response to history
-        self.conversation_history.append(AIMessage(content=full_response))
+        history.append(AIMessage(content=full_response))
 
-    async def get_response_with_tools(self, user_message: str) -> dict[str, Any]:
+    async def get_response_with_tools(
+        self, user_message: str, history: list[BaseMessage] | None = None
+    ) -> dict[str, Any]:
         """Get a response that may include tool calls.
 
         Args:
             user_message: The user's input message
+            history: Conversation context; defaults to the instance history.
 
         Returns:
             Dictionary containing response text and any tool calls
@@ -275,10 +294,12 @@ class AiInterface:
         Raises:
             Exception: If the model invocation fails
         """
-        messages = self._build_messages(user_message)
+        if history is None:
+            history = self.conversation_history
+        messages = self._build_messages(user_message, history=history)
 
         # Add user message to history
-        self.conversation_history.append(HumanMessage(content=user_message))
+        history.append(HumanMessage(content=user_message))
 
         # Invoke model
         response = await self.model.ainvoke(messages)
@@ -288,7 +309,7 @@ class AiInterface:
         tool_calls = getattr(response, "tool_calls", [])
 
         # Add AI response to history
-        self.conversation_history.append(AIMessage(content=response_text, tool_calls=tool_calls))
+        history.append(AIMessage(content=response_text, tool_calls=tool_calls))
 
         return {
             "text": response_text,

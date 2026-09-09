@@ -62,6 +62,7 @@ from panelini.panels.ai import AiChat
 chat = AiChat(
     system_message="You are a helpful assistant with access to a local storage tool.",
     tools=[LocalStorageTool()],
+    show_preview=True,  # opt in: the preview pane is off by default
 )
 
 app = Panelini(title="AI Chat with Custom Tool", sidebar_enabled=True)
@@ -80,7 +81,7 @@ Two things to notice:
 graph TB
     subgraph sidebar [" Sidebar "]
         direction TB
-        gen(["General Setup"])
+        conv(["Conversations"])
         tools(["Basic Tools<br/>☐ get_current_time<br/>☐ update_preview<br/>☐ local_storage"])
     end
     subgraph main [" Main "]
@@ -90,7 +91,7 @@ graph TB
 
     classDef side fill:#6366f1,stroke:#4f46e5,color:#ffffff
     classDef main fill:#0d7377,stroke:#095c5f,color:#ffffff
-    class gen,tools side
+    class conv,tools side
     class chat,preview main
 ```
 

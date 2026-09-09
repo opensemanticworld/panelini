@@ -63,3 +63,33 @@
     }
   }
 }
+
+// Per-row action icons (node data.actions), revealed on row hover.
+// Rows are absolutely positioned, so the bar anchors to the row's right edge.
+div.wunderbaum {
+  span.wb-node {
+    .wb-row-actions {
+      position: absolute;
+      right: 6px;
+      top: 0;
+      bottom: 0;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding-left: 8px;
+
+      i {
+        cursor: pointer;
+        opacity: 0.55;
+
+        &:hover {
+          opacity: 1;
+        }
+      }
+    }
+  }
+
+  div.wb-row:hover span.wb-node .wb-row-actions {
+    display: inline-flex;
+  }
+}

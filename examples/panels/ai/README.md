@@ -1,6 +1,21 @@
 # AI panel examples
 
-- `chat_min.py` - minimal AI chat inside Panelini.
+All chat examples build their app through a `create_app()` factory and serve
+it with `pn.serve(create_app, ...)`, so every browser session gets its own
+`Panelini`/`AiChat` instance (multi-user isolation). The module-level
+`app = create_app()` shares one instance across all browsers; it exists only
+for Pyodide/portfolio builds, so do not serve it directly in multi-user
+deployments.
+
+- `chat_min.py` - minimal AI chat inside Panelini. Every chat comes with
+  per-user conversation history in an icon-tabbed sidebar
+  (conversations/setup): a drag-and-drop Wunderbaum folder tree (folders
+  via context menu, inline rename, delete with undo), new chat,
+  import/export, search over titles and messages, and a toggle to a
+  date-grouped list view; chats are named after their first message.
+  History is in-memory unless `PANELINI_HISTORY_DB` points at a SQLite file.
+- `chat_sqlite_history.py` - same as `chat_min.py` but with persistent history: one module-level `SqliteHistoryStore` passed via `ai_history_store`, so conversations survive server restarts (`PANELINI_HISTORY_DB` overrides the database path, default `panelini_history.sqlite3`).
+- `chat_local_storage.py` - same as `chat_min.py` but with `ai_history_store="browser"`: each user's history lives in their browser's localStorage, surviving page reloads and server restarts without a server-side database (per-browser only, ~5MB quota).
 - `chat_custom_tool.py` - AI chat wired with a custom in-memory storage tool.
 - `chat_multi_tab.py` - multiple AI chats in separate tabs, with config switching.
 - `plot_by_code.py` - AI chat that renders matplotlib figures via `llm-sandbox` (Docker) in a `PlotPanel` next to the chat. A right-sidebar "Regenerate plot" button lets you override the plot model (default: Claude Sonnet 4.6). Optional OSW connector tools are registered when all six `OSW_DOMAIN` / `OSW_USER` / `OSW_PASSWORD` / `BLAZEGRAPH_*` env vars are set; credentials stay in memory (no `accounts.pwd.yaml` is written and no CLI prompt is shown).

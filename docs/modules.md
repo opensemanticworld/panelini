@@ -117,7 +117,10 @@ The dashboard shell. Built on `param.Parameterized`, so every constructor argume
   - System prompt for the AI backend.
 * - `ai_welcome_message`
   - `String`
-  - Greeting shown in the chat pane.
+  - Optional greeting posted into a new chat; `None` starts it empty.
+* - `ai_show_preview`
+  - `Boolean`
+  - Show the preview pane next to the chat (default: `False`).
 * - `ai_config_path`
   - `str | Path`
   - Custom `config.yml`. Auto-discovered when `None`.

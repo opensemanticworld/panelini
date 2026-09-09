@@ -5,7 +5,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.graph_detail_tool import tool
-from panelini.testing import node_dom_pos, vn_wait
+from panelini.testing import node_dom_pos, stop_server, vn_wait
 
 
 @pytest.mark.media(role="overview", capture="gif", viewport=(1440, 860))
@@ -21,11 +21,16 @@ def test_click_node_shows_details(page: Page, port):
     page.goto(f"http://localhost:{port}")
     vn_wait(page)
 
-    # Let physics settle so node 1 (Alpha) stays put before we read its position.
-    time.sleep(0.6)
+    # Let physics settle so node 1 (Alpha) stays put before we read its position,
+    # and so the clip opens on a drawn graph rather than a blank canvas.
+    time.sleep(1.5)
     x, y = node_dom_pos(page, 1)  # Alpha
     page.mouse.click(x, y)
 
+    # Select Details explicitly: the tool only auto-switches when a node has no
+    # visualizations, so without this the clip ends on the empty Visualization tab.
+    page.locator(".bk-tab", has_text="Details").first.click()
     page.get_by_text("Node ID: 1").first.wait_for()
+    time.sleep(1.0)  # hold on the populated Details pane
 
-    server.stop()
+    stop_server(server)

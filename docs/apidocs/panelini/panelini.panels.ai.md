@@ -16,6 +16,7 @@
 panelini.panels.ai.plot
 panelini.panels.ai.tools
 panelini.panels.ai.utils
+panelini.panels.ai.history
 ```
 
 ## Submodules
