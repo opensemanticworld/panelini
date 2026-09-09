@@ -322,5 +322,11 @@ def assemble_animation(
             loop=0,
             quality=quality,
             method=6,
+            # Let the encoder store a frame as a difference from the one before it
+            # rather than whole. A UI clip is mostly a page that is not moving, and
+            # measured over the three tanstack clips this halves the file at identical
+            # quality: 305 kB to 158 kB for the explorer at 900 px. It costs encode
+            # time, which a recording run has and a reader does not.
+            minimize_size=True,
         )
     return len(kept)

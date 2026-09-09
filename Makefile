@@ -25,7 +25,7 @@ test-ui: ## Run UI tests with Playwright in headless mode
 	@echo "🚀 Installing Playwright browsers"
 	@uv run playwright install
 	@echo "🚀 Running UI tests with Playwright (headless)"
-	@uv run pytest -m "ui and not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
+	@uv run pytest -m "ui and not portfolio" -n auto --maxprocesses=8 --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-ui-headed
 test-ui-headed: ## Run UI tests with Playwright in headed mode
@@ -37,7 +37,7 @@ test-ui-headed: ## Run UI tests with Playwright in headed mode
 .PHONY: test-full
 test-full: ## Test the code with pytest
 	@echo "🚀 Testing code: Running full pytest"
-	@uv run pytest -m "not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
+	@uv run pytest -m "not portfolio" -n auto --maxprocesses=8 --cov --cov-config=pyproject.toml --cov-report=xml
 
 .PHONY: test-portfolio
 test-portfolio: portfolio ## Verify representative built Pyodide apps render in a browser (one per category)
