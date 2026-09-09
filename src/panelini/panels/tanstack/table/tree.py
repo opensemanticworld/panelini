@@ -195,7 +195,9 @@ def insert_sibling(tree: Tree, ref_key: str, node: Node, before: bool = False) -
 
     parent = find_parent(result, ref_key)
     siblings = result if parent is None else _child_list(parent)
-    for index, sibling in enumerate(siblings):
+    # The guard above already returned for a key that is not in the tree, so one of
+    # these siblings carries it and the loop always leaves through the break.
+    for index, sibling in enumerate(siblings):  # pragma: no branch
         if sibling.get(KEY) == ref_key:
             siblings.insert(index if before else index + 1, payload)
             break
@@ -353,7 +355,9 @@ def apply_move(tree: Tree, key: str, anchor_key: str, position: str, types: Type
         return None
 
     pruned, node = remove_key(tree, key)
-    if node is None:
+    # `find_node` above already returned for a key the tree does not hold, so this
+    # cannot be None. It stays as the narrowing that lets the two inserts take a node.
+    if node is None:  # pragma: no cover
         return None
 
     if position == "child":

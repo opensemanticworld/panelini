@@ -4127,8 +4127,14 @@ def test_the_search_box_tells_python_once_the_typing_settles(page: Page, port):
 
     # The rows narrow on the keystroke, without waiting for the round trip.
     expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B", "File B1"])
-    wait_until(lambda: table.filter_text == "File", timeout=10)
-    assert len(seen) == 1
+    # Wait on the watcher's own record rather than on `filter_text`: param stores a
+    # value into the instance dict before it runs the watchers, so a poll from this
+    # thread can read the new value back with `seen` still empty.
+    wait_until(lambda: seen == ["File"], timeout=10)
+    # A write per keystroke would land within a debounce window of the first, so give
+    # it one before claiming the box only spoke once.
+    page.wait_for_timeout(500)
+    assert seen == ["File"]
 
     server.stop()
 
