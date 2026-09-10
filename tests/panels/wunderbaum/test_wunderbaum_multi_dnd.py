@@ -13,9 +13,7 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.wunderbaum import Wunderbaum
-from panelini.testing import drag, wait_until, wb_title_center, wb_wait
-
-_PORT = 6423
+from panelini.testing import drag, free_port, wait_until, wb_title_center, wb_wait
 
 MULTI_SOURCE = [
     {
@@ -65,9 +63,10 @@ def server_cleanup():
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the shared multi-select tree once for the whole module."""
-    server = pn.serve(tree, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(tree, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     # kill_all_servers() (not server.stop()) so panel's own server/thread
     # registry is cleared too - see test_wunderbaum_dnd for the full reason.
     pn.state.kill_all_servers()
@@ -80,7 +79,7 @@ def ready_page(browser, panel_server):
     _events.clear()
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     wb_wait(page)
     yield page
     page.goto("about:blank")

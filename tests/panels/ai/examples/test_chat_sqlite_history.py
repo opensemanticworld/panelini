@@ -13,9 +13,8 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
-from panelini.testing import stop_server
+from panelini.testing import free_port, stop_server
 
-_PORTS = (6360, 6361)  # one per server generation, avoids rebind races
 _MODULE = "examples.panels.ai.chat_sqlite_history"
 
 
@@ -32,12 +31,16 @@ def history_db(tmp_path):
         os.environ["PANELINI_HISTORY_DB"] = previous
 
 
-def _serve(port: int):
-    """(Re)import the example (fresh store on the same file) and serve it."""
+def _serve():
+    """(Re)import the example (fresh store on the same file) and serve it.
+
+    A fresh port per generation, so restarting cannot hit a rebind race.
+    """
     module = importlib.reload(importlib.import_module(_MODULE))
+    port = free_port()
     server = pn.serve(module.create_app, port=port, threaded=True, show=False)
     time.sleep(0.5)
-    return module, server
+    return module, server, port
 
 
 def _open_sidebar(page: Page, port: int) -> None:
@@ -74,10 +77,10 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
             page = context.new_page()
 
             # first server: create a conversation
-            module, server = _serve(_PORTS[0])
+            module, server, port = _serve()
             assert history_db == module.DB_PATH  # the env override is honored
             try:
-                _open_sidebar(page, _PORTS[0])
+                _open_sidebar(page, port)
                 _send_message(page, "Persist me across restarts")
                 page.locator(".wb-row", has_text="Persist me").first.wait_for()
             finally:
@@ -89,9 +92,9 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
             assert count == 1
 
             # second server: a fresh store instance reads the same file
-            _, server = _serve(_PORTS[1])
+            _, server, port = _serve()
             try:
-                _open_sidebar(page, _PORTS[1])
+                _open_sidebar(page, port)
                 row = page.locator(".wb-row", has_text="Persist me").first
                 row.wait_for()
                 row.click()

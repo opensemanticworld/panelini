@@ -11,9 +11,8 @@ from bokeh.util.warnings import BokehUserWarning
 from playwright.sync_api import Page
 
 from panelini.ai_testing import StubChatModel
-from panelini.testing import stop_server
+from panelini.testing import free_port, stop_server
 
-_PORT = 6380
 _MODULE = "examples.panels.ai.chat_local_storage"
 
 
@@ -29,14 +28,15 @@ def panel_server(mock_langchain):
         # tripwire: any double-attached component fails the suite
         warnings.simplefilter("error", BokehUserWarning)
         module = importlib.reload(importlib.import_module(_MODULE))
-        server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
+        port = free_port()
+        server = pn.serve(module.create_app, port=port, threaded=True, show=False)
         time.sleep(0.5)
-        yield server
+        yield server, port
         stop_server(server)
 
 
-def _open_sidebar(page: Page) -> None:
-    page.goto(f"http://localhost:{_PORT}")
+def _open_sidebar(page: Page, port: int) -> None:
+    page.goto(f"http://localhost:{port}")
     page.locator(".chat-interface textarea").first.wait_for()
     page.locator(".left-navbar-button").first.click()
     page.locator("text=Conversations").first.wait_for()
@@ -63,7 +63,8 @@ def test_history_survives_a_page_reload(browser, panel_server):
     context = browser.new_context()
     try:
         page = context.new_page()
-        _open_sidebar(page)
+        _, port = panel_server
+        _open_sidebar(page, port)
         _send_message(page, "Remember me in this browser")
         page.locator(".wb-row", has_text="Remember me").first.wait_for()
 
@@ -92,7 +93,8 @@ def test_history_is_per_browser(browser, panel_server):
     context = browser.new_context()
     try:
         page = context.new_page()
-        _open_sidebar(page)
+        _, port = panel_server
+        _open_sidebar(page, port)
         page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
         assert page.locator(".wunderbaum-wrapper:visible").count() == 0
         assert _storage_keys(page) == []

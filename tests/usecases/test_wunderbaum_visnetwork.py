@@ -24,9 +24,8 @@ from examples.usecases.wunderbaum_visnetwork import (
     vis_edge,
     vis_node,
 )
-from panelini.testing import drag, wait_until, wb_title_center, wb_wait
+from panelini.testing import drag, free_port, wait_until, wb_title_center, wb_wait
 
-_PORT = 6610
 _ORIGINAL_NODES = copy.deepcopy(NODES)
 _ORIGINAL_EDGES = copy.deepcopy(EDGES)
 _ORIGINAL_COUNTER = _counter["v"]
@@ -35,9 +34,10 @@ _ORIGINAL_COUNTER = _counter["v"]
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the combined tree+graph demo once for the whole module."""
-    server = pn.serve(app, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     pn.state.kill_all_servers()
 
 
@@ -59,7 +59,7 @@ def ready_page(browser, panel_server):
 
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     wb_wait(page)
     page.locator(".vis-network canvas").first.wait_for()
     yield page

@@ -23,7 +23,14 @@ Point = tuple[float, float]
 
 
 def free_port() -> int:
-    """Return a free localhost TCP port (used to serve Panel apps in tests)."""
+    """Return a free localhost TCP port (used to serve Panel apps in tests).
+
+    Call this per served app, never a fixed port. Under ``pytest -n auto`` the
+    tests of one module can land on different workers, and each of those workers
+    imports the module and serves its own copy of the app; a fixed port would
+    have them race to bind it, leaving the losers driving Python objects no
+    browser is attached to.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("", 0))

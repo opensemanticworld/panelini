@@ -18,9 +18,7 @@ from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from panelini.ai_testing import StubChatModel
-from panelini.testing import stop_server, wait_until
-
-_PORT = 6310
+from panelini.testing import free_port, stop_server, wait_until
 
 
 @pytest.fixture(scope="module")
@@ -39,9 +37,10 @@ def panel_server(mock_langchain, tmp_path_factory):
             # tripwire: any double-attached component fails the suite
             warnings.simplefilter("error", BokehUserWarning)
             module = importlib.reload(importlib.import_module("examples.panels.ai.chat_min"))
-            server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
+            port = free_port()
+            server = pn.serve(module.create_app, port=port, threaded=True, show=False)
             time.sleep(0.5)
-            yield server, _PORT
+            yield server, port
             stop_server(server)
     finally:
         if previous is None:

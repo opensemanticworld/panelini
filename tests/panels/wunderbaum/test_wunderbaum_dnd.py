@@ -17,9 +17,8 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.wunderbaum import Wunderbaum
-from panelini.testing import center, drag, wait_until, wb_wait
+from panelini.testing import center, drag, free_port, wait_until, wb_wait
 
-_PORT = 6420
 _COPY_KEY = "Alt" if sys.platform == "darwin" else "Control"
 
 DND_SOURCE = [
@@ -69,9 +68,10 @@ def server_cleanup():
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the shared dnd tree once for the whole module."""
-    server = pn.serve(tree, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(tree, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     # kill_all_servers() (not server.stop()) so panel's own server/thread
     # registry is cleared too - a bare .stop() leaves a stale entry that a
     # later, unrelated test's pn.state.reset() can trip over.
@@ -92,7 +92,7 @@ def ready_page(browser, panel_server):
     _events.clear()
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     wb_wait(page)
     yield page
     page.goto("about:blank")

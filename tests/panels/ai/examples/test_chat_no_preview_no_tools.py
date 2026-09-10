@@ -7,9 +7,7 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from panelini.testing import stop_server
-
-_PORT = 6340
+from panelini.testing import free_port, stop_server
 
 
 @pytest.fixture(scope="module")
@@ -18,9 +16,10 @@ def panel_server(mock_langchain):
     p1, p2 = mock_langchain
     with p1, p2:
         module = importlib.reload(importlib.import_module("examples.panels.ai.chat_no_preview_no_tools"))
-        server = pn.serve(module.create_app, port=_PORT, threaded=True, show=False)
+        port = free_port()
+        server = pn.serve(module.create_app, port=port, threaded=True, show=False)
         time.sleep(0.5)
-        yield server, _PORT
+        yield server, port
         stop_server(server)
 
 

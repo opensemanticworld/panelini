@@ -16,9 +16,7 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.wunderbaum import Wunderbaum
-from panelini.testing import center, drag, wait_until
-
-_PORT = 6421
+from panelini.testing import center, drag, free_port, wait_until
 
 LEFT_SOURCE = [
     {
@@ -83,9 +81,10 @@ def server_cleanup():
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve both trees side by side once for the whole module."""
-    server = pn.serve(pn.Row(left_tree, right_tree), port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(pn.Row(left_tree, right_tree), port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     # kill_all_servers() (not server.stop()) so panel's own server/thread
     # registry is cleared too - see test_wunderbaum_dnd for the full reason.
     pn.state.kill_all_servers()
@@ -100,7 +99,7 @@ def ready_page(browser, panel_server):
     _right_events.clear()
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     # Both trees must be up, not just the first one wb_wait would find.
     wait_until(lambda: page.locator(".wunderbaum-wrapper").count() == 2)
     page.locator(".wunderbaum-wrapper").first.wait_for(state="visible")

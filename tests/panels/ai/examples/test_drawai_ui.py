@@ -10,12 +10,11 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from panelini.testing import stop_server
+from panelini.testing import free_port, stop_server
 
 pytest.importorskip("anthropic")
 pytest.importorskip("PIL")
 
-_PORT = 6330
 _FIXTURES = Path(__file__).parent.parent / "fixtures" / "drawai"
 
 
@@ -32,9 +31,10 @@ def panel_server(mock_langchain, mock_anthropic_sdk):
     with lc1, lc2, cfg_patch, anth_patch:
         module = importlib.import_module("examples.panels.ai.drawai_beautify")
         app = module.build_app()  # build_app is NOT called at module level anymore
-        server = pn.serve(app.servable(), port=_PORT, threaded=True, show=False)
+        port = free_port()
+        server = pn.serve(app.servable(), port=port, threaded=True, show=False)
         time.sleep(0.5)
-        yield server, _PORT, module
+        yield server, port, module
         stop_server(server)
 
 
