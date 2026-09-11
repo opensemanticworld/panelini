@@ -2712,7 +2712,7 @@ wheels = [
 
 [[package]]
 name = "panelini"
-version = "0.11.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "panel" },
