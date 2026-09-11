@@ -1,6 +1,6 @@
 # API reference
 
-A handwritten overview of the public API, organised by what you're most likely to import. For exhaustive signatures and docstrings jump straight to the [auto-generated reference](apidocs/index).
+A handwritten overview of the public API, organised by what you're most likely to import. For exhaustive signatures and docstrings jump straight to the [auto-generated reference](apidocs/panelini/panelini), created with [sphinx-autodoc2](https://github.com/chrisjsewell/sphinx-autodoc2).
 
 ## Quick imports
 
@@ -253,7 +253,7 @@ Every public module, class, and function - generated from source docstrings - li
 :gutter: 3
 
 :::{grid-item-card} 📚 Browse the full API
-:link: apidocs/index
+:link: apidocs/panelini/panelini
 :link-type: doc
 All modules, every signature, every docstring.
 :::
@@ -269,5 +269,5 @@ High-level picture of how the pieces fit together.
 ```{toctree}
 :hidden:
 
-apidocs/index
+apidocs/panelini/panelini
 ```
