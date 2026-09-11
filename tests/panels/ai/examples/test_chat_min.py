@@ -115,6 +115,37 @@ def _row_trash(page: Page, title: str, applied: Callable[[], None]) -> None:
     raise AssertionError(msg)
 
 
+def _confirm_delete(page: Page, title: str) -> None:
+    """Click the list-view trash until the row it sits on is gone.
+
+    Arming the trash rebuilds every row, so the confirming click can land
+    mid-rebuild and be dropped. A dropped click leaves the row armed, so the
+    next pass confirms it.
+    """
+    row_title = page.locator(".history-title", has_text=title).first
+    for _ in range(5):
+        page.locator(".history-delete").first.click()
+        try:
+            row_title.wait_for(state="detached", timeout=5000)
+        except PlaywrightTimeoutError:
+            continue
+        return
+    msg = f"the trash on {title!r} never took effect"
+    raise AssertionError(msg)
+
+
+def _show_tree_view(page: Page) -> None:
+    """Put the shared page back on the tree view.
+
+    ``ready_page`` is module scoped, so a test left in the list view fails
+    every test after it.
+    """
+    if page.locator(".pnl-tst-row:visible").count():
+        return
+    page.locator(".history-view-toggle button:visible").first.click()
+    page.locator(".pnl-tst-row:visible").first.wait_for()
+
+
 def _drag_onto(page: Page, source: Locator, target: Locator) -> None:
     """Drop one row into the middle of another, which is ``make-child``.
 
@@ -260,27 +291,28 @@ def test_toggle_to_list_for_rename_and_delete(ready_page: Page):
     page = ready_page
 
     page.locator(".history-view-toggle button:visible").first.click()
-    page.locator(".history-title:visible").first.wait_for()
-    assert page.locator("text=Today").first.is_visible()
-    assert page.locator(".history-title:visible").count() == 2
+    try:
+        page.locator(".history-title:visible").first.wait_for()
+        assert page.locator("text=Today").first.is_visible()
+        assert page.locator(".history-title:visible").count() == 2
 
-    page.locator(".history-rename").first.click()
-    rename_input = page.locator(".history-rename-input input").first
-    rename_input.wait_for()
-    rename_input.fill("Renamed chat")
-    rename_input.press("Enter")
-    page.locator(".history-title", has_text="Renamed chat").first.wait_for()
+        page.locator(".history-rename").first.click()
+        rename_input = page.locator(".history-rename-input input").first
+        rename_input.wait_for()
+        rename_input.fill("Renamed chat")
+        rename_input.press("Enter")
+        page.locator(".history-title", has_text="Renamed chat").first.wait_for()
 
-    # two-click delete: first click arms, second deletes
-    page.locator(".history-delete").first.click()
-    time.sleep(0.3)
-    assert page.locator(".history-title:visible").count() == 2
-    page.locator(".history-delete").first.click()
-    page.locator(".history-title", has_text="Renamed chat").first.wait_for(state="detached")
-    assert page.locator(".history-title:visible").count() == 1
+        # two-click delete: first click arms, second deletes
+        page.locator(".history-delete").first.click()
+        time.sleep(0.3)
+        assert page.locator(".history-title:visible").count() == 2
+        _confirm_delete(page, "Renamed chat")
+        expect(page.locator(".history-title:visible")).to_have_count(1)
+    finally:
+        _show_tree_view(page)
 
-    # back to the tree; the surviving conversation is there
-    page.locator(".history-view-toggle button:visible").first.click()
+    # back on the tree; the surviving conversation is there
     page.locator(".pnl-tst-row", has_text="Hello history").first.wait_for()
     assert page.locator(".history-title:visible").count() == 0
 
