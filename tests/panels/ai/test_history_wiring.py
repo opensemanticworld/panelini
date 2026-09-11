@@ -16,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from panelini.panels.ai.backend import AiBackend
 from panelini.panels.ai.frontend import AiChat
 from panelini.panels.ai.history import InMemoryHistoryStore
+from panelini.panels.ai.history.tree import placement_key
 from panelini.panels.ai.utils.config import AppConfig, ModelConfig, ProviderConfig
 
 pytestmark = pytest.mark.ai
@@ -191,8 +192,8 @@ class TestChatHistoryWiring:
 
     def test_action_row_order_and_alignment(self, chat: AiChat) -> None:
         # card body is a Column whose first object is the action row: new
-        # chat + folder on the left, everything else right-aligned behind
-        # a spacer, the view toggle at the very right
+        # chat and new folder on the left, everything else right-aligned
+        # behind a spacer, the view toggle at the very right
         row = list(chat._history_panel.card[0][0])
         assert row[:2] == [
             chat._history_panel.new_chat_button,
@@ -213,7 +214,7 @@ class TestChatHistoryWiring:
         conv_id = chat.backend.conversation_id
         assert conv_id is not None
 
-        chat._history_panel._on_tree_event("click", {"key": f"conv:{conv_id}", "action": "delete"})
+        chat._history_panel.tree.handle_event("delete", {"keys": [placement_key(conv_id, None)]})
 
         # nothing rematerializes: no rows, fresh lazy feed, hint shown
         assert store.list_conversations(USER) == []

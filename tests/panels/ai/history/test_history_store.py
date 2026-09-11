@@ -26,11 +26,19 @@ from panelini.panels.ai.history import (
     SqliteHistoryStore,
     derive_title,
 )
+from panelini.panels.ai.history.document import conversation_to_document
 
 pytestmark = pytest.mark.ai
 
 USER = "alice"
 OTHER = "bob"
+
+
+def _document_of(store: ChatHistoryStore, conversation_id: str) -> dict:
+    """Return a conversation's stored document, through the converters."""
+    record = store.get_conversation(USER, conversation_id)
+    assert record is not None
+    return conversation_to_document(record, store.load_messages(USER, conversation_id))
 
 
 @pytest.fixture(params=["memory", "sqlite", "localstorage"])
@@ -54,7 +62,9 @@ class TestConversations:
         conv = store.create_conversation(USER)
         assert conv.title == DEFAULT_TITLE
         assert conv.user_id == USER
-        assert conv.folder_id is None
+        assert conv.folder_ids == ()
+        assert conv.parent_id is None
+        assert conv.forked_from_message_id is None
         assert conv.current_message_id is None
         assert not conv.pinned
         assert not conv.archived
@@ -178,10 +188,10 @@ class TestFolders:
         conv = store.create_conversation(USER)
         store.move_conversation(USER, conv.id, folder.id)
         moved = store.get_conversation(USER, conv.id)
-        assert moved is not None and moved.folder_id == folder.id
+        assert moved is not None and moved.folder_ids == (folder.id,)
         store.move_conversation(USER, conv.id, None)
         back = store.get_conversation(USER, conv.id)
-        assert back is not None and back.folder_id is None
+        assert back is not None and back.folder_ids == ()
 
     def test_move_to_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
         conv = store.create_conversation(USER)
@@ -191,17 +201,17 @@ class TestFolders:
     def test_delete_folder_moves_contents_to_root(self, store: ChatHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
         child = store.create_folder(USER, "Child", parent_id=parent.id)
-        conv = store.create_conversation(USER, folder_id=parent.id)
+        conv = store.create_conversation(USER, folder_ids=[parent.id])
         store.delete_folder(USER, parent.id)
         conv_after = store.get_conversation(USER, conv.id)
-        assert conv_after is not None and conv_after.folder_id is None
+        assert conv_after is not None and conv_after.folder_ids == ()
         folders = store.list_folders(USER)
         assert [f.id for f in folders] == [child.id]
         assert folders[0].parent_id is None
 
     def test_create_conversation_in_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
         with pytest.raises(ValueError, match="folder"):
-            store.create_conversation(USER, folder_id="missing")
+            store.create_conversation(USER, folder_ids=["missing"])
 
     def test_move_folder_nests_and_returns_to_root(self, store: ChatHistoryStore) -> None:
         parent = store.create_folder(USER, "Parent")
@@ -224,6 +234,94 @@ class TestFolders:
         folder = store.create_folder(USER, "Projects")
         with pytest.raises(ValueError, match="folder"):
             store.move_folder(USER, folder.id, "missing")
+
+
+# ── multi-folder placements ───────────────────────────────────────────────
+
+
+class TestPlacements:
+    """Folders are virtual, so one chat can be filed under several at once."""
+
+    def test_create_files_under_several_folders(self, store: ChatHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        reading = store.create_folder(USER, "Reading")
+        conv = store.create_conversation(USER, folder_ids=[work.id, reading.id])
+        assert conv.folder_ids == (work.id, reading.id)
+        stored = store.get_conversation(USER, conv.id)
+        assert stored is not None and stored.folder_ids == (work.id, reading.id)
+
+    def test_duplicate_folder_ids_collapse(self, store: ChatHistoryStore) -> None:
+        """The document schema declares folder_ids unique, so the store keeps it so."""
+        folder = store.create_folder(USER, "Work")
+        conv = store.create_conversation(USER, folder_ids=[folder.id, folder.id])
+        assert conv.folder_ids == (folder.id,)
+
+    def test_link_adds_a_placement_and_is_idempotent(self, store: ChatHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        reading = store.create_folder(USER, "Reading")
+        conv = store.create_conversation(USER, folder_ids=[work.id])
+        store.link_conversation(USER, conv.id, reading.id)
+        store.link_conversation(USER, conv.id, reading.id)
+        linked = store.get_conversation(USER, conv.id)
+        assert linked is not None and linked.folder_ids == (work.id, reading.id)
+
+    def test_unlink_keeps_the_other_placements(self, store: ChatHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        reading = store.create_folder(USER, "Reading")
+        conv = store.create_conversation(USER, folder_ids=[work.id, reading.id])
+        store.unlink_conversation(USER, conv.id, work.id)
+        left = store.get_conversation(USER, conv.id)
+        assert left is not None and left.folder_ids == (reading.id,)
+
+    def test_unlink_leaves_the_conversation_itself(self, store: ChatHistoryStore) -> None:
+        """Unlinking the last placement files a chat at the root, not in the bin."""
+        folder = store.create_folder(USER, "Work")
+        conv = store.create_conversation(USER, folder_ids=[folder.id])
+        store.unlink_conversation(USER, conv.id, folder.id)
+        store.unlink_conversation(USER, conv.id, folder.id)  # idempotent
+        remaining = store.get_conversation(USER, conv.id)
+        assert remaining is not None and remaining.folder_ids == ()
+
+    def test_link_to_unknown_folder_raises(self, store: ChatHistoryStore) -> None:
+        conv = store.create_conversation(USER)
+        with pytest.raises(ValueError, match="folder"):
+            store.link_conversation(USER, conv.id, "missing")
+
+    def test_move_replaces_every_placement(self, store: ChatHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        reading = store.create_folder(USER, "Reading")
+        target = store.create_folder(USER, "Target")
+        conv = store.create_conversation(USER, folder_ids=[work.id, reading.id])
+        store.move_conversation(USER, conv.id, target.id)
+        moved = store.get_conversation(USER, conv.id)
+        assert moved is not None and moved.folder_ids == (target.id,)
+
+    def test_delete_folder_spares_placements_elsewhere(self, store: ChatHistoryStore) -> None:
+        work = store.create_folder(USER, "Work")
+        reading = store.create_folder(USER, "Reading")
+        conv = store.create_conversation(USER, folder_ids=[work.id, reading.id])
+        store.delete_folder(USER, work.id)
+        after = store.get_conversation(USER, conv.id)
+        assert after is not None and after.folder_ids == (reading.id,)
+
+    def test_fork_fields_survive_a_reload(self, store: ChatHistoryStore) -> None:
+        """Forks are carried, not minted: a restored document keeps its pointers."""
+        from panelini.panels.ai.history.document import DocumentHistoryStore
+
+        assert isinstance(store, DocumentHistoryStore)
+        parent = store.create_conversation(USER, title="original")
+        message = store.append_message(USER, parent.id, "human", "hi")
+        fork = store.create_conversation(USER, title="fork")
+        document = {
+            **_document_of(store, fork.id),
+            "parent_id": parent.id,
+            "forked_from_message_id": message.id,
+        }
+        store.restore_conversation(USER, document)
+        reloaded = store.get_conversation(USER, fork.id)
+        assert reloaded is not None
+        assert reloaded.parent_id == parent.id
+        assert reloaded.forked_from_message_id == message.id
 
 
 # ── tenant safety ─────────────────────────────────────────────────────────
@@ -264,6 +362,17 @@ class TestUserIsolation:
         conv = store.create_conversation(OTHER)
         with pytest.raises(ValueError, match="folder"):
             store.move_conversation(OTHER, conv.id, folder.id)
+
+    def test_link_and_unlink_are_scoped(self, store: ChatHistoryStore) -> None:
+        folder = store.create_folder(USER, "Projects")
+        other_folder = store.create_folder(OTHER, "Theirs")
+        conv = store.create_conversation(USER, folder_ids=[folder.id])
+        with pytest.raises(ValueError, match="folder"):
+            store.link_conversation(USER, conv.id, other_folder.id)
+        store.link_conversation(OTHER, conv.id, other_folder.id)  # foreign chat: no-op
+        store.unlink_conversation(OTHER, conv.id, folder.id)  # foreign chat: no-op
+        after = store.get_conversation(USER, conv.id)
+        assert after is not None and after.folder_ids == (folder.id,)
 
     def test_folder_mutations_are_scoped_no_ops(self, store: ChatHistoryStore) -> None:
         folder = store.create_folder(USER, "Projects")

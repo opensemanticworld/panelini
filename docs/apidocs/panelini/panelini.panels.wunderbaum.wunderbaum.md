@@ -59,7 +59,7 @@
 
 ````
 
-`````{py:class} Wunderbaum(source: typing.Optional[list[dict[str, typing.Any]]] = None, columns: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, types: typing.Optional[dict[str, typing.Any]] = None, context_menu_items: typing.Optional[list[dict[str, typing.Any]]] = None, tree_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, lazy_load_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], typing.Union[list[dict[str, typing.Any]], collections.abc.Awaitable[list[dict[str, typing.Any]]]]]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
+`````{py:class} Wunderbaum(source: typing.Optional[list[dict[str, typing.Any]]] = None, columns: typing.Optional[list[dict[str, typing.Any]]] = None, options: typing.Optional[dict[str, typing.Any]] = None, types: typing.Optional[dict[str, typing.Any]] = None, context_menu_items: typing.Optional[list[dict[str, typing.Any]]] = None, tree_id: typing.Optional[str] = None, tree_event_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], None]] = None, lazy_load_callback: typing.Optional[typing.Callable[[str, dict[str, typing.Any]], typing.Union[list[dict[str, typing.Any]], collections.abc.Awaitable[list[dict[str, typing.Any]]]]]] = None, file_drop_callback: typing.Optional[typing.Callable[[dict[str, typing.Any]], None]] = None, **params: typing.Any)
 :canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum
 
 Bases: {py:obj}`panel.custom.AnyWidgetComponent`
@@ -119,6 +119,16 @@ Bases: {py:obj}`panel.custom.AnyWidgetComponent`
    'List(...)'
 
 ```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.context_menu_items
+```
+
+````
+
+````{py:attribute} tree_id
+:canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.tree_id
+:value: >
+   'String(...)'
+
+```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.tree_id
 ```
 
 ````
@@ -231,6 +241,22 @@ Bases: {py:obj}`panel.custom.AnyWidgetComponent`
 :canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.respond_lazy_load
 
 ```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.respond_lazy_load
+```
+
+````
+
+````{py:method} filter_nodes(match: str, options: typing.Optional[dict[str, typing.Any]] = None) -> None
+:canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.filter_nodes
+
+```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.filter_nodes
+```
+
+````
+
+````{py:method} clear_filter() -> None
+:canonical: panelini.panels.wunderbaum.wunderbaum.Wunderbaum.clear_filter
+
+```{autodoc2-docstring} panelini.panels.wunderbaum.wunderbaum.Wunderbaum.clear_filter
 ```
 
 ````

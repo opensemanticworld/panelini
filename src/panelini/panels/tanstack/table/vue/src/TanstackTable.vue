@@ -1533,18 +1533,29 @@ const menuItems = computed(() =>
   buildItems(props.state.options.menu, DEFAULT_MENU).filter((item) => item.id !== SEARCH_ID),
 )
 
+// A third way to reach the same actions, drawn in the row itself. Neither a
+// separator nor the search box means anything inside a row, so an entry naming one
+// is dropped rather than rendering something unusable. Empty by default, like the
+// toolbar and the menu.
+const rowActionItems = computed(() =>
+  buildItems(props.state.options.row_actions, []).filter(
+    (item) => item.id !== SEARCH_ID && item.id !== SEPARATOR_ID,
+  ),
+)
+
 const hasToolbar = computed(() => toolbarItems.value.length > 0)
 const toolbarLabel = computed(() => props.state.options.toolbar_label ?? 'Tree actions')
 const searchLabel = computed(() => props.state.options.search_label ?? 'Search')
 
-// The single lookup behind both halves: a button is drawn and its shortcut fires
-// only when the table declared the action. Either declaration counts, so a table
-// offering `delete` in its menu alone still answers to the Delete key: the two
-// lists together are what the table may do.
+// The single lookup behind all three: a button is drawn and its shortcut fires
+// only when the table declared the action. Any of the declarations counts, so a
+// table offering `delete` in its menu alone still answers to the Delete key: the
+// three lists together are what the table may do.
 function itemFor(id) {
   return (
     toolbarItems.value.find((item) => item.id === id) ??
     menuItems.value.find((item) => item.id === id) ??
+    rowActionItems.value.find((item) => item.id === id) ??
     null
   )
 }
@@ -2415,6 +2426,17 @@ function onRowContextMenu(row, event) {
   openContextMenu(row, event.clientX, event.clientY)
 }
 
+// A button in a row names its own row rather than the one the keyboard is on, so
+// it makes that row active first and then runs the very action the menu and the
+// shortcut run. The selection rule is the context menu's, for the same reason: a
+// row already in a selection keeps it, so the trash on one of five selected rows
+// still deletes five.
+function onRowAction(row, item) {
+  if (selectable.value && !row.getIsSelected()) selectOnly(row)
+  setActive(row.id)
+  runAction(item)
+}
+
 // From the keyboard there is no pointer to place it at, so it hangs off the row
 // itself, which is where a reader's attention already is.
 function openMenuForFocusedRow(row) {
@@ -2761,13 +2783,13 @@ function rowAt(input) {
   return null
 }
 
-// The checkbox, the twisty and the open title editor are the controls inside a row.
-// `draggable` is registered on the host, so without this a press on any of them
-// starts a drag and the click that would have toggled it never lands, which is what
-// made checkbox selection and drag and drop mutually exclusive. For the editor it is
-// what lets the caret be placed with the mouse.
+// The checkbox, the twisty, the row action buttons and the open title editor are the
+// controls inside a row. `draggable` is registered on the host, so without this a
+// press on any of them starts a drag and the click that would have toggled it never
+// lands, which is what made checkbox selection and drag and drop mutually exclusive.
+// For the editor it is what lets the caret be placed with the mouse.
 function onRowControl(hit, input) {
-  const selector = '.pnl-tst-check, .pnl-tst-twisty, .pnl-tst-edit'
+  const selector = '.pnl-tst-check, .pnl-tst-twisty, .pnl-tst-rbtn, .pnl-tst-edit'
   for (const control of hit.element.querySelectorAll(selector)) {
     const rect = control.getBoundingClientRect()
     if (
@@ -2909,7 +2931,16 @@ const dndPane = {
     }
     if (drag.sourceId === tableId.value) {
       if (keys.includes(key)) return
-      props.emitEvent('move', { key: drag.key, keys, ...placement })
+      // `copy` is reported for a move within one table the same way it is for a
+      // transfer between two, so an application that files a row in more than one
+      // place can tell a second filing from a relocation. The panel itself always
+      // moves: what a copy within one tree would mean is the application's to say.
+      props.emitEvent('move', {
+        key: drag.key,
+        keys,
+        ...placement,
+        copy: Boolean(input?.ctrlKey || input?.altKey),
+      })
       return
     }
     // The rows are in another pane, so their keys mean nothing here and the
@@ -3261,6 +3292,35 @@ function dropLineStyle(row) {
               />
             </template>
             <span v-else class="pnl-tst-value">{{ cell.getValue() }}</span>
+            <!-- The row's own actions. Inside the last gridcell rather than beside
+                 it, because the row is a `role="row"` whose children have to be
+                 gridcells; the margin in the stylesheet is what pushes them to the
+                 row's trailing edge. Out of the tab order for the reason the
+                 checkbox is: the row carries the roving tabindex. The label names
+                 the row, so a reader hears which one the button would act on. -->
+            <span
+              v-if="
+                rowActionItems.length > 0 &&
+                cellIndex === headers.length - 1 &&
+                !isEditing(row, cellIndex, cell)
+              "
+              class="pnl-tst-rbtns"
+            >
+              <button
+                v-for="item in rowActionItems"
+                :key="item.uid"
+                type="button"
+                class="pnl-tst-rbtn"
+                tabindex="-1"
+                :aria-label="`${item.label} ${row.original.title ?? row.id}`"
+                :title="item.label"
+                @click.stop="onRowAction(row, item)"
+                @dblclick.stop
+              >
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <span class="pnl-tst-icon" aria-hidden="true" v-html="item.icon"></span>
+              </button>
+            </span>
           </div>
         </div>
       </div>

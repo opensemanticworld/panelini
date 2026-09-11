@@ -2876,6 +2876,172 @@ def test_the_menu_leaves_the_search_action_out(page: Page, port):
     server.stop()
 
 
+# --- row action buttons -------------------------------------------------------
+# The third way to reach the same actions, and the only one that needs no right
+# click. What is pinned down here is that a button names and acts on the row it
+# sits on rather than on the one the keyboard is on, that it stays out of the tab
+# order and out of the drag, and that declaring an action here declares it at all.
+
+
+def row_buttons(page: Page, index: int):
+    return rows(page).nth(index).locator(".pnl-tst-rbtn")
+
+
+def row_button(page: Page, index: int, label: str):
+    return rows(page).nth(index).locator(f".pnl-tst-rbtn[aria-label='{label}']")
+
+
+def test_no_row_buttons_by_default(page: Page, port):
+    """A table that says nothing about `row_actions` gets none, not hidden ones."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "menu": True, "toolbar": True},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator(".pnl-tst-rbtn").count() == 0
+
+    server.stop()
+
+
+def test_row_buttons_name_the_row_they_sit_on(page: Page, port):
+    """The label carries the title, so a reader hears which row the button would take."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        columns=COLUMNS,
+        options={"expand_all": True, "row_actions": ["rename", "delete"]},
+    )
+    server = serve(table, page, port)
+
+    assert row_buttons(page, 0).count() == 2
+    labels = [row_buttons(page, 1).nth(i).get_attribute("aria-label") for i in range(2)]
+    assert labels == ["Rename File A1", "Delete File A1"]
+    # Out of the tab order for the reason the checkbox is: the row holds the
+    # roving tabindex and Tab has to stay the way out of the grid.
+    assert row_buttons(page, 1).first.get_attribute("tabindex") == "-1"
+
+    # In the last gridcell rather than beside it, so the row stays a pure cell list.
+    cells = rows(page).nth(1).locator("[role='gridcell']")
+    assert cells.count() == 2
+    assert cells.nth(1).locator(".pnl-tst-rbtn").count() == 2
+
+    server.stop()
+
+
+def test_a_row_button_acts_on_its_own_row(page: Page, port):
+    """Not on the active one: the button makes its row active before it runs."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "row_actions": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1)  # File A1 is the selected, active row
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+
+    row_button(page, 4, "Delete File B1").click()
+
+    wait_until(lambda: shape(table.source) == "a(a1,a2),b", timeout=10)
+    expect_titles(page, ["Folder A", "File A1", "File A2", "Folder B"])
+
+    server.stop()
+
+
+def test_a_row_button_keeps_a_selection_it_sits_inside(page: Page, port):
+    """The context menu's rule: a trash on one of two selected rows still deletes two."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "row_actions": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    click_row(page, 1, "Control")  # File A1
+    click_row(page, 2, "Control")  # File A2
+    wait_until(lambda: table.selected_keys == ["a1", "a2"], timeout=10)
+
+    row_button(page, 2, "Delete File A2").click()
+
+    wait_until(lambda: shape(table.source) == "a,b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_a_row_button_opens_the_editor_rather_than_the_cell_under_it(page: Page, port):
+    """A rename button starts the editor on its row and never on the value beside it."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "row_actions": ["rename"]},
+    )
+    server = serve(table, page, port)
+
+    row_button(page, 1, "Rename File A1").click()
+
+    editor = page.locator(".pnl-tst-edit")
+    expect(editor).to_have_count(1, timeout=10000)
+    assert editor.input_value() == "File A1"
+    # The buttons step aside for the editor rather than crowding it.
+    assert rows(page).nth(1).locator(".pnl-tst-rbtn").count() == 0
+
+    server.stop()
+
+
+def test_a_press_on_a_row_button_does_not_start_a_drag(page: Page, port):
+    """`draggable` is on the host, so a row control has to be excluded by hand."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "enable_dnd": True, "row_actions": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    box = row_button(page, 1, "Delete File A1").bounding_box()
+    assert box
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2 + 40, steps=8)
+    page.wait_for_timeout(200)
+    assert page.locator(".pnl-tst-row--dragging").count() == 0
+    page.mouse.up()
+
+    assert shape(table.source) == "a(a1,a2),b(b1)"
+
+    server.stop()
+
+
+def test_a_row_only_action_still_answers_to_its_shortcut(page: Page, port):
+    """The three lists together are what a table may do, so a row button is a declaration."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "select_mode": "multi", "row_actions": ["delete"]},
+    )
+    server = serve(table, page, port)
+
+    assert page.locator("[role='toolbar']").count() == 0
+
+    click_row(page, 1)  # File A1
+    wait_until(lambda: table.selected_keys == ["a1"], timeout=10)
+    page.keyboard.press("Delete")
+
+    wait_until(lambda: shape(table.source) == "a(a2),b(b1)", timeout=10)
+
+    server.stop()
+
+
+def test_row_buttons_leave_the_separator_and_the_search_out(page: Page, port):
+    """Neither means anything inside a row, so both are dropped rather than drawn."""
+    table = TanstackTable(
+        source=copy.deepcopy(SOURCE),
+        options={"expand_all": True, "row_actions": ["search", "|", "delete"]},
+    )
+    server = serve(table, page, port)
+
+    assert row_buttons(page, 0).count() == 1
+    assert row_buttons(page, 0).first.get_attribute("aria-label") == "Delete Folder A"
+    assert rows(page).first.locator("input").count() == 0
+    assert rows(page).first.locator(".pnl-tst-tsep").count() == 0
+
+    server.stop()
+
+
 # --- cross-pane transfer ------------------------------------------------------
 
 

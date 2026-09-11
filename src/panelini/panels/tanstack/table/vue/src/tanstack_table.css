@@ -213,6 +213,53 @@
   box-shadow: inset 0 0 0 1px var(--pnl-tst-border);
 }
 
+/* The row's actions, pushed to the trailing edge of the last cell by the margin.
+   The value beside them gives way first: it is `overflow: hidden`, so its automatic
+   minimum size is zero and the buttons keep their width however long the title is. */
+.pnl-tst-rbtns {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+
+/* Drawn on every row and only dimmed until the row is hovered or the button is
+   focused. A control that exists on hover alone cannot be reached by a finger, and
+   nobody who does not hover ever learns it is there. The colour is inherited, so a
+   row an application has tinted tints its buttons with it. */
+.pnl-tst-rbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.35;
+  cursor: pointer;
+}
+
+.pnl-tst-row:hover .pnl-tst-rbtn,
+.pnl-tst-rbtn:focus-visible {
+  opacity: 1;
+}
+
+.pnl-tst-rbtn:hover {
+  background: var(--pnl-tst-active);
+}
+
+.pnl-tst-rbtn:focus-visible {
+  outline: 2px solid var(--pnl-tst-focus);
+  outline-offset: -2px;
+}
+
+.pnl-tst-rbtn .pnl-tst-icon {
+  color: inherit;
+}
+
 /* The inline editor. It takes the width the value had rather than the whole cell, so
    opening it does not shift the row, and it inherits the row's font so the text does
    not jump as the editor appears. */

@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opensemanticworld.github.io/panelini/schemas/v2/chat_history_schema.json",
+  "x-oold-uuid": "5289ba9e-bd7a-47df-a97a-2744e4e48802",
+  "x-oold-version": "2",
+  "title": "Chat history",
+  "description": "One stored document of the AI chat history: a Conversation with its messages embedded, or a Folder grouping conversations. An OO-LD document: the JSON-Schema validates instances while the @context maps properties to vocabulary terms. Instances stay open to foreign properties so documents from other chat apps survive a round trip.",
+  "@context": {
+    "@version": 1.1,
+    "schema": "https://schema.org/",
+    "panelini": "https://opensemanticworld.github.io/panelini/vocab#",
+    "id": "@id",
+    "type": "@type",
+    "Conversation": "schema:Conversation",
+    "Folder": "schema:Collection",
+    "Message": "schema:Message",
+    "Attachment": "schema:MediaObject",
+    "schema_version": "schema:version",
+    "user_id": "panelini:userId",
+    "title": "schema:name",
+    "name": "schema:name",
+    "pinned": "panelini:pinned",
+    "archived": "panelini:archived",
+    "folder_ids": {
+      "@id": "panelini:folderId",
+      "@container": "@set",
+      "@type": "@id"
+    },
+    "parent_id": {
+      "@id": "panelini:parentId",
+      "@type": "@id"
+    },
+    "forked_from_message_id": {
+      "@id": "panelini:forkedFromMessageId",
+      "@type": "@id"
+    },
+    "current_message_id": {
+      "@id": "panelini:currentMessageId",
+      "@type": "@id"
+    },
+    "created_at": "schema:dateCreated",
+    "updated_at": "schema:dateModified",
+    "settings": "panelini:settings",
+    "messages": {
+      "@id": "schema:hasPart",
+      "@container": "@set"
+    },
+    "role": "panelini:role",
+    "content": "schema:text",
+    "extra": "panelini:extra",
+    "parent_message_id": {
+      "@id": "panelini:parentMessageId",
+      "@type": "@id"
+    },
+    "attachments": {
+      "@id": "schema:associatedMedia",
+      "@container": "@set"
+    },
+    "media_type": "schema:encodingFormat",
+    "size": "schema:contentSize",
+    "url": "schema:contentUrl",
+    "text": "schema:text",
+    "width": "schema:width",
+    "height": "schema:height",
+    "omitted": "panelini:omitted"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Conversation"
+    },
+    {
+      "$ref": "#/$defs/Folder"
+    }
+  ],
+  "$defs": {
+    "Conversation": {
+      "title": "Conversation",
+      "description": "One AI chat conversation with its messages embedded.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "type",
+        "id",
+        "title",
+        "created_at",
+        "updated_at",
+        "messages"
+      ],
+      "properties": {
+        "@context": {
+          "type": [
+            "object",
+            "string",
+            "array"
+          ]
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "type": {
+          "const": "Conversation"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "folder_ids": {
+          "description": "Folders the conversation is filed under. Folders are virtual, so a conversation can sit in several at once; an empty list places it at the root.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "parent_id": {
+          "description": "The conversation this one was forked from.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "forked_from_message_id": {
+          "description": "Message in the parent conversation the fork branched off after.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "temperature": {
+              "type": "number"
+            }
+          }
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Message"
+          }
+        }
+      }
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "A virtual folder grouping conversations; nests under another folder through parent_id.",
+      "type": "object",
+      "required": [
+        "schema_version",
+        "type",
+        "id",
+        "name",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "@context": {
+          "type": [
+            "object",
+            "string",
+            "array"
+          ]
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "type": {
+          "const": "Folder"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Message": {
+      "title": "Message",
+      "description": "One message in a conversation. parent_message_id chains messages into the branch the conversation currently follows.",
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "content",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "human",
+            "ai",
+            "tool",
+            "system"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          }
+        },
+        "extra": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "parent_message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "Attachment": {
+      "title": "Attachment",
+      "description": "A file sent with a message. The properties are the superset of what ChatGPT, Claude, Open WebUI and LibreChat carry in their exports: an identity (id, name, media_type, size), the payload either inline (url as a data: URI) or by reference (url), the text extracted where the file was parsed, and image dimensions. Every payload property is optional: a store may keep only the reference, and a size-limited one (localStorage) drops the payload and marks the attachment omitted.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "media_type": {
+          "description": "MIME type, e.g. image/png.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Size of the original file in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "url": {
+          "description": "Where the bytes are: a data: URI for an inline payload, otherwise a reference the reading application resolves.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Text extracted from the file, used as model context.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "omitted": {
+          "description": "True when the store dropped the payload (e.g. over the localStorage quota); the attachment is then a reference only.",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

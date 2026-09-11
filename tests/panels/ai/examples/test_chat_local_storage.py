@@ -66,7 +66,7 @@ def test_history_survives_a_page_reload(browser, panel_server):
         _, port = panel_server
         _open_sidebar(page, port)
         _send_message(page, "Remember me in this browser")
-        page.locator(".wb-row", has_text="Remember me").first.wait_for()
+        page.locator(".pnl-tst-row", has_text="Remember me").first.wait_for()
 
         # one conversation document is in localStorage
         keys = _storage_keys(page)
@@ -78,7 +78,7 @@ def test_history_survives_a_page_reload(browser, panel_server):
         page.locator("text=Conversations").first.wait_for()
 
         # the hydrated conversation reappears and replays
-        row = page.locator(".wb-row", has_text="Remember me").first
+        row = page.locator(".pnl-tst-row", has_text="Remember me").first
         row.wait_for()
         row.click()
         replayed = page.locator(".chat-interface").locator("text=Remember me in this browser").first
@@ -96,7 +96,7 @@ def test_history_is_per_browser(browser, panel_server):
         _, port = panel_server
         _open_sidebar(page, port)
         page.locator(".history-empty:visible", has_text="No conversations yet").first.wait_for()
-        assert page.locator(".wunderbaum-wrapper:visible").count() == 0
+        assert page.locator(".history-tree:visible").count() == 0
         assert _storage_keys(page) == []
     finally:
         context.close()

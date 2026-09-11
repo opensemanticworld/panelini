@@ -834,6 +834,42 @@ def test_move_callback_sees_the_resolved_position(source):
     assert shape(table.source) == "a(b(b1,b2),d(d1),e)"
 
 
+def test_a_copy_drag_reports_the_modifier_and_still_moves(source, events):
+    """The panel only ever moves; ``copy`` is for the application to read."""
+    table = TanstackTable(
+        source=source,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("move", {"key": "d", "targetKey": "b1", "instruction": "make-child", "copy": True})
+
+    assert events[0][1]["copy"] is True
+    assert shape(table.source) == "a(b(b1(d(d1)),b2),e)"
+
+
+def test_a_vetoed_copy_drag_still_reports_the_modifier(source, events):
+    """A tree that files its own rows vetoes the move and reads the payload."""
+    table = TanstackTable(
+        source=source,
+        event_callback=lambda name, params: events.append((name, params)),
+        move_callback=lambda key, anchor_key, position: False,
+    )
+    table.handle_event("move", {"key": "d", "targetKey": "b1", "instruction": "make-child", "copy": True})
+
+    params = events[0][1]
+    assert (params["copy"], params["applied"], params["anchor_key"]) == (True, False, "b1")
+    assert shape(table.source) == "a(b(b1,b2),e),d(d1)"
+
+
+def test_a_plain_drag_reports_no_copy(source, events):
+    table = TanstackTable(
+        source=source,
+        event_callback=lambda name, params: events.append((name, params)),
+    )
+    table.handle_event("move", {"key": "d", "targetKey": "b1", "instruction": "make-child"})
+
+    assert events[0][1]["copy"] is False
+
+
 def test_move_callback_is_not_called_for_unresolvable_intents(source):
     seen = []
     table = TanstackTable(

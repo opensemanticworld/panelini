@@ -1,8 +1,8 @@
 """Document-shaped chat history: schema, converters, shared store logic.
 
-The conversation document defined by ``chat_history_schema_v2.json`` (an
-OO-LD document: JSON-Schema plus a JSON-LD ``@context``) is both the storage
-model and the import/export interchange format. :class:`DocumentHistoryStore`
+The documents defined by ``chat_history_schema.json`` (an OO-LD document:
+JSON-Schema plus a JSON-LD ``@context``) are both the storage model and the
+import/export interchange format. :class:`DocumentHistoryStore`
 implements every :class:`~.store.ChatHistoryStore` semantic once, on top of
 a minimal per-document CRUD that each backend provides.
 """
@@ -35,12 +35,12 @@ SCHEMA_VERSION = 2
 KIND_CONVERSATION = "conversation"
 KIND_FOLDER = "folder"
 
-_SCHEMA_PATH = Path(__file__).parent / f"chat_history_schema_v{SCHEMA_VERSION}.json"
+_SCHEMA_PATH = Path(__file__).parent / "chat_history_schema.json"
 
 
 @lru_cache(maxsize=1)
 def load_schema() -> dict[str, Any]:
-    """Return the bundled conversation document schema."""
+    """Return the bundled chat history document schema."""
     return json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
@@ -49,8 +49,12 @@ def document_context() -> dict[str, Any]:
     return copy.deepcopy(load_schema()["@context"])
 
 
-def validate_conversation_document(document: dict[str, Any]) -> None:
-    """Validate a conversation document against the v2 schema.
+def _validate(document: dict[str, Any], def_name: str) -> None:
+    """Validate *document* against one named ``$def`` of the v2 schema.
+
+    The named ``$def``, not the schema's ``oneOf`` root: a failed ``oneOf``
+    collapses every error into "is not valid under any of the given schemas",
+    which hides the field that is actually wrong.
 
     A no-op when :mod:`jsonschema` is not installed (e.g. Pyodide builds).
 
@@ -61,10 +65,32 @@ def validate_conversation_document(document: dict[str, Any]) -> None:
         import jsonschema
     except ImportError:  # pragma: no cover - optional dependency
         return
+    schema = load_schema()
     try:
-        jsonschema.validate(document, load_schema())
+        jsonschema.validate(
+            document,
+            {"$schema": schema["$schema"], "$ref": f"#/$defs/{def_name}", "$defs": schema["$defs"]},
+        )
     except jsonschema.ValidationError as err:
         raise ValueError(err.message) from err
+
+
+def validate_conversation_document(document: dict[str, Any]) -> None:
+    """Validate a conversation document against the v2 schema.
+
+    Raises:
+        ValueError: When the document does not match the schema.
+    """
+    _validate(document, "Conversation")
+
+
+def validate_folder_document(document: dict[str, Any]) -> None:
+    """Validate a folder document against the v2 schema.
+
+    Raises:
+        ValueError: When the document does not match the schema.
+    """
+    _validate(document, "Folder")
 
 
 # ── record <-> document converters ─────────────────────────────────────────
@@ -92,7 +118,9 @@ def conversation_to_document(record: ConversationRecord, messages: Sequence[Mess
         "title": record.title,
         "pinned": record.pinned,
         "archived": record.archived,
-        "folder_id": record.folder_id,
+        "folder_ids": list(record.folder_ids),
+        "parent_id": record.parent_id,
+        "forked_from_message_id": record.forked_from_message_id,
         "current_message_id": record.current_message_id,
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
@@ -108,7 +136,9 @@ def conversation_from_document(document: dict[str, Any]) -> ConversationRecord:
         title=document["title"],
         pinned=bool(document.get("pinned", False)),
         archived=bool(document.get("archived", False)),
-        folder_id=document.get("folder_id"),
+        folder_ids=tuple(document.get("folder_ids") or ()),
+        parent_id=document.get("parent_id"),
+        forked_from_message_id=document.get("forked_from_message_id"),
         current_message_id=document.get("current_message_id"),
         created_at=datetime.fromisoformat(document["created_at"]),
         updated_at=datetime.fromisoformat(document["updated_at"]),
@@ -229,7 +259,7 @@ class DocumentHistoryStore(ChatHistoryStore):
         return conversation_from_document(doc) if doc is not None else None
 
     def create_conversation(
-        self, user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None
+        self, user_id: str, title: str = DEFAULT_TITLE, folder_ids: Sequence[str] = ()
     ) -> ConversationRecord:
         now = utcnow()
         record = ConversationRecord(
@@ -238,13 +268,16 @@ class DocumentHistoryStore(ChatHistoryStore):
             title=title,
             pinned=False,
             archived=False,
-            folder_id=folder_id,
+            folder_ids=tuple(dict.fromkeys(folder_ids)),  # dedupe, keep order
+            parent_id=None,
+            forked_from_message_id=None,
             current_message_id=None,
             created_at=now,
             updated_at=now,
         )
         with self._transaction():
-            self._require_folder(user_id, folder_id)
+            for folder_id in record.folder_ids:
+                self._require_folder(user_id, folder_id)
             self._put(user_id, KIND_CONVERSATION, conversation_to_document(record))
         return record
 
@@ -269,7 +302,24 @@ class DocumentHistoryStore(ChatHistoryStore):
             doc = self._get(user_id, KIND_CONVERSATION, conversation_id)
             if doc is None:
                 return
-            doc["folder_id"] = folder_id
+            doc["folder_ids"] = [] if folder_id is None else [folder_id]
+            self._put(user_id, KIND_CONVERSATION, doc)
+
+    def link_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        with self._transaction():
+            self._require_folder(user_id, folder_id)
+            doc = self._get(user_id, KIND_CONVERSATION, conversation_id)
+            if doc is None or folder_id in (folder_ids := doc.get("folder_ids") or []):
+                return
+            doc["folder_ids"] = [*folder_ids, folder_id]
+            self._put(user_id, KIND_CONVERSATION, doc)
+
+    def unlink_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        with self._transaction():
+            doc = self._get(user_id, KIND_CONVERSATION, conversation_id)
+            if doc is None or folder_id not in (folder_ids := doc.get("folder_ids") or []):
+                return
+            doc["folder_ids"] = [fid for fid in folder_ids if fid != folder_id]
             self._put(user_id, KIND_CONVERSATION, doc)
 
     def set_pinned(self, user_id: str, conversation_id: str, pinned: bool) -> None:
@@ -344,9 +394,11 @@ class DocumentHistoryStore(ChatHistoryStore):
             created_at=now,
             updated_at=now,
         )
+        document = folder_to_document(record)
+        validate_folder_document(document)
         with self._transaction():
             self._require_folder(user_id, parent_id)
-            self._put(user_id, KIND_FOLDER, folder_to_document(record))
+            self._put(user_id, KIND_FOLDER, document)
         return record
 
     def rename_folder(self, user_id: str, folder_id: str, name: str) -> None:
@@ -374,14 +426,15 @@ class DocumentHistoryStore(ChatHistoryStore):
             self._put(user_id, KIND_FOLDER, doc)
 
     def delete_folder(self, user_id: str, folder_id: str) -> None:
-        # Contents move to the root in the same transaction.
+        # Subfolders move to the root and the folder is unlinked from every
+        # conversation, all in the same transaction.
         with self._transaction():
             if self._get(user_id, KIND_FOLDER, folder_id) is None:
                 return
             self._delete(user_id, KIND_FOLDER, folder_id)
             for doc in self._iter(user_id, KIND_CONVERSATION):
-                if doc.get("folder_id") == folder_id:
-                    doc["folder_id"] = None
+                if folder_id in (folder_ids := doc.get("folder_ids") or []):
+                    doc["folder_ids"] = [fid for fid in folder_ids if fid != folder_id]
                     self._put(user_id, KIND_CONVERSATION, doc)
             for doc in self._iter(user_id, KIND_FOLDER):
                 if doc.get("parent_id") == folder_id:

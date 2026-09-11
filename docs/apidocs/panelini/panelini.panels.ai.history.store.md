@@ -191,13 +191,35 @@
 
 ````
 
-````{py:attribute} folder_id
-:canonical: panelini.panels.ai.history.store.ConversationRecord.folder_id
+````{py:attribute} folder_ids
+:canonical: panelini.panels.ai.history.store.ConversationRecord.folder_ids
+:type: tuple[str, ...]
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.folder_ids
+```
+
+````
+
+````{py:attribute} parent_id
+:canonical: panelini.panels.ai.history.store.ConversationRecord.parent_id
 :type: str | None
 :value: >
    None
 
-```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.folder_id
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.parent_id
+```
+
+````
+
+````{py:attribute} forked_from_message_id
+:canonical: panelini.panels.ai.history.store.ConversationRecord.forked_from_message_id
+:type: str | None
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ConversationRecord.forked_from_message_id
 ```
 
 ````
@@ -442,7 +464,7 @@ Bases: {py:obj}`abc.ABC`
 
 ````
 
-````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_ids: collections.abc.Sequence[str] = ()) -> panelini.panels.ai.history.store.ConversationRecord
 :canonical: panelini.panels.ai.history.store.ChatHistoryStore.create_conversation
 :abstractmethod:
 
@@ -474,6 +496,24 @@ Bases: {py:obj}`abc.ABC`
 :abstractmethod:
 
 ```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.move_conversation
+```
+
+````
+
+````{py:method} link_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.store.ChatHistoryStore.link_conversation
+:abstractmethod:
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.link_conversation
+```
+
+````
+
+````{py:method} unlink_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.store.ChatHistoryStore.unlink_conversation
+:abstractmethod:
+
+```{autodoc2-docstring} panelini.panels.ai.history.store.ChatHistoryStore.unlink_conversation
 ```
 
 ````

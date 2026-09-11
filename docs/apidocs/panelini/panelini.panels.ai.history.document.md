@@ -43,6 +43,10 @@
   - ```{autodoc2-docstring} panelini.panels.ai.history.document.validate_conversation_document
     :summary:
     ```
+* - {py:obj}`validate_folder_document <panelini.panels.ai.history.document.validate_folder_document>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.document.validate_folder_document
+    :summary:
+    ```
 * - {py:obj}`message_to_dict <panelini.panels.ai.history.document.message_to_dict>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.document.message_to_dict
     :summary:
@@ -142,6 +146,13 @@
 ```
 ````
 
+````{py:function} validate_folder_document(document: dict[str, typing.Any]) -> None
+:canonical: panelini.panels.ai.history.document.validate_folder_document
+
+```{autodoc2-docstring} panelini.panels.ai.history.document.validate_folder_document
+```
+````
+
 ````{py:function} message_to_dict(record: panelini.panels.ai.history.store.MessageRecord) -> dict[str, typing.Any]
 :canonical: panelini.panels.ai.history.document.message_to_dict
 
@@ -207,7 +218,7 @@ Bases: {py:obj}`panelini.panels.ai.history.store.ChatHistoryStore`
 
 ````
 
-````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None) -> panelini.panels.ai.history.store.ConversationRecord
+````{py:method} create_conversation(user_id: str, title: str = DEFAULT_TITLE, folder_ids: collections.abc.Sequence[str] = ()) -> panelini.panels.ai.history.store.ConversationRecord
 :canonical: panelini.panels.ai.history.document.DocumentHistoryStore.create_conversation
 
 ````
@@ -224,6 +235,16 @@ Bases: {py:obj}`panelini.panels.ai.history.store.ChatHistoryStore`
 
 ````{py:method} move_conversation(user_id: str, conversation_id: str, folder_id: str | None) -> None
 :canonical: panelini.panels.ai.history.document.DocumentHistoryStore.move_conversation
+
+````
+
+````{py:method} link_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.document.DocumentHistoryStore.link_conversation
+
+````
+
+````{py:method} unlink_conversation(user_id: str, conversation_id: str, folder_id: str) -> None
+:canonical: panelini.panels.ai.history.document.DocumentHistoryStore.unlink_conversation
 
 ````
 

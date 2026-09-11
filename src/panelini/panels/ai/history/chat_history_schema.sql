@@ -1,5 +1,5 @@
 -- Document storage: one row per conversation or folder document. The body
--- is the JSON document defined by chat_history_schema_v2.json; user_id,
+-- is the JSON document defined by chat_history_schema.json; user_id,
 -- kind, and updated_at mirror body fields for indexing. Maps 1:1 onto a
 -- Postgres JSONB table or a browser object store.
 

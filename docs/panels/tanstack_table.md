@@ -112,6 +112,7 @@ The **first** column is the **tree column**, whatever it declares: it carries th
 | `toggle_on_click` | `False` | A click on the only selected row clears the selection. |
 | `toolbar` | absent | Ordered list of action ids, or `True` for the default set. Absent means no toolbar. |
 | `menu` | absent | The same ids, as a right-click context menu. `True` gives its own shorter default set. |
+| `row_actions` | absent | The same ids again, as buttons at the trailing edge of every row. |
 | `toolbar_label`, `menu_label`, `search_label` | `"Tree actions"`, `"Row actions"`, `"Search"` | Accessible names for those three. |
 | `sortable` | `True` | `False` takes the sort off the whole table. |
 | `sort_folders_first` | `False` | Branches above leaves at every level, whichever way a column is sorted. |
@@ -128,9 +129,9 @@ The **first** column is the **tree column**, whatever it declares: it carries th
 
 `drop_accept` and `drop_max_bytes` are decided in Python. The browser reads them only to skip loading the bytes of a file that was going to be refused.
 
-### Toolbar and menu actions
+### Toolbar, menu and row actions
 
-`toolbar` and `menu` take these ids, plus `"|"` for a separator:
+`toolbar`, `menu` and `row_actions` take these ids, plus `"|"` for a separator:
 
 | Action id | Shortcut | What it does |
 | --- | --- | --- |
@@ -145,7 +146,9 @@ The **first** column is the **tree column**, whatever it declares: it carries th
 | `expand-all` / `collapse-all` | none | Every branch at once. |
 | `search` | `Ctrl+F` | The search box. Toolbar only; a menu drops it. |
 
-The two lists together are what the table may do, so an **action left out of both cannot be reached by its shortcut either**. An entry may also be a dict `{id, label, icon, node}` that relabels an action and sets the template its new node is minted from. That is what makes `new-folder` mint a folder and `new-file` a file, and it lets one id appear twice under two labels.
+The three lists together are what the table may do, so an **action left out of all of them cannot be reached by its shortcut either**. An entry may also be a dict `{id, label, icon, node}` that relabels an action and sets the template its new node is minted from. That is what makes `new-folder` mint a folder and `new-file` a file, and it lets one id appear twice under two labels.
+
+`row_actions` puts its buttons inside each row at the trailing edge, dimmed to 35% until the row is hovered or a button is focused, which is what makes an action reachable without a right click. `"|"` and `search` are dropped there, and the buttons carry no disabled state: an action is judged against the row it sits on, which it makes active before running. The buttons are out of the tab order, like the row checkbox, because the row itself carries the roving tabindex.
 
 ## Editing
 

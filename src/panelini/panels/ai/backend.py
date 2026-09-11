@@ -434,7 +434,7 @@ class AiBackend:
             temperature: Current temperature.
 
         Returns:
-            A ``chat_history_schema_v2.json`` conversation document.
+            A ``chat_history_schema.json`` conversation document.
         """
         from .history.document import (
             conversation_to_document,
@@ -459,7 +459,9 @@ class AiBackend:
                 title=DEFAULT_TITLE,
                 pinned=False,
                 archived=False,
-                folder_id=None,
+                folder_ids=(),
+                parent_id=None,
+                forked_from_message_id=None,
                 current_message_id=None,
                 created_at=now,
                 updated_at=now,

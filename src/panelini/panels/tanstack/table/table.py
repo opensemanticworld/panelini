@@ -181,8 +181,13 @@ class TanstackTable(AnyWidgetComponent):
             "menu takes the same list and puts those actions in a context menu on the rows, opened "
             "by a right click or Shift+F10, never by the left button, which selects and drags, and "
             "it is absent by default so a table "
-            "gets one only by asking. The two lists together are what a table may do, so an action "
-            "offered in the menu alone still answers to its shortcut. toolbar_label, menu_label and "
+            "gets one only by asking. row_actions takes the same list again and draws those actions "
+            "as buttons at the trailing edge of every row, dimmed until the row is hovered, which is "
+            "what makes an action reachable without a right click. A separator or the search box is "
+            "dropped there, and the buttons carry no disabled state: an action is judged against the "
+            "row it sits on, which it makes active before it runs. The three lists together are what "
+            "a table may do, so an action offered in one of them alone still answers to its "
+            "shortcut. toolbar_label, menu_label and "
             "search_label name the toolbar, the menu and the search box for assistive technology, "
             "and new_key_prefix names the keys minted for added nodes. file_icons is "
             "an extra {extension: icon name} mapping used when a file is added or renamed, and "
@@ -829,6 +834,10 @@ class TanstackTable(AnyWidgetComponent):
         where the node is going. Either way the callbacks see the same normalised
         snake_case payload, and the same ``move_callback`` gets its veto.
 
+        ``copy`` records whether Ctrl or Alt was held at the drop. It is reported
+        and never acted on, so a table whose rows may sit in several places at
+        once can tell a second filing from a relocation.
+
         Args:
             event_params: Raw payload from the browser.
 
@@ -851,6 +860,10 @@ class TanstackTable(AnyWidgetComponent):
             "desired_level": desired_level,
             "position": position,
             "anchor_key": anchor_key,
+            # Reported, never acted on: this panel moves. An application that can
+            # hold one row in several places reads it and does the second filing
+            # itself, which is why it survives a veto.
+            "copy": bool(event_params.get("copy")),
             "applied": False,
             "applied_keys": [],
         }

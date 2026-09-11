@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -43,14 +44,22 @@ def new_id() -> str:
 
 @dataclass(frozen=True)
 class ConversationRecord:
-    """One chat conversation owned by a user."""
+    """One chat conversation owned by a user.
+
+    Folders are virtual, so a conversation is filed under any number of them
+    at once; an empty ``folder_ids`` places it at the root. ``parent_id`` and
+    ``forked_from_message_id`` are set when the conversation branched off
+    another one; the store carries them, it does not mint them.
+    """
 
     id: str
     user_id: str
     title: str
     pinned: bool
     archived: bool
-    folder_id: str | None
+    folder_ids: tuple[str, ...]
+    parent_id: str | None
+    forked_from_message_id: str | None
     current_message_id: str | None
     created_at: datetime
     updated_at: datetime
@@ -107,9 +116,11 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def create_conversation(
-        self, user_id: str, title: str = DEFAULT_TITLE, folder_id: str | None = None
+        self, user_id: str, title: str = DEFAULT_TITLE, folder_ids: Sequence[str] = ()
     ) -> ConversationRecord:
-        """Create and return a new conversation.
+        """Create and return a new conversation, filed under ``folder_ids``.
+
+        Duplicate ids collapse; an empty sequence creates it at the root.
 
         Raises:
             ValueError: On a folder the user does not own.
@@ -125,10 +136,27 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def move_conversation(self, user_id: str, conversation_id: str, folder_id: str | None) -> None:
-        """Move a conversation into a folder (``None`` moves it to the root).
+        """Replace every placement with one folder (``None`` is the root).
 
         Raises:
             ValueError: On a folder the user does not own.
+        """
+
+    @abstractmethod
+    def link_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        """File a conversation under one more folder, keeping the others.
+
+        Idempotent: linking into a folder it already sits in changes nothing.
+
+        Raises:
+            ValueError: On a folder the user does not own.
+        """
+
+    @abstractmethod
+    def unlink_conversation(self, user_id: str, conversation_id: str, folder_id: str) -> None:
+        """Drop one placement, keeping the others (the chat itself stays).
+
+        Idempotent: unlinking a folder it is not in changes nothing.
         """
 
     @abstractmethod
@@ -192,7 +220,11 @@ class ChatHistoryStore(ABC):
 
     @abstractmethod
     def delete_folder(self, user_id: str, folder_id: str) -> None:
-        """Delete a folder; its conversations and subfolders move to the root."""
+        """Delete a folder; its subfolders move to the root.
+
+        The folder is dropped from every conversation's ``folder_ids``, so a
+        conversation filed elsewhere as well keeps those placements.
+        """
 
     # -- lifecycle ----------------------------------------------------------
 

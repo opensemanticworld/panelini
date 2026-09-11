@@ -19,6 +19,10 @@
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.tabler_mask
     :summary:
     ```
+* - {py:obj}`tabler_icon <panelini.panels.ai.history.icons.tabler_icon>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.tabler_icon
+    :summary:
+    ```
 * - {py:obj}`icon_button_css <panelini.panels.ai.history.icons.icon_button_css>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.icon_button_css
     :summary:
@@ -31,24 +35,32 @@
 :class: autosummary longtable
 :align: left
 
+* - {py:obj}`CHAT_PATHS <panelini.panels.ai.history.icons.CHAT_PATHS>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.CHAT_PATHS
+    :summary:
+    ```
+* - {py:obj}`FOLDER_PATHS <panelini.panels.ai.history.icons.FOLDER_PATHS>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_PATHS
+    :summary:
+    ```
+* - {py:obj}`FOLDER_OPEN_PATHS <panelini.panels.ai.history.icons.FOLDER_OPEN_PATHS>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_OPEN_PATHS
+    :summary:
+    ```
+* - {py:obj}`REFRESH_PATHS <panelini.panels.ai.history.icons.REFRESH_PATHS>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.REFRESH_PATHS
+    :summary:
+    ```
+* - {py:obj}`CHECK_PATHS <panelini.panels.ai.history.icons.CHECK_PATHS>`
+  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.CHECK_PATHS
+    :summary:
+    ```
 * - {py:obj}`NEW_CHAT_MASK <panelini.panels.ai.history.icons.NEW_CHAT_MASK>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.NEW_CHAT_MASK
     :summary:
     ```
-* - {py:obj}`CHAT_MASK <panelini.panels.ai.history.icons.CHAT_MASK>`
-  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.CHAT_MASK
-    :summary:
-    ```
 * - {py:obj}`FOLDER_PLUS_MASK <panelini.panels.ai.history.icons.FOLDER_PLUS_MASK>`
   - ```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_PLUS_MASK
-    :summary:
-    ```
-* - {py:obj}`PENCIL_MASK <panelini.panels.ai.history.icons.PENCIL_MASK>`
-  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.PENCIL_MASK
-    :summary:
-    ```
-* - {py:obj}`TRASH_MASK <panelini.panels.ai.history.icons.TRASH_MASK>`
-  - ```{autodoc2-docstring} panelini.panels.ai.history.icons.TRASH_MASK
     :summary:
     ```
 * - {py:obj}`UNDO_MASK <panelini.panels.ai.history.icons.UNDO_MASK>`
@@ -78,6 +90,63 @@
 ```
 ````
 
+````{py:function} tabler_icon(paths: str) -> str
+:canonical: panelini.panels.ai.history.icons.tabler_icon
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.tabler_icon
+```
+````
+
+````{py:data} CHAT_PATHS
+:canonical: panelini.panels.ai.history.icons.CHAT_PATHS
+:value: >
+   None
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.CHAT_PATHS
+```
+
+````
+
+````{py:data} FOLDER_PATHS
+:canonical: panelini.panels.ai.history.icons.FOLDER_PATHS
+:value: >
+   "<path d='M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2'/>"
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_PATHS
+```
+
+````
+
+````{py:data} FOLDER_OPEN_PATHS
+:canonical: panelini.panels.ai.history.icons.FOLDER_OPEN_PATHS
+:value: >
+   "<path d='M5 19l2.757 -7.351a1 1 0 0 1 .936 -.649h12.307a1 1 0 0 1 .986 1.164l-.996 5.211a2 2 0 0 1 -..."
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_OPEN_PATHS
+```
+
+````
+
+````{py:data} REFRESH_PATHS
+:canonical: panelini.panels.ai.history.icons.REFRESH_PATHS
+:value: >
+   "<path d='M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4'/><path d='M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4'/..."
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.REFRESH_PATHS
+```
+
+````
+
+````{py:data} CHECK_PATHS
+:canonical: panelini.panels.ai.history.icons.CHECK_PATHS
+:value: >
+   "<path d='M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0 -18'/><path d='M9 12l2 2l4 -4'/>"
+
+```{autodoc2-docstring} panelini.panels.ai.history.icons.CHECK_PATHS
+```
+
+````
+
 ````{py:data} NEW_CHAT_MASK
 :canonical: panelini.panels.ai.history.icons.NEW_CHAT_MASK
 :value: >
@@ -88,42 +157,12 @@
 
 ````
 
-````{py:data} CHAT_MASK
-:canonical: panelini.panels.ai.history.icons.CHAT_MASK
-:value: >
-   'tabler_mask(...)'
-
-```{autodoc2-docstring} panelini.panels.ai.history.icons.CHAT_MASK
-```
-
-````
-
 ````{py:data} FOLDER_PLUS_MASK
 :canonical: panelini.panels.ai.history.icons.FOLDER_PLUS_MASK
 :value: >
    'tabler_mask(...)'
 
 ```{autodoc2-docstring} panelini.panels.ai.history.icons.FOLDER_PLUS_MASK
-```
-
-````
-
-````{py:data} PENCIL_MASK
-:canonical: panelini.panels.ai.history.icons.PENCIL_MASK
-:value: >
-   'tabler_mask(...)'
-
-```{autodoc2-docstring} panelini.panels.ai.history.icons.PENCIL_MASK
-```
-
-````
-
-````{py:data} TRASH_MASK
-:canonical: panelini.panels.ai.history.icons.TRASH_MASK
-:value: >
-   'tabler_mask(...)'
-
-```{autodoc2-docstring} panelini.panels.ai.history.icons.TRASH_MASK
 ```
 
 ````
