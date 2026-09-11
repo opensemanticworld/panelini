@@ -20,6 +20,7 @@ develop-eggs/
 dist/
 # Include pre-built Vue assets for custom panels
 !src/panelini/panels/*/vue/dist/
+!src/panelini/panels/*/*/vue/dist/
 downloads/
 eggs/
 .eggs/
@@ -69,6 +70,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+panelini_history.sqlite3*
 
 # Flask stuff:
 instance/

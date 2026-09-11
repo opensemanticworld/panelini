@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import logging
 import time
 from collections.abc import Awaitable
 from pathlib import Path
@@ -12,6 +13,8 @@ import param  # type: ignore[import-untyped]
 from panel.custom import AnyWidgetComponent
 
 pn.extension()
+
+logger = logging.getLogger(__name__)
 
 bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
 
@@ -57,6 +60,11 @@ class Wunderbaum(AnyWidgetComponent):
         doc="Context menu items shown on right-click. Each: {id, label, icon?}.",
     )
 
+    tree_id = param.String(
+        default="",
+        doc="Identifier for this tree, reported as source_tree_id on cross-tree drops.",
+    )
+
     # Internal event data (for JavaScript -> Python communication)
     _event_data = param.Dict(default={}, doc="Event data from JavaScript")
 
@@ -74,6 +82,7 @@ class Wunderbaum(AnyWidgetComponent):
         options: Optional[dict[str, Any]] = None,
         types: Optional[dict[str, Any]] = None,
         context_menu_items: Optional[list[dict[str, Any]]] = None,
+        tree_id: Optional[str] = None,
         tree_event_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
         lazy_load_callback: Optional[
             Callable[[str, dict[str, Any]], Union[list[dict[str, Any]], Awaitable[list[dict[str, Any]]]]]
@@ -88,6 +97,11 @@ class Wunderbaum(AnyWidgetComponent):
             columns: Column definitions for treegrid mode.
             options: Wunderbaum configuration options.
             types: Node type definitions.
+            context_menu_items: Context menu items shown on right-click.
+            tree_id: Identifier for this tree. A tree that receives a drag from
+                another tree reports it as ``source_tree_id`` on the
+                ``externalDrop`` event, so give every tree in a multi-tree
+                layout a distinct id.
             tree_event_callback: Callback for tree events (activate, click, etc.).
             lazy_load_callback: Callback for lazy loading. Receives (key, request_data),
                 returns list of child node dicts.
@@ -106,6 +120,8 @@ class Wunderbaum(AnyWidgetComponent):
             self.types = types
         if context_menu_items is not None:
             self.context_menu_items = context_menu_items
+        if tree_id is not None:
+            self.tree_id = tree_id
 
         self._tree_event_callback = tree_event_callback
         self._lazy_load_callback = lazy_load_callback
@@ -117,16 +133,23 @@ class Wunderbaum(AnyWidgetComponent):
         self.param.watch(self._on_lazy_request_change, ["_lazy_request"])
 
     def _on_event_data_change(self, event: Any) -> None:
-        """Handle event data changes from JavaScript."""
+        """Handle event data changes from JavaScript.
+
+        Events arrive as a per-tick batch ``{seq, events: [...]}`` so that
+        same-gesture events (e.g. click + activate) are all delivered in
+        order instead of coalescing to the last one.
+        """
         event_data = event.new
         if not event_data:
             return
 
-        event_name = event_data.get("event_name")
-        event_params = event_data.get("event_params", {})
-
-        if event_name:
-            self.handle_tree_event(event_name, event_params)
+        events = event_data.get("events")
+        if not isinstance(events, list):  # legacy single-event shape
+            events = [event_data]
+        for item in events:
+            event_name = item.get("event_name")
+            if event_name:
+                self.handle_tree_event(event_name, item.get("event_params", {}))
 
     def handle_tree_event(self, event_name: str, event_params: dict[str, Any]) -> None:
         """Handle a tree event.
@@ -135,7 +158,7 @@ class Wunderbaum(AnyWidgetComponent):
             event_name: Name of the event (activate, click, dblclick, etc.).
             event_params: Event parameters containing node key, title, data, etc.
         """
-        print(f"Tree event: {event_name}")
+        logger.debug("Tree event: %s", event_name)
 
         # Handle file drop separately
         if event_name == "fileDrop":
@@ -277,6 +300,14 @@ class Wunderbaum(AnyWidgetComponent):
         """
         self._send_tree_action("setActiveNode", {"key": key})
 
+    def start_edit_title(self, key: str) -> None:
+        """Activate a node and open its inline title editor.
+
+        Args:
+            key: Key of the node to edit.
+        """
+        self._send_tree_action("startEditTitle", {"key": key})
+
     def respond_lazy_load(self, key: str, children: list[dict[str, Any]]) -> None:
         """Respond to a lazy load request with children data.
 
@@ -289,6 +320,27 @@ class Wunderbaum(AnyWidgetComponent):
             "children": children,
             "timestamp": time.time(),
         }
+
+    def filter_nodes(self, match: str, options: Optional[dict[str, Any]] = None) -> None:
+        """Filter the tree, dimming or hiding nodes that do not match.
+
+        The match count comes back asynchronously as a ``filter`` tree event
+        with ``{"filter": match, "matches": n}``, since actions are one-way.
+
+        Args:
+            match: Substring searched for in node titles.
+            options: Wunderbaum filter options. Useful ones: ``mode`` ('dim' or
+                'hide'), ``fuzzy``, ``autoExpand``, ``matchBranch``,
+                ``leavesOnly``, ``highlight``.
+
+        Example:
+            tree.filter_nodes("report", {"mode": "hide", "autoExpand": True})
+        """
+        self._send_tree_action("filterNodes", {"filter": match, "options": options or {}})
+
+    def clear_filter(self) -> None:
+        """Remove an active filter and show every node again."""
+        self._send_tree_action("clearFilter", None)
 
     def batch_update(self, actions: list[dict[str, Any]]) -> None:
         """Execute multiple tree actions atomically.

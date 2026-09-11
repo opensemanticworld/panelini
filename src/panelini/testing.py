@@ -23,11 +23,30 @@ Point = tuple[float, float]
 
 
 def free_port() -> int:
-    """Return a free localhost TCP port (used to serve Panel apps in tests)."""
+    """Return a free localhost TCP port (used to serve Panel apps in tests).
+
+    Call this per served app, never a fixed port. Under ``pytest -n auto`` the
+    tests of one module can land on different workers, and each of those workers
+    imports the module and serves its own copy of the app; a fixed port would
+    have them race to bind it, leaving the losers driving Python objects no
+    browser is attached to.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(("", 0))
         return int(s.getsockname()[1])
+
+
+def stop_server(server: Any) -> None:
+    """Stop a threaded ``pn.serve()`` and wait for its thread to die.
+
+    ``stop()`` only schedules the shutdown, so the thread is still alive when it
+    returns. A following ``pn.state.reset()`` would then call ``stop()`` again on
+    that live thread and raise "Thread already stopping"; joining first makes the
+    teardown deterministic.
+    """
+    server.stop()
+    server.join()
 
 
 def disable_panelini_backgrounds() -> None:
@@ -322,5 +341,11 @@ def assemble_animation(
             loop=0,
             quality=quality,
             method=6,
+            # Let the encoder store a frame as a difference from the one before it
+            # rather than whole. A UI clip is mostly a page that is not moving, and
+            # measured over the three tanstack clips this halves the file at identical
+            # quality: 305 kB to 158 kB for the explorer at 900 px. It costs encode
+            # time, which a recording run has and a reader does not.
+            minimize_size=True,
         )
     return len(kept)

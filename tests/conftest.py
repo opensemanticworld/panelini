@@ -8,6 +8,10 @@ normal run the marker is inert. Run with ``--record-media`` to record each marke
 test as a Playwright video and convert it (in ``pytest_sessionfinish``, after the
 video is flushed) to a small animated WebP / GIF, a screenshot, or an MP4, written
 to ``docs/_static/media/<area>/<slug>/<role>.<ext>``.
+
+``width`` and ``quality`` on the marker are the size budget: both default to what
+they defaulted to before they existed, so nothing already recorded changes, and a
+``quality`` on a screenshot writes it as a lossy WebP rather than a PNG.
 """
 
 from __future__ import annotations
@@ -62,9 +66,11 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
-        "media(role, capture='gif', name=None, viewport=None): record docs media. "
-        "capture is 'gif'|'video'|'screenshot' with optional timing: '@S' from S to "
-        "end, '@S:E' a range, '@:E' up to E; screenshot takes the frame nearest S.",
+        "media(role, capture='gif', name=None, viewport=None, width=None, quality=None): "
+        "record docs media. capture is 'gif'|'video'|'screenshot' with optional timing: "
+        "'@S' from S to end, '@S:E' a range, '@:E' up to E; screenshot takes the frame "
+        "nearest S. width caps the output width, quality is the lossy setting and turns "
+        "a screenshot into a WebP.",
     )
     config._media_jobs = []
     if config.getoption("--record-media"):
@@ -197,6 +203,7 @@ def _media_record(request):
     Browser.new_context = _recording_new_context
 
     page = request.getfixturevalue("page")
+
     restore_glide = None
     if animate:
         # Cursor + glide only for animations; keep screenshots cursor-free.
@@ -226,6 +233,8 @@ def _media_record(request):
             "role": (m.args[0] if m.args else m.kwargs.get("role", "overview")),
             "capture": (m.args[1] if len(m.args) > 1 else m.kwargs.get("capture", "gif")),
             "name": m.kwargs.get("name"),
+            "width": m.kwargs.get("width"),
+            "quality": m.kwargs.get("quality"),
         }
         for m in request.node.iter_markers("media")
     ]
@@ -285,7 +294,7 @@ def _parse_capture(spec: str) -> tuple[str, float | None, float | None]:
     return kind or "gif", start, end
 
 
-def _media_target(test_path: str, role: str, name: str | None, kind: str, fmt: str) -> Path:
+def _media_target(test_path: str, role: str, name: str | None, kind: str, fmt: str, lossy: bool = False) -> Path:
     parts = Path(test_path).resolve().parts
     rel = parts[parts.index("tests") + 1 :]
     area = rel[1] if rel and rel[0] == "panels" else (rel[0] if rel else "misc")
@@ -295,7 +304,11 @@ def _media_target(test_path: str, role: str, name: str | None, kind: str, fmt: s
     # for several examples (the AI chat ones share a module), and tying the override to
     # ``feature`` silently produced module-named files for the overview clip.
     slug = name or module_slug
-    ext = {"screenshot": "png", "video": "mp4"}.get(kind, "gif" if fmt == "gif" else "webp")
+    # A still is a PNG unless a ``quality`` asked for a lossy one. The frames come out
+    # of a lossy video, so a dense page arrives carrying compression noise in every
+    # flat area, and a PNG has to store that noise exactly: measured at 733 kB for a
+    # 1400x800 treegrid against 51 kB for the same frame as a WebP.
+    ext = {"screenshot": "webp" if lossy else "png", "video": "mp4"}.get(kind, "gif" if fmt == "gif" else "webp")
     return DOCS_MEDIA / area / f"{slug}_{role}.{ext}"
 
 
@@ -335,13 +348,17 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
 
     for m in job["markers"]:
         kind, start, end = _parse_capture(m["capture"])
-        target = _media_target(job["path"], m["role"], m["name"], kind, fmt)
+        width, quality = m.get("width"), m.get("quality")
+        target = _media_target(job["path"], m["role"], m["name"], kind, fmt, lossy=quality is not None)
         window = [(t, fr) for (t, fr) in frames if (start is None or t >= start) and (end is None or t <= end)]
         window = window or frames
         if kind == "screenshot":
             _, fr = min(window, key=lambda tf: abs(tf[0] - start)) if start is not None else window[-1]
             target.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(fr).convert("RGB").save(target)
+            still = Image.fromarray(fr).convert("RGB")
+            if width and still.width > width:
+                still = still.resize((width, round(still.height * width / still.width)), Image.Resampling.LANCZOS)
+            still.save(target, **({"quality": quality, "method": 6} if quality is not None else {}))
         elif kind == "video":
             _transcode(video, target, start, end)
         else:  # animation (gif/webp)
@@ -359,7 +376,8 @@ def _emit_job(job: dict, *, fmt: str, keep_video: bool) -> None:
                 # shared-server tests that navigate their page to about:blank at teardown.
                 hold = max(1, round(TAIL_HOLD_MS / (1000 / TARGET_FPS)))
                 imgs.extend([imgs[-1]] * hold)
-            assemble_animation(imgs, target, duration_ms=round(1000 / TARGET_FPS), fmt=fmt)
+            sized = {k: v for k, v in (("width", width), ("quality", quality)) if v is not None}
+            assemble_animation(imgs, target, duration_ms=round(1000 / TARGET_FPS), fmt=fmt, **sized)
         size_kb = target.stat().st_size / 1024 if target.exists() else 0
         print(f"[media] {target.relative_to(REPO_ROOT)} ({size_kb:.0f} kB)")
 

@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.visnetwork_json_data_min import nodes, vis
-from panelini.testing import node_dom_pos, vn_wait
+from panelini.testing import node_dom_pos, stop_server, vn_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -83,4 +83,4 @@ def test_json_data_tooltip(page: Page, port):
         time.sleep(0.1)
     assert tooltip.is_visible()
 
-    server.stop()
+    stop_server(server)

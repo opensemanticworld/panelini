@@ -1,0 +1,19 @@
+# {py:mod}`panelini.panels.tanstack.table`
+
+```{py:module} panelini.panels.tanstack.table
+```
+
+```{autodoc2-docstring} panelini.panels.tanstack.table
+:allowtitles:
+```
+
+## Submodules
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+panelini.panels.tanstack.table.tree
+panelini.panels.tanstack.table.table
+panelini.panels.tanstack.table.icons
+```

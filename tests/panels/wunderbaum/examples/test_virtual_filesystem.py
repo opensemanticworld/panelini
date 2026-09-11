@@ -7,17 +7,16 @@ import pytest
 from playwright.sync_api import FloatRect, Page
 
 from examples.panels.wunderbaum.virtual_filesystem import app, fs_to_tree_source, tree
-from panelini.testing import drag, wait_until, wb_title_center, wb_wait
-
-_PORT = 6430
+from panelini.testing import drag, free_port, wait_until, wb_title_center, wb_wait
 
 
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the virtual filesystem example once for the whole module."""
-    server = pn.serve(app, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     # kill_all_servers() (not server.stop()) so panel's own server/thread
     # registry is cleared too - a bare .stop() leaves a stale entry that a
     # later, unrelated test's pn.state.reset() can trip over.
@@ -38,7 +37,7 @@ def ready_page(browser, panel_server):
     tree.source = fs_to_tree_source()
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     wb_wait(page)
     yield page
     page.goto("about:blank")

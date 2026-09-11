@@ -86,7 +86,7 @@
 
 ````
 
-````{py:method} get_response(user_message: str, stream: bool = True) -> str | collections.abc.AsyncGenerator[str, None]
+````{py:method} get_response(user_message: str, stream: bool = True, history: list[langchain_core.messages.BaseMessage] | None = None) -> str | collections.abc.AsyncGenerator[str, None]
 :canonical: panelini.panels.ai.utils.ai_interface.AiInterface.get_response
 :async:
 
@@ -95,7 +95,7 @@
 
 ````
 
-````{py:method} get_response_with_tools(user_message: str) -> dict[str, typing.Any]
+````{py:method} get_response_with_tools(user_message: str, history: list[langchain_core.messages.BaseMessage] | None = None) -> dict[str, typing.Any]
 :canonical: panelini.panels.ai.utils.ai_interface.AiInterface.get_response_with_tools
 :async:
 
