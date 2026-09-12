@@ -58,6 +58,15 @@ class MonacoEditor(AnyWidgetComponent):
             "so the most permissive setting among the editors on the page wins."
         ),
     )
+    enable_schema_request = param.Boolean(
+        default=False,
+        doc=(
+            "Let Monaco fetch schemas over the network: a buffer's `$schema` pointer and any "
+            "remote `$ref` inside a schema resolve live (CORS permitting) instead of only "
+            "against `schema_store`. Page-wide, like the other jsonDefaults settings: one "
+            "editor enabling it enables it for all."
+        ),
+    )
     theme = param.Selector(default="vs", objects=["vs", "vs-dark", "hc-black", "hc-light"])
     read_only = param.Boolean(default=False)
     options = param.Dict(default={}, doc="Extra monaco.editor.create options, merged last.")
