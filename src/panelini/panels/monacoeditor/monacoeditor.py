@@ -38,8 +38,28 @@ class MonacoEditor(AnyWidgetComponent):
         _esm = 'export { render } from "monacoeditor-bundle";'
         _importmap: ClassVar = {"imports": {"monacoeditor-bundle": _BUNDLE_URL}}
 
+    # Monaco tracks list focus through document.activeElement, which a shadow root retargets,
+    # so a suggest row ends up with the focused-row *foreground* (white) while the matching
+    # focus *background* rule never applies: white text on the widget's near-white ground.
+    # Pinning both sides of each state keeps every row readable whatever the focus tracking
+    # concluded.
+    _SUGGEST_CONTRAST_CSS: ClassVar = """
+.monaco-editor .suggest-widget .monaco-list-row {
+  color: var(--vscode-editorSuggestWidget-foreground, #000000);
+}
+.monaco-editor .suggest-widget .monaco-list-row.focused {
+  color: var(--vscode-editorSuggestWidget-selectedForeground, #ffffff);
+  background-color: var(--vscode-editorSuggestWidget-selectedBackground, #0060c0);
+}
+.monaco-editor .suggest-widget .monaco-list-row .details-label,
+.monaco-editor .suggest-widget .suggest-details {
+  color: var(--vscode-editorSuggestWidget-foreground, #333333);
+}
+"""
+
     _stylesheets: ClassVar = [
         (bundled_assets_dir / "monacoeditor.css").read_text(encoding="utf-8"),
+        _SUGGEST_CONTRAST_CSS,
     ]
 
     value = param.String(default="", doc="Editor text, synced from the browser.")
