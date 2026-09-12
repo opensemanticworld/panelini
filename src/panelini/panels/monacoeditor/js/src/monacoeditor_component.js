@@ -122,7 +122,22 @@ const schemaRequests = new Map();
 const schemaFetch = new Map();
 let modelSeq = 0;
 
+// Registrations arrive in a burst (four settings per editor, any number of editors on the
+// page), and both language services treat every options update as a reset - monaco-yaml
+// restarts its worker each time. Applied unbatched, a page of editors spends minutes
+// re-initialising; coalesced, the burst costs one update.
+let syncScheduled = false;
+
 function syncSchemas() {
+  if (syncScheduled) return;
+  syncScheduled = true;
+  setTimeout(() => {
+    syncScheduled = false;
+    applySchemas();
+  }, 50);
+}
+
+function applySchemas() {
   const levels = [...schemaRequests.values()];
   const fetchEnabled = [...schemaFetch.values()].some(Boolean);
   // The registration URI must be fragment-free: yaml-language-server reads a fragment as a
