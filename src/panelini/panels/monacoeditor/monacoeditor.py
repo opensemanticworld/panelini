@@ -1,6 +1,7 @@
 """Entrypoint of monacoeditor panel."""
 
 import json
+import os
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -12,12 +13,30 @@ pn.extension()
 
 bundled_assets_dir = Path(__file__).parent / "js" / "dist"
 
+#: The commit whose committed ``js/dist`` bundle the import map points at. Update when the
+#: bundle is rebuilt (the pin must name a commit that already contains the new dist).
+_BUNDLE_REF = "4ba35bbb050cae5aa7f3f0a29a17f85417a772fe"
+_BUNDLE_CDN = (
+    "https://cdn.jsdelivr.net/gh/opensemanticworld/panelini"
+    f"@{_BUNDLE_REF}/src/panelini/panels/monacoeditor/js/dist/monacoeditor.mjs"
+)
+#: Override with a self-hosted URL, or "inline" to embed the module text in the document
+#: (offline use). Inline costs dearly with many editors: ``_esm`` is a per-instance model
+#: property, so a page with 24 editors ships the 6.6 MB bundle 24 times.
+_BUNDLE_URL = os.environ.get("PANELINI_MONACO_BUNDLE", _BUNDLE_CDN)
+
 
 class MonacoEditor(AnyWidgetComponent):
     """A code and JSON editor using
     https://github.com/microsoft/monaco-editor"""
 
-    _esm = (bundled_assets_dir / "monacoeditor.mjs").read_text(encoding="utf-8")
+    if _BUNDLE_URL == "inline":
+        _esm = (bundled_assets_dir / "monacoeditor.mjs").read_text(encoding="utf-8")
+    else:
+        # A shim that re-exports the real module: the browser fetches and caches the bundle
+        # once, and the document carries these two lines per editor instead of the bundle.
+        _esm = 'export { render } from "monacoeditor-bundle";'
+        _importmap: ClassVar = {"imports": {"monacoeditor-bundle": _BUNDLE_URL}}
 
     _stylesheets: ClassVar = [
         (bundled_assets_dir / "monacoeditor.css").read_text(encoding="utf-8"),
