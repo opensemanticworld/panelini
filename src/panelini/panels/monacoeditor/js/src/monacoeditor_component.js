@@ -31,6 +31,19 @@ function injectCodiconFont() {
   document.head.appendChild(style);
 }
 
+// With schema fetching enabled, monaco may ask for a buffer's relative $schema in the
+// moment before the debounced schema store lands. That resolves against the models'
+// inmemory:// base, and Chrome reports the unsupported scheme as a console error even
+// though the store answers 50 ms later. Rejecting before the native call keeps the console
+// clean; real http(s) requests pass through untouched.
+const nativeFetch = self.fetch.bind(self);
+self.fetch = (resource, ...rest) => {
+  if (String(resource?.url ?? resource).startsWith("inmemory:")) {
+    return Promise.reject(new TypeError("inmemory:// resolves from the schema store, not by fetch"));
+  }
+  return nativeFetch(resource, ...rest);
+};
+
 self.MonacoEnvironment = {
   getWorker(_, label) {
     if (label === "json") return new JsonWorker();
