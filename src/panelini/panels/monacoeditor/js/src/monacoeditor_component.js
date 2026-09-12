@@ -207,6 +207,9 @@ export function render({ model, el }) {
     ...(model.get("options") || {}),
   });
 
+  model.set("ready", true);
+  model.save_changes();
+
   // Monaco's global mouse-leave monitor tests viewDomNode.contains(event.target) on a
   // document listener. Inside a shadow root the event retargets to the host, so that is
   // always false and every mouse move is treated as leaving the editor, which cancels the

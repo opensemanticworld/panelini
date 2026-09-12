@@ -69,6 +69,15 @@ class MonacoEditor(AnyWidgetComponent):
     )
     theme = param.Selector(default="vs", objects=["vs", "vs-dark", "hc-black", "hc-light"])
     read_only = param.Boolean(default=False)
+    ready = param.Boolean(
+        default=False,
+        doc=(
+            "Set from the browser once the editor exists. Monaco boots noticeably later than "
+            "the page (the bundle is large), so a host that wants a loading indicator needs "
+            "this signal rather than the page's own load event. Same convention as "
+            "JsonEditor.ready."
+        ),
+    )
     options = param.Dict(default={}, doc="Extra monaco.editor.create options, merged last.")
 
     # Sizing modes that already hand Monaco a height to fill. Pinning a height on top of

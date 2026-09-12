@@ -109892,7 +109892,7 @@ function h5e({ model: s, el: e }) {
     scrollBeyondLastLine: !1,
     ...s.get("options") || {}
   });
-  t.addEventListener("mousemove", (c) => c.stopPropagation());
+  s.set("ready", !0), s.save_changes(), t.addEventListener("mousemove", (c) => c.stopPropagation());
   let l = !1, r = null;
   return n.onDidChangeContent(() => {
     l || (clearTimeout(r), r = setTimeout(() => {
