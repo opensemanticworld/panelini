@@ -28,7 +28,24 @@ class MonacoEditor(AnyWidgetComponent):
     json_schema = param.Dict(
         default=None,
         allow_None=True,
-        doc="JSON schema validated against the buffer. None disables validation.",
+        doc=(
+            "JSON schema validated against the buffer. None disables validation. Ignored by "
+            "Monaco when the buffer itself declares `$schema`, which always wins; register "
+            "the schema under that URI in `schema_store` for such documents."
+        ),
+    )
+    schema_store = param.Dict(
+        default=None,
+        allow_None=True,
+        doc=(
+            "Schemas keyed by the URI a buffer's own `$schema` may name, resolved locally "
+            "since Monaco never fetches. A buffer that declares `$schema` bypasses "
+            "`json_schema` entirely, so without a store entry under that URI it gets no "
+            "validation and no completion at all. Relative keys resolve against the "
+            "in-memory folder the editor models live in, mirroring how the JSON service "
+            "resolves a relative `$schema`. The store is page-wide; on a key registered by "
+            "several editors the last one wins."
+        ),
     )
     schema_request = param.Selector(
         default="warning",

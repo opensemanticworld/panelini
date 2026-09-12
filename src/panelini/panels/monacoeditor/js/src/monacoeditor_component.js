@@ -4,6 +4,9 @@
 // `?worker` so the workers are embedded and dist stays self-contained.
 import "monaco-editor/esm/vs/editor/editor.all.js";
 import "monaco-editor/esm/vs/language/json/monaco.contribution.js";
+// Monarch highlighting only: YAML gets colors but no schema service, which the JSON side
+// provides for the same document.
+import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker&inline";
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker&inline";
@@ -30,9 +33,69 @@ self.MonacoEnvironment = {
   },
 };
 
+// Monaco ships no Turtle language, so a small Monarch tokenizer supplies the highlighting:
+// IRIs, prefixed names, literals with language tags or datatypes, and the @prefix/@base
+// directives cover what serializers emit.
+let turtleRegistered = false;
+
+function registerTurtle() {
+  if (turtleRegistered) return;
+  turtleRegistered = true;
+  monaco.languages.register({ id: "turtle", extensions: [".ttl"], aliases: ["Turtle"] });
+  monaco.languages.setLanguageConfiguration("turtle", {
+    comments: { lineComment: "#" },
+    brackets: [["[", "]"], ["(", ")"]],
+    autoClosingPairs: [
+      { open: "[", close: "]" },
+      { open: "(", close: ")" },
+      { open: '"', close: '"' },
+      { open: "<", close: ">" },
+    ],
+  });
+  monaco.languages.setMonarchTokensProvider("turtle", {
+    defaultToken: "",
+    tokenizer: {
+      root: [
+        [/#.*$/, "comment"],
+        [/@(prefix|base)\b/, "keyword"],
+        [/\b(a|true|false)\b/, "keyword"],
+        [/<[^<>"{}|^`\s]*>/, "type.identifier"],
+        [/"""/, { token: "string", next: "@longString" }],
+        [/"(?:[^"\\]|\\.)*"(?:\^\^|@[a-zA-Z][a-zA-Z0-9-]*)?/, "string"],
+        [/[+-]?\d+(\.\d+)?([eE][+-]?\d+)?/, "number"],
+        [/[A-Za-z_][\w.-]*:[\w.%-]*/, "identifier"],
+        [/:[\w.%-]+/, "identifier"],
+        [/[;,.\[\]()]/, "delimiter"],
+      ],
+      longString: [
+        [/"""/, { token: "string", next: "@pop" }],
+        [/./, "string"],
+      ],
+    },
+  });
+}
+
 // jsonDefaults is a page-wide singleton, so every editor's schema is tracked here and
 // scoped to that editor's model URI via fileMatch.
 const schemas = new Map();
+// Schemas registered by the URI a document's own `$schema` names, because that in-document
+// pointer takes precedence over any fileMatch association: without a local copy under that
+// URI the buffer gets no schema at all, since nothing is ever fetched. Keyed per editor so
+// disposal removes exactly what one editor contributed; a relative pointer resolves against
+// the in-memory folder the models live in, mirroring how the JSON service resolves it.
+const SCHEMA_STORE_BASE = "inmemory://panelini/";
+const schemaStores = new Map();
+
+function storeEntries() {
+  const merged = new Map();
+  for (const store of schemaStores.values()) {
+    for (const [key, schema] of Object.entries(store || {})) {
+      const uri = /^[a-z][a-z0-9+.-]*:/i.test(key) ? key : new URL(key, SCHEMA_STORE_BASE).href;
+      merged.set(uri, schema);
+    }
+  }
+  return merged;
+}
 // schemaRequest has no per-editor equivalent either, and unlike schemas it cannot be
 // scoped by fileMatch, so it is merged: the most permissive level on the page wins.
 const SCHEMA_REQUEST_LEVELS = ["ignore", "warning", "error"];
@@ -45,11 +108,14 @@ function syncSchemas() {
     validate: true,
     enableSchemaRequest: false,
     schemaRequest: SCHEMA_REQUEST_LEVELS.find((level) => levels.includes(level)) ?? "warning",
-    schemas: [...schemas].map(([uri, schema]) => ({
-      uri: `${uri}#schema`,
-      fileMatch: [uri],
-      schema,
-    })),
+    schemas: [
+      ...[...schemas].map(([uri, schema]) => ({
+        uri: `${uri}#schema`,
+        fileMatch: [uri],
+        schema,
+      })),
+      ...[...storeEntries()].map(([uri, schema]) => ({ uri, schema })),
+    ],
   });
 }
 
@@ -71,8 +137,18 @@ function setSchema(uri, schema) {
   syncSchemas();
 }
 
+function setSchemaStore(uri, store) {
+  if (store && Object.keys(store).length) {
+    schemaStores.set(uri, store);
+  } else {
+    schemaStores.delete(uri);
+  }
+  syncSchemas();
+}
+
 export function render({ model, el }) {
   injectCodiconFont();
+  registerTurtle();
   el.style.height = "100%";
   const container = document.createElement("div");
   container.style.cssText = "width:100%;height:100%;min-height:150px";
@@ -81,6 +157,7 @@ export function render({ model, el }) {
   const uri = monaco.Uri.parse(`inmemory://panelini/editor-${modelSeq++}.json`);
   const textModel = monaco.editor.createModel(model.get("value"), model.get("language"), uri);
   setSchema(uri.toString(), model.get("json_schema"));
+  setSchemaStore(uri.toString(), model.get("schema_store"));
   setSchemaRequest(uri.toString(), model.get("schema_request"));
 
   const editor = monaco.editor.create(container, {
@@ -119,6 +196,7 @@ export function render({ model, el }) {
     applying = false;
   });
   model.on("change:json_schema", () => setSchema(uri.toString(), model.get("json_schema")));
+  model.on("change:schema_store", () => setSchemaStore(uri.toString(), model.get("schema_store")));
   model.on("change:schema_request", () => setSchemaRequest(uri.toString(), model.get("schema_request")));
   model.on("change:language", () => monaco.editor.setModelLanguage(textModel, model.get("language")));
   model.on("change:theme", () => monaco.editor.setTheme(model.get("theme")));
@@ -129,6 +207,7 @@ export function render({ model, el }) {
     editor.dispose();
     textModel.dispose();
     setSchema(uri.toString(), null);
+    setSchemaStore(uri.toString(), null);
     setSchemaRequest(uri.toString(), null);
   };
 }
