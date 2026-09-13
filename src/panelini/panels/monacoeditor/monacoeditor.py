@@ -55,6 +55,20 @@ class MonacoEditor(AnyWidgetComponent):
 .monaco-editor .suggest-widget .suggest-details {
   color: var(--vscode-editorSuggestWidget-foreground, #333333);
 }
+/* Monaco's suggest rows use the generic class names .main, .left and .right, and a host
+   app's global stylesheets reach into the shadow root (Panel distributes them there). A
+   host rule like `.main { padding-top: 17px }` pushed every label out of its 16px row, so
+   the box properties monaco relies on are pinned. */
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main,
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main > .left,
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main > .right {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  align-items: center !important;
+}
 """
 
     _stylesheets: ClassVar = [
