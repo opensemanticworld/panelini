@@ -15,7 +15,7 @@ bundled_assets_dir = Path(__file__).parent / "js" / "dist"
 
 #: The commit whose committed ``js/dist`` bundle the import map points at. Update when the
 #: bundle is rebuilt (the pin must name a commit that already contains the new dist).
-_BUNDLE_REF = "6509388cda31837f54ecc20371e0a8a18dfc7422"
+_BUNDLE_REF = "a748bb7cbbab8798b6abe8e858e013968dbc35d6"
 _BUNDLE_CDN = (
     "https://cdn.jsdelivr.net/gh/opensemanticworld/panelini"
     f"@{_BUNDLE_REF}/src/panelini/panels/monacoeditor/js/dist/monacoeditor.mjs"
