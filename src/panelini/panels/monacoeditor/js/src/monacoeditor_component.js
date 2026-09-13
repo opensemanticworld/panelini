@@ -52,6 +52,14 @@ self.MonacoEnvironment = {
   },
 };
 
+// The ESM build never assigns the global the AMD loader would, leaving outside automation
+// no handle on the API (MonacoEnvironment.globalAPI only works when it is set before
+// monaco's module evaluates, which import hoisting makes unreliable). Assigned, not
+// spread-merged: this bundle carries its own complete monaco.
+if (!self.monaco) {
+  self.monaco = monaco;
+}
+
 // configureMonacoYaml registers global providers, exactly like jsonDefaults; created once
 // and fed by the same schema maps.
 let monacoYaml = null;
