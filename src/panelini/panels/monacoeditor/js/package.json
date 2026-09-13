@@ -5,7 +5,8 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
-    "monaco-editor": "0.52.2"
+    "monaco-editor": "0.52.2",
+    "monaco-yaml": "^5.5.1"
   },
   "scripts": {
     "build": "vite build --config vite.config.js",

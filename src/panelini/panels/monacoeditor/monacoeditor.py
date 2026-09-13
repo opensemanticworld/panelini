@@ -1,6 +1,7 @@
 """Entrypoint of monacoeditor panel."""
 
 import json
+import os
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -12,15 +13,67 @@ pn.extension()
 
 bundled_assets_dir = Path(__file__).parent / "js" / "dist"
 
+#: The commit whose committed ``js/dist`` bundle the import map points at. Update when the
+#: bundle is rebuilt (the pin must name a commit that already contains the new dist).
+_BUNDLE_REF = "4ba35bbb050cae5aa7f3f0a29a17f85417a772fe"
+_BUNDLE_CDN = (
+    "https://cdn.jsdelivr.net/gh/opensemanticworld/panelini"
+    f"@{_BUNDLE_REF}/src/panelini/panels/monacoeditor/js/dist/monacoeditor.mjs"
+)
+#: Override with a self-hosted URL, or "inline" to embed the module text in the document
+#: (offline use). Inline costs dearly with many editors: ``_esm`` is a per-instance model
+#: property, so a page with 24 editors ships the 6.6 MB bundle 24 times.
+_BUNDLE_URL = os.environ.get("PANELINI_MONACO_BUNDLE", _BUNDLE_CDN)
+
 
 class MonacoEditor(AnyWidgetComponent):
     """A code and JSON editor using
     https://github.com/microsoft/monaco-editor"""
 
-    _esm = (bundled_assets_dir / "monacoeditor.mjs").read_text(encoding="utf-8")
+    if _BUNDLE_URL == "inline":
+        _esm = (bundled_assets_dir / "monacoeditor.mjs").read_text(encoding="utf-8")
+    else:
+        # A shim that re-exports the real module: the browser fetches and caches the bundle
+        # once, and the document carries these two lines per editor instead of the bundle.
+        _esm = 'export { render } from "monacoeditor-bundle";'
+        _importmap: ClassVar = {"imports": {"monacoeditor-bundle": _BUNDLE_URL}}
+
+    # Monaco tracks list focus through document.activeElement, which a shadow root retargets,
+    # so a suggest row ends up with the focused-row *foreground* (white) while the matching
+    # focus *background* rule never applies: white text on the widget's near-white ground.
+    # Pinning both sides of each state keeps every row readable whatever the focus tracking
+    # concluded.
+    _SUGGEST_CONTRAST_CSS: ClassVar = """
+.monaco-editor .suggest-widget .monaco-list-row {
+  color: var(--vscode-editorSuggestWidget-foreground, #000000);
+}
+.monaco-editor .suggest-widget .monaco-list-row.focused {
+  color: var(--vscode-editorSuggestWidget-selectedForeground, #ffffff);
+  background-color: var(--vscode-editorSuggestWidget-selectedBackground, #0060c0);
+}
+.monaco-editor .suggest-widget .monaco-list-row .details-label,
+.monaco-editor .suggest-widget .suggest-details {
+  color: var(--vscode-editorSuggestWidget-foreground, #333333);
+}
+/* Monaco's suggest rows use the generic class names .main, .left and .right, and a host
+   app's global stylesheets reach into the shadow root (Panel distributes them there). A
+   host rule like `.main { padding-top: 17px }` pushed every label out of its 16px row, so
+   the box properties monaco relies on are pinned. */
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main,
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main > .left,
+.monaco-editor .suggest-widget .monaco-list-row .contents > .main > .right {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  align-items: center !important;
+}
+"""
 
     _stylesheets: ClassVar = [
         (bundled_assets_dir / "monacoeditor.css").read_text(encoding="utf-8"),
+        _SUGGEST_CONTRAST_CSS,
     ]
 
     value = param.String(default="", doc="Editor text, synced from the browser.")
@@ -28,7 +81,24 @@ class MonacoEditor(AnyWidgetComponent):
     json_schema = param.Dict(
         default=None,
         allow_None=True,
-        doc="JSON schema validated against the buffer. None disables validation.",
+        doc=(
+            "JSON schema validated against the buffer. None disables validation. Ignored by "
+            "Monaco when the buffer itself declares `$schema`, which always wins; register "
+            "the schema under that URI in `schema_store` for such documents."
+        ),
+    )
+    schema_store = param.Dict(
+        default=None,
+        allow_None=True,
+        doc=(
+            "Schemas keyed by the URI a buffer's own `$schema` may name, resolved locally "
+            "since Monaco never fetches. A buffer that declares `$schema` bypasses "
+            "`json_schema` entirely, so without a store entry under that URI it gets no "
+            "validation and no completion at all. Relative keys resolve against the "
+            "in-memory folder the editor models live in, mirroring how the JSON service "
+            "resolves a relative `$schema`. The store is page-wide; on a key registered by "
+            "several editors the last one wins."
+        ),
     )
     schema_request = param.Selector(
         default="warning",
@@ -41,8 +111,26 @@ class MonacoEditor(AnyWidgetComponent):
             "so the most permissive setting among the editors on the page wins."
         ),
     )
+    enable_schema_request = param.Boolean(
+        default=False,
+        doc=(
+            "Let Monaco fetch schemas over the network: a buffer's `$schema` pointer and any "
+            "remote `$ref` inside a schema resolve live (CORS permitting) instead of only "
+            "against `schema_store`. Page-wide, like the other jsonDefaults settings: one "
+            "editor enabling it enables it for all."
+        ),
+    )
     theme = param.Selector(default="vs", objects=["vs", "vs-dark", "hc-black", "hc-light"])
     read_only = param.Boolean(default=False)
+    ready = param.Boolean(
+        default=False,
+        doc=(
+            "Set from the browser once the editor exists. Monaco boots noticeably later than "
+            "the page (the bundle is large), so a host that wants a loading indicator needs "
+            "this signal rather than the page's own load event. Same convention as "
+            "JsonEditor.ready."
+        ),
+    )
     options = param.Dict(default={}, doc="Extra monaco.editor.create options, merged last.")
 
     # Sizing modes that already hand Monaco a height to fill. Pinning a height on top of
