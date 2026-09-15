@@ -254,8 +254,13 @@ def test_mirrored_activation_does_not_loop(ready_page: Page):
 
     Each tree's activate handler sets the other tree's active node with
     ``no_events=True``. Without that suppression the two calls would
-    retrigger each other without end; the event count bound is what proves
-    they settle instead.
+    retrigger each other without end.
+
+    The event bound below is a smoke check over the whole path, not the
+    proof. A bound only shows that no loop completed inside the wait. What
+    rules the loop out is that ``no_events=True`` emits no event at all,
+    which ``test_set_active_node_with_no_events_emits_nothing`` asserts
+    directly: with nothing emitted there is nothing left to recur on.
     """
     page = ready_page
     _events.clear()
