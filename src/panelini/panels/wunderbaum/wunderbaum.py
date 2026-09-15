@@ -292,13 +292,16 @@ class Wunderbaum(AnyWidgetComponent):
         """
         self._send_tree_action("selectNode", {"key": key, "selected": selected})
 
-    def set_active_node(self, key: str) -> None:
+    def set_active_node(self, key: str, no_events: bool = False) -> None:
         """Set the active (focused) node.
 
         Args:
             key: Key of the node to activate.
+            no_events: Suppress the ``activate`` event that the activation would
+                otherwise produce. Set this when the call is programmatic and the
+                handler that triggered it would otherwise be entered again.
         """
-        self._send_tree_action("setActiveNode", {"key": key})
+        self._send_tree_action("setActiveNode", {"key": key, "noEvents": no_events})
 
     def start_edit_title(self, key: str) -> None:
         """Activate a node and open its inline title editor.
