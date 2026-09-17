@@ -40,6 +40,7 @@ def _place_cursor_in_object(page: Page):
     page.keyboard.press("End")
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_schema_violation_is_flagged(page: Page, app):
     app.data_editor.set_json({"name": "Ada", "age": "not-an-int"})
     page.locator(MARKER).first.wait_for(timeout=15000)

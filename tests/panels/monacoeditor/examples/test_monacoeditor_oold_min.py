@@ -87,6 +87,7 @@ def test_schema_request_warning_reports_the_unresolvable_pointer(page: Page, app
     page.locator(SCHEMA_EDITOR).locator(MARKER).first.wait_for(timeout=15000)
 
 
+@pytest.mark.media(role="feature", capture="screenshot")
 def test_editors_fill_the_viewport_height(page: Page, app):
     """Both editors stretch to the window instead of sitting at the 400px default."""
     viewport = page.viewport_size
