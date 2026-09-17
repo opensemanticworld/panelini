@@ -1,5 +1,6 @@
 """Test cases for the Panelini monacoeditor panel."""
 
+import importlib
 import json
 
 from panelini.panels.monacoeditor import MonacoEditor
@@ -62,3 +63,23 @@ def test_monacoeditor_retains_schema():
     schema = {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}
     editor = MonacoEditor(json_schema=schema)
     assert editor.json_schema == schema
+
+
+def test_monacoeditor_inline_bundle_embeds_module_text(monkeypatch):
+    """PANELINI_MONACO_BUNDLE=inline embeds the bundle text instead of the CDN shim.
+
+    The inline branch runs at class-definition time, so the module has to be reimported
+    with the environment set before MonacoEditor picks up the inlined ``_esm``.
+    """
+    from panelini.panels.monacoeditor import monacoeditor as module
+
+    bundle_text = (module.bundled_assets_dir / "monacoeditor.mjs").read_text(encoding="utf-8")
+    monkeypatch.setenv("PANELINI_MONACO_BUNDLE", "inline")
+    try:
+        importlib.reload(module)
+        assert module.MonacoEditor._esm == bundle_text
+        # The inline build carries the module text itself, so it needs no import map.
+        assert "_importmap" not in module.MonacoEditor.__dict__
+    finally:
+        monkeypatch.undo()
+        importlib.reload(module)
