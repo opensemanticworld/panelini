@@ -9,6 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.terminalmirror.terminalmirror_panel_min import app, terminal
+from panelini.testing import stop_server
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -32,4 +33,4 @@ def test_component(page: Page, port):
     # The terminal container stays visible after printing.
     assert page.locator(".xterm").first.is_visible()
 
-    server.stop()
+    stop_server(server)

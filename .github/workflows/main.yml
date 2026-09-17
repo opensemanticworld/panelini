@@ -60,7 +60,14 @@ jobs:
           fi
 
       - name: Run full tests including headless ui tests
-        run: uv run pytest -m "not portfolio" --cov --cov-config=pyproject.toml --cov-report=xml
+        # -n auto is one worker per vCPU: 4 on the ubuntu and windows runners, 3 on
+        # the macOS one. Every UI test serves its own app on its own free port, so
+        # they parallelise without sharing anything, and pytest-cov combines the
+        # workers' data before writing the report Codecov reads. The cap does not
+        # bind on a runner; it is here so `make test-full` matches this exactly on a
+        # workstation, where enough concurrent browsers starve the timing-sensitive
+        # UI tests.
+        run: uv run pytest -m "not portfolio" -n auto --maxprocesses=8 --cov --cov-config=pyproject.toml --cov-report=xml
 
       - name: Check typing
         run: uv run ty check

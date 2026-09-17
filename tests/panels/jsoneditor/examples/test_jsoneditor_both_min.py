@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.jsoneditor.jsoneditor_both_min import app, form_editor, tree_editor
-from panelini.testing import wait_until
+from panelini.testing import stop_server, wait_until
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -41,4 +41,4 @@ def test_both_editors(page: Page, port):
     assert tree_editor.value["name"] == "Sample A"
     assert tree_editor.value["unit"] == "mm"
 
-    server.stop()
+    stop_server(server)

@@ -8,7 +8,7 @@ import panel as pn
 import pytest
 from playwright.sync_api import Page, expect
 
-_PORT = 6300
+from panelini.testing import free_port, stop_server
 
 
 @pytest.fixture(scope="module")
@@ -17,10 +17,11 @@ def panel_server(mock_langchain):
     p1, p2 = mock_langchain
     with p1, p2:
         module = importlib.reload(importlib.import_module("examples.panels.ai.chat_multi_tab"))
-        server = pn.serve(module.app.servable(), port=_PORT, threaded=True, show=False)
+        port = free_port()
+        server = pn.serve(module.create_app, port=port, threaded=True, show=False)
         time.sleep(0.5)
-        yield server, _PORT
-        server.stop()
+        yield server, port
+        stop_server(server)
 
 
 @pytest.fixture(scope="module")
@@ -40,11 +41,22 @@ def ready_page(browser, panel_server):
     context.close()
 
 
+# Each AiChat sidebar carries its own setup/conversations tab pair; only the
+# linked Ingest/Digest headers belong to this test. Hidden panes report an
+# empty inner_text, so they drop out through the same filter.
+_INNER_TABS = {"⚙️", "💬", ""}
+
+
+def _tab_names(page: Page) -> list[str]:
+    """Return the linked tab names in DOM order, inner AiChat tabs excluded."""
+    tab_headers = page.locator(".bk-tab")
+    names = (tab_headers.nth(i).inner_text().strip() for i in range(tab_headers.count()))
+    return [name for name in names if name not in _INNER_TABS]
+
+
 def _unique_tab_names(page: Page) -> list[str]:
     """Return deduplicated tab names in DOM order."""
-    tab_headers = page.locator(".bk-tab")
-    all_names = [tab_headers.nth(i).inner_text() for i in range(tab_headers.count())]
-    return list(dict.fromkeys(all_names))
+    return list(dict.fromkeys(_tab_names(page)))
 
 
 def test_multi_tab_renders(ready_page: Page):
@@ -53,8 +65,7 @@ def test_multi_tab_renders(ready_page: Page):
     # Reset to first tab for test isolation
     page.locator(".bk-tab").first.click()
 
-    tab_headers = page.locator(".bk-tab")
-    all_names = [tab_headers.nth(i).inner_text() for i in range(tab_headers.count())]
+    all_names = _tab_names(page)
     unique_names = list(dict.fromkeys(all_names))
 
     # Get names of all tab headers (main + sidebar each have the same set)

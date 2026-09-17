@@ -5,7 +5,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.usecases.jsoneditor_visnetwork import app, visnetwork
-from panelini.testing import node_dom_pos, vn_wait, wait_until
+from panelini.testing import node_dom_pos, stop_server, vn_wait, wait_until
 
 
 @pytest.mark.media(role="overview", capture="gif", viewport=(1400, 820))
@@ -24,4 +24,4 @@ def test_click_node_edit_name(page: Page, port):
     name.fill("Peter")
     page.locator('[for="root[name]"]').first.click()  # blur -> commit -> graph relabels
     wait_until(lambda: visnetwork.nodes[0].get("label") == "Peter")
-    server.stop()
+    stop_server(server)

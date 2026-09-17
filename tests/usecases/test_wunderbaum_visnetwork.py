@@ -1,5 +1,6 @@
 # pytest test_wunderbaum_visnetwork.py --headed --slowmo 1000
 
+import contextlib
 import copy
 import time
 
@@ -23,9 +24,8 @@ from examples.usecases.wunderbaum_visnetwork import (
     vis_edge,
     vis_node,
 )
-from panelini.testing import drag, wait_until, wb_title_center, wb_wait
+from panelini.testing import drag, free_port, wait_until, wb_title_center, wb_wait
 
-_PORT = 6610
 _ORIGINAL_NODES = copy.deepcopy(NODES)
 _ORIGINAL_EDGES = copy.deepcopy(EDGES)
 _ORIGINAL_COUNTER = _counter["v"]
@@ -34,9 +34,10 @@ _ORIGINAL_COUNTER = _counter["v"]
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the combined tree+graph demo once for the whole module."""
-    server = pn.serve(app, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(app, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     pn.state.kill_all_servers()
 
 
@@ -58,7 +59,7 @@ def ready_page(browser, panel_server):
 
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     wb_wait(page)
     page.locator(".vis-network canvas").first.wait_for()
     yield page
@@ -208,6 +209,12 @@ def _find_in_source(source, key):
     return search(source)
 
 
+def _parent_in_source(key):
+    """Parent key of ``key`` in the server's copy of the tree, or None when absent."""
+    result = _find_in_source(tree.source, key)
+    return None if result is None else result[1]
+
+
 def _get_client_children(page, parent_key):
     """Get child keys of a node in the client-side wunderbaum tree."""
     return page.evaluate(
@@ -246,7 +253,14 @@ def test_dnd_move_node(ready_page: Page):
     src = page.locator(".wb-row .wb-title", has_text="Truck").first
     tgt = page.locator(".wb-row .wb-title", has_text="Animal").first
     src.drag_to(tgt)
-    wait_until(lambda: get_parent("Truck") == "Animal")
+    wait_until(lambda: get_parent("Truck") == "Animal", timeout=10)
+
+    # The server's copy of the tree arrives on a message of its own. The component
+    # sends the drop event straight away and defers `emitSource` by a task, so the
+    # data model having moved says nothing about `tree.source` having caught up.
+    # Wait for it and assert anyway, so a real failure still names the parent it found.
+    with contextlib.suppress(TimeoutError):
+        wait_until(lambda: _parent_in_source("Thing/Vehicle/Truck") == "Thing/Animal", timeout=10)
 
     # Server-side tree: Truck moved under Animal
     result = _find_in_source(

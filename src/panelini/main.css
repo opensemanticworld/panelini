@@ -20,6 +20,9 @@
   box-shadow: none;
   outline: none;
   overflow-y: auto;
+  /* reserve the scrollbar gutter so content width stays stable when the
+     scrollbar appears/disappears (tab switches, card collapse) */
+  scrollbar-gutter: stable;
   background-color: transparent;
   padding-top: var(--content-spacing);
 }
@@ -76,8 +79,24 @@ div.bk-btn-group button.bk-btn.bk-btn-default {
   display: none;
 }
 
-/* Hide dotted outline of buttons */
-button:focus,
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: color-mix(in srgb, var(--background-color) 60%, transparent);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* Hide dotted outline of buttons while one is held down.
+   `:focus` is deliberately not in here. This stylesheet is appended to
+   `panel.config.raw_css` and Panel puts it inside every component's shadow root, so
+   a `button:focus { outline: none !important }` reaches every button of every panel
+   and leaves a keyboard user with no way to see where they are. A browser draws its
+   own ring for a keyboard focus only, so there is nothing left to hide. */
 button:active {
   outline: none !important;
 }

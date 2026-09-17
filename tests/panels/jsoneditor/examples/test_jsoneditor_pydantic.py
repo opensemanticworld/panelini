@@ -9,7 +9,7 @@ from playwright.sync_api import Page
 from pydantic import BaseModel, Field
 
 from examples.panels.jsoneditor.jsoneditor_pydantic import PydanticEditor
-from panelini.testing import wait_until
+from panelini.testing import stop_server, wait_until
 
 
 class ASub(BaseModel):
@@ -55,7 +55,7 @@ def test_initial_value_displayed(page: Page, port, editor):
     assert page.locator("#root\\[x\\]").input_value() == str(a.x)
     assert page.locator("#root\\[y\\]").input_value() == str(a.y)
 
-    server.stop()
+    stop_server(server)
 
 
 def test_value_change_propagates_to_python(page: Page, port, editor):
@@ -73,4 +73,4 @@ def test_value_change_propagates_to_python(page: Page, port, editor):
 
     assert my_editor.value["x"] == 42
 
-    server.stop()
+    stop_server(server)

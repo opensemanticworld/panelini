@@ -10,7 +10,7 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.jsoneditor import JsonEditor
-from panelini.testing import wait_until
+from panelini.testing import stop_server, wait_until
 
 
 @pytest.mark.ui
@@ -34,4 +34,4 @@ def test_initial_value_not_reset_on_serve(page: Page, port):
     assert editor.ready, "JSONEditor did not become ready within 10 s"
     assert editor.value == initial_value, f"Value was reset on serve: expected {initial_value!r}, got {editor.value!r}"
 
-    server.stop()
+    stop_server(server)

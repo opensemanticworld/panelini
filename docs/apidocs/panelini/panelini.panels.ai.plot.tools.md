@@ -13,7 +13,7 @@
 :titlesonly:
 :maxdepth: 1
 
-panelini.panels.ai.plot.tools.osw_plot_tools
-panelini.panels.ai.plot.tools.osw_tools
 panelini.panels.ai.plot.tools.plot_tools
+panelini.panels.ai.plot.tools.osw_tools
+panelini.panels.ai.plot.tools.osw_plot_tools
 ```

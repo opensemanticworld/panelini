@@ -10,9 +10,8 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.ctrl_drag_duplicate import demo, panel
-from panelini.testing import node_dom_pos, vn_wait, wait_until
+from panelini.testing import free_port, node_dom_pos, vn_wait, wait_until
 
-_PORT = 6510
 _ORIGINAL_NODES = copy.deepcopy(demo.vis.nodes)
 _ORIGINAL_EDGES = copy.deepcopy(demo.vis.edges)
 
@@ -20,9 +19,10 @@ _ORIGINAL_EDGES = copy.deepcopy(demo.vis.edges)
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the ctrl-drag-duplicate demo once for the whole module."""
-    server = pn.serve(panel, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(panel, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     pn.state.kill_all_servers()
 
 
@@ -37,7 +37,7 @@ def ready_page(browser, panel_server):
     demo.vis.edges = copy.deepcopy(_ORIGINAL_EDGES)
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     vn_wait(page)
     yield page
     page.goto("about:blank")

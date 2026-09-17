@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.wunderbaum_table_min import tree
-from panelini.testing import wb_wait
+from panelini.testing import stop_server, wb_wait
 
 
 @pytest.mark.media(role="overview", capture="screenshot")
@@ -33,4 +33,4 @@ def test_component(page: Page, port):
     rows = page.locator(".wb-row")
     assert rows.count() > 0, "No .wb-row elements - tree did not render"
 
-    server.stop()
+    stop_server(server)

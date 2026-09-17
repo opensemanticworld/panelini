@@ -10,6 +10,7 @@ from playwright.sync_api import Page
 
 from examples.panels.visnetwork.device_hierarchy import edges, nodes, options
 from panelini.panels.visnetwork import VisNetwork
+from panelini.testing import stop_server
 
 
 @pytest.mark.media(role="feature", capture="screenshot")
@@ -34,4 +35,4 @@ def test_component(page: Page, port):
     # Check that the vis-network canvas is rendered
     assert canvas.is_visible()
 
-    server.stop()
+    stop_server(server)

@@ -54,6 +54,10 @@ autodoc2_packages = [
 ]
 autodoc2_render_plugin = "myst"
 autodoc2_hidden_objects = ["private", "dunder", "inherited"]
+# No generated index page: its title is hardcoded to "API Reference", which is
+# what modules.md is already called. modules.md points at the package page
+# directly instead, so the sidebar gains no third level saying the same thing.
+autodoc2_index_template = None
 
 # Intersphinx mapping
 intersphinx_mapping = {

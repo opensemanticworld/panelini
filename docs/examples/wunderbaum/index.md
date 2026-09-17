@@ -33,6 +33,13 @@ Switch to tree + table mode with per-node column values.
 Hierarchical checkboxes with tri-state parent propagation.
 :::
 
+:::{grid-item-card} Multi-select + drag-and-drop
+:link: multi_select_dnd
+:link-type: doc
+:img-top: /_static/media/wunderbaum/multi_select_dnd_feature.webp
+One-way checkbox propagation, and dragging the whole selection.
+:::
+
 :::{grid-item-card} Context menu
 :link: context_menu
 :link-type: doc
@@ -77,6 +84,7 @@ wunderbaum_panelini_min
 wunderbaum_panel_min
 wunderbaum_table_min
 checkbox_tree
+multi_select_dnd
 context_menu
 lazy_loading
 incremental_tree_demo

@@ -155,6 +155,7 @@ Overview <panels/index>
 panels/jsoneditor
 panels/visnetwork
 panels/wunderbaum
+panels/tanstack_table
 panels/graph_detail_tool
 panels/ai
 panels/terminalmirror
@@ -170,6 +171,7 @@ examples/chat/index
 examples/jsoneditor/index
 examples/visnetwork/index
 examples/wunderbaum/index
+examples/tanstack/index
 examples/terminalmirror/index
 examples/usecases/index
 ```

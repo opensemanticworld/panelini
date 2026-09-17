@@ -23,6 +23,12 @@ Interactive physics-simulated graph with edit modes, drag-drop files, and event 
 Fast tree and tree-grid with columns, checkboxes, drag-and-drop, context menus, and lazy loading.
 :::
 
+:::{grid-item-card} TanstackTable
+:link: tanstack_table
+:link-type: doc
+Accessible ARIA treegrid with cell editors, undo, cross-pane drag, and lazy loading.
+:::
+
 :::{grid-item-card} GraphDetailTool
 :link: graph_detail_tool
 :link-type: doc
@@ -49,6 +55,7 @@ graph LR
         je(["JsonEditor"])
         vn(["VisNetwork"])
         wb(["Wunderbaum"])
+        tst(["TanstackTable"])
         gdt(["GraphDetailTool"])
         ai(["AiChat"])
         tm(["TerminalMirror"])
@@ -65,7 +72,7 @@ graph LR
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef targetNode fill:#1e293b,stroke:#334155,color:#f8fafc
 
-    class je,vn,wb,gdt,ai,tm panelNode
+    class je,vn,wb,tst,gdt,ai,tm panelNode
     class panelini,standalone,other targetNode
 ```
 
@@ -87,6 +94,9 @@ graph LR
 * - {doc}`Wunderbaum <wunderbaum>`
   - Tree / tree-grid with columns, checkboxes, drag-and-drop, and lazy loading
   - [wunderbaum](https://mar10.github.io/wunderbaum/) + Vue.js
+* - {doc}`TanstackTable <tanstack_table>`
+  - Accessible ARIA treegrid with cell editors, undo, cross-pane drag, and lazy loading
+  - [TanStack Table](https://tanstack.com/table) + Vue.js
 * - {doc}`GraphDetailTool <graph_detail_tool>`
   - Complete graph editing UI with node detail visualization
   - Composes VisNetwork + JsonEditor

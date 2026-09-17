@@ -7,7 +7,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.wunderbaum.lazy_loading import app, load_counts, tree
-from panelini.testing import wait_until, wb_row, wb_wait
+from panelini.testing import stop_server, wait_until, wb_row, wb_wait
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -31,7 +31,13 @@ def test_component(page: Page, port):
     wb_row(page, "Root 1").locator(".wb-expander").click()
     wait_until(lambda: page.locator(".wb-row").count() > rows_before)
 
+    # Wait for a loaded child by name: the row count also grows while the
+    # pre-loaded "Root 3" branch paints, so the clip would otherwise end on the
+    # spinner instead of on the children the callback returned.
+    wb_row(page, "Child 1 of Root 1").wait_for(timeout=10000)
+    time.sleep(1.5)  # hold on the loaded branch
+
     # Backend lazy_load_callback fired for r1, and the UI gained child rows.
     assert load_counts.get("r1", 0) >= 1
 
-    server.stop()
+    stop_server(server)

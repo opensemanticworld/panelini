@@ -1,6 +1,6 @@
 # API reference
 
-A handwritten overview of the public API, organised by what you're most likely to import. For exhaustive signatures and docstrings jump straight to the [auto-generated reference](apidocs/index).
+A handwritten overview of the public API, organised by what you're most likely to import. For exhaustive signatures and docstrings jump straight to the [auto-generated reference](apidocs/panelini/panelini), created with [sphinx-autodoc2](https://github.com/chrisjsewell/sphinx-autodoc2).
 
 ## Quick imports
 
@@ -117,7 +117,10 @@ The dashboard shell. Built on `param.Parameterized`, so every constructor argume
   - System prompt for the AI backend.
 * - `ai_welcome_message`
   - `String`
-  - Greeting shown in the chat pane.
+  - Optional greeting posted into a new chat; `None` starts it empty.
+* - `ai_show_preview`
+  - `Boolean`
+  - Show the preview pane next to the chat (default: `False`).
 * - `ai_config_path`
   - `str | Path`
   - Custom `config.yml`. Auto-discovered when `None`.
@@ -250,7 +253,7 @@ Every public module, class, and function - generated from source docstrings - li
 :gutter: 3
 
 :::{grid-item-card} 📚 Browse the full API
-:link: apidocs/index
+:link: apidocs/panelini/panelini
 :link-type: doc
 All modules, every signature, every docstring.
 :::
@@ -266,5 +269,5 @@ High-level picture of how the pieces fit together.
 ```{toctree}
 :hidden:
 
-apidocs/index
+apidocs/panelini/panelini
 ```

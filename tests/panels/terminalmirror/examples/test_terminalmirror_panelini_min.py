@@ -9,7 +9,7 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.terminalmirror.terminalmirror_panelini_min import app, card
-from panelini.testing import wait_until, xterm_wait_for_text
+from panelini.testing import stop_server, wait_until, xterm_wait_for_text
 
 
 @pytest.mark.media(role="feature", capture="gif")
@@ -46,4 +46,4 @@ def test_component(page: Page, port):
     page.locator(".xterm").first.wait_for(state="visible")
     xterm_wait_for_text(page, "Hello from TerminalMirror!")
 
-    server.stop()
+    stop_server(server)

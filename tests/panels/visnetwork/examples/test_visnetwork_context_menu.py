@@ -10,9 +10,8 @@ import pytest
 from playwright.sync_api import Page
 
 from examples.panels.visnetwork.context_menu import demo, panel
-from panelini.testing import node_dom_pos, vn_wait, wait_until
+from panelini.testing import free_port, node_dom_pos, vn_wait, wait_until
 
-_PORT = 6520
 _ORIGINAL_NODES = copy.deepcopy(demo.vis.nodes)
 _ORIGINAL_EDGES = copy.deepcopy(demo.vis.edges)
 _ORIGINAL_NEXT_ID = demo.next_id
@@ -21,9 +20,10 @@ _ORIGINAL_NEXT_ID = demo.next_id
 @pytest.fixture(scope="module")
 def panel_server():
     """Serve the context-menu demo once for the whole module."""
-    server = pn.serve(panel, port=_PORT, threaded=True, show=False)
+    port = free_port()
+    pn.serve(panel, port=port, threaded=True, show=False)
     time.sleep(0.2)
-    yield server
+    yield port
     pn.state.kill_all_servers()
 
 
@@ -39,7 +39,7 @@ def ready_page(browser, panel_server):
     demo.next_id = _ORIGINAL_NEXT_ID
     context = browser.new_context()
     page = context.new_page()
-    page.goto(f"http://localhost:{_PORT}")
+    page.goto(f"http://localhost:{panel_server}")
     vn_wait(page)
     yield page
     page.goto("about:blank")
