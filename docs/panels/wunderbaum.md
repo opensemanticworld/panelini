@@ -66,6 +66,8 @@ tree.add_folder(parent_key=None, key="src", title="src")
 tree.add_file(parent_key="src", key="src/main.py", title="main.py")
 ```
 
+`set_active_node` fires an `activate` event by default. Pass `no_events=True` to activate a node without that event, for example when an `activate` handler mirrors the activation into a second tree and would otherwise be called again.
+
 ## Context menu
 
 Provide `context_menu_items` to show a right-click menu; the selected action arrives through the event callback so Python can add, rename, or delete nodes.
