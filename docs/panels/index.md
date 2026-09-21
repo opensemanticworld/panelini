@@ -11,6 +11,12 @@ Panels are **independent, standalone components** that can be used in any Panel 
 JSON-Schema driven form editor. Dynamic schemas, theming, bi-directional value sync.
 :::
 
+:::{grid-item-card} MonacoEditor
+:link: monacoeditor
+:link-type: doc
+Code and JSON editor from VS Code, with local JSON-Schema validation and no network calls.
+:::
+
 :::{grid-item-card} VisNetwork
 :link: visnetwork
 :link-type: doc
@@ -53,6 +59,7 @@ Mirror sys.stdout into an on-screen terminal widget with automatic collapse/expa
 graph LR
     subgraph panels [" Available Panels "]
         je(["JsonEditor"])
+        me(["MonacoEditor"])
         vn(["VisNetwork"])
         wb(["Wunderbaum"])
         tst(["TanstackTable"])
@@ -72,7 +79,7 @@ graph LR
     classDef panelNode fill:#0d7377,stroke:#095c5f,color:#ffffff
     classDef targetNode fill:#1e293b,stroke:#334155,color:#f8fafc
 
-    class je,vn,wb,tst,gdt,ai,tm panelNode
+    class je,me,vn,wb,tst,gdt,ai,tm panelNode
     class panelini,standalone,other targetNode
 ```
 
@@ -88,6 +95,9 @@ graph LR
 * - {doc}`JsonEditor <jsoneditor>`
   - JSON Schema-based form editor with dynamic schema support
   - [json-editor](https://github.com/json-editor/json-editor) + Vue.js
+* - {doc}`MonacoEditor <monacoeditor>`
+  - Code and JSON editor with local JSON-Schema validation, hover docs, and completion
+  - [monaco-editor](https://github.com/microsoft/monaco-editor)
 * - {doc}`VisNetwork <visnetwork>`
   - Interactive network/graph visualization with manipulation
   - [vis-network](https://visjs.github.io/vis-network/docs/network/) + Vue.js
