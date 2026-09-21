@@ -1174,7 +1174,9 @@ export default {
         if (node.selected) obj.selected = true;
         if (node.lazy && (!node.children || node.children.length === 0)) obj.lazy = true;
         if (node.checkbox != null) obj.checkbox = node.checkbox;
-        if (node.classes) obj.classes = node.classes;
+        if (node.classes && node.classes.size) {
+          obj.classes = [...node.classes].join(' ');
+        }
         if (node.tooltip) obj.tooltip = node.tooltip;
         if (node.children && node.children.length > 0) {
           obj.children = node.children.map(serialize);
@@ -1276,7 +1278,7 @@ export default {
           this.selectNode(payload.key, payload.selected);
           break;
         case 'setActiveNode':
-          this.setActiveNode(payload.key);
+          this.setActiveNode(payload.key, { noEvents: !!payload.noEvents });
           break;
         case 'startEditTitle':
           this.startEditTitle(typeof payload === 'object' ? payload.key : payload);
@@ -1330,6 +1332,18 @@ export default {
       }
     },
 
+    // Wunderbaum stores row classes as a `Set<string>` and its renderer spreads
+    // that set into `classList.add()`. A raw string would be added character by
+    // character, and a string containing a space would throw. The library's own
+    // loader converts via `toSet()`; this is the same conversion for the
+    // `updateNode` path, which bypasses the loader.
+    toClassSet(value) {
+      if (value instanceof Set) return new Set(value);
+      if (Array.isArray(value)) return new Set(value.filter(Boolean));
+      if (typeof value !== 'string') return new Set();
+      return new Set(value.split(/\s+/).filter(Boolean));
+    },
+
     updateNode(key, data) {
       if (!this.tree) return;
       const node = this.findByKey(key);
@@ -1337,7 +1351,10 @@ export default {
         if (data.title !== undefined) node.setTitle(data.title);
         if (data.icon !== undefined) node.icon = data.icon;
         if (data.type !== undefined) node.type = data.type;
-        if (data.classes !== undefined) node.classes = data.classes;
+        if (data.classes !== undefined) {
+          const next = this.toClassSet(data.classes);
+          node.classes = next.size ? next : null;
+        }
         if (data.tooltip !== undefined) node.tooltip = data.tooltip;
         if (data.checkbox !== undefined) node.checkbox = data.checkbox;
         if (data.data !== undefined) {
@@ -1382,11 +1399,11 @@ export default {
       }
     },
 
-    setActiveNode(key) {
+    setActiveNode(key, options) {
       if (!this.tree) return;
       const node = this.findByKey(key);
       if (node) {
-        node.setActive(true);
+        node.setActive(true, options || {});
       }
     },
 
