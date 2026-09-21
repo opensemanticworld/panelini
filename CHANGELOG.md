@@ -5,6 +5,27 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.0.1 (2026-09-21)
+
+### Bug Fixes
+
+- **wunderbaum**: Correct node classes and add no_events to activation
+  ([`d02ec44`](https://github.com/opensemanticworld/panelini/commit/d02ec44975fc83bb51b55e0f1b0e78a694e8becb))
+
+### Documentation
+
+- **wunderbaum**: Document no_events on set_active_node
+  ([`9fc5794`](https://github.com/opensemanticworld/panelini/commit/9fc5794664f3dc750c4280c245fc921c69cbb9dc))
+
+### Testing
+
+- **wunderbaum**: Cover node classes and no_events activation
+  ([`c6165aa`](https://github.com/opensemanticworld/panelini/commit/c6165aa7023ac8eb668384441a81274270a30f42))
+
+- **wunderbaum**: State what the loop bound does and does not prove
+  ([`d78eadb`](https://github.com/opensemanticworld/panelini/commit/d78eadb48f5fdc2fc1fd91ab757f3f03a79b4006))
+
+
 ## v1.0.0 (2026-09-11)
 
 ### Bug Fixes
