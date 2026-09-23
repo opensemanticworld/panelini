@@ -147,6 +147,15 @@ SUBTYPE_TO_PARENT: dict[str, str] = {
     "chameo:ScanningElectronMicroscope": "Equipments",
     "chameo:FocusedIonBeam": "Equipments",
     "chameo:Equipment": "Equipments",
+    "temgo:ElectronProbeMicroAnalyser": "Equipments",
+    "temgo:PlasmaCleaner": "Equipments",
+    "temgo:SEMSampleCoater": "Equipments",
+    "temgo:CrossPolisher": "Equipments",
+    "temgo:IonMiller": "Equipments",
+    "temgo:Furnance": "Equipments",
+    "temgo:Ladle": "Equipments",
+    "temgo:Crucible": "Equipments",
+    "temgo:Mould": "Equipments",
     "chameo:Sample": "Samples",
     "owl:Class": "DatasetClasses",
     "temgo:EDSMapping": "Processes",
@@ -163,35 +172,22 @@ SUBTYPE_TO_PARENT: dict[str, str] = {
 
 # -- Download CSV templates as entities ---------------------------------------
 
-TEMPLATE_TO_SCHEMA: dict[str, str] = {
-    "compositions": "Composition",
-    "datasetClasses": "DatasetClasses",
-    "datasets": "Datasets",
-    "equipments": "Equipments",
-    "organisations": "Organisations",
-    "people": "People",
-    "processClasses": "ProcessClasses",
-    "processes": "Processes",
-    "projects": "Projects",
-    "properties": "Properties",
-    "samples": "Samples",
-    "software": "Software",
-}
+TEMPLATE_NAMES = [
+    "compositions",
+    "datasetClasses",
+    "datasets",
+    "properties",
+    "samples",
+]
 
 print("Fetching templates from GitHub ...")
 entity_list: list[dict] = []
-for template_name, schema_name in TEMPLATE_TO_SCHEMA.items():
+for template_name in TEMPLATE_NAMES:
     url = f"{REPO_RAW}/templates/{template_name}.csv"
     entities = _fetch_csv_entities(url)
-    for e in entities:
-        etype = e.get("@type", "")
-        if etype and etype not in SUBTYPE_TO_PARENT:
-            SUBTYPE_TO_PARENT[etype] = schema_name
     entity_list.extend(entities)
     if entities:
         print(f"  {template_name}: {len(entities)} entities")
-    else:
-        print(f"  {template_name}: (empty)")
 
 print(f"  Total entities: {len(entity_list)}")
 

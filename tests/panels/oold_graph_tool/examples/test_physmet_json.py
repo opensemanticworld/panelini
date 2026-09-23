@@ -147,21 +147,25 @@ class TestHasRdfTypeEdges:
 
 
 class TestRdfEdges:
+    def _entity_ids(self) -> set[str]:
+        return {e["@id"] for e in entity_list}
+
+    def _count_resolvable(self, field: str) -> int:
+        """Count entities where *field* points to a known entity @id."""
+        ids = self._entity_ids()
+        return sum(1 for e in entity_list if e.get(field, "") in ids)
+
     def test_affiliation_edges(self, tool):
-        expected = sum(1 for e in entity_list if "affiliation" in e)
-        assert len(edges_by_label(tool, "member")) == expected
+        assert len(edges_by_label(tool, "member")) == self._count_resolvable("affiliation")
 
     def test_funding_agency_edges(self, tool):
-        expected = sum(1 for e in entity_list if "hasFundingAgency" in e)
-        assert len(edges_by_label(tool, "fundedBy")) == expected
+        assert len(edges_by_label(tool, "fundedBy")) == self._count_resolvable("hasFundingAgency")
 
     def test_contact_person_edges(self, tool):
-        expected = sum(1 for e in entity_list if "contactPerson" in e)
-        assert len(edges_by_label(tool, "HasContactPerson")) == expected
+        assert len(edges_by_label(tool, "HasContactPerson")) == self._count_resolvable("contactPerson")
 
     def test_project_edges(self, tool):
-        expected = sum(1 for e in entity_list if "project" in e)
-        assert len(edges_by_label(tool, "HasProject")) == expected
+        assert len(edges_by_label(tool, "HasProject")) == self._count_resolvable("project")
 
 
 # ── 7. Expansion Policy ─────────────────────────────────────────────────────
