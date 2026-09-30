@@ -20,6 +20,7 @@ from rdflib.term import URIRef
 
 from panelini.panels.jsoneditor import JsonEditor
 from panelini.panels.monacoeditor import MonacoEditor
+from panelini.panels.filter.filter import Filter
 from panelini.panels.oold_graph_tool.entity_adapter import (
     EntityAdapter,
     adapt_entity,
@@ -40,7 +41,9 @@ pn.extension("jsoneditor")  # For viewing/editing node details (parent class)
 # ── OO-LD meta-schema (for Monaco validation of class/schema nodes) ───────────
 _META_SCHEMA_PATH = Path(__file__).parent / "meta" / "oold-meta-schema.json"
 _OOLD_META_SCHEMA: dict = (
-    json.loads(_META_SCHEMA_PATH.read_text(encoding="utf-8")) if _META_SCHEMA_PATH.exists() else {}
+    json.loads(_META_SCHEMA_PATH.read_text(encoding="utf-8"))
+    if _META_SCHEMA_PATH.exists()
+    else {}
 )
 
 # ── Class-graph colour palette (shared with _build_class_graph) ────────────────
@@ -52,7 +55,12 @@ _HAS_TYPE_EDGE_COLOR = "#888888"  # gray    --HasSchemaType / HasRdfType
 
 _PRIMITIVES_OOLD = (str, int, float, bool, type(None), dict, list, tuple, set)
 _MAX_LABEL = 80
-_SKIP_FIELDS = {"type", "uuid", "id", "initialized_from"}  # fields excluded from "Create:" menu
+_SKIP_FIELDS = {
+    "type",
+    "uuid",
+    "id",
+    "initialized_from",
+}  # fields excluded from "Create:" menu
 
 
 def _truncate(s: str) -> str:
@@ -130,7 +138,9 @@ def _infer_je_schema(val: Any) -> dict:
     return {"type": "string"}
 
 
-def numeric_to_color(value: float, min_val: float, max_val: float, colormap_name: str = "viridis") -> str:
+def numeric_to_color(
+    value: float, min_val: float, max_val: float, colormap_name: str = "viridis"
+) -> str:
     """Convert a numeric value to a color using a matplotlib colormap.
 
     Args:
@@ -188,7 +198,8 @@ class Entity(LinkedBaseModel):
     id: str = Field(default="", description="IRI of the entity, derived from uuid.")
     name: str
     initialized_from: Optional[str] = Field(
-        None, description="From which entity this was copied and changed afterwards, if any"
+        None,
+        description="From which entity this was copied and changed afterwards, if any",
     )
 
     def get_iri(self):
@@ -311,7 +322,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         _pydantic_classes: list[type] = []
         if entity_types is not None:
             for type_input in entity_types:
-                if isinstance(type_input, type) and hasattr(type_input, "export_schema"):
+                if isinstance(type_input, type) and hasattr(
+                    type_input, "export_schema"
+                ):
                     _pydantic_classes.append(type_input)
                 type_name, schema = adapt_type(type_input)
                 converted_types[type_name] = schema
@@ -373,8 +386,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
             register_pydantic_hierarchy(cls, self.schema_registry)
 
         # Convert instances to EntityAdapter
-        self.entity_list: list[EntityAdapter] = [adapt_entity(item, self.schema_registry) for item in _instances]
-        self.entity_dict: dict[str, EntityAdapter] = {adapter.get_iri(): adapter for adapter in self.entity_list}
+        self.entity_list: list[EntityAdapter] = [
+            adapt_entity(item, self.schema_registry) for item in _instances
+        ]
+        self.entity_dict: dict[str, EntityAdapter] = {
+            adapter.get_iri(): adapter for adapter in self.entity_list
+        }
 
         # Color scheme for different entity types (optional, generated on the fly if not provided)
         self.type_colors = type_colors if type_colors is not None else {}
@@ -395,7 +412,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         ]
 
         # Store entity_types as dict[str, dict] (schema dicts)
-        self.entity_types: dict[str, dict] = dict(converted_types) if converted_types else {}
+        self.entity_types: dict[str, dict] = (
+            dict(converted_types) if converted_types else {}
+        )
         for entity in self.entity_list:
             if entity.type_name not in self.entity_types and entity.schema:
                 self.entity_types[entity.type_name] = entity.schema
@@ -412,7 +431,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.rdf_graph = RDFGraph()
 
         for element in self.entity_list:
-            print(f"Parsing entity {element} with IRI {element.get_iri()} into RDF graph")
+            print(
+                f"Parsing entity {element} with IRI {element.get_iri()} into RDF graph"
+            )
             jsonld_doc = element.to_jsonld()
             self.rdf_graph.parse(data=json.dumps(jsonld_doc), format="json-ld")
 
@@ -433,7 +454,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 label = oold_obj.name if isinstance(oold_obj, EntityAdapter) else id_str
 
                 # Store entity type name as metadata for duplication
-                entity_type_name = oold_obj.type_name if isinstance(oold_obj, EntityAdapter) else "Entity"
+                entity_type_name = (
+                    oold_obj.type_name
+                    if isinstance(oold_obj, EntityAdapter)
+                    else "Entity"
+                )
 
                 visjs_node = {
                     "id": id_str,
@@ -458,11 +483,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 # create edge
 
                 if isinstance(o, URIRef) or show_literals:
-                    self.visjs_edges.append({
-                        "from": str(s),
-                        "to": str(o),
-                        "label": iri_to_edge_label(p),
-                    })
+                    self.visjs_edges.append(
+                        {
+                            "from": str(s),
+                            "to": str(o),
+                            "label": iri_to_edge_label(p),
+                        }
+                    )
                     # create nodes if they don't exist yet
 
                     if not any(node["id"] == str(s) for node in self.visjs_nodes):
@@ -503,11 +530,20 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.text_col = pn.Column(sizing_mode="stretch_width")
         self.viz_config_col = pn.Column(sizing_mode="stretch_width")
         self.query_col = pn.Column(sizing_mode="stretch_both")
+        self.filter_col = pn.Column(sizing_mode="stretch_both")
 
         # Property mapping state
-        self.property_mappings = {"color": None, "size": None, "x": None, "y": None, "shape": None}
+        self.property_mappings = {
+            "color": None,
+            "size": None,
+            "x": None,
+            "y": None,
+            "shape": None,
+        }
         self._available_properties = None  # Cache
-        self._property_types = {}  # Cache: {prop_name: "numeric"|"categorical"|"string"}
+        self._property_types = (
+            {}
+        )  # Cache: {prop_name: "numeric"|"categorical"|"string"}
         self._mapping_dropdowns = {}  # UI widgets
 
         super().__init__(nodes=self.visjs_nodes, edges=self.visjs_edges)
@@ -535,15 +571,22 @@ class OOLDGraphDetailTool(GraphDetailTool):
             sizing_mode="stretch_both",
             styles={"flex": "1 1 auto", "min-height": "0", "overflow-y": "auto"},
         )
-        self._oold_apply_btn = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
+        self._oold_apply_btn = pn.widgets.Button(
+            name="Apply Changes", button_type="primary", width=150
+        )
         self._oold_apply_btn.on_click(self._on_oold_form_apply)
         self._oold_jump_btn = pn.widgets.Button(
-            name="Jump to Defining Schema", button_type="default", width=200, visible=False
+            name="Jump to Defining Schema",
+            button_type="default",
+            width=200,
+            visible=False,
         )
         self._oold_jump_btn.on_click(
-            lambda _: self.show_node_details(getattr(self, "_oold_jump_target", None))
-            if getattr(self, "_oold_jump_target", None)
-            else None
+            lambda _: (
+                self.show_node_details(getattr(self, "_oold_jump_target", None))
+                if getattr(self, "_oold_jump_target", None)
+                else None
+            )
         )
         self._oold_jump_target = None
         self._oold_btn_row = pn.Row(
@@ -551,7 +594,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._oold_jump_btn,
             styles={"flex": "0 0 auto", "margin-top": "auto"},
         )
-        self.oold_detail_col.extend([self._oold_header, self.current_node_oold_editor, self._oold_btn_row])
+        self.oold_detail_col.extend(
+            [self._oold_header, self.current_node_oold_editor, self._oold_btn_row]
+        )
 
         # -- Persistent widgets for Text tab --
         self.current_text_editor = MonacoEditor(
@@ -559,7 +604,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             language="json",
             height=600,
         )
-        self.text_apply_button = pn.widgets.Button(name="Apply Changes", button_type="primary", width=150)
+        self.text_apply_button = pn.widgets.Button(
+            name="Apply Changes", button_type="primary", width=150
+        )
         self.text_apply_button.on_click(self._on_text_apply)
         self.text_col.extend([self.current_text_editor, self.text_apply_button])
 
@@ -567,6 +614,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.detail_tabs.append(("OO-LD Form", self.oold_detail_col))
         self.detail_tabs.append(("Text", self.text_col))
         self.detail_tabs.append(("Visualization Config", self.viz_config_col))
+
+        # -- Filter tab widgets --
+        self.filter_col.clear()
+        self.filter_widget = Filter(sizing_mode="stretch_both")
+
+        # Watch the new 'value' param
+        self.filter_widget.param.watch(self._on_filter_change, "value")
+
+        self.filter_col.extend(
+            [pn.pane.Markdown("### Semantic Graph Filter"), self.filter_widget]
+        )
+        self.detail_tabs.append(("Filter", self.filter_col))
 
         # -- Query tab widgets --
         self._query_editor = JsonEditor(
@@ -594,20 +653,26 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._query_show_all_btn,
             styles={"flex": "0 0 auto", "margin-top": "auto"},
         )
-        self.query_col.extend([
-            pn.pane.Markdown("### Graph Query"),
-            self._query_editor,
-            self._query_btn_row,
-            self._query_status,
-        ])
+        self.query_col.extend(
+            [
+                pn.pane.Markdown("### Graph Query"),
+                self._query_editor,
+                self._query_btn_row,
+                self._query_status,
+            ]
+        )
         self.detail_tabs.append(("Query", self.query_col))
         self._init_query_tab()
 
         # Add undo/redo buttons to edit row
-        self.undo_button = pn.widgets.Button(name="↶ Undo (Ctrl+Z)", button_type="default", width=150)
+        self.undo_button = pn.widgets.Button(
+            name="↶ Undo (Ctrl+Z)", button_type="default", width=150
+        )
         self.undo_button.on_click(lambda event: self.undo())
 
-        self.redo_button = pn.widgets.Button(name="↷ Redo (Ctrl+Y)", button_type="default", width=150)
+        self.redo_button = pn.widgets.Button(
+            name="↷ Redo (Ctrl+Y)", button_type="default", width=150
+        )
         self.redo_button.on_click(lambda event: self.redo())
 
         # Add undo/redo buttons to edit row
@@ -660,7 +725,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         if entity_type_name not in self.type_colors:
             # Generate a new color for this type
-            color = self._predefined_colors[self._color_index % len(self._predefined_colors)]
+            color = self._predefined_colors[
+                self._color_index % len(self._predefined_colors)
+            ]
             self.type_colors[entity_type_name] = color
             self._color_index += 1
             print(f"Assigned color {color} to type '{entity_type_name}'")
@@ -685,8 +752,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
         try:
             state_snapshot = {
                 "entities": [e.deep_copy() for e in self.entity_list],
-                "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
-                "visible_edge_keys": (set(self._visible_edge_keys) if self._visible_edge_keys is not None else None),
+                "visible_node_ids": (
+                    set(self._visible_node_ids)
+                    if self._visible_node_ids is not None
+                    else None
+                ),
+                "visible_edge_keys": (
+                    set(self._visible_edge_keys)
+                    if self._visible_edge_keys is not None
+                    else None
+                ),
             }
             self.undo_stack.append(state_snapshot)
 
@@ -708,8 +783,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Return a snapshot dict of the current state (for undo/redo stacks)."""
         return {
             "entities": [e.deep_copy() for e in self.entity_list],
-            "visible_node_ids": (set(self._visible_node_ids) if self._visible_node_ids is not None else None),
-            "visible_edge_keys": (set(self._visible_edge_keys) if self._visible_edge_keys is not None else None),
+            "visible_node_ids": (
+                set(self._visible_node_ids)
+                if self._visible_node_ids is not None
+                else None
+            ),
+            "visible_edge_keys": (
+                set(self._visible_edge_keys)
+                if self._visible_edge_keys is not None
+                else None
+            ),
         }
 
     def _restore_state(self, state: dict | list) -> None:
@@ -789,7 +872,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         try:
             self.redo_stack.append(self._current_state_snapshot())
             self._restore_state(self.undo_stack.pop())
-            print(f"Undo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}")
+            print(
+                f"Undo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}"
+            )
         except Exception as e:
             print(f"Error during undo: {e}")
             import traceback
@@ -805,7 +890,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         try:
             self.undo_stack.append(self._current_state_snapshot())
             self._restore_state(self.redo_stack.pop())
-            print(f"Redo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}")
+            print(
+                f"Redo completed. Undo stack: {len(self.undo_stack)}, Redo stack: {len(self.redo_stack)}"
+            )
         except Exception as e:
             print(f"Error during redo: {e}")
             import traceback
@@ -842,19 +929,30 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if k.startswith(("x-oold-", "@")) or k == "$ref":
                 continue
             if k == "items" and isinstance(v, dict):
-                cleaned = {ik: iv for ik, iv in v.items() if ik != "$ref" and not ik.startswith(("x-oold-", "@"))}
+                cleaned = {
+                    ik: iv
+                    for ik, iv in v.items()
+                    if ik != "$ref" and not ik.startswith(("x-oold-", "@"))
+                }
                 if not cleaned.get("type"):
                     cleaned["type"] = "object"
                 result[k] = cleaned
             elif k == "anyOf" and isinstance(v, list):
-                non_null = [b for b in v if not (isinstance(b, dict) and b.get("type") == "null")]
+                non_null = [
+                    b
+                    for b in v
+                    if not (isinstance(b, dict) and b.get("type") == "null")
+                ]
                 if len(non_null) == 1 and isinstance(non_null[0], dict):
                     inner = self._clean_prop_for_editor(non_null[0])
                     for ik, iv in inner.items():
                         if ik not in result:
                             result[ik] = iv
                 else:
-                    result[k] = [self._clean_prop_for_editor(b) if isinstance(b, dict) else b for b in v]
+                    result[k] = [
+                        self._clean_prop_for_editor(b) if isinstance(b, dict) else b
+                        for b in v
+                    ]
             else:
                 result[k] = v
         if "type" not in result and "anyOf" not in result:
@@ -865,7 +963,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Ensure persistent OO-LD Form widgets are in the column (context menus may clear it)."""
         if self._oold_header not in list(self.oold_detail_col):
             self.oold_detail_col.clear()
-            self.oold_detail_col.extend([self._oold_header, self.current_node_oold_editor, self._oold_btn_row])
+            self.oold_detail_col.extend(
+                [self._oold_header, self.current_node_oold_editor, self._oold_btn_row]
+            )
 
     def show_node_details(self, node_id: Any) -> None:
         """Override the method to show node details in the side panel in a OO-LD-specific fashion"""
@@ -883,10 +983,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self._class_form_node_id = node_id
             self._oold_form_kind = "class"
             self._oold_header.object = f"### {type_name} (Class)"
-            self.current_node_oold_editor.set_schema(self._SUBCLASS_DEF_SCHEMA, startval=class_schema)
+            self.current_node_oold_editor.set_schema(
+                self._SUBCLASS_DEF_SCHEMA, startval=class_schema
+            )
             self._oold_jump_btn.visible = False
             self._update_text_tab(
-                class_schema, json_schema=_OOLD_META_SCHEMA or None, node_id=node_id, node_kind="class"
+                class_schema,
+                json_schema=_OOLD_META_SCHEMA or None,
+                node_id=node_id,
+                node_kind="class",
             )
             return
 
@@ -910,15 +1015,28 @@ class OOLDGraphDetailTool(GraphDetailTool):
             schema = self._build_editor_schema(current_entity.schema)
             self._current_single_node_id = node_id
             self._oold_form_kind = "entity"
-            self._oold_header.object = f"### Node ID: {node_id} of type {_node_type_label}"
-            self.current_node_oold_editor.set_schema(schema, startval=current_entity.data)
+            self._oold_header.object = (
+                f"### Node ID: {node_id} of type {_node_type_label}"
+            )
+            self.current_node_oold_editor.set_schema(
+                schema, startval=current_entity.data
+            )
             self._oold_jump_btn.visible = False
-            self._update_text_tab(current_entity.data, json_schema=schema, node_id=node_id, node_kind="entity")
+            self._update_text_tab(
+                current_entity.data,
+                json_schema=schema,
+                node_id=node_id,
+                node_kind="entity",
+            )
         else:
             self._new_entity_node_id = node_id
             self._oold_form_kind = "create_entity"
-            self._oold_header.object = f"### Node ID: {node_id} of type {_node_type_label}"
-            self.current_node_oold_editor.set_schema({"type": "object", "properties": {}}, startval={})
+            self._oold_header.object = (
+                f"### Node ID: {node_id} of type {_node_type_label}"
+            )
+            self.current_node_oold_editor.set_schema(
+                {"type": "object", "properties": {}}, startval={}
+            )
             self._oold_jump_btn.visible = False
 
     def _default_detail_tab_once(self) -> None:
@@ -962,7 +1080,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._full_sync_after_edit(replace_nodes=True)
 
     def _update_text_tab(
-        self, data: dict, json_schema: dict | None = None, *, node_id: str | None = None, node_kind: str | None = None
+        self,
+        data: dict,
+        json_schema: dict | None = None,
+        *,
+        node_id: str | None = None,
+        node_kind: str | None = None,
     ) -> None:
         """Update the persistent Text tab editor with new data."""
         self._text_tab_node_id = node_id
@@ -1023,7 +1146,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return node_id[:idx], node_id[idx + len(sep) :]
         return None
 
-    def _show_field_node_form(self, node_id: str, cls_nid: str, field_name: str) -> None:
+    def _show_field_node_form(
+        self, node_id: str, cls_nid: str, field_name: str
+    ) -> None:
         """Update persistent widgets for editing a property's sub-schema."""
         parent_schema = self._get_class_for_node_id(cls_nid)
         if parent_schema is None:
@@ -1117,7 +1242,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # -- Instance property node editing ------------------------------------------
 
-    def _show_instance_property_form(self, node_id: str, entity_iri: str, field_name: str) -> None:
+    def _show_instance_property_form(
+        self, node_id: str, entity_iri: str, field_name: str
+    ) -> None:
         """Update persistent widgets for editing a single instance property value."""
         entity = self.entity_dict.get(entity_iri)
         if entity is None:
@@ -1125,7 +1252,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         all_props = self.introspector.get_properties(entity.schema)
         prop_info = all_props.get(field_name)
-        prop_schema = self._clean_prop_for_editor(prop_info.raw_schema) if prop_info else {}
+        prop_schema = (
+            self._clean_prop_for_editor(prop_info.raw_schema) if prop_info else {}
+        )
 
         current_value = entity.get(field_name)
         wrapped_value = {field_name: current_value}
@@ -1149,7 +1278,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._oold_jump_btn.visible = True
         self._oold_jump_target = field_nid
 
-        self._update_text_tab(wrapped_value, json_schema=wrapped_schema, node_id=node_id, node_kind="instance_prop")
+        self._update_text_tab(
+            wrapped_value,
+            json_schema=wrapped_schema,
+            node_id=node_id,
+            node_kind="instance_prop",
+        )
 
     def _on_instance_property_apply(self, event: Any) -> None:
         """Apply edited instance property value back to the entity."""
@@ -1266,7 +1400,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if prop_name in skip or prop_name not in entity_props:
                 continue
             try:
-                deserialized = self._deserialize_property_value(entity, prop_name, prop_value)
+                deserialized = self._deserialize_property_value(
+                    entity, prop_name, prop_value
+                )
                 entity.set(prop_name, deserialized)
             except Exception as e:
                 print(f"Warning: Could not update property '{prop_name}': {e}")
@@ -1278,7 +1414,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if prop_name in skip or prop_name in new_data or prop_info.required:
                 continue
             try:
-                _base_type, _is_list, is_optional = self.introspector.classify_property(prop_info)
+                _base_type, _is_list, is_optional = self.introspector.classify_property(
+                    prop_info
+                )
                 if is_optional:
                     entity.set(prop_name, None)
             except Exception as e:
@@ -1301,20 +1439,28 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Now populate OO-LD Details tab with semantic properties
         self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### OO-LD Multi-Node Editor ({len(node_ids)} nodes)"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown(f"### OO-LD Multi-Node Editor ({len(node_ids)} nodes)")
+        )
 
         # Get entities
-        selected_entities = [self.entity_dict[nid] for nid in node_ids if nid in self.entity_dict]
+        selected_entities = [
+            self.entity_dict[nid] for nid in node_ids if nid in self.entity_dict
+        ]
 
         if not selected_entities:
-            self.oold_detail_col.append(pn.pane.Markdown("*No entities found for selected nodes*"))
+            self.oold_detail_col.append(
+                pn.pane.Markdown("*No entities found for selected nodes*")
+            )
             return
 
         # Find common properties
         common_props = self._get_common_properties(selected_entities)
 
         if not common_props:
-            self.oold_detail_col.append(pn.pane.Markdown("*No common properties found*"))
+            self.oold_detail_col.append(
+                pn.pane.Markdown("*No common properties found*")
+            )
             return
 
         # Build comparison DataFrame
@@ -1327,7 +1473,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Create comparison tabulator
         self.oold_detail_col.append(pn.pane.Markdown("#### Property Comparison Table"))
-        self.oold_detail_col.append(pn.pane.Markdown("*Edit cells to update individual entities*"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown("*Edit cells to update individual entities*")
+        )
 
         self.oold_comparison_tabulator = pn.widgets.Tabulator(
             comp_df,
@@ -1343,12 +1491,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.multi_node_individual_apply_button = pn.widgets.Button(
             name="Apply Individual Changes", button_type="primary", width=200
         )
-        self.multi_node_individual_apply_button.on_click(self._on_multi_node_individual_apply)
+        self.multi_node_individual_apply_button.on_click(
+            self._on_multi_node_individual_apply
+        )
         self.oold_detail_col.append(self.multi_node_individual_apply_button)
 
         # Build set-all table
-        self.oold_detail_col.append(pn.pane.Markdown("#### Set Value for All Selected Entities"))
-        self.oold_detail_col.append(pn.pane.Markdown("*Edit cells to apply value to ALL selected entities*"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown("#### Set Value for All Selected Entities")
+        )
+        self.oold_detail_col.append(
+            pn.pane.Markdown("*Edit cells to apply value to ALL selected entities*")
+        )
 
         table_data = comp_df.to_dict("records")
         set_all_row = self._build_set_all_row(table_data, common_props)
@@ -1364,7 +1518,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.oold_detail_col.append(self.oold_set_all_tabulator)
 
         # "Apply to All" button for the set-all table
-        self.multi_node_apply_button = pn.widgets.Button(name="Apply to All", button_type="primary", width=150)
+        self.multi_node_apply_button = pn.widgets.Button(
+            name="Apply to All", button_type="primary", width=150
+        )
         self.multi_node_apply_button.on_click(self.on_multi_node_apply_changes)
         self.oold_detail_col.append(self.multi_node_apply_button)
 
@@ -1389,7 +1545,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return []
 
         # Get properties from first entity as baseline
-        first_model_fields = set(self.introspector.get_properties(entities[0].schema).keys())
+        first_model_fields = set(
+            self.introspector.get_properties(entities[0].schema).keys()
+        )
 
         # Find intersection across all entities
         common_fields = first_model_fields.copy()
@@ -1416,7 +1574,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         return result
 
-    def _get_property_editor_config(self, entity: "EntityAdapter", prop_name: str) -> dict[str, Any]:
+    def _get_property_editor_config(
+        self, entity: "EntityAdapter", prop_name: str
+    ) -> dict[str, Any]:
         """Get Tabulator editor configuration for a property.
 
         Args:
@@ -1471,7 +1631,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         else:
             return str(value)
 
-    def _deserialize_property_value(self, entity: "EntityAdapter", prop_name: str, value: Any) -> Any:  # noqa: C901
+    def _deserialize_property_value(
+        self, entity: "EntityAdapter", prop_name: str, value: Any
+    ) -> Any:  # noqa: C901
         """Deserialize a tabulator value back to property type.
 
         Handles type conversion based on OO-LD schema property info.
@@ -1524,7 +1686,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Table Building =====
 
-    def _build_comparison_dataframe(self, entities: list, properties: list[str]) -> pd.DataFrame:
+    def _build_comparison_dataframe(
+        self, entities: list, properties: list[str]
+    ) -> pd.DataFrame:
         """Build DataFrame for comparison table.
 
         Args:
@@ -1548,7 +1712,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         return pd.DataFrame(rows)
 
-    def _build_set_all_row(self, table_data: list[dict[str, Any]], properties: list[str]) -> dict[str, Any]:
+    def _build_set_all_row(
+        self, table_data: list[dict[str, Any]], properties: list[str]
+    ) -> dict[str, Any]:
         """Build single row for set-all table showing common values.
 
         Args:
@@ -1578,12 +1744,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     def _refresh_oold_tabulators(self) -> None:
         """Refresh OO-LD comparison and set-all tables with current entity data."""
-        if not hasattr(self, "oold_comparison_tabulator") or not hasattr(self, "oold_set_all_tabulator"):
+        if not hasattr(self, "oold_comparison_tabulator") or not hasattr(
+            self, "oold_set_all_tabulator"
+        ):
             return
 
         # Get current selected entities
         selected_entities = [
-            self.entity_dict[nid] for nid in self._current_selected_node_ids if nid in self.entity_dict
+            self.entity_dict[nid]
+            for nid in self._current_selected_node_ids
+            if nid in self.entity_dict
         ]
 
         if not selected_entities:
@@ -1723,7 +1893,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== RDF → visjs edge building =====
 
-    def _literal_node_id(self, entity_iri: str, pred_label: str, subject_str: str) -> str:
+    def _literal_node_id(
+        self, entity_iri: str, pred_label: str, subject_str: str
+    ) -> str:
         """Return a stable, path-scoped ID for a literal node: <entity_iri>#<field_name>."""
         entity = self.entity_dict.get(subject_str)
         if entity is not None:
@@ -1807,7 +1979,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         - Other external URI: skip (would clutter the graph).
         """
         existing_node_ids = {n["id"] for n in self.visjs_nodes}
-        class_node_ids: set[str] = {_cls_node_id(cls) for cls in (self.entity_types or {}).values()}
+        class_node_ids: set[str] = {
+            _cls_node_id(cls) for cls in (self.entity_types or {}).values()
+        }
         compact_map = getattr(self, "_iri_compact_map", {})
         expand_map = getattr(self, "_iri_expand_map", {})
         expanded_source = set(source_ids)
@@ -1825,13 +1999,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 o_str = str(o)
                 o_compact = compact_map.get(o_str, o_str)
                 if o_compact in class_node_ids or o_str in class_node_ids:
-                    self.visjs_edges.append({
-                        "from": s_compact,
-                        "to": o_compact,
-                        "label": "HasRdfType",
-                        "arrows": "to",
-                        "color": _HAS_TYPE_EDGE_COLOR,
-                    })
+                    self.visjs_edges.append(
+                        {
+                            "from": s_compact,
+                            "to": o_compact,
+                            "label": "HasRdfType",
+                            "arrows": "to",
+                            "color": _HAS_TYPE_EDGE_COLOR,
+                        }
+                    )
                 continue
             pred_label = str(p).split("/")[-1].split("#")[-1]
             if isinstance(o, RDFLiteral):
@@ -1840,20 +2016,24 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 lit_counter[base_lit_id] = idx + 1
                 lit_id = base_lit_id if idx == 0 else f"{base_lit_id}_{idx}"
                 if lit_id not in existing_node_ids:
-                    self.visjs_nodes.append({
-                        "id": lit_id,
-                        "label": _truncate(str(o)),
-                        "color": _ATTR_VAL_NODE_COLOR,
-                        "shape": "ellipse",
-                        "node_kind": "literal",
-                    })
+                    self.visjs_nodes.append(
+                        {
+                            "id": lit_id,
+                            "label": _truncate(str(o)),
+                            "color": _ATTR_VAL_NODE_COLOR,
+                            "shape": "ellipse",
+                            "node_kind": "literal",
+                        }
+                    )
                     existing_node_ids.add(lit_id)
-                self.visjs_edges.append({
-                    "from": s_compact,
-                    "to": lit_id,
-                    "label": pred_label,
-                    "arrows": "to",
-                })
+                self.visjs_edges.append(
+                    {
+                        "from": s_compact,
+                        "to": lit_id,
+                        "label": pred_label,
+                        "arrows": "to",
+                    }
+                )
             else:
                 o_str = str(o)
                 o_compact = compact_map.get(o_str, o_str)
@@ -1863,19 +2043,25 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     or o_compact in class_node_ids
                     or o_str in class_node_ids
                 ):
-                    self.visjs_edges.append({
-                        "from": s_compact,
-                        "to": o_compact,
-                        "label": pred_label,
-                        "arrows": "to",
-                    })
+                    self.visjs_edges.append(
+                        {
+                            "from": s_compact,
+                            "to": o_compact,
+                            "label": pred_label,
+                            "arrows": "to",
+                        }
+                    )
             # else: external URI reference --skip
 
     # ===== Expansion context-menu helpers =====
 
     def _snapshot_visible_edge_keys(self) -> set[tuple]:
         """Return (from, to, label) keys for all edges currently between visible nodes."""
-        ids = {n["id"] for n in self._full_visjs_nodes} if self._visible_node_ids is None else self._visible_node_ids
+        ids = (
+            {n["id"] for n in self._full_visjs_nodes}
+            if self._visible_node_ids is None
+            else self._visible_node_ids
+        )
         return {
             (e.get("from", ""), e.get("to", ""), e.get("label", ""))
             for e in self._full_visjs_edges
@@ -1899,14 +2085,22 @@ class OOLDGraphDetailTool(GraphDetailTool):
             target = str(edge.get("to", ""))
             if not target or target not in full_node_ids:
                 continue
-            node_hidden = self._visible_node_ids is not None and target not in self._visible_node_ids
+            node_hidden = (
+                self._visible_node_ids is not None
+                and target not in self._visible_node_ids
+            )
             edge_key = (edge.get("from", ""), target, edge.get("label", ""))
-            edge_hidden = self._visible_edge_keys is not None and edge_key not in self._visible_edge_keys
+            edge_hidden = (
+                self._visible_edge_keys is not None
+                and edge_key not in self._visible_edge_keys
+            )
             if node_hidden or edge_hidden:
                 result.setdefault(edge.get("label", ""), []).append(target)
         return result
 
-    def _get_inverse_expand_options_for_node(self, node_id: str) -> dict[str, list[str]]:
+    def _get_inverse_expand_options_for_node(
+        self, node_id: str
+    ) -> dict[str, list[str]]:
         """Return {edge_label: [source_node_id, ...]} for expandable incoming edges.
 
         An edge is expandable when its source node is hidden, OR when the
@@ -1923,9 +2117,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
             source = str(edge.get("from", ""))
             if not source or source not in full_node_ids:
                 continue
-            node_hidden = self._visible_node_ids is not None and source not in self._visible_node_ids
+            node_hidden = (
+                self._visible_node_ids is not None
+                and source not in self._visible_node_ids
+            )
             edge_key = (source, edge.get("to", ""), edge.get("label", ""))
-            edge_hidden = self._visible_edge_keys is not None and edge_key not in self._visible_edge_keys
+            edge_hidden = (
+                self._visible_edge_keys is not None
+                and edge_key not in self._visible_edge_keys
+            )
             if node_hidden or edge_hidden:
                 result.setdefault(edge.get("label", ""), []).append(source)
         return result
@@ -1956,7 +2156,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return schema
         return None
 
-    def _get_expandable_subobject_fields(self, entity_id: str) -> list[str]:  # noqa: C901
+    def _get_expandable_subobject_fields(
+        self, entity_id: str
+    ) -> list[str]:  # noqa: C901
         """Return list-field names that have ≥1 sub-object element not yet fully visible."""
         entity = self.entity_dict.get(entity_id)
         if entity is None:
@@ -1983,7 +2185,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if not sub_iri:
                     continue
                 if sub_iri not in self.entity_dict or (
-                    self._visible_node_ids is not None and sub_iri not in self._visible_node_ids
+                    self._visible_node_ids is not None
+                    and sub_iri not in self._visible_node_ids
                 ):
                     result.append(field_name)
                     break
@@ -1996,7 +2199,13 @@ class OOLDGraphDetailTool(GraphDetailTool):
         creatable = self._get_creatable_fields(node_id)
         expandable_subobjs = self._get_expandable_subobject_fields(node_id)
         is_class_node = self._get_class_for_node_id(node_id) is not None
-        if not outgoing and not incoming and not creatable and not expandable_subobjs and not is_class_node:
+        if (
+            not outgoing
+            and not incoming
+            and not creatable
+            and not expandable_subobjs
+            and not is_class_node
+        ):
             return {}
         d: dict[str, str] = {}
         if outgoing or incoming:
@@ -2027,10 +2236,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes]
             candidate_edges = self._full_visjs_edges
         else:
-            self.visjs_nodes = [dict(n) for n in self._full_visjs_nodes if n["id"] in self._visible_node_ids]
+            self.visjs_nodes = [
+                dict(n)
+                for n in self._full_visjs_nodes
+                if n["id"] in self._visible_node_ids
+            ]
             visible_ids = {n["id"] for n in self.visjs_nodes}
             candidate_edges = [
-                e for e in self._full_visjs_edges if e.get("from") in visible_ids and e.get("to") in visible_ids
+                e
+                for e in self._full_visjs_edges
+                if e.get("from") in visible_ids and e.get("to") in visible_ids
             ]
         if self._visible_edge_keys is None:
             self.visjs_edges = [dict(e) for e in candidate_edges]
@@ -2038,7 +2253,8 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.visjs_edges = [
                 dict(e)
                 for e in candidate_edges
-                if (e.get("from", ""), e.get("to", ""), e.get("label", "")) in self._visible_edge_keys
+                if (e.get("from", ""), e.get("to", ""), e.get("label", ""))
+                in self._visible_edge_keys
             ]
 
         _structural_labels = {
@@ -2050,7 +2266,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
             "HasRange",
         }
         for edge in self.visjs_edges:
-            frm, to, lbl = edge.get("from", ""), edge.get("to", ""), edge.get("label", "")
+            frm, to, lbl = (
+                edge.get("from", ""),
+                edge.get("to", ""),
+                edge.get("label", ""),
+            )
             edge["id"] = f"{frm}|{lbl}|{to}"
             edge_cb: dict[str, str] = {}
             if self._visible_edge_keys is not None:
@@ -2066,7 +2286,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         for node in self.visjs_nodes:
             if node.get("node_kind") == "literal":
-                node["callback_name_dict"] = {"edit_value": "Edit Value", "hide": "Hide", "delete": "Delete"}
+                node["callback_name_dict"] = {
+                    "edit_value": "Edit Value",
+                    "hide": "Hide",
+                    "delete": "Delete",
+                }
             else:
                 cb = self._expand_dict_for_node(node["id"])
                 cb["hide"] = "Hide"
@@ -2076,7 +2300,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if hasattr(self, "property_mappings") and any(self.property_mappings.values()):
             self._apply_all_mappings()
 
-    def _on_context_menu_item(self, element_type: str, element_id: Any, action_id: str) -> None:  # noqa: C901
+    def _on_context_menu_item(
+        self, element_type: str, element_id: Any, action_id: str
+    ) -> None:  # noqa: C901
         """Handle a right-click context-menu selection on a node or edge."""
         if element_type == "edge" and action_id.startswith("edge_"):
             self._on_edge_context_menu(str(element_id), action_id)
@@ -2215,7 +2441,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if action_id == "edge_hide":
             self._visible_edge_keys.discard((frm, to, lbl))
         elif action_id == "edge_hide_all":
-            self._visible_edge_keys = {k for k in self._visible_edge_keys if k[2] != lbl}
+            self._visible_edge_keys = {
+                k for k in self._visible_edge_keys if k[2] != lbl
+            }
         elif action_id == "edge_expand_all":
             source_to_added = self._expand_edge_label_for_all(lbl)
         elif action_id == "edge_reveal_definition":
@@ -2274,7 +2502,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
         while _cls_node_id(schema) != target_nid:
             schema_nid = _cls_node_id(schema)
             schema_id = schema.get("$id") or schema.get("iri") or ""
-            isa_label = "SubClassOf" if schema_id in self._schema_alias_keys else "ExtendsSchema"
+            isa_label = (
+                "SubClassOf"
+                if schema_id in self._schema_alias_keys
+                else "ExtendsSchema"
+            )
             parent_refs = self.introspector.get_parent_schema_refs(schema)
             if not parent_refs:
                 break
@@ -2325,7 +2557,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return None
         return None
 
-    def _position_nodes_near(self, source_id: str, label_to_added: dict[str, set[str]]) -> None:
+    def _position_nodes_near(
+        self, source_id: str, label_to_added: dict[str, set[str]]
+    ) -> None:
         """Set x/y on newly added nodes so they appear near *source_id*.
 
         Each node is placed at distance 100 from the source.  The angle is
@@ -2386,7 +2620,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Sub-object list expansion =====
 
-    def _expand_subobject_list(self, entity_id: str, field_name: str) -> None:  # noqa: C901
+    def _expand_subobject_list(
+        self, entity_id: str, field_name: str
+    ) -> None:  # noqa: C901
         """Register and reveal all sub-objects in a list field that are not yet visible."""
         entity = self.entity_dict.get(entity_id)
         if entity is None:
@@ -2427,7 +2663,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 else:
                     self.entity_list.append(sub_obj)
                     self.entity_dict[sub_iri] = sub_obj
-                sub_label = sub_obj.get("name", sub_iri) if isinstance(sub_obj, dict) else sub_obj.name
+                sub_label = (
+                    sub_obj.get("name", sub_iri)
+                    if isinstance(sub_obj, dict)
+                    else sub_obj.name
+                )
                 new_node = {
                     "id": sub_iri,
                     "label": sub_label,
@@ -2437,7 +2677,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 }
                 self._full_visjs_nodes.append(dict(new_node))
                 changed = True
-            if self._visible_node_ids is not None and sub_iri not in self._visible_node_ids:
+            if (
+                self._visible_node_ids is not None
+                and sub_iri not in self._visible_node_ids
+            ):
                 self._visible_node_ids.add(sub_iri)
                 changed = True
 
@@ -2456,7 +2699,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
             e["to"]
             for e in self._full_visjs_edges
             if e.get("from") == node_id
-            and any(n["id"] == e["to"] and n.get("node_kind") == "literal" for n in self._full_visjs_nodes)
+            and any(
+                n["id"] == e["to"] and n.get("node_kind") == "literal"
+                for n in self._full_visjs_nodes
+            )
         }
         self._visible_node_ids.discard(node_id)
         self._visible_node_ids -= literal_children
@@ -2488,8 +2734,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Strip list-element suffix (e.g. "hobbies_1" -> "hobbies")
         if "_" in field_name and field_name.rsplit("_", 1)[-1].isdigit():
             field_name = field_name.rsplit("_", 1)[0]
-        if entity_iri in self.entity_dict and field_name in self.introspector.get_properties(
-            self.entity_dict[entity_iri].schema
+        if (
+            entity_iri in self.entity_dict
+            and field_name
+            in self.introspector.get_properties(self.entity_dict[entity_iri].schema)
         ):
             return entity_iri, field_name
         return None
@@ -2499,7 +2747,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
         type_schema_ids = {id(s) for s in self.entity_types.values()}
         for ref in self.introspector.get_parent_schema_refs(schema):
             parent = self.introspector.resolve_ref(ref)
-            if parent is not None and id(parent) in type_schema_ids and parent is not schema:
+            if (
+                parent is not None
+                and id(parent) in type_schema_ids
+                and parent is not schema
+            ):
                 return _cls_node_id(parent)
         return None
 
@@ -2527,7 +2779,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
         entity.set(field_name, None)
         self._full_sync_after_edit()
         # Refresh the JSON editor if it is currently showing this entity
-        if hasattr(self, "current_node_oold_editor") and getattr(self, "_current_single_node_id", None) == entity_iri:
+        if (
+            hasattr(self, "current_node_oold_editor")
+            and getattr(self, "_current_single_node_id", None) == entity_iri
+        ):
             self.current_node_oold_editor.value = entity.data
 
     def _delete_entity_node(self, node_id: str) -> None:
@@ -2549,7 +2804,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         entity = self.entity_dict.pop(node_id, None)
         if entity is not None and entity in self.entity_list:
             self.entity_list.remove(entity)
-        self._full_visjs_nodes = [n for n in self._full_visjs_nodes if n["id"] != node_id]
+        self._full_visjs_nodes = [
+            n for n in self._full_visjs_nodes if n["id"] != node_id
+        ]
         if self._visible_node_ids is not None:
             self._visible_node_ids.discard(node_id)
         self._rebuild_visjs_edges()
@@ -2575,7 +2832,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             node_id=node_id,
             retype_pairs=retype_pairs,
             clear_pairs=iri_refs,
-            on_confirm=lambda: self._execute_class_delete(node_id, cls, retype_pairs, iri_refs),
+            on_confirm=lambda: self._execute_class_delete(
+                node_id, cls, retype_pairs, iri_refs
+            ),
         )
 
     def _execute_class_delete(
@@ -2592,8 +2851,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
         for entity, field_name in clear_pairs:
             entity.set(field_name, None)
         # Remove from entity_types
-        self.entity_types = {k: v for k, v in (self.entity_types or {}).items() if id(v) != id(cls)}
-        self._full_visjs_nodes = [n for n in self._full_visjs_nodes if n["id"] != node_id]
+        self.entity_types = {
+            k: v for k, v in (self.entity_types or {}).items() if id(v) != id(cls)
+        }
+        self._full_visjs_nodes = [
+            n for n in self._full_visjs_nodes if n["id"] != node_id
+        ]
         if self._visible_node_ids is not None:
             self._visible_node_ids.discard(node_id)
         self._rebuild_visjs_edges()
@@ -2627,7 +2890,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.oold_detail_col.clear()
         self.oold_detail_col.append(pn.pane.Markdown("\n".join(lines)))
 
-        confirm_btn = pn.widgets.Button(name="Confirm Delete", button_type="danger", width=150)
+        confirm_btn = pn.widgets.Button(
+            name="Confirm Delete", button_type="danger", width=150
+        )
         cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
 
         def _on_confirm(_event: Any) -> None:
@@ -2641,7 +2906,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
     # ===== Literal value editing =====
 
-    def _field_name_for_predicate(self, entity: "EntityAdapter", pred_label: str) -> Optional[str]:
+    def _field_name_for_predicate(
+        self, entity: "EntityAdapter", pred_label: str
+    ) -> Optional[str]:
         """Map an RDF predicate label back to the schema property name on an entity.
 
         Checks direct name match first, then scans the JSON-LD @context chain.
@@ -2675,12 +2942,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.oold_detail_col.clear()
         if len(refs) == 1:
             entity, field_name = refs[0]
-            self.oold_detail_col.append(pn.pane.Markdown(f"### Edit **{entity.name}**.{field_name}"))
+            self.oold_detail_col.append(
+                pn.pane.Markdown(f"### Edit **{entity.name}**.{field_name}")
+            )
         else:
             names = ", ".join(f"{e.name}.{f}" for e, f in refs)
-            self.oold_detail_col.append(pn.pane.Markdown(f"### Edit literal value\n\nAffects: {names}"))
+            self.oold_detail_col.append(
+                pn.pane.Markdown(f"### Edit literal value\n\nAffects: {names}")
+            )
 
-        self._lit_edit_input = pn.widgets.TextInput(value=lit_value, name="New value", width=300)
+        self._lit_edit_input = pn.widgets.TextInput(
+            value=lit_value, name="New value", width=300
+        )
         apply_btn = pn.widgets.Button(name="Apply", button_type="primary", width=100)
         apply_btn.on_click(self._on_literal_edit_apply)
         cancel_btn = pn.widgets.Button(name="Cancel", button_type="default", width=100)
@@ -2701,7 +2974,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         for entity, field_name in self._lit_edit_refs:
             try:
-                new_val = self._deserialize_property_value(entity, field_name, new_value_str)
+                new_val = self._deserialize_property_value(
+                    entity, field_name, new_value_str
+                )
                 entity.set(field_name, new_val)
             except Exception as e:
                 print(f"Error updating {entity.name}.{field_name}: {e}")
@@ -2710,7 +2985,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._full_sync_after_edit()
         self.oold_detail_col.clear()
 
-    def _field_inner_model_type(self, entity: "EntityAdapter", field_name: str) -> dict | None:
+    def _field_inner_model_type(
+        self, entity: "EntityAdapter", field_name: str
+    ) -> dict | None:
         """Return the target schema dict if field_name expects a sub-object, else None."""
         props = self.introspector.get_properties(entity.schema)
         prop_info = props.get(field_name)
@@ -2723,11 +3000,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return resolved
         return None
 
-    def _build_property_create_schema(self, entity: "EntityAdapter", field_name: str) -> tuple[dict, dict]:
+    def _build_property_create_schema(
+        self, entity: "EntityAdapter", field_name: str
+    ) -> tuple[dict, dict]:
         """Build a JSON Schema and start value for a single-property create form."""
         prop_info = self.introspector.get_properties(entity.schema).get(field_name)
         if prop_info is None:
-            return {"type": "object", "properties": {field_name: {"type": "string"}}}, {field_name: ""}
+            return {"type": "object", "properties": {field_name: {"type": "string"}}}, {
+                field_name: ""
+            }
 
         cleaned = self._clean_prop_for_editor(prop_info.raw_schema)
         schema = {"type": "object", "properties": {field_name: cleaned}}
@@ -2745,7 +3026,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
         "type": "object",
         "title": "New Property",
         "properties": {
-            "name": {"type": "string", "description": "Property name (key in the schema)."},
+            "name": {
+                "type": "string",
+                "description": "Property name (key in the schema).",
+            },
             "type": {
                 "type": "string",
                 "enum": ["string", "integer", "number", "boolean", "array", "object"],
@@ -2797,7 +3081,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         type_name = self.introspector.get_type_name(schema)
 
         self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New Property on **{type_name}**"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown(f"### Create New Property on **{type_name}**")
+        )
 
         start_val = {
             "name": "",
@@ -2865,7 +3151,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
             inner = {"type": prop_type}
 
         if nullable:
-            prop_schema: dict[str, Any] = {"anyOf": [inner, {"type": "null"}], "default": None}
+            prop_schema: dict[str, Any] = {
+                "anyOf": [inner, {"type": "null"}],
+                "default": None,
+            }
         else:
             prop_schema = dict(inner)
 
@@ -2943,7 +3232,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 "anyOf": [
                     {"type": "object"},
                     {"type": "string"},
-                    {"type": "array", "items": {"anyOf": [{"type": "object"}, {"type": "string"}, {"type": "null"}]}},
+                    {
+                        "type": "array",
+                        "items": {
+                            "anyOf": [
+                                {"type": "object"},
+                                {"type": "string"},
+                                {"type": "null"},
+                            ]
+                        },
+                    },
                     {"type": "null"},
                 ],
             },
@@ -2975,12 +3273,20 @@ class OOLDGraphDetailTool(GraphDetailTool):
             return
         self._create_subclass_parent_node_id = parent_node_id
         parent_name = self.introspector.get_type_name(parent_schema)
-        parent_id = parent_schema.get("$id") or parent_schema.get("iri") or parent_node_id
+        parent_id = (
+            parent_schema.get("$id") or parent_schema.get("iri") or parent_node_id
+        )
 
         self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New Subclass of **{parent_name}**"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown(f"### Create New Subclass of **{parent_name}**")
+        )
 
-        subclass_id = f"{parent_id.rsplit('.', 1)[0]}Subclass.json" if "." in parent_id else f"{parent_id}/Subclass"
+        subclass_id = (
+            f"{parent_id.rsplit('.', 1)[0]}Subclass.json"
+            if "." in parent_id
+            else f"{parent_id}/Subclass"
+        )
         start_val: dict[str, Any] = {
             "$id": subclass_id,
             "title": f"{parent_name}Subclass",
@@ -3027,7 +3333,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         new_schema.setdefault("type", "object")
         new_schema.setdefault("properties", {})
-        new_schema["properties"].setdefault("type", {"type": "string", "default": schema_id})
+        new_schema["properties"].setdefault(
+            "type", {"type": "string", "default": schema_id}
+        )
 
         self.schema_registry[schema_id] = new_schema
         self.schema_registry[title] = new_schema
@@ -3053,7 +3361,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self._create_entity_id = entity_id
         self._create_field_name = field_name
         self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### Create **{entity.name}**.{field_name}"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown(f"### Create **{entity.name}**.{field_name}")
+        )
 
         inner_type = self._field_inner_model_type(entity, field_name)
         self._create_is_subobject = inner_type is not None
@@ -3071,7 +3381,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if "uuid" in inner_props:
                 default_values["uuid"] = str(uuid.uuid4())
             if "name" in inner_props:
-                default_values["name"] = f"New{self.introspector.get_type_name(inner_type)}"
+                default_values["name"] = (
+                    f"New{self.introspector.get_type_name(inner_type)}"
+                )
             self._create_input = JsonEditor(
                 value=default_values,
                 options={"schema": inner_schema, "startval": default_values},
@@ -3107,14 +3419,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
             inner_type = self._create_inner_type
             inner_type_name = self.introspector.get_type_name(inner_type)
             try:
-                sub_obj = EntityAdapter(data, inner_type, inner_type_name, self.schema_registry)
+                sub_obj = EntityAdapter(
+                    data, inner_type, inner_type_name, self.schema_registry
+                )
             except Exception as exc:
                 print(f"Error creating sub-object {inner_type_name}: {exc}")
                 return
             # Append to list field or set scalar field
             prop_info = self.introspector.get_properties(entity.schema).get(field_name)
             if prop_info is not None:
-                _base_type, is_list, _is_optional = self.introspector.classify_property(prop_info)
+                _base_type, is_list, _is_optional = self.introspector.classify_property(
+                    prop_info
+                )
             else:
                 is_list = False
             if is_list:
@@ -3151,7 +3467,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             raw = raw.strip()
 
         is_iri = self._is_iri_field(entity, field_name)
-        known_ids = set(self.entity_dict.keys()) | {_cls_node_id(c) for c in (self.entity_types or {}).values()}
+        known_ids = set(self.entity_dict.keys()) | {
+            _cls_node_id(c) for c in (self.entity_types or {}).values()
+        }
 
         new_node_ids: list[str] = []
 
@@ -3162,7 +3480,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return
             prop_info = self.introspector.get_properties(entity.schema).get(field_name)
             if prop_info is not None:
-                _base_type, is_list, _is_optional = self.introspector.classify_property(prop_info)
+                _base_type, is_list, _is_optional = self.introspector.classify_property(
+                    prop_info
+                )
             else:
                 is_list = isinstance(raw, list)
             entity.set(field_name, iri_values if is_list else iri_values[0])
@@ -3208,7 +3528,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         # Work on the full node set so _build_class_graph() idempotency checks are correct.
         # Drop stale literal nodes --they are rebuilt fresh from the current RDF.
-        self.visjs_nodes = [n for n in self._full_visjs_nodes if n.get("node_kind") != "literal"]
+        self.visjs_nodes = [
+            n for n in self._full_visjs_nodes if n.get("node_kind") != "literal"
+        ]
         self.visjs_edges = []
 
         all_entity_ids = set(self.entity_dict.keys())
@@ -3241,22 +3563,34 @@ class OOLDGraphDetailTool(GraphDetailTool):
         def _ensure_node(schema: dict, color: str = _CLS_NODE_COLOR) -> str:
             nid = _cls_node_id(schema)
             if nid not in existing_node_ids:
-                self.visjs_nodes.append({
-                    "id": nid,
-                    "label": self.introspector.get_type_name(schema),
-                    "color": color,
-                    "shape": "ellipse",
-                    "node_kind": "class",
-                })
+                self.visjs_nodes.append(
+                    {
+                        "id": nid,
+                        "label": self.introspector.get_type_name(schema),
+                        "color": color,
+                        "shape": "ellipse",
+                        "node_kind": "class",
+                    }
+                )
                 existing_node_ids.add(nid)
             return nid
 
-        existing_edges: set[tuple] = {(e.get("from"), e.get("to"), e.get("label")) for e in self.visjs_edges}
+        existing_edges: set[tuple] = {
+            (e.get("from"), e.get("to"), e.get("label")) for e in self.visjs_edges
+        }
 
         def _add_edge(from_id: str, to_id: str, label: str, **kwargs: Any) -> None:
             key = (from_id, to_id, label)
             if key not in existing_edges:
-                self.visjs_edges.append({"from": from_id, "to": to_id, "label": label, "arrows": "to", **kwargs})
+                self.visjs_edges.append(
+                    {
+                        "from": from_id,
+                        "to": to_id,
+                        "label": label,
+                        "arrows": "to",
+                        **kwargs,
+                    }
+                )
                 existing_edges.add(key)
 
         for schema in self.entity_types.values():
@@ -3264,7 +3598,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             # ExtendsSchema / SubClassOf edges via allOf $ref
             schema_id = schema.get("$id") or schema.get("iri") or ""
-            isa_label = "SubClassOf" if schema_id in self._schema_alias_keys else "ExtendsSchema"
+            isa_label = (
+                "SubClassOf"
+                if schema_id in self._schema_alias_keys
+                else "ExtendsSchema"
+            )
             for ref in self.introspector.get_parent_schema_refs(schema):
                 parent = self.introspector.resolve_ref(ref)
                 if parent is not None:
@@ -3280,33 +3618,41 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     continue
                 field_nid = f"{cls_nid}#field_{field_name}"
                 if field_nid not in existing_node_ids:
-                    self.visjs_nodes.append({
-                        "id": field_nid,
-                        "label": field_name,
-                        "color": _FIELD_NODE_COLOR,
-                        "shape": "ellipse",
-                        "node_kind": "field",
-                    })
+                    self.visjs_nodes.append(
+                        {
+                            "id": field_nid,
+                            "label": field_name,
+                            "color": _FIELD_NODE_COLOR,
+                            "shape": "ellipse",
+                            "node_kind": "field",
+                        }
+                    )
                     existing_node_ids.add(field_nid)
                 _add_edge(cls_nid, field_nid, "definesProperty")
 
                 # HasRange
                 target_ref = prop_info.ref or prop_info.range
-                target_schema = self.introspector.resolve_ref(target_ref) if target_ref else None
+                target_schema = (
+                    self.introspector.resolve_ref(target_ref) if target_ref else None
+                )
                 if target_schema is not None:
                     ann_nid = _ensure_node(target_schema)
                 else:
                     ann_nid = f"{field_nid}#type"
                     if ann_nid not in existing_node_ids:
-                        base_type, is_list, _ = self.introspector.classify_property(prop_info)
+                        base_type, is_list, _ = self.introspector.classify_property(
+                            prop_info
+                        )
                         type_label = f"list[{base_type}]" if is_list else base_type
-                        self.visjs_nodes.append({
-                            "id": ann_nid,
-                            "label": type_label,
-                            "color": _ATTR_VAL_NODE_COLOR,
-                            "shape": "ellipse",
-                            "node_kind": "type",
-                        })
+                        self.visjs_nodes.append(
+                            {
+                                "id": ann_nid,
+                                "label": type_label,
+                                "color": _ATTR_VAL_NODE_COLOR,
+                                "shape": "ellipse",
+                                "node_kind": "type",
+                            }
+                        )
                         existing_node_ids.add(ann_nid)
                 _add_edge(field_nid, ann_nid, "HasRange", color=_ISA_EDGE_COLOR)
 
@@ -3318,13 +3664,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                             default_label = json.dumps(prop_info.default)
                         except Exception:
                             default_label = str(prop_info.default)
-                        self.visjs_nodes.append({
-                            "id": default_nid,
-                            "label": _truncate(default_label),
-                            "color": _ATTR_VAL_NODE_COLOR,
-                            "shape": "ellipse",
-                            "node_kind": "default",
-                        })
+                        self.visjs_nodes.append(
+                            {
+                                "id": default_nid,
+                                "label": _truncate(default_label),
+                                "color": _ATTR_VAL_NODE_COLOR,
+                                "shape": "ellipse",
+                                "node_kind": "default",
+                            }
+                        )
                         existing_node_ids.add(default_nid)
                     _add_edge(field_nid, default_nid, "default")
 
@@ -3332,13 +3680,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if prop_info.description:
                     desc_nid = f"{field_nid}#description"
                     if desc_nid not in existing_node_ids:
-                        self.visjs_nodes.append({
-                            "id": desc_nid,
-                            "label": _truncate(prop_info.description),
-                            "color": _ATTR_VAL_NODE_COLOR,
-                            "shape": "ellipse",
-                            "node_kind": "description",
-                        })
+                        self.visjs_nodes.append(
+                            {
+                                "id": desc_nid,
+                                "label": _truncate(prop_info.description),
+                                "color": _ATTR_VAL_NODE_COLOR,
+                                "shape": "ellipse",
+                                "node_kind": "description",
+                            }
+                        )
                         existing_node_ids.add(desc_nid)
                     _add_edge(field_nid, desc_nid, "description")
 
@@ -3357,13 +3707,15 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     if val is not None:
                         constraint_nid = f"{field_nid}#constraint_{attr_label}"
                         if constraint_nid not in existing_node_ids:
-                            self.visjs_nodes.append({
-                                "id": constraint_nid,
-                                "label": str(val),
-                                "color": _ATTR_VAL_NODE_COLOR,
-                                "shape": "ellipse",
-                                "node_kind": "constraint",
-                            })
+                            self.visjs_nodes.append(
+                                {
+                                    "id": constraint_nid,
+                                    "label": str(val),
+                                    "color": _ATTR_VAL_NODE_COLOR,
+                                    "shape": "ellipse",
+                                    "node_kind": "constraint",
+                                }
+                            )
                             existing_node_ids.add(constraint_nid)
                         _add_edge(field_nid, constraint_nid, attr_label)
 
@@ -3377,7 +3729,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             instance_iri = entity.get_iri()
             if instance_iri not in all_node_ids or cls_nid not in all_node_ids:
                 continue
-            _add_edge(instance_iri, cls_nid, "HasSchemaType", color=_HAS_TYPE_EDGE_COLOR)
+            _add_edge(
+                instance_iri, cls_nid, "HasSchemaType", color=_HAS_TYPE_EDGE_COLOR
+            )
 
     def _sync_entity_to_visjs(self, entity: EntityAdapter) -> None:
         """Sync a single entity's data to its corresponding visjs node.
@@ -3415,7 +3769,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Snapshot edge keys before rebuild so we can detect genuinely new edges
         old_edge_keys: Optional[set[tuple]] = None
         if self._visible_edge_keys is not None:
-            old_edge_keys = {(e.get("from", ""), e.get("to", ""), e.get("label", "")) for e in self._full_visjs_edges}
+            old_edge_keys = {
+                (e.get("from", ""), e.get("to", ""), e.get("label", ""))
+                for e in self._full_visjs_edges
+            }
 
         # Rebuild RDF graph
         self._rebuild_rdf_graph()
@@ -3425,10 +3782,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Auto-reveal edges that are new since the snapshot and have both endpoints visible
         if old_edge_keys is not None:
-            visible = self._visible_node_ids or {n["id"] for n in self._full_visjs_nodes}
+            visible = self._visible_node_ids or {
+                n["id"] for n in self._full_visjs_nodes
+            }
             for e in self._full_visjs_edges:
                 key = (e.get("from", ""), e.get("to", ""), e.get("label", ""))
-                if key not in old_edge_keys and e.get("from") in visible and e.get("to") in visible:
+                if (
+                    key not in old_edge_keys
+                    and e.get("from") in visible
+                    and e.get("to") in visible
+                ):
                     self._visible_edge_keys.add(key)  # type: ignore[union-attr]
             self._apply_visibility_filter_inplace()
 
@@ -3486,7 +3849,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if col in entity_props:
                     try:
                         value = row[col]
-                        deserialized = self._deserialize_property_value(entity, col, value)
+                        deserialized = self._deserialize_property_value(
+                            entity, col, value
+                        )
                         entity.set(col, deserialized)
                     except Exception as e:
                         print(f"  Warning: Could not update {entity_iri}.{col}: {e}")
@@ -3533,13 +3898,19 @@ class OOLDGraphDetailTool(GraphDetailTool):
                         for node_id in self._current_selected_node_ids:
                             if node_id in self.entity_dict:
                                 entity = self.entity_dict[node_id]
-                                entity_props = self.introspector.get_properties(entity.schema)
+                                entity_props = self.introspector.get_properties(
+                                    entity.schema
+                                )
                                 if col in entity_props:
                                     try:
-                                        deserialized = self._deserialize_property_value(entity, col, value)
+                                        deserialized = self._deserialize_property_value(
+                                            entity, col, value
+                                        )
                                         entity.set(col, deserialized)
                                     except Exception as e:
-                                        print(f"  Warning: Could not update {node_id}.{col}: {e}")
+                                        print(
+                                            f"  Warning: Could not update {node_id}.{col}: {e}"
+                                        )
 
             self._full_sync_after_edit()
 
@@ -3562,14 +3933,18 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if node_id is None:
             return
         # Pin the temp node so it doesn't drift while the user fills the form
-        self.visnetwork_panel.update_nodes([{"id": node_id, "x": x, "y": y, "fixed": True}])
+        self.visnetwork_panel.update_nodes(
+            [{"id": node_id, "x": x, "y": y, "fixed": True}]
+        )
         # Store position so on_new_entity_save can place the entity node here
         if not hasattr(self, "_pending_node_positions"):
             self._pending_node_positions: dict[Any, dict] = {}
         self._pending_node_positions[node_id] = {"x": x, "y": y}
 
     @staticmethod
-    def _derive_new_iri_from_parts(parent_iri: str, parent_uuid: str, new_uuid: str) -> str:
+    def _derive_new_iri_from_parts(
+        parent_iri: str, parent_uuid: str, new_uuid: str
+    ) -> str:
         """Derive a new IRI by replacing the parent UUID in the parent IRI."""
         if parent_uuid and parent_iri and parent_uuid in parent_iri:
             return parent_iri.replace(parent_uuid, new_uuid, 1)
@@ -3581,7 +3956,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         parent_uuid = parent_entity.get("uuid", "")
         return self._derive_new_iri_from_parts(parent_iri, parent_uuid, new_uuid)
 
-    def _reassign_and_register_subobjects(self, entity: "EntityAdapter") -> None:  # noqa: C901
+    def _reassign_and_register_subobjects(
+        self, entity: "EntityAdapter"
+    ) -> None:  # noqa: C901
         """Recursively give each sub-object field a new UUID and register it as a standalone entity.
 
         Called after deep-copying a parent entity so that embedded sub-objects don't share
@@ -3618,8 +3995,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     sub_data.pop("__iris__", None)
                     new_sub_uuid = str(uuid.uuid4())
                     sub_data["uuid"] = new_sub_uuid
-                    sub_data["id"] = self._derive_new_iri_from_parts(old_iri, old_uuid, new_sub_uuid)
-                    new_sub = EntityAdapter(sub_data, inner_type, inner_type_name, self.schema_registry)
+                    sub_data["id"] = self._derive_new_iri_from_parts(
+                        old_iri, old_uuid, new_sub_uuid
+                    )
+                    new_sub = EntityAdapter(
+                        sub_data, inner_type, inner_type_name, self.schema_registry
+                    )
                 except Exception:
                     new_items.append(sub_obj)
                     continue
@@ -3640,7 +4021,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 if self._visible_node_ids is not None:
                     self._visible_node_ids.add(sub_iri)
                 new_items.append(new_sub.data)
-            entity.set(field_name, new_items if is_list else (new_items[0] if new_items else None))
+            entity.set(
+                field_name,
+                new_items if is_list else (new_items[0] if new_items else None),
+            )
 
     def on_nodes_duplicated(self, duplicated_nodes: list[dict[str, Any]]) -> None:
         """Callback when nodes are duplicated via Ctrl+drag.
@@ -3664,20 +4048,27 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 # dup_node.id is a JS-generated temp ID, not an IRI --find source by name
                 parent_entity: Optional[EntityAdapter] = None
                 for entity in self.entity_list:
-                    if entity.type_name == entity_type_name and entity.name == base_name:
+                    if (
+                        entity.type_name == entity_type_name
+                        and entity.name == base_name
+                    ):
                         parent_entity = entity
                         break
 
                 if parent_entity is not None:
                     new_uuid = str(uuid.uuid4())
-                    entity_data = json.loads(json.dumps(parent_entity.data, default=str))
+                    entity_data = json.loads(
+                        json.dumps(parent_entity.data, default=str)
+                    )
                     entity_data.pop("id", None)
                     entity_data.pop("__iris__", None)
                     entity_data["uuid"] = new_uuid
                     entity_data["name"] = unique_name
                     entity_data["id"] = self._derive_new_iri(parent_entity, new_uuid)
                     entity_data["initialized_from"] = parent_entity.get_iri()
-                    new_entity = EntityAdapter(entity_data, entity_type, entity_type_name, self.schema_registry)
+                    new_entity = EntityAdapter(
+                        entity_data, entity_type, entity_type_name, self.schema_registry
+                    )
                     # Deep-copy sub-objects: give each a new UUID and register as standalone entity
                     self._reassign_and_register_subobjects(new_entity)
                 else:
@@ -3755,7 +4146,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 return
 
             # Show popup dialog for property selection
-            self._show_edge_property_dialog(source_entity, target_iri, object_properties)
+            self._show_edge_property_dialog(
+                source_entity, target_iri, object_properties
+            )
 
         except Exception as e:
             print(f"Error in edge creation callback: {e}")
@@ -3779,7 +4172,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if prop_name in ["id", "type", "__iris__", "uuid"]:
                 continue
 
-            base_type, is_list, is_optional = self.introspector.classify_property(prop_info)
+            base_type, is_list, is_optional = self.introspector.classify_property(
+                prop_info
+            )
             is_object_property = False
             prop_type = "unknown"
 
@@ -3798,17 +4193,22 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     prop_type = "list[IRI]" if is_list else "IRI"
 
             if is_object_property:
-                object_props.append({
-                    "name": prop_name,
-                    "type": prop_type,
-                    "description": prop_info.description or "",
-                    "is_list": is_list,
-                })
+                object_props.append(
+                    {
+                        "name": prop_name,
+                        "type": prop_type,
+                        "description": prop_info.description or "",
+                        "is_list": is_list,
+                    }
+                )
 
         return object_props
 
     def _show_edge_property_dialog(  # noqa: C901
-        self, source_entity: "EntityAdapter", target_iri: str, object_properties: list[dict[str, Any]]
+        self,
+        source_entity: "EntityAdapter",
+        target_iri: str,
+        object_properties: list[dict[str, Any]],
     ) -> None:
         """Show a dialog to select which property should be set for the new edge.
 
@@ -3837,7 +4237,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 label += f" - {prop_info['description']}"
             property_options[label] = prop_info["name"]
 
-        property_select = pn.widgets.Select(name="Property", options=property_options, width=500)
+        property_select = pn.widgets.Select(
+            name="Property", options=property_options, width=500
+        )
 
         # Show current value of selected property
         current_value_pane = pn.pane.Markdown("")
@@ -3862,7 +4264,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Action selection: add to list or replace
         action_select = pn.widgets.RadioButtonGroup(
-            name="Action", options=["Append to list", "Replace value"], value="Append to list", width=300
+            name="Action",
+            options=["Append to list", "Replace value"],
+            value="Append to list",
+            width=300,
         )
         dialog_content.append(action_select)
 
@@ -3871,7 +4276,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         apply_button = pn.widgets.Button(name="Apply", button_type="primary", width=100)
 
-        cancel_button = pn.widgets.Button(name="Cancel", button_type="default", width=100)
+        cancel_button = pn.widgets.Button(
+            name="Cancel", button_type="default", width=100
+        )
 
         button_row.append(apply_button)
         button_row.append(cancel_button)
@@ -3879,7 +4286,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Store dialog reference
         self._edge_dialog = pn.Card(
-            dialog_content, title="Configure Edge Property", width=600, collapsed=False, header_background="#4CAF50"
+            dialog_content,
+            title="Configure Edge Property",
+            width=600,
+            collapsed=False,
+            header_background="#4CAF50",
         )
 
         # Add dialog to the detail column
@@ -3904,7 +4315,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 current_value = entity_data.get(prop_name, None)
 
                 # Find property info to check if it's a list
-                prop_info = next((p for p in object_properties if p["name"] == prop_name), None)
+                prop_info = next(
+                    (p for p in object_properties if p["name"] == prop_name), None
+                )
                 is_list = prop_info["is_list"] if prop_info else False
 
                 if action == "Append to list":
@@ -3918,7 +4331,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                     else:
                         # Property is not a list, but user wants to append
                         # Convert to list if needed
-                        print(f"Warning: Property {prop_name} is not a list type, setting single value")
+                        print(
+                            f"Warning: Property {prop_name} is not a list type, setting single value"
+                        )
                         new_value = target_iri
                 else:  # Replace value
                     new_value = [target_iri] if is_list else target_iri
@@ -3932,7 +4347,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
                 # Close dialog
                 self.oold_detail_col.clear()
-                self.oold_detail_col.append(pn.pane.Markdown(f"✓ Property **{prop_name}** updated successfully"))
+                self.oold_detail_col.append(
+                    pn.pane.Markdown(f"✓ Property **{prop_name}** updated successfully")
+                )
 
             except Exception as e:
                 print(f"Error applying edge property: {e}")
@@ -3947,7 +4364,10 @@ class OOLDGraphDetailTool(GraphDetailTool):
             self.visjs_edges = [
                 e
                 for e in self.visjs_edges
-                if not (e.get("from") == source_entity.get_iri() and e.get("to") == target_iri)
+                if not (
+                    e.get("from") == source_entity.get_iri()
+                    and e.get("to") == target_iri
+                )
             ]
             self.visnetwork_panel.edges = self.visjs_edges
 
@@ -3981,10 +4401,14 @@ class OOLDGraphDetailTool(GraphDetailTool):
         # Button row with Apply and Reset
         button_row = pn.Row()
 
-        apply_button = pn.widgets.Button(name="Apply Mappings", button_type="primary", width=200)
+        apply_button = pn.widgets.Button(
+            name="Apply Mappings", button_type="primary", width=200
+        )
         apply_button.on_click(self._on_apply_mappings)
 
-        reset_button = pn.widgets.Button(name="Reset All Mappings", button_type="warning", width=200)
+        reset_button = pn.widgets.Button(
+            name="Reset All Mappings", button_type="warning", width=200
+        )
         reset_button.on_click(self._on_reset_mappings)
 
         button_row.append(apply_button)
@@ -4012,7 +4436,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         for entity in self.entity_list:
             entity_data = entity.data
-            for prop_name, _prop_info in self.introspector.get_properties(entity.schema).items():
+            for prop_name, _prop_info in self.introspector.get_properties(
+                entity.schema
+            ).items():
                 # Skip internal fields
                 if prop_name in ["id", "type", "__iris__", "uuid"]:
                     continue
@@ -4045,7 +4471,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 self._property_types[prop_name] = "unknown"
                 continue
 
-            base_type, is_list, is_optional = self.introspector.classify_property(prop_info)
+            base_type, is_list, is_optional = self.introspector.classify_property(
+                prop_info
+            )
 
             # Skip lists and complex types
             if is_list:
@@ -4082,7 +4510,11 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
         # Define visual properties with recommended types
         visual_props = {
-            "color": ["categorical", "string", "numeric"],  # numeric for gradient coloring
+            "color": [
+                "categorical",
+                "string",
+                "numeric",
+            ],  # numeric for gradient coloring
             "size": ["numeric"],
             "x": ["numeric"],
             "y": ["numeric"],
@@ -4151,7 +4583,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             print(f"  {visual_prop} <- {source_prop} (label: '{label}')")
             if source_prop is None and label != "(None)":
-                print(f"    WARNING: Could not find property for label '{label}' in options: {list(options.keys())}")
+                print(
+                    f"    WARNING: Could not find property for label '{label}' in options: {list(options.keys())}"
+                )
             self.property_mappings[visual_prop] = source_prop
 
         print(f"Property mappings: {self.property_mappings}")
@@ -4212,11 +4646,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if "color" in transformers:
                 prop_name = self.property_mappings["color"]
                 # Handle special entity_type property
-                value = entity.type_name if prop_name == "entity_type" else entity_data.get(prop_name)
+                value = (
+                    entity.type_name
+                    if prop_name == "entity_type"
+                    else entity_data.get(prop_name)
+                )
                 old_color = node.get("color")
                 new_color = transformers["color"](value)
                 node["color"] = new_color
-                print(f"  Node {entity.name}: value={value}, color={old_color} -> {new_color}")
+                print(
+                    f"  Node {entity.name}: value={value}, color={old_color} -> {new_color}"
+                )
 
             # Handle position (x, y) together to properly manage 'fixed' flag
             has_x = False
@@ -4252,11 +4692,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
             if "shape" in transformers:
                 prop_name = self.property_mappings["shape"]
                 # Handle special entity_type property
-                value = entity.type_name if prop_name == "entity_type" else entity_data.get(prop_name)
+                value = (
+                    entity.type_name
+                    if prop_name == "entity_type"
+                    else entity_data.get(prop_name)
+                )
                 old_shape = node.get("shape")
                 new_shape = transformers["shape"](value)
                 node["shape"] = new_shape
-                print(f"  Node {entity.name}: type={value}, shape={old_shape} -> {new_shape}")
+                print(
+                    f"  Node {entity.name}: type={value}, shape={old_shape} -> {new_shape}"
+                )
 
     def _apply_mappings_to_node(self, node: dict, entity: Any) -> None:
         """Apply current property mappings to a single node.
@@ -4390,7 +4836,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             # Use colormap for numeric values
             def map_color(value):
-                color = numeric_to_color(value, min_val, max_val, colormap_name="viridis")
+                color = numeric_to_color(
+                    value, min_val, max_val, colormap_name="viridis"
+                )
                 return color
 
             return map_color
@@ -4438,7 +4886,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
         print(f"Building shape mapper for property: {prop_name}")
 
         # Available shapes in vis.js - ordered for visual distinction
-        available_shapes = ["ellipse", "box", "diamond", "star", "triangle", "triangleDown", "square", "hexagon"]
+        available_shapes = [
+            "ellipse",
+            "box",
+            "diamond",
+            "star",
+            "triangle",
+            "triangleDown",
+            "square",
+            "hexagon",
+        ]
 
         # Special handling for entity_type property
         if prop_name == "entity_type":
@@ -4546,7 +5003,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if any(self.property_mappings.values()):
             info.append(pn.pane.Markdown("\n".join(active_mappings)))
         else:
-            info.append(pn.pane.Markdown("*No active mappings - using default visualization*"))
+            info.append(
+                pn.pane.Markdown("*No active mappings - using default visualization*")
+            )
 
         return info
 
@@ -4647,14 +5106,24 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 root_label = self._node_display_name(root_id) if root_id else ""
                 steps_val = []
                 for step in p.expansion_steps:
-                    steps_val.append({
-                        "relations": list(step.relations),
-                        "iter_limit": step.iter_limit if step.iter_limit is not None else 1,
-                    })
-                policy_vals.append({
-                    "root_node": root_label,
-                    "steps": steps_val if steps_val else [{"relations": [], "iter_limit": 1}],
-                })
+                    steps_val.append(
+                        {
+                            "relations": list(step.relations),
+                            "iter_limit": (
+                                step.iter_limit if step.iter_limit is not None else 1
+                            ),
+                        }
+                    )
+                policy_vals.append(
+                    {
+                        "root_node": root_label,
+                        "steps": (
+                            steps_val
+                            if steps_val
+                            else [{"relations": [], "iter_limit": 1}]
+                        ),
+                    }
+                )
             if policy_vals:
                 startval = {"policies": policy_vals}
 
@@ -4801,9 +5270,7 @@ class OOLDGraphDetailTool(GraphDetailTool):
         if self._visible_node_ids is None and self._visible_edge_keys is None:
             msg = f"Showing all **{total_nodes}** nodes and **{total_edges}** edges"
         else:
-            msg = (
-                f"Showing **{shown_nodes}**/{total_nodes} nodes and **{shown_edges}**/{total_edges} edges *(filtered)*"
-            )
+            msg = f"Showing **{shown_nodes}**/{total_nodes} nodes and **{shown_edges}**/{total_edges} edges *(filtered)*"
         if errors:
             msg += "\n\n" + "\n".join(f"- {e}" for e in errors)
         self._query_status.object = msg
@@ -4887,7 +5354,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             for node_id in self._current_selected_node_ids:
                 if node_id in self.entity_dict:
                     entity = self.entity_dict[node_id]
-                    deserialized = self._deserialize_property_value(entity, column, value)
+                    deserialized = self._deserialize_property_value(
+                        entity, column, value
+                    )
                     entity.set(column, deserialized)
                     print(f"  Updated {node_id}")
 
@@ -4906,7 +5375,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """Show the JSON editor UI for creating a new entity of entity_type (schema dict)."""
         entity_type_name = self.introspector.get_type_name(entity_type)
         self.oold_detail_col.clear()
-        self.oold_detail_col.append(pn.pane.Markdown(f"### Create New {entity_type_name}"))
+        self.oold_detail_col.append(
+            pn.pane.Markdown(f"### Create New {entity_type_name}")
+        )
 
         type_props = self.introspector.get_properties(entity_type)
         default_values: dict[str, Any] = {}
@@ -4929,20 +5400,28 @@ class OOLDGraphDetailTool(GraphDetailTool):
             compact=True,
             sizing_mode="stretch_width",
         )
-        self.new_entity_save_button = pn.widgets.Button(name="Save Entity", button_type="primary", width=150)
+        self.new_entity_save_button = pn.widgets.Button(
+            name="Save Entity", button_type="primary", width=150
+        )
         self.new_entity_save_button.on_click(self.on_new_entity_save)
-        self.new_entity_cancel_button = pn.widgets.Button(name="Cancel", button_type="default", width=150)
+        self.new_entity_cancel_button = pn.widgets.Button(
+            name="Cancel", button_type="default", width=150
+        )
         self.new_entity_cancel_button.on_click(self.on_new_entity_cancel)
         self._new_entity_type = entity_type
 
         self.oold_detail_col.append(self.new_entity_editor)
-        self.oold_detail_col.append(pn.Row(self.new_entity_save_button, self.new_entity_cancel_button))
+        self.oold_detail_col.append(
+            pn.Row(self.new_entity_save_button, self.new_entity_cancel_button)
+        )
         self.detail_tabs.active = 2
 
     def on_create_entity_click(self, event: Any) -> None:
         """Callback when the 'Create Entity' button is clicked."""
         try:
-            if not hasattr(self, "new_entity_type_select") or not hasattr(self, "_new_entity_node_id"):
+            if not hasattr(self, "new_entity_type_select") or not hasattr(
+                self, "_new_entity_node_id"
+            ):
                 return
             entity_type_name = self.new_entity_type_select.value
             entity_type = self.entity_types[entity_type_name]
@@ -4963,7 +5442,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
             event: Button click event
         """
         try:
-            if not hasattr(self, "new_entity_editor") or not hasattr(self, "_new_entity_type"):
+            if not hasattr(self, "new_entity_editor") or not hasattr(
+                self, "_new_entity_type"
+            ):
                 return
 
             # Get the entity data from editor
@@ -4979,7 +5460,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
                 entity_data["id"] = f"urn:uuid:{fallback_uuid}"
 
             # Create the entity instance
-            new_entity = EntityAdapter(entity_data, entity_type, entity_type_name, self.schema_registry)
+            new_entity = EntityAdapter(
+                entity_data, entity_type, entity_type_name, self.schema_registry
+            )
             entity_iri = new_entity.get_iri()
 
             # Add to entity_list and entity_dict
@@ -4989,8 +5472,12 @@ class OOLDGraphDetailTool(GraphDetailTool):
             # Create visjs node for the new entity, preserving the cursor position if available
             node_label = entity_data.get("name", entity_iri)
             pending_pos = {}
-            if hasattr(self, "_pending_node_positions") and hasattr(self, "_new_entity_node_id"):
-                pending_pos = self._pending_node_positions.pop(self._new_entity_node_id, {})
+            if hasattr(self, "_pending_node_positions") and hasattr(
+                self, "_new_entity_node_id"
+            ):
+                pending_pos = self._pending_node_positions.pop(
+                    self._new_entity_node_id, {}
+                )
             new_visjs_node = {
                 "id": entity_iri,
                 "label": node_label,
@@ -5017,8 +5504,16 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             # Clear the creation UI and show success message
             self.oold_detail_col.clear()
-            self.oold_detail_col.append(pn.pane.Markdown(f"### ✓ Entity Created Successfully\n\nIRI: `{entity_iri}`"))
-            self.oold_detail_col.append(pn.pane.Markdown(f"The new {entity_type_name} has been added to the graph."))
+            self.oold_detail_col.append(
+                pn.pane.Markdown(
+                    f"### ✓ Entity Created Successfully\n\nIRI: `{entity_iri}`"
+                )
+            )
+            self.oold_detail_col.append(
+                pn.pane.Markdown(
+                    f"The new {entity_type_name} has been added to the graph."
+                )
+            )
 
         except Exception as e:
             print(f"Error saving new entity: {e}")
@@ -5026,7 +5521,9 @@ class OOLDGraphDetailTool(GraphDetailTool):
 
             traceback.print_exc()
             self.oold_detail_col.clear()
-            self.oold_detail_col.append(pn.pane.Markdown(f"### Error Creating Entity\n\n```\n{e!s}\n```"))
+            self.oold_detail_col.append(
+                pn.pane.Markdown(f"### Error Creating Entity\n\n```\n{e!s}\n```")
+            )
 
     def on_new_entity_cancel(self, event: Any) -> None:
         """Callback when the 'Cancel' button is clicked during entity creation.
@@ -5038,6 +5535,17 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         self.oold_detail_col.clear()
         self.oold_detail_col.append(pn.pane.Markdown("### Entity creation cancelled"))
+
+    def _on_filter_change(self, event: Any) -> None:
+        """Callback triggered when the JSON Editor value changes."""
+        val = event.new
+
+        if not val or "_trigger_apply" not in val:
+            return
+
+        raw_query = val.get("Advanced", {}).get("query", "")
+
+        print(f"Filter Apply Button Pressed!\nExecuting SPARQL Query:\n{raw_query}")
 
 
 if __name__ == "__main__":

@@ -110,7 +110,10 @@ EXTRA_IRI_FIELDS: dict = {
 # -- Build entity_types list --------------------------------------------------
 
 context_inner = context_doc.get("@context", context_doc)
-context_pseudo_schema: dict = {"$id": context_url, "@context": {**context_inner, **EXTRA_IRI_FIELDS}}
+context_pseudo_schema: dict = {
+    "$id": context_url,
+    "@context": {**context_inner, **EXTRA_IRI_FIELDS},
+}
 
 ENTITY_IRI = "https://w3id.org/2004/02/Entity"
 
@@ -221,17 +224,24 @@ for type_iri, parent_name in SUBTYPE_TO_PARENT.items():
     parent = schemas[parent_name]
     parent_id = parent.get("$id", parent_name)
     meta = CLASS_METADATA.get(type_iri, {})
-    sub_schemas.append({
-        "$id": type_iri,
-        "title": meta.get("title", type_iri.split(":")[-1]),
-        "description": meta.get("description", ""),
-        "type": "object",
-        "@context": parent.get("@context", {}),
-        "allOf": [{"$ref": parent_id}],
-        "properties": {},
-    })
+    sub_schemas.append(
+        {
+            "$id": type_iri,
+            "title": meta.get("title", type_iri.split(":")[-1]),
+            "description": meta.get("description", ""),
+            "type": "object",
+            "@context": parent.get("@context", {}),
+            "allOf": [{"$ref": parent_id}],
+            "properties": {},
+        }
+    )
 
-entity_types: list[dict] = [ENTITY_SCHEMA, context_pseudo_schema, *schemas.values(), *sub_schemas]
+entity_types: list[dict] = [
+    ENTITY_SCHEMA,
+    context_pseudo_schema,
+    *schemas.values(),
+    *sub_schemas,
+]
 
 # -- Config -------------------------------------------------------------------
 
@@ -249,7 +259,14 @@ config = OOLDGraphConfig(
             ExpansionStep(
                 uuid="physmet-step1",
                 name="step1",
-                relations=["-ExtendsSchema", "-SubClassOf", "-HasSchemaType", "-HasRdfType", "hasInput", "hasOutput"],
+                relations=[
+                    "-ExtendsSchema",
+                    "-SubClassOf",
+                    "-HasSchemaType",
+                    "-HasRdfType",
+                    "hasInput",
+                    "hasOutput",
+                ],
                 iter_limit=10,
             ),
         ],
@@ -258,6 +275,9 @@ config = OOLDGraphConfig(
 
 # -- Launch -------------------------------------------------------------------
 
-if __name__ == "__main__":
-    graph_detail_panel = OOLDGraphDetailTool(config=config)
-    pn.serve(graph_detail_panel, show=True, title="PhysMet Research Data Graph")
+graph_detail_panel = OOLDGraphDetailTool(config=config)
+
+# Notice this is completely unindented and NOT inside an if __name__ block
+pn.Column(graph_detail_panel, styles={"overflow-y": "hidden"}).servable(
+    title="PhysMet Research Data Graph"
+)
