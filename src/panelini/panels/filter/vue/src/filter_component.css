@@ -1,0 +1,65 @@
+/* Safely flattens the root wrapper without deleting the tab headers */
+.json-editor-scroll-area {
+    max-height: calc(100vh - 88px);
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    .card {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 2px !important;
+        margin: 0 !important;
+    }
+
+    .card-header {
+        margin-bottom: 10px;
+    }
+
+    .card-title {
+        display: none !important;
+    }
+
+    .card-body {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .btn-group {
+        display: none;
+    }
+
+    .je-object__controls {
+        display: none;
+    }
+
+    .json-editor-btntype-add {
+        background-color: #fff;
+        border-color: var(--bs-success);
+        border-radius: var(--bs-border-radius-sm) !important;
+        color: var(--bs-success);
+        margin-right: 1rem;
+    }
+
+    .json-editor-btntype-add:active,
+    .json-editor-btntype-add:focus-visible,
+    .json-editor-btntype-add:hover {
+        background-color: var(--bs-success);
+        border-color: var(--bs-success);
+        color: #fff;
+    }
+
+    .json-editor-btntype-deletelast {
+        background-color: #fff;
+        border-color: var(--bs-danger);
+        border-radius: var(--bs-border-radius-sm) !important;
+        color: var(--bs-danger);
+    }
+
+    .json-editor-btntype-deletelast:active,
+    .json-editor-btntype-deletelast:focus-visible,
+    .json-editor-btntype-deletelast:hover {
+        background-color: var(--bs-danger);
+        border-color: var(--bs-danger);
+        color: #fff;
+    }
+}
