@@ -161,3 +161,7 @@ docs/_static/media/_videos/
 # Generated docs portfolio (build artifacts)
 docs/portfolio/
 docs/_static/portfolio/
+
+# JupyterLite build output
+jupyterlite_build/
+.jupyterlite.doit.db
