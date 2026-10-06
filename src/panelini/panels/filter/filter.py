@@ -11,5 +11,6 @@ bundled_assets_dir = Path(__file__).parent / "vue" / "dist"
 
 class Filter(AnyWidgetComponent):
     value = param.Dict(default={})
+    schema = param.Dict(default={})
 
     _esm: ClassVar = bundled_assets_dir / "filter_vue.mjs"

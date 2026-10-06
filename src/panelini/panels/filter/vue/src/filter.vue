@@ -14,8 +14,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, createApp } from 'vue';
 import * as jsonEditorModule from '@json-editor/json-editor';
+import { register_ontocombo } from './ontocombo/json_editor_bridge.js';
 
 const props = defineProps({
     model: Object
@@ -29,6 +30,7 @@ let isUpdating = false;
 const bsSelect = { "class": "form-select" };
 const flatContainer = { "class": "border-0 p-0 m-0 bg-transparent shadow-none" };
 
+// Vue owns the schema structure
 const filterSchema = {
     "type": "object",
     "format": "categories",
@@ -54,20 +56,20 @@ const filterSchema = {
                     "subject": {
                         "type": "string",
                         "title": "Subject",
-                        "enum": ["?s", "Person", "Organization", "Location"],
-                        "options": { "grid_columns": 4, "inputAttributes": bsSelect }
+                        "format": "ontocombo",
+                        "options": { "grid_columns": 4, "ontology_data": [] }
                     },
                     "predicate": {
                         "type": "string",
                         "title": "Predicate",
-                        "enum": ["?p", "hasName", "hasAge", "locatedIn"],
-                        "options": { "grid_columns": 4, "inputAttributes": bsSelect }
+                        "format": "ontocombo",
+                        "options": { "grid_columns": 4, "ontology_data": [] }
                     },
                     "object": {
                         "type": "string",
                         "title": "Object",
-                        "enum": ["?o", "John", "30", "Norway"],
-                        "options": { "grid_columns": 4, "inputAttributes": bsSelect }
+                        "format": "ontocombo",
+                        "options": { "grid_columns": 4, "ontology_data": [] }
                     },
                     "logic": {
                         "type": "string",
@@ -86,7 +88,7 @@ const filterSchema = {
                 }
             },
             "default": [
-                { "subject": "?s", "predicate": "?p", "object": "?o", "logic": "AND", "modifier": "" }
+                { "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }
             ]
         },
         "Advanced": {
@@ -101,6 +103,7 @@ const filterSchema = {
                     "type": "string",
                     "title": " ",
                     "format": "textarea",
+                    "default": "SELECT * WHERE {\n  ?s ?p ?o .\n}",
                     "options": {
                         "inputAttributes": {
                             "class": "form-control",
@@ -125,45 +128,55 @@ const injectCSS = (href, targetNode) => {
 
 const cancelQuery = () => {
     if (props.model && editor) {
-        let val = editor.getValue();
-        val = JSON.parse(JSON.stringify(val || {}));
-        val._trigger_cancel = Date.now();
-        props.model.set('value', val);
-        props.model.save_changes();
+        isUpdating = true;
+        const simpleEditor = editor.getEditor('root.Simple');
+        if (simpleEditor) {
+            simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
+        }
+        const advEditor = editor.getEditor('root.Advanced.query');
+        if (advEditor) {
+            advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
+        }
+        updateLayout();
+        setTimeout(() => {
+            let val = editor.getValue();
+            val = JSON.parse(JSON.stringify(val || {}));
+            const oldVal = props.model.get('value') || {};
+            val._trigger_apply = oldVal._trigger_apply || 0;
+            val._trigger_cancel = Date.now();
+            props.model.set('value', val);
+            props.model.save_changes();
+            isUpdating = false;
+        }, 50);
     }
 };
 
 const applyQuery = () => {
     if (props.model && editor) {
-        let val = editor.getValue();
-        val = JSON.parse(JSON.stringify(val || {}));
-        val._trigger_apply = Date.now();
-        props.model.set('value', val);
-        props.model.save_changes();
+        setTimeout(() => {
+            let val = editor.getValue();
+            val = JSON.parse(JSON.stringify(val || {}));
+            const oldVal = props.model.get('value') || {};
+            val._trigger_cancel = oldVal._trigger_cancel || 0;
+            val._trigger_apply = Date.now();
+            props.model.set('value', val);
+            props.model.save_changes();
+        }, 50);
     }
 };
 
-// Layout manager that specifically targets explicit data-schemapath indices
 const updateLayout = () => {
     nextTick(() => {
         const shadowRoot = editorHolder.value?.getRootNode();
         if (!shadowRoot || !editor) return;
-
-        // 1. Get the TRUE length of the active array directly from the editor's data
         const currentData = editor.getValue();
         const actualLength = currentData?.Simple?.length || 0;
-
-        // 2. Loop strictly up to the actual active length, ignoring the hidden ghost nodes
         for (let index = 0; index < actualLength; index++) {
             const isLast = (index === actualLength - 1);
-
             const logicNode = shadowRoot.querySelector(`[data-schemapath="root.Simple.${index}.logic"]`);
             const modNode = shadowRoot.querySelector(`[data-schemapath="root.Simple.${index}.modifier"]`);
-
-            isLast ? logicNode.classList.add('d-none') : logicNode.classList.remove('d-none');
-            isLast ? modNode.classList.add('d-none') : modNode.classList.remove('d-none');
-
-            console.log(isLast, logicNode)
+            if (logicNode) isLast ? logicNode.classList.add('d-none') : logicNode.classList.remove('d-none');
+            if (modNode) isLast ? modNode.classList.add('d-none') : modNode.classList.remove('d-none');
         };
     });
 };
@@ -179,6 +192,21 @@ onMounted(async () => {
     try {
         const JSONEditor = jsonEditorModule.JSONEditor || jsonEditorModule.default?.JSONEditor || window.JSONEditor;
 
+        // 1. Register our custom Vue ontocombo component
+        register_ontocombo(JSONEditor, createApp);
+
+        // 2. Grab the raw data payload from Python using the name 'schema'
+        const rawData = props.model?.get('schema') || {};
+        const entitiesData = rawData.entities || [];
+        const predicatesData = rawData.predicates || [];
+
+        // 3. Inject the dynamic data into your local Vue schema
+        const simpleProps = filterSchema.properties.Simple.items.properties;
+        simpleProps.subject.options.ontology_data = entitiesData;
+        simpleProps.object.options.ontology_data = entitiesData;
+        simpleProps.predicate.options.ontology_data = predicatesData;
+
+        // 4. Initialize editor
         editor = new JSONEditor(editorHolder.value, {
             theme: 'bootstrap5',
             iconlib: 'fontawesome5',
@@ -202,14 +230,12 @@ onMounted(async () => {
             navLinks.forEach(link => {
                 if (link.textContent.trim() === 'Simple') link.click();
             });
-
             updateLayout();
         });
 
         editor.on('change', () => {
             if (isUpdating) return;
             let val = editor.getValue();
-
             let isSimpleActive = true;
             const navLinks = shadowRoot.querySelectorAll('.nav-tabs .nav-link');
             navLinks.forEach(link => {
@@ -225,14 +251,19 @@ onMounted(async () => {
                     if (i > 0) {
                         let prevRow = val.Simple[i - 1];
                         if (prevRow.modifier === 'NOT') {
-                            rowText = `NOT (${rowText})`;
+                            rowText = `FILTER NOT EXISTS { ${rowText} }`;
                         }
-                        queryParts.push(`\n${prevRow.logic}\n`);
+                        let joiner = prevRow.logic === 'OR' ? ' } UNION {\n    ' : ' .\n    ';
+                        queryParts.push(joiner);
+                    } else {
+                        if (row.modifier === 'NOT') {
+                            rowText = `FILTER NOT EXISTS { ${rowText} }`;
+                        }
                     }
                     queryParts.push(rowText);
                 });
 
-                const newAdvanced = queryParts.join('');
+                const newAdvanced = `SELECT * WHERE {\n  ${queryParts.join('')} \n}`;
                 if (!val.Advanced) val.Advanced = {};
 
                 if (val.Advanced.query !== newAdvanced) {
@@ -248,7 +279,11 @@ onMounted(async () => {
 
             if (props.model) {
                 val = JSON.parse(JSON.stringify(val || {}));
+                const oldVal = props.model.get('value') || {};
+                if (oldVal._trigger_apply) val._trigger_apply = oldVal._trigger_apply;
+                if (oldVal._trigger_cancel) val._trigger_cancel = oldVal._trigger_cancel;
                 props.model.set('value', val);
+                props.model.save_changes();
             }
         });
 
