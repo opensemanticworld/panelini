@@ -28,28 +28,55 @@ let editor = null;
 let isUpdating = false;
 
 const bsSelect = { "class": "form-select" };
-const flatContainer = { "class": "border-0 p-0 m-0 bg-transparent shadow-none" };
 
-// Vue owns the schema structure
 const filterSchema = {
     "type": "object",
     "format": "categories",
     "title": " ",
     "properties": {
-        "Simple": {
+        "Basic": {
             "type": "array",
             "minItems": 1,
             "options": {
-                "category": "Simple",
-                "containerAttributes": flatContainer,
+                "category": "Basic",
                 "titleHidden": true
             },
             "items": {
                 "type": "object",
                 "format": "grid",
                 "options": {
-                    "containerAttributes": flatContainer,
-                    "inputAttributes": flatContainer,
+                    "titleHidden": true
+                },
+                "properties": {
+                    "predicate": {
+                        "type": "string",
+                        "title": "Predicate",
+                        "format": "ontocombo",
+                        "options": { "grid_columns": 5, "ontology_data": [] }
+                    },
+                    "object": {
+                        "type": "string",
+                        "title": "Object",
+                        "format": "ontocombo",
+                        "options": { "grid_columns": 5, "ontology_data": [] }
+                    }
+                }
+            },
+            "default": [
+                { "predicate": "", "object": "" }
+            ]
+        },
+        "Simple": {
+            "type": "array",
+            "minItems": 1,
+            "options": {
+                "category": "Simple",
+                "titleHidden": true
+            },
+            "items": {
+                "type": "object",
+                "format": "grid",
+                "options": {
                     "titleHidden": true
                 },
                 "properties": {
@@ -95,7 +122,6 @@ const filterSchema = {
             "type": "object",
             "options": {
                 "category": "Advanced",
-                "containerAttributes": flatContainer,
                 "titleHidden": true
             },
             "properties": {
@@ -126,24 +152,31 @@ const injectCSS = (href, targetNode) => {
     }
 };
 
+const getActiveTab = (shadowRoot) => {
+    const activeLink = shadowRoot?.querySelector('.nav-tabs .nav-link.active');
+    return activeLink ? activeLink.textContent.trim() : 'Basic';
+};
+
 const cancelQuery = () => {
     if (props.model && editor) {
         isUpdating = true;
+        const basicEditor = editor.getEditor('root.Basic');
+        if (basicEditor) basicEditor.setValue([{ "predicate": "", "object": "" }]);
         const simpleEditor = editor.getEditor('root.Simple');
-        if (simpleEditor) {
-            simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
-        }
+        if (simpleEditor) simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
         const advEditor = editor.getEditor('root.Advanced.query');
-        if (advEditor) {
-            advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
-        }
+        if (advEditor) advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
+
         updateLayout();
+
         setTimeout(() => {
             let val = editor.getValue();
             val = JSON.parse(JSON.stringify(val || {}));
             const oldVal = props.model.get('value') || {};
             val._trigger_apply = oldVal._trigger_apply || 0;
             val._trigger_cancel = Date.now();
+            val.active_tab = getActiveTab(editorHolder.value?.getRootNode());
+
             props.model.set('value', val);
             props.model.save_changes();
             isUpdating = false;
@@ -159,6 +192,8 @@ const applyQuery = () => {
             const oldVal = props.model.get('value') || {};
             val._trigger_cancel = oldVal._trigger_cancel || 0;
             val._trigger_apply = Date.now();
+            val.active_tab = getActiveTab(editorHolder.value?.getRootNode());
+
             props.model.set('value', val);
             props.model.save_changes();
         }, 50);
@@ -169,6 +204,7 @@ const updateLayout = () => {
     nextTick(() => {
         const shadowRoot = editorHolder.value?.getRootNode();
         if (!shadowRoot || !editor) return;
+
         const currentData = editor.getValue();
         const actualLength = currentData?.Simple?.length || 0;
         for (let index = 0; index < actualLength; index++) {
@@ -186,27 +222,29 @@ onMounted(async () => {
     const shadowRoot = editorHolder.value.getRootNode();
 
     injectCSS('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', shadowRoot);
-    injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css', shadowRoot);
-    injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css', document.head);
+    injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css', shadowRoot);
+    injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css', document.head);
+    injectCSS('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', document.head);
+
 
     try {
         const JSONEditor = jsonEditorModule.JSONEditor || jsonEditorModule.default?.JSONEditor || window.JSONEditor;
 
-        // 1. Register our custom Vue ontocombo component
         register_ontocombo(JSONEditor, createApp);
 
-        // 2. Grab the raw data payload from Python using the name 'schema'
         const rawData = props.model?.get('schema') || {};
         const entitiesData = rawData.entities || [];
         const predicatesData = rawData.predicates || [];
 
-        // 3. Inject the dynamic data into your local Vue schema
+        const basicProps = filterSchema.properties.Basic.items.properties;
+        basicProps.predicate.options.ontology_data = predicatesData;
+        basicProps.object.options.ontology_data = entitiesData;
+
         const simpleProps = filterSchema.properties.Simple.items.properties;
         simpleProps.subject.options.ontology_data = entitiesData;
         simpleProps.object.options.ontology_data = entitiesData;
         simpleProps.predicate.options.ontology_data = predicatesData;
 
-        // 4. Initialize editor
         editor = new JSONEditor(editorHolder.value, {
             theme: 'bootstrap5',
             iconlib: 'fontawesome5',
@@ -222,13 +260,9 @@ onMounted(async () => {
         });
 
         editor.on('ready', () => {
-            const tabs = shadowRoot.querySelectorAll('.nav-tabs .nav-item');
-            tabs.forEach(tab => {
-                if (tab.textContent.trim() === 'Basic') tab.style.display = 'none';
-            });
             const navLinks = shadowRoot.querySelectorAll('.nav-tabs .nav-link');
             navLinks.forEach(link => {
-                if (link.textContent.trim() === 'Simple') link.click();
+                if (link.textContent.trim() === 'Basic') link.click();
             });
             updateLayout();
         });
@@ -236,11 +270,12 @@ onMounted(async () => {
         editor.on('change', () => {
             if (isUpdating) return;
             let val = editor.getValue();
-            let isSimpleActive = true;
+
+            let isSimpleActive = false;
             const navLinks = shadowRoot.querySelectorAll('.nav-tabs .nav-link');
             navLinks.forEach(link => {
-                if (link.textContent.trim() === 'Advanced' && link.classList.contains('active')) {
-                    isSimpleActive = false;
+                if (link.textContent.trim() === 'Simple' && link.classList.contains('active')) {
+                    isSimpleActive = true;
                 }
             });
 
@@ -282,6 +317,7 @@ onMounted(async () => {
                 const oldVal = props.model.get('value') || {};
                 if (oldVal._trigger_apply) val._trigger_apply = oldVal._trigger_apply;
                 if (oldVal._trigger_cancel) val._trigger_cancel = oldVal._trigger_cancel;
+                val.active_tab = getActiveTab(shadowRoot);
                 props.model.set('value', val);
                 props.model.save_changes();
             }

@@ -3,25 +3,28 @@ import ontocombo from './ontocombo.vue';
 export function register_ontocombo(JSONEditor, createApp) {
     JSONEditor.defaults.editors.ontocombo = class extends JSONEditor.defaults.editors.string {
         build() {
-            // 1. Create a dummy hidden input to satisfy JSON-Editor's internal methods
-            this.input = document.createElement('input');
-            this.input.type = 'hidden';
-            this.container.appendChild(this.input);
+            super.build();
 
-            // 2. Create the container for Vue
+            // FIX: Hide the default text input completely by making it hidden
+            if (this.input) {
+                this.input.type = 'hidden';
+                this.input.style.setProperty('display', 'none', 'important');
+            }
+
             this.vueContainer = document.createElement('div');
-            this.container.appendChild(this.vueContainer);
+            this.vueContainer.style.width = '100%';
 
-            // 3. Mount Vue
+            this.input.parentNode.insertBefore(this.vueContainer, this.input.nextSibling);
+
             const ontologyData = this.schema.options?.ontology_data || [];
 
             this.vueApp = createApp(ontocombo, {
                 options: ontologyData,
                 modelValue: this.value,
-                placeholder: this.schema.title || 'Select...',
+                placeholder: '',
                 'onUpdate:modelValue': (newVal) => {
                     this.value = newVal;
-                    this.input.value = newVal; // Keep dummy input in sync
+                    if (this.input) this.input.value = newVal;
                     this.onChange(true);
                 }
             });
@@ -30,25 +33,10 @@ export function register_ontocombo(JSONEditor, createApp) {
         }
 
         setValue(val) {
-            this.value = val;
-            if (this.input) this.input.value = val;
+            super.setValue(val);
             if (this.vueInstance) {
                 this.vueInstance.$props.modelValue = val;
             }
-        }
-
-        // Safely override enable/disable to prevent the crash
-        enable() {
-            if (!this.always_disabled) {
-                this.disabled = false;
-                if (this.input) this.input.disabled = false;
-            }
-        }
-
-        disable(alwaysDisabled) {
-            if (alwaysDisabled) this.always_disabled = true;
-            this.disabled = true;
-            if (this.input) this.input.disabled = true;
         }
 
         destroy() {

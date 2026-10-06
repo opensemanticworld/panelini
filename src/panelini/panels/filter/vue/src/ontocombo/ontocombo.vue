@@ -1,39 +1,47 @@
 <template>
     <div class="ontocombo" ref="containerRef">
-        <div class="ontocombo-header" @click.stop="toggleDropdown">
-            <input type="text" class="ontocombo-input" v-model="searchQuery" @focus="isOpen = true" @click.stop
-                :placeholder="selectedLabel || placeholder" />
-            <div class="ontocombo-arrow">
+        <div class="ontocombo-header form-control p-0 d-flex align-items-stretch" @click.stop="openDropdown">
+            <input type="text" class="ontocombo-input flex-grow-1 px-2 border-0 bg-transparent" v-model="searchQuery"
+                @focus="openDropdown" @click.stop="openDropdown" @input="onInput" :placeholder="placeholder"
+                style="outline: none !important; box-shadow: none !important; min-width: 0;" />
+            <!-- Restored FontAwesome 5 icons with flex-shrink-0 so they don't get crushed -->
+            <div class="ontocombo-arrow d-flex align-items-center px-2 flex-shrink-0" @click.stop="toggleDropdown"
+                style="cursor: pointer;">
                 <i class="fas" :class="isOpen ? 'fa-caret-down' : 'fa-caret-right'"></i>
             </div>
         </div>
 
-        <div v-show="isOpen" class="ontocombo-dropdown" @click.stop>
-            <template v-for="item in visibleItems" :key="item.id">
-                <div v-if="item.isGroup" class="ontocombo-row is-group" :class="getDepthClass(item.level, true)"
-                    :style="{ paddingLeft: `${item.level * 16 + 8}px` }" @click.stop="toggleGroup(item.id)">
-                    <span class="row-label" :title="item.label">{{ item.label }}</span>
-                    <i class="fas row-toggle" :class="item.expanded ? 'fa-caret-down' : 'fa-caret-right'"></i>
+        <Teleport to="body">
+            <div v-if="isOpen" class="ontocombo-dropdown" :style="dropdownStyle" @click.stop>
+                <template v-for="item in visibleItems" :key="item.id">
+                    <div v-if="item.isGroup" class="ontocombo-row is-group" :class="getDepthClass(item.level, true)"
+                        :style="{ display: 'flex', cursor: 'pointer', 'align-items': 'center', padding: `0 ${item.level * 16 + 8}px` }"
+                        @click.stop="toggleGroup(item.id)">
+                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label }}</span>
+                        <!-- Restored FontAwesome 5 icons for groups -->
+                        <i class="fas row-toggle" :class="item.expanded ? 'fa-caret-down' : 'fa-caret-right'"></i>
+                    </div>
+                    <div v-else class="ontocombo-row is-element" :class="getDepthClass(item.level, false)"
+                        :style="{ cursor: 'pointer', paddingLeft: `${item.level * 16 + 8}px` }"
+                        @click.stop="selectItem(item)">
+                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label }}</span>
+                    </div>
+                </template>
+                <div v-if="visibleItems.length === 0" class="ontocombo-empty">
+                    Using custom value: "{{ searchQuery }}"
                 </div>
-                <div v-else class="ontocombo-row is-element" :class="getDepthClass(item.level, false)"
-                    :style="{ paddingLeft: `${item.level * 16 + 8}px` }" @click.stop="selectItem(item)">
-                    <span class="row-label" :title="item.label">{{ item.label }}</span>
-                </div>
-            </template>
-            <div v-if="visibleItems.length === 0" class="ontocombo-empty">
-                No results found
             </div>
-        </div>
+        </Teleport>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
     modelValue: String,
     options: { type: Array, default: () => [] },
-    placeholder: { type: String, default: 'Select...' }
+    placeholder: { type: String, default: '' }
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -42,29 +50,52 @@ const containerRef = ref(null);
 const isOpen = ref(false);
 const searchQuery = ref('');
 const expandedGroups = ref(new Set());
-const selectedLabel = ref('');
+const dropdownStyle = ref({});
+
+const updatePosition = () => {
+    if (containerRef.value && isOpen.value) {
+        const rect = containerRef.value.getBoundingClientRect();
+        dropdownStyle.value = {
+            position: 'fixed',
+            top: `${rect.bottom + 4}px`,
+            left: `${rect.left}px`,
+            width: `${rect.width}px`,
+            zIndex: 999999,
+            backgroundColor: '#ffffff',
+            border: '1px solid #ced4da',
+            boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)',
+            maxHeight: '250px',
+            overflowY: 'auto'
+        };
+    }
+};
 
 watch(() => props.modelValue, (newVal) => {
-    if (!newVal) {
-        selectedLabel.value = '';
-        return;
-    }
-    const findLabel = (nodes) => {
-        for (const node of nodes) {
-            if (!node.children && node.value === newVal) return node.label;
-            if (node.children) {
-                const found = findLabel(node.children);
-                if (found) return found;
+    if (newVal !== searchQuery.value) {
+        const findLabel = (nodes) => {
+            for (const node of nodes) {
+                if (!node.children && node.value === newVal) return node.label;
+                if (node.children) {
+                    const found = findLabel(node.children);
+                    if (found) return found;
+                }
             }
-        }
-        return newVal;
-    };
-    selectedLabel.value = findLabel(props.options) || newVal;
+            return null;
+        };
+        searchQuery.value = findLabel(props.options) || newVal || '';
+    }
 }, { immediate: true });
+
+watch(isOpen, (val) => {
+    if (val) nextTick(updatePosition);
+});
+
+const onInput = () => {
+    emit('update:modelValue', searchQuery.value);
+};
 
 const visibleItems = computed(() => {
     const query = searchQuery.value.toLowerCase();
-
     const processNodes = (nodes, level = 0, forceExpand = false) => {
         let result = [];
         for (const node of nodes) {
@@ -74,16 +105,8 @@ const visibleItems = computed(() => {
             if (!query || matchesQuery || childMatches) {
                 if (node.children) {
                     const isExpanded = forceExpand || !!query || expandedGroups.value.has(node.id);
-                    result.push({
-                        ...node,
-                        isGroup: true,
-                        level,
-                        expanded: isExpanded
-                    });
-
-                    if (isExpanded) {
-                        result.push(...processNodes(node.children, level + 1, forceExpand));
-                    }
+                    result.push({ ...node, isGroup: true, level, expanded: isExpanded });
+                    if (isExpanded) result.push(...processNodes(node.children, level + 1, forceExpand));
                 } else {
                     result.push({ ...node, isGroup: false, level });
                 }
@@ -91,7 +114,6 @@ const visibleItems = computed(() => {
         }
         return result;
     };
-
     return processNodes(props.options);
 });
 
@@ -103,15 +125,17 @@ const hasMatchingChild = (nodes, query) => {
     return false;
 };
 
-const toggleDropdown = () => {
-    isOpen.value = !isOpen.value;
-    if (isOpen.value) searchQuery.value = '';
+const openDropdown = () => {
+    isOpen.value = true;
+    nextTick(updatePosition);
 };
 
-const closeDropdown = () => {
-    isOpen.value = false;
-    searchQuery.value = '';
+const toggleDropdown = () => {
+    isOpen.value = !isOpen.value;
+    if (isOpen.value) nextTick(updatePosition);
 };
+
+const closeDropdown = () => { isOpen.value = false; };
 
 const toggleGroup = (groupId) => {
     if (expandedGroups.value.has(groupId)) {
@@ -123,8 +147,8 @@ const toggleGroup = (groupId) => {
 };
 
 const selectItem = (item) => {
+    searchQuery.value = item.label;
     emit('update:modelValue', item.value);
-    selectedLabel.value = item.label;
     closeDropdown();
 };
 
@@ -136,18 +160,29 @@ const getDepthClass = (level, isGroup) => {
     return `${prefix}-level-${level}`;
 };
 
-const handleClickOutside = (event) => {
+const handleGlobalEvent = (event) => {
     if (isOpen.value && containerRef.value) {
         const path = event.composedPath();
-        if (!path.includes(containerRef.value)) {
+        const dropdownEl = document.querySelector('.ontocombo-dropdown');
+        if (!path.includes(containerRef.value) && (!dropdownEl || !path.includes(dropdownEl))) {
             closeDropdown();
         }
     }
 };
 
-onMounted(() => document.addEventListener('click', handleClickOutside));
-onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside));
+onMounted(() => {
+    document.addEventListener('click', handleGlobalEvent);
+    document.addEventListener('mousedown', handleGlobalEvent);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleGlobalEvent);
+    document.removeEventListener('mousedown', handleGlobalEvent);
+    window.removeEventListener('scroll', updatePosition, true);
+    window.removeEventListener('resize', updatePosition);
+});
 </script>
 
-<!-- Link the separate CSS file here -->
 <style src="./ontocombo.css"></style>
