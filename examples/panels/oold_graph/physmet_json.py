@@ -275,9 +275,6 @@ config = OOLDGraphConfig(
 
 # -- Launch -------------------------------------------------------------------
 
-graph_detail_panel = OOLDGraphDetailTool(config=config)
-
-# Notice this is completely unindented and NOT inside an if __name__ block
-pn.Column(graph_detail_panel, styles={"overflow-y": "hidden"}).servable(
-    title="PhysMet Research Data Graph"
-)
+if __name__ == "__main__":
+    graph_detail_panel = OOLDGraphDetailTool(config=config)
+    pn.serve(graph_detail_panel, show=True, title="PhysMet Research Data Graph")
