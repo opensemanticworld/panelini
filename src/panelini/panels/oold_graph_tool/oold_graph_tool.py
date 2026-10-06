@@ -20,7 +20,6 @@ from rdflib.term import URIRef
 
 from panelini.panels.jsoneditor import JsonEditor
 from panelini.panels.monacoeditor import MonacoEditor
-from panelini.panels.filter.filter import Filter
 from panelini.panels.oold_graph_tool.entity_adapter import (
     EntityAdapter,
     adapt_entity,
@@ -530,7 +529,6 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.text_col = pn.Column(sizing_mode="stretch_width")
         self.viz_config_col = pn.Column(sizing_mode="stretch_width")
         self.query_col = pn.Column(sizing_mode="stretch_both")
-        self.filter_col = pn.Column(sizing_mode="stretch_both")
 
         # Property mapping state
         self.property_mappings = {
@@ -614,18 +612,6 @@ class OOLDGraphDetailTool(GraphDetailTool):
         self.detail_tabs.append(("OO-LD Form", self.oold_detail_col))
         self.detail_tabs.append(("Text", self.text_col))
         self.detail_tabs.append(("Visualization Config", self.viz_config_col))
-
-        # -- Filter tab widgets --
-        self.filter_col.clear()
-        self.filter_widget = Filter(sizing_mode="stretch_both")
-
-        # Watch the new 'value' param
-        self.filter_widget.param.watch(self._on_filter_change, "value")
-
-        self.filter_col.extend(
-            [pn.pane.Markdown("### Semantic Graph Filter"), self.filter_widget]
-        )
-        self.detail_tabs.append(("Filter", self.filter_col))
 
         # -- Query tab widgets --
         self._query_editor = JsonEditor(
@@ -5535,17 +5521,6 @@ class OOLDGraphDetailTool(GraphDetailTool):
         """
         self.oold_detail_col.clear()
         self.oold_detail_col.append(pn.pane.Markdown("### Entity creation cancelled"))
-
-    def _on_filter_change(self, event: Any) -> None:
-        """Callback triggered when the JSON Editor value changes."""
-        val = event.new
-
-        if not val or "_trigger_apply" not in val:
-            return
-
-        raw_query = val.get("Advanced", {}).get("query", "")
-
-        print(f"Filter Apply Button Pressed!\nExecuting SPARQL Query:\n{raw_query}")
 
 
 if __name__ == "__main__":
