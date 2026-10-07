@@ -1,6 +1,6 @@
 import json
 import panel as pn
-from tripper import Session, RDF, EMMO, DCTERMS
+from tripper import Session, RDF, EMMO, DCTERMS, Namespace
 from tripper.datadoc import search, acquire, get_context, TableDoc
 from panelini.panels.filter.filter import Filter
 
@@ -12,15 +12,11 @@ class TripperQueryModel:
         self.ts = triplestore
 
     def execute_query(self, query: str) -> str:
-        prefixes_str = ""
-        for prefix, uri in self.ts.namespaces.items():
-            prefixes_str += f"PREFIX {prefix}: <{uri}>\n"
-
-        full_query = prefixes_str + "\n" + query
-        print(f"--- Executing SPARQL ---\n{full_query}")
+        print(f"--- Executing SPARQL ---\n{query}")
 
         try:
-            results = self.ts.query(full_query)
+            # Tripper automatically resolves bound namespaces, so we pass the query directly.
+            results = self.ts.query(query)
 
             output_lines = []
             rows = list(results)
@@ -46,11 +42,20 @@ class TripperQueryModel:
     def execute_datadoc_search(self, basic_criteria: list) -> str:
         """Executes tripper.datadoc search -> acquire -> TableDoc."""
 
-        # Bind the PERS namespace so it can be matched
+        # Ensure pers is bound
         PERS = self.ts.bind("pers", "https://www.ntnu.edu/physmet/people/")
 
-        # Map string prefixes to literal Tripper Namespace objects
-        ns_map = {"rdf": RDF, "emmo": EMMO, "dcterms": DCTERMS, "pers": PERS}
+        # Dynamically build mapping from all registered namespaces (including newly discovered ones)
+        ns_map = {
+            prefix.lower(): Namespace(str(uri))
+            for prefix, uri in self.ts.namespaces.items()
+        }
+
+        # Explicit fallbacks for standard ontologies
+        ns_map["rdf"] = RDF
+        ns_map["emmo"] = EMMO
+        ns_map["dcterms"] = DCTERMS
+        ns_map["pers"] = PERS
 
         criteria = {}
         for item in basic_criteria:
@@ -61,13 +66,13 @@ class TripperQueryModel:
                 p_obj = p_str
                 o_obj = o_str
 
-                # Resolve predicate string to actual Namespace object
+                # Resolve predicate string to actual Namespace object securely
                 if ":" in p_str:
                     pref, val = p_str.split(":", 1)
                     if pref.lower() in ns_map:
                         p_obj = getattr(ns_map[pref.lower()], val)
 
-                # Resolve object string to actual Namespace object
+                # Resolve object string to actual Namespace object securely
                 if ":" in o_str:
                     pref, val = o_str.split(":", 1)
                     if pref.lower() in ns_map:
@@ -207,53 +212,129 @@ class GraphiaTool(pn.viewable.Viewer):
         return self._layout
 
     def _build_combo_data(self):
-        """Restored placeholder data so the hierarchy renders immediately."""
-        return {
-            "entities": [
-                {
-                    "id": "classes",
-                    "label": "Classes",
-                    "children": [
-                        {
-                            "id": "emmo:Dataset",
-                            "label": "Dataset",
-                            "value": "emmo:Dataset",
-                        }
-                    ],
-                },
-                {
-                    "id": "instances",
-                    "label": "Instances",
-                    "children": [
-                        {
-                            "id": "pers:ArmelPerrotin",
-                            "label": "Armel Perrotin",
-                            "value": "pers:ArmelPerrotin",
-                        }
-                    ],
-                },
-            ],
-            "predicates": [
-                {
-                    "id": "rdf_core",
-                    "label": "RDF Core",
-                    "children": [
-                        {"id": "rdf:type", "label": "rdf:type", "value": "rdf:type"}
-                    ],
-                },
-                {
-                    "id": "dcterms",
-                    "label": "DC Terms",
-                    "children": [
-                        {
-                            "id": "dcterms:creator",
-                            "label": "dcterms:creator",
-                            "value": "dcterms:creator",
-                        }
-                    ],
-                },
-            ],
-        }
+        """Dynamically fetch elements, categorizing them strictly by namespace prefix."""
+        ts = self.model.ts
+
+        # Pre-bind standard ontologies to ensure they receive correct prefixes
+        ts.bind("rdf", str(RDF))
+        ts.bind("emmo", str(EMMO))
+        ts.bind("dcterms", str(DCTERMS))
+        ts.bind("pers", "https://www.ntnu.edu/physmet/people/")
+
+        entities_tree = {"classes": {}, "instances": {}}
+        predicates_tree = {}
+
+        def parse_iri(iri_val):
+            """Intelligently splits URIs into prefix, name, and prefix:name strings."""
+            iri_str = str(iri_val)
+            if not iri_str.startswith("http"):
+                return None, None, None
+
+            # 1. Match against known bound namespaces
+            for prefix, uri in ts.namespaces.items():
+                uri_str = str(uri)
+                if iri_str.startswith(uri_str):
+                    name = iri_str[len(uri_str) :]
+                    return prefix, name, f"{prefix}:{name}"
+
+            # 2. Extract prefix and name for unknown URIs dynamically
+            if "#" in iri_str:
+                base, name = iri_str.rsplit("#", 1)
+                prefix = base.split("/")[-1] if "/" in base else "unknown"
+                ns_uri = base + "#"
+            elif "/" in iri_str:
+                base, name = iri_str.rsplit("/", 1)
+                prefix = base.split("/")[-1] if "/" in base else "unknown"
+                ns_uri = base + "/"
+            else:
+                return "other", iri_str, iri_str
+
+            # Clean the extracted prefix of special characters
+            prefix = "".join(e for e in prefix if e.isalnum()) or "other"
+
+            # Auto-bind newly discovered namespaces so Tripper can resolve them later
+            if prefix != "other" and prefix not in ts.namespaces:
+                ts.bind(prefix, ns_uri)
+
+            return prefix, name, f"{prefix}:{name}"
+
+        def add_to_tree(tree, iri_val):
+            prefix, name, value = parse_iri(iri_val)
+            if not prefix:
+                return
+
+            if prefix not in tree:
+                tree[prefix] = []
+
+            if not any(x["value"] == value for x in tree[prefix]):
+                # Store prefix as group (handled below), show 'name' as label, and 'prefix:name' as the return value
+                tree[prefix].append({"id": value, "label": name, "value": value})
+
+        # PREPOPULATE essentials to guarantee they exist even if SPARQL is empty or fails
+        add_to_tree(predicates_tree, RDF.type)
+        add_to_tree(predicates_tree, DCTERMS.creator)
+        add_to_tree(entities_tree["classes"], EMMO.Dataset)
+        add_to_tree(
+            entities_tree["instances"],
+            self.model.ts.namespaces.get("pers") + "ArmelPerrotin",
+        )
+
+        # Safe extraction handles both tuple-like and dict-like SPARQL wrappers
+        def extract_val(row, key, idx):
+            if isinstance(row, dict) or hasattr(row, "get"):
+                return row.get(key) or row.get(str(key))
+            if isinstance(row, (tuple, list)) and len(row) > idx:
+                return row[idx]
+            return row
+
+        # Fetch Predicates dynamically
+        try:
+            for row in ts.query("SELECT DISTINCT ?p WHERE { ?s ?p ?o }"):
+                add_to_tree(predicates_tree, extract_val(row, "p", 0))
+        except Exception as e:
+            print(f"Warning: Predicates query failed: {e}")
+
+        # Fetch Classes dynamically
+        try:
+            for row in ts.query("SELECT DISTINCT ?c WHERE { ?s a ?c }"):
+                add_to_tree(entities_tree["classes"], extract_val(row, "c", 0))
+        except Exception as e:
+            print(f"Warning: Classes query failed: {e}")
+
+        # Fetch Instances dynamically
+        try:
+            for row in ts.query("SELECT DISTINCT ?s WHERE { ?s a ?c }"):
+                add_to_tree(entities_tree["instances"], extract_val(row, "s", 0))
+        except Exception as e:
+            print(f"Warning: Instances query failed: {e}")
+
+        # Format prefix groups into Vue's expected nested array
+        def dict_to_grouped_list(d, parent_id, parent_label):
+            children = []
+            for prefix, items in d.items():
+                items.sort(key=lambda x: str(x["label"]).lower())
+                children.append(
+                    {"id": f"{parent_id}_{prefix}", "label": prefix, "children": items}
+                )
+            children.sort(key=lambda x: str(x["label"]).lower())
+            if not children:
+                return []
+            return [{"id": parent_id, "label": parent_label, "children": children}]
+
+        # Both Classes and Instances are appended into the entities list
+        entities_list = dict_to_grouped_list(
+            entities_tree["classes"], "classes", "Classes"
+        ) + dict_to_grouped_list(entities_tree["instances"], "instances", "Instances")
+
+        predicates_list = []
+        for prefix, items in predicates_tree.items():
+            items.sort(key=lambda x: str(x["label"]).lower())
+            predicates_list.append(
+                {"id": f"pred_{prefix}", "label": prefix, "children": items}
+            )
+        predicates_list.sort(key=lambda x: str(x["label"]).lower())
+
+        return {"entities": entities_list, "predicates": predicates_list}
 
     def _on_filter_change(self, event):
         val = event.new
