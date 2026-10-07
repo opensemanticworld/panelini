@@ -286,25 +286,50 @@ onMounted(async () => {
             });
 
             if (isSimpleActive && val && val.Simple && Array.isArray(val.Simple)) {
-                let queryParts = [];
+                let parts = [];
+                let currentOrGroup = [];
+
                 val.Simple.forEach((row, i) => {
                     let rowText = `${row.subject || '?s'} ${row.predicate || '?p'} ${row.object || '?o'}`;
+
                     if (i > 0) {
                         let prevRow = val.Simple[i - 1];
+
+                        // Strictly apply NOT modifier only to the current newly added row
                         if (prevRow.modifier === 'NOT') {
                             rowText = `FILTER NOT EXISTS { ${rowText} }`;
                         }
-                        let joiner = prevRow.logic === 'OR' ? ' } UNION {\n    ' : ' .\n    ';
-                        queryParts.push(joiner);
-                    } else {
-                        if (row.modifier === 'NOT') {
-                            rowText = `FILTER NOT EXISTS { ${rowText} }`;
+
+                        // If logic is OR, bind tightly to the previous element
+                        if (prevRow.logic === 'OR') {
+                            if (currentOrGroup.length === 0) {
+                                // Extract the immediately preceding item to start the OR group
+                                currentOrGroup.push(parts.pop());
+                            }
+                            currentOrGroup.push(rowText);
+                        } else {
+                            // If logic is AND, seal any existing OR group before adding the new AND chain
+                            if (currentOrGroup.length > 0) {
+                                parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
+                                currentOrGroup = [];
+                            }
+                            parts.push(rowText);
                         }
+                    } else {
+                        parts.push(rowText);
                     }
-                    queryParts.push(rowText);
                 });
 
-                const newAdvanced = `SELECT * WHERE {\n  ${queryParts.join('')} \n}`;
+                // Seal any dangling OR group at the end of the query
+                if (currentOrGroup.length > 0) {
+                    parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
+                }
+
+                // Join all the separate AND parts and sealed UNION blocks together cleanly
+                let queryBody = parts.join(' .\n  ');
+
+                const newAdvanced = `SELECT * WHERE {\n  ${queryBody} \n}`;
+
                 if (!val.Advanced) val.Advanced = {};
 
                 if (val.Advanced.query !== newAdvanced) {
