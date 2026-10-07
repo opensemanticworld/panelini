@@ -22,7 +22,7 @@ const at = {}, Rn = [], vr = () => {
   return (p) => u[p] || (u[p] = s(p));
 }, $f = /-\w/g, Xt = Qo(
   (s) => s.replace($f, (u) => u.slice(1).toUpperCase())
-), Gf = /\B([A-Z])/g, Fn = Qo(
+), Gf = /\B([A-Z])/g, Mn = Qo(
   (s) => s.replace(Gf, "-$1").toLowerCase()
 ), mu = Qo((s) => s.charAt(0).toUpperCase() + s.slice(1)), va = Qo(
   (s) => s ? `on${mu(s)}` : ""
@@ -508,7 +508,7 @@ function Ar(s, u, p, _, b, O) {
   }
   Za();
 }
-function Ci(s) {
+function Ei(s) {
   const u = /* @__PURE__ */ Xe(s);
   return u === s || (jt(u, "iterate", so), /* @__PURE__ */ Ft(s)) ? u : /* @__PURE__ */ _r(s) ? /* @__PURE__ */ ln(s) ? u.map((p) => cn(Mt(p))) : u.map(cn) : u.map(Mt);
 }
@@ -524,8 +524,8 @@ const oy = {
     return wa(this, Symbol.iterator, (s) => yr(this, s));
   },
   concat(...s) {
-    return Ci(this).concat(
-      ...s.map((u) => Me(u) ? Ci(u) : u)
+    return Ei(this).concat(
+      ...s.map((u) => Me(u) ? Ei(u) : u)
     );
   },
   entries() {
@@ -581,7 +581,7 @@ const oy = {
     return ja(this, "indexOf", s);
   },
   join(s) {
-    return Ci(this).join(s);
+    return Ei(this).join(s);
   },
   // keys() iterator only reads `length`, no optimization required
   lastIndexOf(...s) {
@@ -613,13 +613,13 @@ const oy = {
     return Gi(this, "splice", s);
   },
   toReversed() {
-    return Ci(this).toReversed();
+    return Ei(this).toReversed();
   },
   toSorted(s) {
-    return Ci(this).toSorted(s);
+    return Ei(this).toSorted(s);
   },
   toSpliced(...s) {
-    return Ci(this).toSpliced(...s);
+    return Ei(this).toSpliced(...s);
   },
   unshift(...s) {
     return Gi(this, "unshift", s);
@@ -1198,11 +1198,11 @@ function Ty(s, u, p, _ = !0, b = !1) {
 }
 const Tt = [];
 let fr = -1;
-const Ti = [];
-let sn = null, Si = 0;
+const Li = [];
+let sn = null, Pi = 0;
 const Nu = /* @__PURE__ */ Promise.resolve();
 let qo = null;
-function Li(s) {
+function Dn(s) {
   const u = qo || Nu;
   return s ? u.then(this ? s.bind(this) : s) : u;
 }
@@ -1226,10 +1226,10 @@ function Du() {
 }
 function Ay(s) {
   if (!Me(s))
-    sn && s.id === -1 ? sn.splice(Si + 1, 0, s) : s.flags & 1 || (Ti.push(s), s.flags |= 1);
+    sn && s.id === -1 ? sn.splice(Pi + 1, 0, s) : s.flags & 1 || (Li.push(s), s.flags |= 1);
   else
     for (let u = 0; u < s.length; u++)
-      Ti.push(s[u]);
+      Li.push(s[u]);
   Du();
 }
 function Fc(s, u, p = fr + 1) {
@@ -1243,20 +1243,20 @@ function Fc(s, u, p = fr + 1) {
   }
 }
 function Fu(s) {
-  if (Ti.length) {
-    const u = [...new Set(Ti)].sort(
+  if (Li.length) {
+    const u = [...new Set(Li)].sort(
       (p, _) => ao(p) - ao(_)
     );
-    if (Ti.length = 0, sn) {
+    if (Li.length = 0, sn) {
       for (let p = 0; p < u.length; p++)
         sn.push(u[p]);
       return;
     }
-    for (sn = u, Si = 0; Si < sn.length; Si++) {
-      const p = sn[Si];
+    for (sn = u, Pi = 0; Pi < sn.length; Pi++) {
+      const p = sn[Pi];
       p.flags & 4 && (p.flags &= -2), p.flags & 8 || p(), p.flags &= -2;
     }
-    sn = null, Si = 0;
+    sn = null, Pi = 0;
   }
 }
 const ao = (s) => s.id == null ? s.flags & 2 ? -1 : 1 / 0 : s.id;
@@ -1275,7 +1275,7 @@ function Mu(s) {
       const u = Tt[fr];
       u && (u.flags &= -2);
     }
-    fr = -1, Tt.length = 0, Fu(), qo = null, (Tt.length || Ti.length) && Mu();
+    fr = -1, Tt.length = 0, Fu(), qo = null, (Tt.length || Li.length) && Mu();
   }
 }
 let Dt = null, Hu = null;
@@ -1288,12 +1288,12 @@ function Ry(s, u = Dt, p) {
     return s;
   const _ = (...b) => {
     _._d && Yc(-1);
-    const O = Uo(u), h = Dn.length;
+    const O = Uo(u), h = Fn.length;
     let w;
     try {
       w = s(...b);
     } finally {
-      for (let a = Dn.length; a > h; a--) ud();
+      for (let a = Fn.length; a > h; a--) ud();
       Uo(O), _._d && Yc(1);
     }
     return w;
@@ -1822,7 +1822,7 @@ const Fa = (s) => s ? yd(s) ? as(s) : Fa(s.parent) : null, io = (
     $forceUpdate: (s) => s.f || (s.f = () => {
       nl(s.update);
     }),
-    $nextTick: (s) => s.n || (s.n = Li.bind(s.proxy)),
+    $nextTick: (s) => s.n || (s.n = Dn.bind(s.proxy)),
     $watch: (s) => Fy.bind(s)
   })
 ), xa = (s, u) => s !== at && !s.__isScriptSetup && et(s, u), rm = {
@@ -2196,7 +2196,7 @@ function cm(s, u) {
   };
 }
 let Ai = null;
-const um = (s, u) => u === "modelValue" || u === "model-value" ? s.modelModifiers : s[`${u}Modifiers`] || s[`${Xt(u)}Modifiers`] || s[`${Fn(u)}Modifiers`];
+const um = (s, u) => u === "modelValue" || u === "model-value" ? s.modelModifiers : s[`${u}Modifiers`] || s[`${Xt(u)}Modifiers`] || s[`${Mn(u)}Modifiers`];
 function dm(s, u, ...p) {
   if (s.isUnmounted) return;
   const _ = s.vnode.props || at;
@@ -2205,7 +2205,7 @@ function dm(s, u, ...p) {
   h && (h.trim && (b = p.map((y) => dt(y) ? y.trim() : y)), h.number && (b = b.map(Ja)));
   let w, a = _[w = va(u)] || // also try camelCase event handler (#2249)
   _[w = va(Xt(u))];
-  !a && O && (a = _[w = va(Fn(u))]), a && tr(
+  !a && O && (a = _[w = va(Mn(u))]), a && tr(
     a,
     s,
     6,
@@ -2242,7 +2242,7 @@ function Yu(s, u, p = !1) {
   return !O && !w ? (rt(s) && _.set(s, null), null) : (Me(O) ? O.forEach((a) => h[a] = null) : xt(h, O), rt(s) && _.set(s, h), h);
 }
 function os(s, u) {
-  return !s || !Zo(u) ? !1 : (u = u.slice(2), u = u === "Once" ? u : u.replace(/Once$/, ""), et(s, u[0].toLowerCase() + u.slice(1)) || et(s, Fn(u)) || et(s, u));
+  return !s || !Zo(u) ? !1 : (u = u.slice(2), u = u === "Once" ? u : u.replace(/Once$/, ""), et(s, u[0].toLowerCase() + u.slice(1)) || et(s, Mn(u)) || et(s, u));
 }
 function Wc(s) {
   const {
@@ -2290,7 +2290,7 @@ function Wc(s) {
       ), T = u.props ? w : pm(w);
     }
   } catch (L) {
-    Dn.length = 0, rs(L, s, 1), P = Ir(Dr);
+    Fn.length = 0, rs(L, s, 1), P = Ir(Dr);
   }
   let I = P;
   if (T && k !== !1) {
@@ -2416,7 +2416,7 @@ function vm(s, u, p, _) {
       (!u || // for camelCase
       !et(u, m) && // it's possible the original props was passed in as kebab-case
       // and converted to camelCase (#955)
-      ((y = Fn(m)) === m || !et(u, y))) && (a ? p && // for camelCase
+      ((y = Mn(m)) === m || !et(u, y))) && (a ? p && // for camelCase
       (p[m] !== void 0 || // for kebab-case
       p[y] !== void 0) && (b[m] = Va(
         a,
@@ -2486,7 +2486,7 @@ function Va(s, u, p, _, b, O) {
     ] && (O && !w ? _ = !1 : h[
       1
       /* shouldCastTrue */
-    ] && (_ === "" || _ === Fn(p)) && (_ = !0));
+    ] && (_ === "" || _ === Mn(p)) && (_ = !0));
   }
   return _;
 }
@@ -3467,13 +3467,13 @@ const cd = (s) => s.__isSuspense;
 function Em(s, u) {
   u && u.pendingBranch ? Me(s) ? u.effects.push(...s) : u.effects.push(s) : Ay(s);
 }
-const Nt = /* @__PURE__ */ Symbol.for("v-fgt"), ss = /* @__PURE__ */ Symbol.for("v-txt"), Dr = /* @__PURE__ */ Symbol.for("v-cmt"), Ca = /* @__PURE__ */ Symbol.for("v-stc"), Dn = [];
+const Nt = /* @__PURE__ */ Symbol.for("v-fgt"), ss = /* @__PURE__ */ Symbol.for("v-txt"), Dr = /* @__PURE__ */ Symbol.for("v-cmt"), Ca = /* @__PURE__ */ Symbol.for("v-stc"), Fn = [];
 let Bt = null;
 function Qt(s = !1) {
-  Dn.push(Bt = s ? null : []);
+  Fn.push(Bt = s ? null : []);
 }
 function ud() {
-  Dn.pop(), Bt = Dn[Dn.length - 1] || null;
+  Fn.pop(), Bt = Fn[Fn.length - 1] || null;
 }
 let lo = 1;
 function Yc(s, u = !1) {
@@ -4023,7 +4023,7 @@ function Zi(s, u, p) {
   else {
     const _ = Zm(s, u);
     Bo.test(p) ? s.setProperty(
-      Fn(_),
+      Mn(_),
       p.replace(Bo, ""),
       "important"
     ) : s[_] = p;
@@ -4082,7 +4082,7 @@ function su(s, u, p, _, b) {
   }
   h && s.removeAttribute(b || u);
 }
-function Pi(s, u, p, _) {
+function Ti(s, u, p, _) {
   s.addEventListener(u, p, _);
 }
 function Qm(s, u, p, _) {
@@ -4100,7 +4100,7 @@ function Xm(s, u, p, _, b = null) {
         _,
         b
       );
-      Pi(s, w, f, a);
+      Ti(s, w, f, a);
     } else h && (Qm(s, w, h, a), O[u] = void 0);
   }
 }
@@ -4109,7 +4109,7 @@ function rb(s) {
   let u, p;
   for (; (p = s.match(eb)) && !tb.test(s); )
     u || (u = {}), s = s.slice(0, s.length - p[1].length), u[p[1].toLowerCase()] = !0;
-  return [s[2] === ":" ? s.slice(3) : Fn(s.slice(2)), u];
+  return [s[2] === ":" ? s.slice(3) : Mn(s.slice(2)), u];
 }
 let Sa = 0;
 const nb = /* @__PURE__ */ Promise.resolve(), ib = () => Sa || (nb.then(() => Sa = 0), Sa = Date.now());
@@ -4194,11 +4194,11 @@ const ub = {
     s.parentNode && (s.type === "text" ? s[Do] = s.defaultValue.replace(/[\r\n]/g, "") : s.type === "textarea" && (s[Do] = s.defaultValue.replace(/\r\n?/g, `
 `))), s[No] = cu(b);
     const O = _ || b.props && b.props.type === "number";
-    Pi(s, u ? "change" : "input", (h) => {
+    Ti(s, u ? "change" : "input", (h) => {
       h.target.composing || s[No](Pa(s.value, p, O));
-    }), (p || O) && Pi(s, "change", () => {
+    }), (p || O) && Ti(s, "change", () => {
       s.value = Pa(s.value, p, O);
-    }), u || (Pi(s, "compositionstart", cb), Pi(s, "compositionend", uu), Pi(s, "change", uu));
+    }), u || (Ti(s, "compositionstart", cb), Ti(s, "compositionend", uu), Ti(s, "change", uu));
   },
   // set value on mounted so it's after min/max for type="range"
   mounted(s, { value: u, modifiers: { trim: p, number: _ } }) {
@@ -4225,7 +4225,7 @@ const ub = {
   middle: (s) => "button" in s && s.button !== 1,
   right: (s) => "button" in s && s.button !== 2,
   exact: (s, u) => db.some((p) => s[`${p}Key`] && !u.includes(p))
-}, Ei = (s, u) => {
+}, Si = (s, u) => {
   if (!s) return s;
   const p = s._withMods || (s._withMods = {}), _ = u.join(".");
   return p[_] || (p[_] = (b, ...O) => {
@@ -8081,12 +8081,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Ge(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Ae);
-      function Mn(o) {
-        return Mn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Hn(o) {
+        return Hn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Mn(o);
+        }, Hn(o);
       }
       function jd(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8096,20 +8096,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function kd(o) {
         var r = function(n, l) {
-          if (Mn(n) != "object" || !n) return n;
+          if (Hn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Mn(t) != "object") return t;
+            if (Hn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Mn(r) == "symbol" ? r : r + "";
+        return Hn(r) == "symbol" ? r : r + "";
       }
       function xd(o, r, n) {
         return r = nr(r), function(l, e) {
-          if (e && (Mn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Hn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8197,12 +8197,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && jd(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Ae);
-      function Hn(o) {
-        return Hn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Vn(o) {
+        return Vn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Hn(o);
+        }, Vn(o);
       }
       function Cd(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8212,20 +8212,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Ed(o) {
         var r = function(n, l) {
-          if (Hn(n) != "object" || !n) return n;
+          if (Vn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Hn(t) != "object") return t;
+            if (Vn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Hn(r) == "symbol" ? r : r + "";
+        return Vn(r) == "symbol" ? r : r + "";
       }
       function Sd(o, r, n) {
         return r = Mr(r), function(l, e) {
-          if (e && (Hn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Vn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8288,12 +8288,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Cd(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function Vn(o) {
-        return Vn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function zn(o) {
+        return zn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Vn(o);
+        }, zn(o);
       }
       function Td(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8303,20 +8303,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Ld(o) {
         var r = function(n, l) {
-          if (Vn(n) != "object" || !n) return n;
+          if (zn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Vn(t) != "object") return t;
+            if (zn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Vn(r) == "symbol" ? r : r + "";
+        return zn(r) == "symbol" ? r : r + "";
       }
       function Ad(o, r, n) {
         return r = Hr(r), function(l, e) {
-          if (e && (Vn(e) === "object" || typeof e == "function")) return e;
+          if (e && (zn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8424,12 +8424,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Td(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function zn(o) {
-        return zn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function qn(o) {
+        return qn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, zn(o);
+        }, qn(o);
       }
       function Id(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8439,20 +8439,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Bd(o) {
         var r = function(n, l) {
-          if (zn(n) != "object" || !n) return n;
+          if (qn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (zn(t) != "object") return t;
+            if (qn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return zn(r) == "symbol" ? r : r + "";
+        return qn(r) == "symbol" ? r : r + "";
       }
       function Nd(o, r, n) {
         return r = Vr(r), function(l, e) {
-          if (e && (zn(e) === "object" || typeof e == "function")) return e;
+          if (e && (qn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8526,12 +8526,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Id(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function qn(o) {
-        return qn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Un(o) {
+        return Un = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, qn(o);
+        }, Un(o);
       }
       function Dd(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8541,20 +8541,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Fd(o) {
         var r = function(n, l) {
-          if (qn(n) != "object" || !n) return n;
+          if (Un(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (qn(t) != "object") return t;
+            if (Un(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return qn(r) == "symbol" ? r : r + "";
+        return Un(r) == "symbol" ? r : r + "";
       }
       function Md(o, r, n) {
         return r = Ht(r), function(l, e) {
-          if (e && (qn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Un(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8637,12 +8637,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Dd(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function Un(o) {
-        return Un = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function $n(o) {
+        return $n = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Un(o);
+        }, $n(o);
       }
       function Vd(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8652,20 +8652,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function zd(o) {
         var r = function(n, l) {
-          if (Un(n) != "object" || !n) return n;
+          if ($n(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Un(t) != "object") return t;
+            if ($n(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Un(r) == "symbol" ? r : r + "";
+        return $n(r) == "symbol" ? r : r + "";
       }
       function qd(o, r, n) {
         return r = Vt(r), function(l, e) {
-          if (e && (Un(e) === "object" || typeof e == "function")) return e;
+          if (e && ($n(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -8813,12 +8813,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Vd(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function $n(o) {
-        return $n = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Gn(o) {
+        return Gn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, $n(o);
+        }, Gn(o);
       }
       function Ud(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -8828,20 +8828,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function $d(o) {
         var r = function(n, l) {
-          if ($n(n) != "object" || !n) return n;
+          if (Gn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if ($n(t) != "object") return t;
+            if (Gn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return $n(r) == "symbol" ? r : r + "";
+        return Gn(r) == "symbol" ? r : r + "";
       }
       function Gd(o, r, n) {
         return r = zt(r), function(l, e) {
-          if (e && ($n(e) === "object" || typeof e == "function")) return e;
+          if (e && (Gn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -9037,12 +9037,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Wd(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function Gn(o) {
-        return Gn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Wn(o) {
+        return Wn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Gn(o);
+        }, Wn(o);
       }
       function Yd(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9052,20 +9052,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Qd(o) {
         var r = function(n, l) {
-          if (Gn(n) != "object" || !n) return n;
+          if (Wn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Gn(t) != "object") return t;
+            if (Wn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Gn(r) == "symbol" ? r : r + "";
+        return Wn(r) == "symbol" ? r : r + "";
       }
       function Xd(o, r, n) {
         return r = qt(r), function(l, e) {
-          if (e && (Gn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Wn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -9443,12 +9443,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && oh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function Wn(o) {
-        return Wn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Jn(o) {
+        return Jn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Wn(o);
+        }, Jn(o);
       }
       function ch(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9458,20 +9458,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function uh(o) {
         var r = function(n, l) {
-          if (Wn(n) != "object" || !n) return n;
+          if (Jn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Wn(t) != "object") return t;
+            if (Jn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Wn(r) == "symbol" ? r : r + "";
+        return Jn(r) == "symbol" ? r : r + "";
       }
       function dh(o, r, n) {
         return r = yo(r), function(l, e) {
-          if (e && (Wn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Jn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -9521,12 +9521,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && ch(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(yl);
-      function Jn(o) {
-        return Jn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Kn(o) {
+        return Kn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Jn(o);
+        }, Kn(o);
       }
       function ph(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9536,26 +9536,26 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function fh(o) {
         var r = function(n, l) {
-          if (Jn(n) != "object" || !n) return n;
+          if (Kn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Jn(t) != "object") return t;
+            if (Kn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Jn(r) == "symbol" ? r : r + "";
+        return Kn(r) == "symbol" ? r : r + "";
       }
       function yh(o, r, n) {
-        return r = Kn(r), function(l, e) {
-          if (e && (Jn(e) === "object" || typeof e == "function")) return e;
+        return r = Zn(r), function(l, e) {
+          if (e && (Kn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
             return t;
           }(l);
-        }(o, Cl() ? Reflect.construct(r, n || [], Kn(o).constructor) : r.apply(o, n));
+        }(o, Cl() ? Reflect.construct(r, n || [], Zn(o).constructor) : r.apply(o, n));
       }
       function Cl() {
         try {
@@ -9570,7 +9570,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       function ws() {
         return ws = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
           var l = function(t, i) {
-            for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = Kn(t)) !== null; ) ;
+            for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = Zn(t)) !== null; ) ;
             return t;
           }(o, r);
           if (l) {
@@ -9579,10 +9579,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           }
         }, ws.apply(this, arguments);
       }
-      function Kn(o) {
-        return Kn = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
+      function Zn(o) {
+        return Zn = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
           return r.__proto__ || Object.getPrototypeOf(r);
-        }, Kn(o);
+        }, Zn(o);
       }
       function js(o, r) {
         return js = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(n, l) {
@@ -9599,7 +9599,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (typeof t != "function" && t !== null) throw new TypeError("Super expression must either be null or a function");
           e.prototype = Object.create(t && t.prototype, { constructor: { value: e, writable: !0, configurable: !0 } }), Object.defineProperty(e, "prototype", { writable: !1 }), t && js(e, t);
         }(r, o), n = r, (l = [{ key: "build", value: function() {
-          if (ws(Kn(r.prototype), "build", this).call(this), this.schema.minimum !== void 0) {
+          if (ws(Zn(r.prototype), "build", this).call(this), this.schema.minimum !== void 0) {
             var e = this.schema.minimum;
             this.schema.exclusiveMinimum !== void 0 && (e += 1), this.input.setAttribute("min", e);
           }
@@ -9623,12 +9623,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && ph(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function Zn(o) {
-        return Zn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Yn(o) {
+        return Yn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Zn(o);
+        }, Yn(o);
       }
       function mh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9638,20 +9638,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function bh(o) {
         var r = function(n, l) {
-          if (Zn(n) != "object" || !n) return n;
+          if (Yn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Zn(t) != "object") return t;
+            if (Yn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Zn(r) == "symbol" ? r : r + "";
+        return Yn(r) == "symbol" ? r : r + "";
       }
       function vh(o, r, n) {
         return r = mo(r), function(l, e) {
-          if (e && (Zn(e) === "object" || typeof e == "function")) return e;
+          if (e && (Yn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -9699,12 +9699,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && mh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(El);
-      function Yn(o) {
-        return Yn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Qn(o) {
+        return Qn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Yn(o);
+        }, Qn(o);
       }
       function gh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9714,26 +9714,26 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function _h(o) {
         var r = function(n, l) {
-          if (Yn(n) != "object" || !n) return n;
+          if (Qn(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Yn(t) != "object") return t;
+            if (Qn(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Yn(r) == "symbol" ? r : r + "";
+        return Qn(r) == "symbol" ? r : r + "";
       }
       function wh(o, r, n) {
-        return r = Qn(r), function(l, e) {
-          if (e && (Yn(e) === "object" || typeof e == "function")) return e;
+        return r = Xn(r), function(l, e) {
+          if (e && (Qn(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
             return t;
           }(l);
-        }(o, Tl() ? Reflect.construct(r, n || [], Qn(o).constructor) : r.apply(o, n));
+        }(o, Tl() ? Reflect.construct(r, n || [], Xn(o).constructor) : r.apply(o, n));
       }
       function Tl() {
         try {
@@ -9748,7 +9748,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       function xs() {
         return xs = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
           var l = function(t, i) {
-            for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = Qn(t)) !== null; ) ;
+            for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = Xn(t)) !== null; ) ;
             return t;
           }(o, r);
           if (l) {
@@ -9757,10 +9757,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           }
         }, xs.apply(this, arguments);
       }
-      function Qn(o) {
-        return Qn = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
+      function Xn(o) {
+        return Xn = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
           return r.__proto__ || Object.getPrototypeOf(r);
-        }, Qn(o);
+        }, Xn(o);
       }
       function Os(o, r) {
         return Os = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(n, l) {
@@ -9777,7 +9777,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (typeof t != "function" && t !== null) throw new TypeError("Super expression must either be null or a function");
           e.prototype = Object.create(t && t.prototype, { constructor: { value: e, writable: !0, configurable: !0 } }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Os(e, t);
         }(r, o), n = r, (l = [{ key: "preBuild", value: function() {
-          if (xs(Qn(r.prototype), "preBuild", this).call(this), this.schema.options || (this.schema.options = {}), !this.schema.options.cleave) switch (this.format) {
+          if (xs(Xn(r.prototype), "preBuild", this).call(this), this.schema.options || (this.schema.options = {}), !this.schema.options.cleave) switch (this.format) {
             case "ipv6":
               this.schema.options.cleave = { delimiters: [":"], blocks: [4, 4, 4, 4, 4, 4, 4, 4], uppercase: !0 };
               break;
@@ -9788,12 +9788,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && gh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function Xn(o) {
-        return Xn = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ei(o) {
+        return ei = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, Xn(o);
+        }, ei(o);
       }
       function kh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -9803,20 +9803,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function xh(o) {
         var r = function(n, l) {
-          if (Xn(n) != "object" || !n) return n;
+          if (ei(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (Xn(t) != "object") return t;
+            if (ei(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return Xn(r) == "symbol" ? r : r + "";
+        return ei(r) == "symbol" ? r : r + "";
       }
       function Oh(o, r, n) {
         return r = $t(r), function(l, e) {
-          if (e && (Xn(e) === "object" || typeof e == "function")) return e;
+          if (e && (ei(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -10607,12 +10607,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Th(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function ei(o) {
-        return ei = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ti(o) {
+        return ti = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ei(o);
+        }, ti(o);
       }
       function Ih(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -10622,20 +10622,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Bh(o) {
         var r = function(n, l) {
-          if (ei(n) != "object" || !n) return n;
+          if (ti(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ei(t) != "object") return t;
+            if (ti(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ei(r) == "symbol" ? r : r + "";
+        return ti(r) == "symbol" ? r : r + "";
       }
       function Nh(o, r, n) {
         return r = bo(r), function(l, e) {
-          if (e && (ei(e) === "object" || typeof e == "function")) return e;
+          if (e && (ti(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -10691,7 +10691,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         }
         return n;
       }
-      function ti(o) {
+      function ri(o) {
         for (var r = 1; r < arguments.length; r++) {
           var n = arguments[r] != null ? arguments[r] : {};
           r % 2 ? Dl(Object(n), !0).forEach(function(l) {
@@ -10705,7 +10705,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       function vo(o, r, n) {
         return (r = Ml(r)) in o ? Object.defineProperty(o, r, { value: n, enumerable: !0, configurable: !0, writable: !0 }) : o[r] = n, o;
       }
-      function ri(o, r) {
+      function ni(o, r) {
         return function(n) {
           if (Array.isArray(n)) return n;
         }(o) || function(n, l) {
@@ -10907,7 +10907,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }, { key: "preBuild", value: function() {
           var e = this;
           if (ir(Rt(r.prototype), "preBuild", this).call(this), this.editors = {}, this.cached_editors = {}, this.format = this.options.layout || this.options.object_layout || this.schema.format || this.jsoneditor.options.object_layout || "normal", this.schema.properties = this.schema.properties || {}, this.minwidth = 0, this.maxwidth = 0, this.options.table_row) Object.entries(this.schema.properties).forEach(function(t) {
-            var i = ri(t, 2), c = i[0], d = i[1], g = e.jsoneditor.getEditorClass(d);
+            var i = ni(t, 2), c = i[0], d = i[1], g = e.jsoneditor.getEditorClass(d);
             e.editors[c] = e.jsoneditor.createEditor(g, { jsoneditor: e.jsoneditor, schema: d, path: "".concat(e.path, ".").concat(c), parent: e, compact: !0, required: !0 }, e.currentDepth + 1), e.editors[c].preBuild();
             var x = e.editors[c].options.hidden ? 0 : e.editors[c].options.grid_columns || e.editors[c].getNumColumns();
             e.minwidth += x, e.maxwidth += x;
@@ -10940,7 +10940,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }, { key: "build", value: function() {
           var e = this, t = this.format === "categories";
           if (this.rows = [], this.active_tab = null, this.options.table_row) this.editor_holder = this.container, Object.entries(this.editors).forEach(function(c) {
-            var d = ri(c, 2), g = d[0], x = d[1], S = e.theme.getTableCell();
+            var d = ni(c, 2), g = d[0], x = d[1], S = e.theme.getTableCell();
             e.editor_holder.appendChild(S), x.setContainer(S), x.build(), x.postBuild(), x.setOptInCheckbox(x.header), x.setValue(x.getDefault(), !0), e.editors[g].options.hidden && (S.style.display = "none"), e.editors[g].options.input_width && (S.style.width = e.editors[g].options.input_width);
           });
           else {
@@ -10989,7 +10989,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }, { key: "deactivateNonRequiredProperties", value: function(e) {
           var t = this, i = this.jsoneditor.options.show_opt_in, c = this.options.show_opt_in !== void 0, d = c && this.options.show_opt_in === !0, g = c && this.options.show_opt_in === !1;
           (d || !g && i || !c && i) && Object.entries(this.editors).forEach(function(x) {
-            var S = ri(x, 2), D = S[0], $ = S[1];
+            var S = ni(x, 2), D = S[0], $ = S[1];
             t.isRequiredObject($) || t.editors[D].deactivate(), e && typeof t.editors[D].deactivateNonRequiredProperties == "function" && t.editors[D].deactivateNonRequiredProperties(e);
           });
         } }, { key: "showEditJSON", value: function() {
@@ -11046,12 +11046,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                 return t;
               case "properties":
               case "items":
-                return ti(ti({}, t), {}, vo({}, i, {}));
+                return ri(ri({}, t), {}, vo({}, i, {}));
               case "additionalProperties":
               case "propertyNames":
-                return ti(ti({}, t), {}, vo({}, i, !0));
+                return ri(ri({}, t), {}, vo({}, i, !0));
               default:
-                return ti(ti({}, t), {}, vo({}, i, e[i]));
+                return ri(ri({}, t), {}, vo({}, i, e[i]));
             }
           }, {});
         } }, { key: "addObjectProperty", value: function(e, t) {
@@ -11107,7 +11107,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           this.getDependentRequired(e).forEach(function(i) {
             var c;
             Object.entries(t.cached_editors).forEach(function(d) {
-              var g = ri(d, 2), x = (g[0], g[1]);
+              var g = ni(d, 2), x = (g[0], g[1]);
               x.key === i && (c = x);
             }), c && !c.isActive() && c.activate();
           });
@@ -11131,10 +11131,10 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }, { key: "setValue", value: function(e, t) {
           var i = this;
           (jr(e = (e = this.applyConstFilter(e)) || {}) !== "object" || Array.isArray(e)) && (e = {}), Object.entries(this.cached_editors).forEach(function(c) {
-            var d = ri(c, 2), g = d[0], x = d[1];
+            var d = ni(c, 2), g = d[0], x = d[1];
             e[g] !== void 0 ? (i.addObjectProperty(g), x.setValue(e[g], t), x.activate(), i.disabled && x.disable()) : t || i.isRequiredObject(x) ? x.setValue(x.getDefault(), t) : i.jsoneditor.options.show_opt_in || i.options.show_opt_in ? x.deactivate() : i.removeObjectProperty(g);
           }), Object.entries(e).forEach(function(c) {
-            var d = ri(c, 2), g = d[0], x = d[1];
+            var d = ni(c, 2), g = d[0], x = d[1];
             i.cached_editors[g] || (i.addObjectProperty(g), i.editors[g] && i.editors[g].setValue(x, t, !!i.editors[g].template));
           }), this.refreshValue(), this.layoutEditors(), this.onChange();
         } }, { key: "showValidationErrors", value: function(e) {
@@ -11149,12 +11149,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Fh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(z);
-      function ni(o) {
-        return ni = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ii(o) {
+        return ii = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ni(o);
+        }, ii(o);
       }
       function Hh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11164,20 +11164,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Vh(o) {
         var r = function(n, l) {
-          if (ni(n) != "object" || !n) return n;
+          if (ii(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ni(t) != "object") return t;
+            if (ii(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ni(r) == "symbol" ? r : r + "";
+        return ii(r) == "symbol" ? r : r + "";
       }
       function zh(o, r, n) {
         return r = kr(r), function(l, e) {
-          if (e && (ni(e) === "object" || typeof e == "function")) return e;
+          if (e && (ii(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11195,8 +11195,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           return !!o;
         })();
       }
-      function ii() {
-        return ii = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
+      function oi() {
+        return oi = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
           var l = function(t, i) {
             for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = kr(t)) !== null; ) ;
             return t;
@@ -11205,7 +11205,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             var e = Object.getOwnPropertyDescriptor(l, r);
             return e.get ? e.get.call(arguments.length < 3 ? o : n) : e.value;
           }
-        }, ii.apply(this, arguments);
+        }, oi.apply(this, arguments);
       }
       function kr(o) {
         return kr = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
@@ -11228,7 +11228,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (typeof t != "function" && t !== null) throw new TypeError("Super expression must either be null or a function");
           e.prototype = Object.create(t && t.prototype, { constructor: { value: e, writable: !0, configurable: !0 } }), Object.defineProperty(e, "prototype", { writable: !1 }), t && As(e, t);
         }(r, o), n = r, (l = [{ key: "preBuild", value: function() {
-          ii(kr(r.prototype), "preBuild", this).call(this);
+          oi(kr(r.prototype), "preBuild", this).call(this);
         } }, { key: "build", value: function() {
           var e = this;
           this.label = "", this.options.compact || (this.header = this.label = this.theme.getFormInputLabel(this.getTitle(), this.isRequired())), this.schema.description && (this.description = this.theme.getFormInputDescription(this.translateProperty(this.schema.description))), this.options.infoText && (this.infoButton = this.theme.getInfoButton(this.translateProperty(this.options.infoText))), this.options.compact && this.container.classList.add("compact"), this.radioContainer = document.createElement("div"), this.radioGroup = [];
@@ -11256,14 +11256,14 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }, { key: "enable", value: function() {
           if (!this.always_disabled) {
             for (var e = 0; e < this.radioGroup.length; e++) this.radioGroup[e].disabled = !1;
-            this.radioContainer.classList.remove("readonly"), ii(kr(r.prototype), "enable", this).call(this);
+            this.radioContainer.classList.remove("readonly"), oi(kr(r.prototype), "enable", this).call(this);
           }
         } }, { key: "disable", value: function(e) {
           e && (this.always_disabled = !0);
           for (var t = 0; t < this.radioGroup.length; t++) this.radioGroup[t].disabled = !0;
-          this.radioContainer.classList.add("readonly"), ii(kr(r.prototype), "disable", this).call(this);
+          this.radioContainer.classList.add("readonly"), oi(kr(r.prototype), "disable", this).call(this);
         } }, { key: "destroy", value: function() {
-          this.radioContainer.parentNode && this.radioContainer.parentNode.parentNode && this.radioContainer.parentNode.parentNode.removeChild(this.radioContainer.parentNode), this.label && this.label.parentNode && this.label.parentNode.removeChild(this.label), this.description && this.description.parentNode && this.description.parentNode.removeChild(this.description), ii(kr(r.prototype), "destroy", this).call(this);
+          this.radioContainer.parentNode && this.radioContainer.parentNode.parentNode && this.radioContainer.parentNode.parentNode.removeChild(this.radioContainer.parentNode), this.label && this.label.parentNode && this.label.parentNode.removeChild(this.label), this.description && this.description.parentNode && this.description.parentNode.removeChild(this.description), oi(kr(r.prototype), "destroy", this).call(this);
         } }, { key: "getNumColumns", value: function() {
           return 2;
         } }, { key: "setValue", value: function(e) {
@@ -11279,12 +11279,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Hh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Di);
-      function oi(o) {
-        return oi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function si(o) {
+        return si = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, oi(o);
+        }, si(o);
       }
       function Uh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11294,20 +11294,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function $h(o) {
         var r = function(n, l) {
-          if (oi(n) != "object" || !n) return n;
+          if (si(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (oi(t) != "object") return t;
+            if (si(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return oi(r) == "symbol" ? r : r + "";
+        return si(r) == "symbol" ? r : r + "";
       }
       function Gh(o, r, n) {
         return r = Jt(r), function(l, e) {
-          if (e && (oi(e) === "object" || typeof e == "function")) return e;
+          if (e && (si(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11381,12 +11381,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Uh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function si(o) {
-        return si = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ai(o) {
+        return ai = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, si(o);
+        }, ai(o);
       }
       function Jh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11396,20 +11396,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Kh(o) {
         var r = function(n, l) {
-          if (si(n) != "object" || !n) return n;
+          if (ai(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (si(t) != "object") return t;
+            if (ai(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return si(r) == "symbol" ? r : r + "";
+        return ai(r) == "symbol" ? r : r + "";
       }
       function Zh(o, r, n) {
         return r = or(r), function(l, e) {
-          if (e && (si(e) === "object" || typeof e == "function")) return e;
+          if (e && (ai(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11489,12 +11489,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Jh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Di);
-      function ai(o) {
-        return ai = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function li(o) {
+        return li = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ai(o);
+        }, li(o);
       }
       function Qh(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11504,20 +11504,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Xh(o) {
         var r = function(n, l) {
-          if (ai(n) != "object" || !n) return n;
+          if (li(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ai(t) != "object") return t;
+            if (li(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ai(r) == "symbol" ? r : r + "";
+        return li(r) == "symbol" ? r : r + "";
       }
       function ep(o, r, n) {
         return r = Kt(r), function(l, e) {
-          if (e && (ai(e) === "object" || typeof e == "function")) return e;
+          if (e && (li(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11601,12 +11601,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Qh(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Di);
-      function li(o) {
-        return li = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ci(o) {
+        return ci = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, li(o);
+        }, ci(o);
       }
       function rp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11616,20 +11616,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function np(o) {
         var r = function(n, l) {
-          if (li(n) != "object" || !n) return n;
+          if (ci(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (li(t) != "object") return t;
+            if (ci(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return li(r) == "symbol" ? r : r + "";
+        return ci(r) == "symbol" ? r : r + "";
       }
       function ip(o, r, n) {
         return r = go(r), function(l, e) {
-          if (e && (li(e) === "object" || typeof e == "function")) return e;
+          if (e && (ci(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11698,12 +11698,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && rp(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function ci(o) {
-        return ci = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ui(o) {
+        return ui = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ci(o);
+        }, ui(o);
       }
       function sp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11713,20 +11713,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function ap(o) {
         var r = function(n, l) {
-          if (ci(n) != "object" || !n) return n;
+          if (ui(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ci(t) != "object") return t;
+            if (ui(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ci(r) == "symbol" ? r : r + "";
+        return ui(r) == "symbol" ? r : r + "";
       }
       function lp(o, r, n) {
         return r = Zt(r), function(l, e) {
-          if (e && (ci(e) === "object" || typeof e == "function")) return e;
+          if (e && (ui(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11807,12 +11807,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && sp(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function ui(o) {
-        return ui = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function di(o) {
+        return di = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ui(o);
+        }, di(o);
       }
       function up(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11822,20 +11822,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function dp(o) {
         var r = function(n, l) {
-          if (ui(n) != "object" || !n) return n;
+          if (di(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ui(t) != "object") return t;
+            if (di(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ui(r) == "symbol" ? r : r + "";
+        return di(r) == "symbol" ? r : r + "";
       }
       function hp(o, r, n) {
         return r = bn(r), function(l, e) {
-          if (e && (ui(e) === "object" || typeof e == "function")) return e;
+          if (e && (di(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -11934,12 +11934,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && up(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(fe);
-      function di(o) {
-        return di = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function hi(o) {
+        return hi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, di(o);
+        }, hi(o);
       }
       function pp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -11949,20 +11949,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function fp(o) {
         var r = function(n, l) {
-          if (di(n) != "object" || !n) return n;
+          if (hi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (di(t) != "object") return t;
+            if (hi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return di(r) == "symbol" ? r : r + "";
+        return hi(r) == "symbol" ? r : r + "";
       }
       function yp(o, r, n) {
         return r = en(r), function(l, e) {
-          if (e && (di(e) === "object" || typeof e == "function")) return e;
+          if (e && (hi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -12023,12 +12023,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && pp(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Pl);
-      function hi(o) {
-        return hi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function pi(o) {
+        return pi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, hi(o);
+        }, pi(o);
       }
       function bp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -12038,20 +12038,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function vp(o) {
         var r = function(n, l) {
-          if (hi(n) != "object" || !n) return n;
+          if (pi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (hi(t) != "object") return t;
+            if (pi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return hi(r) == "symbol" ? r : r + "";
+        return pi(r) == "symbol" ? r : r + "";
       }
       function gp(o, r, n) {
         return r = sr(r), function(l, e) {
-          if (e && (hi(e) === "object" || typeof e == "function")) return e;
+          if (e && (pi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -12262,12 +12262,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }], l && bp(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(he);
-      function pi(o) {
-        return pi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function fi(o) {
+        return fi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, pi(o);
+        }, fi(o);
       }
       function wp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -12277,20 +12277,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function jp(o) {
         var r = function(n, l) {
-          if (pi(n) != "object" || !n) return n;
+          if (fi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (pi(t) != "object") return t;
+            if (fi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return pi(r) == "symbol" ? r : r + "";
+        return fi(r) == "symbol" ? r : r + "";
       }
       function kp(o, r, n) {
         return r = tn(r), function(l, e) {
-          if (e && (pi(e) === "object" || typeof e == "function")) return e;
+          if (e && (fi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -12330,12 +12330,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           return n.__proto__ = l, n;
         }, Vs(o, r);
       }
-      function fi(o) {
-        return fi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function yi(o) {
+        return yi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, fi(o);
+        }, yi(o);
       }
       function xp(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -12345,20 +12345,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Op(o) {
         var r = function(n, l) {
-          if (fi(n) != "object" || !n) return n;
+          if (yi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (fi(t) != "object") return t;
+            if (yi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return fi(r) == "symbol" ? r : r + "";
+        return yi(r) == "symbol" ? r : r + "";
       }
       function Cp(o, r, n) {
         return r = rn(r), function(l, e) {
-          if (e && (fi(e) === "object" || typeof e == "function")) return e;
+          if (e && (yi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -12398,12 +12398,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           return n.__proto__ = l, n;
         }, zs(o, r);
       }
-      function yi(o) {
-        return yi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function mi(o) {
+        return mi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, yi(o);
+        }, mi(o);
       }
       function Ep(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -12413,20 +12413,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Sp(o) {
         var r = function(n, l) {
-          if (yi(n) != "object" || !n) return n;
+          if (mi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (yi(t) != "object") return t;
+            if (mi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return yi(r) == "symbol" ? r : r + "";
+        return mi(r) == "symbol" ? r : r + "";
       }
       function Pp(o, r, n) {
         return r = ar(r), function(l, e) {
-          if (e && (yi(e) === "object" || typeof e == "function")) return e;
+          if (e && (mi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -12822,7 +12822,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           var Le = se.arg;
           return Le ? Le.done ? (q[U.resultName] = Le.value, q.next = U.nextLoc, q.method !== "return" && (q.method = "next", q.arg = o), q.delegate = null, pe) : Le : (q.method = "throw", q.arg = new TypeError("iterator result is not an object"), q.delegate = null, pe);
         }
-        function Oi(U) {
+        function Ci(U) {
           var q = { tryLoc: U[0] };
           1 in U && (q.catchLoc = U[1]), 2 in U && (q.finallyLoc = U[2], q.afterLoc = U[3]), this.tryEntries.push(q);
         }
@@ -12831,7 +12831,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           q.type = "normal", delete q.arg, U.completion = q;
         }
         function hr(U) {
-          this.tryEntries = [{ tryLoc: "root" }], U.forEach(Oi, this), this.reset(!0);
+          this.tryEntries = [{ tryLoc: "root" }], U.forEach(Ci, this), this.reset(!0);
         }
         function Ct(U) {
           if (U || U === "") {
@@ -13166,7 +13166,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             for (; ; ) switch (pe.prev = pe.next) {
               case 0:
                 d = te.length > 3 && te[3] !== void 0 && te[3], g = this._getExternalRefs(t, i, d), x = 0, S = wn().mark(function _e() {
-                  var we, Ie, De, He, ve, xe, Ke, it, Ot, nn, Oi;
+                  var we, Ie, De, He, ve, xe, Ke, it, Ot, nn, Ci;
                   return wn().wrap(function(Ne) {
                     for (; ; ) switch (Ne.prev = Ne.next) {
                       case 0:
@@ -13256,7 +13256,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
                         }
                         throw new Error("External ref does not contain a valid schema - ".concat(xe));
                       case 63:
-                        return G.refs[we] = Ke, nn = G._getFileBaseFromFileLocation(xe), xe !== we && (Oi = xe.split("/"), xe = (we.substr(0, 1) === "/" ? "/" : "") + Oi.pop()), Ne.next = 68, G._asyncloadExternalRefs(Ke, xe, nn);
+                        return G.refs[we] = Ke, nn = G._getFileBaseFromFileLocation(xe), xe !== we && (Ci = xe.split("/"), xe = (we.substr(0, 1) === "/" ? "/" : "") + Ci.pop()), Ne.next = 68, G._asyncloadExternalRefs(Ke, xe, nn);
                       case 68:
                       case "end":
                         return Ne.stop();
@@ -14168,12 +14168,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }], r && cf(o.prototype, r), Object.defineProperty(o, "prototype", { writable: !1 }), o;
         var o, r;
       }();
-      function mi(o) {
-        return mi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function bi(o) {
+        return bi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, mi(o);
+        }, bi(o);
       }
       function df(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -14183,20 +14183,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function hf(o) {
         var r = function(n, l) {
-          if (mi(n) != "object" || !n) return n;
+          if (bi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (mi(t) != "object") return t;
+            if (bi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return mi(r) == "symbol" ? r : r + "";
+        return bi(r) == "symbol" ? r : r + "";
       }
       function pf(o, r, n) {
         return r = lr(r), function(l, e) {
-          if (e && (mi(e) === "object" || typeof e == "function")) return e;
+          if (e && (bi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -14273,12 +14273,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && df(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function bi(o) {
-        return bi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function vi(o) {
+        return vi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, bi(o);
+        }, vi(o);
       }
       function ff(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -14288,20 +14288,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function yf(o) {
         var r = function(n, l) {
-          if (bi(n) != "object" || !n) return n;
+          if (vi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (bi(t) != "object") return t;
+            if (vi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return bi(r) == "symbol" ? r : r + "";
+        return vi(r) == "symbol" ? r : r + "";
       }
       function mf(o, r, n) {
         return r = cr(r), function(l, e) {
-          if (e && (bi(e) === "object" || typeof e == "function")) return e;
+          if (e && (vi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -14480,12 +14480,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && ff(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function vi(o) {
-        return vi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function gi(o) {
+        return gi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, vi(o);
+        }, gi(o);
       }
       function bf(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -14495,20 +14495,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function vf(o) {
         var r = function(n, l) {
-          if (vi(n) != "object" || !n) return n;
+          if (gi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (vi(t) != "object") return t;
+            if (gi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return vi(r) == "symbol" ? r : r + "";
+        return gi(r) == "symbol" ? r : r + "";
       }
       function gf(o, r, n) {
         return r = ur(r), function(l, e) {
-          if (e && (vi(e) === "object" || typeof e == "function")) return e;
+          if (e && (gi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -14752,12 +14752,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && bf(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function gi(o) {
-        return gi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function _i(o) {
+        return _i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, gi(o);
+        }, _i(o);
       }
       function wf(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -14767,20 +14767,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function jf(o) {
         var r = function(n, l) {
-          if (gi(n) != "object" || !n) return n;
+          if (_i(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (gi(t) != "object") return t;
+            if (_i(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return gi(r) == "symbol" ? r : r + "";
+        return _i(r) == "symbol" ? r : r + "";
       }
       function kf(o, r, n) {
         return r = dr(r), function(l, e) {
-          if (e && (gi(e) === "object" || typeof e == "function")) return e;
+          if (e && (_i(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -15022,12 +15022,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && wf(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function _i(o) {
-        return _i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function wi(o) {
+        return wi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, _i(o);
+        }, wi(o);
       }
       function Of(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -15037,20 +15037,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Cf(o) {
         var r = function(n, l) {
-          if (_i(n) != "object" || !n) return n;
+          if (wi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (_i(t) != "object") return t;
+            if (wi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return _i(r) == "symbol" ? r : r + "";
+        return wi(r) == "symbol" ? r : r + "";
       }
       function Ef(o, r, n) {
         return r = Cr(r), function(l, e) {
-          if (e && (_i(e) === "object" || typeof e == "function")) return e;
+          if (e && (wi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -15068,8 +15068,8 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           return !!o;
         })();
       }
-      function wi() {
-        return wi = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
+      function ji() {
+        return ji = typeof Reflect < "u" && Reflect.get ? Reflect.get.bind() : function(o, r, n) {
           var l = function(t, i) {
             for (; !Object.prototype.hasOwnProperty.call(t, i) && (t = Cr(t)) !== null; ) ;
             return t;
@@ -15078,7 +15078,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
             var e = Object.getOwnPropertyDescriptor(l, r);
             return e.get ? e.get.call(arguments.length < 3 ? o : n) : e.value;
           }
-        }, wi.apply(this, arguments);
+        }, ji.apply(this, arguments);
       }
       function Cr(o) {
         return Cr = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(r) {
@@ -15101,13 +15101,13 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           if (typeof t != "function" && t !== null) throw new TypeError("Super expression must either be null or a function");
           e.prototype = Object.create(t && t.prototype, { constructor: { value: e, writable: !0, configurable: !0 } }), Object.defineProperty(e, "prototype", { writable: !1 }), t && ha(e, t);
         }(r, o), n = r, (l = [{ key: "getTable", value: function() {
-          var e = wi(Cr(r.prototype), "getTable", this).call(this);
+          var e = ji(Cr(r.prototype), "getTable", this).call(this);
           return e.setAttribute("cellpadding", 5), e.setAttribute("cellspacing", 0), e;
         } }, { key: "getTableHeaderCell", value: function(e) {
-          var t = wi(Cr(r.prototype), "getTableHeaderCell", this).call(this, e);
+          var t = ji(Cr(r.prototype), "getTableHeaderCell", this).call(this, e);
           return t.classList.add("ui-state-active"), t.style.fontWeight = "bold", t;
         } }, { key: "getTableCell", value: function() {
-          var e = wi(Cr(r.prototype), "getTableCell", this).call(this);
+          var e = ji(Cr(r.prototype), "getTableCell", this).call(this);
           return e.classList.add("ui-widget-content"), e;
         } }, { key: "getHeaderButtonHolder", value: function() {
           var e = this.getButtonHolder();
@@ -15116,7 +15116,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           var t = this.getDescription(e);
           return t.style.marginLeft = "10px", t.style.display = "inline-block", t;
         } }, { key: "getFormControl", value: function(e, t, i, c) {
-          var d = wi(Cr(r.prototype), "getFormControl", this).call(this, e, t, i, c);
+          var d = ji(Cr(r.prototype), "getFormControl", this).call(this, e, t, i, c);
           return t.type === "checkbox" ? (d.style.lineHeight = "25px", d.style.padding = "3px 0") : d.style.padding = "4px 0 8px 0", d;
         } }, { key: "getDescription", value: function(e) {
           var t = document.createElement("span");
@@ -15155,12 +15155,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Of(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function ji(o) {
-        return ji = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function ki(o) {
+        return ki = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ji(o);
+        }, ki(o);
       }
       function Sf(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -15170,20 +15170,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Pf(o) {
         var r = function(n, l) {
-          if (ji(n) != "object" || !n) return n;
+          if (ki(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ji(t) != "object") return t;
+            if (ki(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ji(r) == "symbol" ? r : r + "";
+        return ki(r) == "symbol" ? r : r + "";
       }
       function Tf(o, r, n) {
         return r = To(r), function(l, e) {
-          if (e && (ji(e) === "object" || typeof e == "function")) return e;
+          if (e && (ki(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -15233,12 +15233,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Sf(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function ki(o) {
-        return ki = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function xi(o) {
+        return xi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, ki(o);
+        }, xi(o);
       }
       function Lf(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -15248,20 +15248,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Af(o) {
         var r = function(n, l) {
-          if (ki(n) != "object" || !n) return n;
+          if (xi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (ki(t) != "object") return t;
+            if (xi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return ki(r) == "symbol" ? r : r + "";
+        return xi(r) == "symbol" ? r : r + "";
       }
       function Rf(o, r, n) {
         return r = pt(r), function(l, e) {
-          if (e && (ki(e) === "object" || typeof e == "function")) return e;
+          if (e && (xi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -15462,12 +15462,12 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
         } }]) && Lf(n.prototype, l), Object.defineProperty(n, "prototype", { writable: !1 }), n;
         var n, l;
       }(Or);
-      function xi(o) {
-        return xi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
+      function Oi(o) {
+        return Oi = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(r) {
           return typeof r;
         } : function(r) {
           return r && typeof Symbol == "function" && r.constructor === Symbol && r !== Symbol.prototype ? "symbol" : typeof r;
-        }, xi(o);
+        }, Oi(o);
       }
       function Bf(o, r) {
         for (var n = 0; n < r.length; n++) {
@@ -15477,20 +15477,20 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
       }
       function Nf(o) {
         var r = function(n, l) {
-          if (xi(n) != "object" || !n) return n;
+          if (Oi(n) != "object" || !n) return n;
           var e = n[Symbol.toPrimitive];
           if (e !== void 0) {
             var t = e.call(n, "string");
-            if (xi(t) != "object") return t;
+            if (Oi(t) != "object") return t;
             throw new TypeError("@@toPrimitive must return a primitive value.");
           }
           return String(n);
         }(o);
-        return xi(r) == "symbol" ? r : r + "";
+        return Oi(r) == "symbol" ? r : r + "";
       }
       function Df(o, r, n) {
         return r = mt(r), function(l, e) {
-          if (e && (xi(e) === "object" || typeof e == "function")) return e;
+          if (e && (Oi(e) === "object" || typeof e == "function")) return e;
           if (e !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
           return function(t) {
             if (t === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -15844,7 +15844,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           var Le = se.arg;
           return Le ? Le.done ? (q[U.resultName] = Le.value, q.next = U.nextLoc, q.method !== "return" && (q.method = "next", q.arg = o), q.delegate = null, pe) : Le : (q.method = "throw", q.arg = new TypeError("iterator result is not an object"), q.delegate = null, pe);
         }
-        function Oi(U) {
+        function Ci(U) {
           var q = { tryLoc: U[0] };
           1 in U && (q.catchLoc = U[1]), 2 in U && (q.finallyLoc = U[2], q.afterLoc = U[3]), this.tryEntries.push(q);
         }
@@ -15853,7 +15853,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
           q.type = "normal", delete q.arg, U.completion = q;
         }
         function hr(U) {
-          this.tryEntries = [{ tryLoc: "root" }], U.forEach(Oi, this), this.reset(!0);
+          this.tryEntries = [{ tryLoc: "root" }], U.forEach(Ci, this), this.reset(!0);
         }
         function Ct(U) {
           if (U || U === "") {
@@ -16219,7 +16219,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
     u({ updateFromExternal: v }), to(() => _.modelValue, (A) => {
       A !== w.value && v(A);
     }, { immediate: !0 }), to(h, (A) => {
-      A && Li(m);
+      A && Dn(m);
     });
     const j = () => {
       b("update:modelValue", w.value);
@@ -16243,9 +16243,9 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
         if (N.label.toLowerCase().includes(B) || N.children && k(N.children, B)) return !0;
       return !1;
     }, E = () => {
-      h.value = !0, Li(m);
+      h.value = !0, Dn(m);
     }, P = () => {
-      h.value = !h.value, h.value && Li(m);
+      h.value = !h.value, h.value && Dn(m);
     }, T = () => {
       h.value = !1;
     }, I = (A) => {
@@ -16272,14 +16272,14 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
     }, [
       wt("div", {
         class: "ontocombo-header form-control p-0 d-flex align-items-stretch",
-        onClick: Ei(E, ["stop"])
+        onClick: Si(E, ["stop"])
       }, [
         Iy(wt("input", {
           type: "text",
           class: "ontocombo-input flex-grow-1 px-2 border-0 bg-transparent",
           "onUpdate:modelValue": B[0] || (B[0] = (N) => w.value = N),
           onFocus: E,
-          onClick: Ei(E, ["stop"]),
+          onClick: Si(E, ["stop"]),
           onInput: j,
           placeholder: s.placeholder,
           readonly: y.value,
@@ -16289,7 +16289,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
         ]),
         wt("div", {
           class: "ontocombo-arrow d-flex align-items-center px-2 flex-shrink-0",
-          onClick: Ei(P, ["stop"]),
+          onClick: Si(P, ["stop"]),
           style: { cursor: "pointer" }
         }, [
           wt("i", {
@@ -16302,7 +16302,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
           key: 0,
           class: "ontocombo-dropdown",
           style: In(f.value),
-          onClick: B[1] || (B[1] = Ei(() => {
+          onClick: B[1] || (B[1] = Si(() => {
           }, ["stop"]))
         }, [
           (Qt(!0), Pr(Nt, null, tm(C.value, (N) => (Qt(), Pr(Nt, {
@@ -16312,7 +16312,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
               key: 0,
               class: Bn(["ontocombo-row is-group", M(N.level, !0)]),
               style: In({ display: "flex", cursor: "pointer", "align-items": "center", padding: `0 ${N.level * 16 + 8}px` }),
-              onClick: Ei((z) => I(N.id), ["stop"])
+              onClick: Si((z) => I(N.id), ["stop"])
             }, [
               wt("span", {
                 class: "row-label flex-grow-1 text-start",
@@ -16325,7 +16325,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
               key: 1,
               class: Bn(["ontocombo-row is-element", M(N.level, !1)]),
               style: In({ cursor: "pointer", paddingLeft: `${N.level * 16 + 8}px` }),
-              onClick: Ei((z) => L(N), ["stop"])
+              onClick: Si((z) => L(N), ["stop"])
             }, [
               wt("span", {
                 class: "row-label flex-grow-1 text-start",
@@ -16518,21 +16518,26 @@ const Cb = {
       const j = v == null ? void 0 : v.querySelector(".nav-tabs .nav-link.active");
       return j ? j.textContent.trim() : "Basic";
     }, f = () => {
+      var v;
       if (u.model && b) {
         O = !0;
-        const v = b.getEditor("root.Basic");
-        v && v.setValue([{ predicate: "", object: "" }]);
-        const j = b.getEditor("root.Simple");
-        j && j.setValue([{ subject: "", predicate: "", object: "", logic: "AND", modifier: "" }]);
-        const C = b.getEditor("root.Advanced.query");
-        C && C.setValue(`SELECT * WHERE {
+        const j = (v = p.value) == null ? void 0 : v.getRootNode(), C = a(j);
+        b.setValue({
+          Basic: [{ predicate: "", object: "" }],
+          Simple: [{ subject: "", predicate: "", object: "", logic: "AND", modifier: "" }],
+          Advanced: { query: `SELECT * WHERE {
   ?s ?p ?o .
-}`), m(), setTimeout(() => {
-          var P;
+}` }
+        }), Dn(() => {
+          const k = j == null ? void 0 : j.querySelectorAll(".nav-tabs .nav-link");
+          k == null || k.forEach((E) => {
+            E.textContent.trim() === C && E.click();
+          }), m();
+        }), setTimeout(() => {
           let k = b.getValue();
           k = JSON.parse(JSON.stringify(k || {}));
           const E = u.model.get("value") || {};
-          k._trigger_apply = E._trigger_apply || 0, k._trigger_cancel = Date.now(), k.active_tab = a((P = p.value) == null ? void 0 : P.getRootNode()), u.model.set("value", k), u.model.save_changes(), O = !1;
+          k._trigger_apply = E._trigger_apply || 0, k._trigger_cancel = Date.now(), k.active_tab = C, u.model.set("value", k), u.model.save_changes(), O = !1;
         }, 50);
       }
     }, y = () => {
@@ -16544,7 +16549,7 @@ const Cb = {
         v._trigger_cancel = j._trigger_cancel || 0, v._trigger_apply = Date.now(), v.active_tab = a((C = p.value) == null ? void 0 : C.getRootNode()), u.model.set("value", v), u.model.save_changes();
       }, 50);
     }, m = () => {
-      Li(() => {
+      Dn(() => {
         var k, E;
         const v = (k = p.value) == null ? void 0 : k.getRootNode();
         if (!v || !b) return;
@@ -16557,7 +16562,7 @@ const Cb = {
     };
     return sl(async () => {
       var j;
-      await Li();
+      await Dn();
       const v = p.value.getRootNode();
       w("https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css", v), w("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css", v), w("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css", document.head), w("https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css", document.head);
       try {

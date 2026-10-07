@@ -170,14 +170,25 @@ const getActiveTab = (shadowRoot) => {
 const cancelQuery = () => {
     if (props.model && editor) {
         isUpdating = true;
-        const basicEditor = editor.getEditor('root.Basic');
-        if (basicEditor) basicEditor.setValue([{ "predicate": "", "object": "" }]);
-        const simpleEditor = editor.getEditor('root.Simple');
-        if (simpleEditor) simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
-        const advEditor = editor.getEditor('root.Advanced.query');
-        if (advEditor) advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
 
-        updateLayout();
+        const shadowRoot = editorHolder.value?.getRootNode();
+        const activeTab = getActiveTab(shadowRoot);
+
+        // Perform a global hard-reset on the entire editor tree
+        editor.setValue({
+            Basic: [{ "predicate": "", "object": "" }],
+            Simple: [{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }],
+            Advanced: { query: "SELECT * WHERE {\n  ?s ?p ?o .\n}" }
+        });
+
+        // The global reset causes JSON-Editor to revert to the first tab, so we instantly click back
+        nextTick(() => {
+            const navLinks = shadowRoot?.querySelectorAll('.nav-tabs .nav-link');
+            navLinks?.forEach(link => {
+                if (link.textContent.trim() === activeTab) link.click();
+            });
+            updateLayout();
+        });
 
         setTimeout(() => {
             let val = editor.getValue();
@@ -185,7 +196,7 @@ const cancelQuery = () => {
             const oldVal = props.model.get('value') || {};
             val._trigger_apply = oldVal._trigger_apply || 0;
             val._trigger_cancel = Date.now();
-            val.active_tab = getActiveTab(editorHolder.value?.getRootNode());
+            val.active_tab = activeTab;
             props.model.set('value', val);
             props.model.save_changes();
             isUpdating = false;
@@ -295,20 +306,16 @@ onMounted(async () => {
                     if (i > 0) {
                         let prevRow = val.Simple[i - 1];
 
-                        // Strictly apply NOT modifier only to the current newly added row
                         if (prevRow.modifier === 'NOT') {
                             rowText = `FILTER NOT EXISTS { ${rowText} }`;
                         }
 
-                        // If logic is OR, bind tightly to the previous element
                         if (prevRow.logic === 'OR') {
                             if (currentOrGroup.length === 0) {
-                                // Extract the immediately preceding item to start the OR group
                                 currentOrGroup.push(parts.pop());
                             }
                             currentOrGroup.push(rowText);
                         } else {
-                            // If logic is AND, seal any existing OR group before adding the new AND chain
                             if (currentOrGroup.length > 0) {
                                 parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
                                 currentOrGroup = [];
@@ -320,12 +327,10 @@ onMounted(async () => {
                     }
                 });
 
-                // Seal any dangling OR group at the end of the query
                 if (currentOrGroup.length > 0) {
                     parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
                 }
 
-                // Join all the separate AND parts and sealed UNION blocks together cleanly
                 let queryBody = parts.join(' .\n  ');
 
                 const newAdvanced = `SELECT * WHERE {\n  ${queryBody} \n}`;
