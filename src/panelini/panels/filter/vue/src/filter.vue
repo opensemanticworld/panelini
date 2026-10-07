@@ -170,14 +170,10 @@ const getActiveTab = (shadowRoot) => {
 const cancelQuery = () => {
     if (props.model && editor) {
         isUpdating = true;
-
-        // FIX: Specific updates prevent JSON-Editor from wiping out the active tab state
         const basicEditor = editor.getEditor('root.Basic');
         if (basicEditor) basicEditor.setValue([{ "predicate": "", "object": "" }]);
-
         const simpleEditor = editor.getEditor('root.Simple');
         if (simpleEditor) simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
-
         const advEditor = editor.getEditor('root.Advanced.query');
         if (advEditor) advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
 
@@ -190,7 +186,6 @@ const cancelQuery = () => {
             val._trigger_apply = oldVal._trigger_apply || 0;
             val._trigger_cancel = Date.now();
             val.active_tab = getActiveTab(editorHolder.value?.getRootNode());
-
             props.model.set('value', val);
             props.model.save_changes();
             isUpdating = false;
@@ -207,7 +202,6 @@ const applyQuery = () => {
             val._trigger_cancel = oldVal._trigger_cancel || 0;
             val._trigger_apply = Date.now();
             val.active_tab = getActiveTab(editorHolder.value?.getRootNode());
-
             props.model.set('value', val);
             props.model.save_changes();
         }, 50);

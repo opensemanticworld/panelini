@@ -45,11 +45,11 @@ class TripperQueryModel:
 
     def execute_datadoc_search(self, basic_criteria: list) -> str:
         """Executes tripper.datadoc search -> acquire -> TableDoc."""
-        from tripper import RDF, EMMO, DCTERMS
 
         # Bind the PERS namespace so it can be matched
         PERS = self.ts.bind("pers", "https://www.ntnu.edu/physmet/people/")
 
+        # Map string prefixes to literal Tripper Namespace objects
         ns_map = {"rdf": RDF, "emmo": EMMO, "dcterms": DCTERMS, "pers": PERS}
 
         criteria = {}
@@ -61,11 +61,13 @@ class TripperQueryModel:
                 p_obj = p_str
                 o_obj = o_str
 
+                # Resolve predicate string to actual Namespace object
                 if ":" in p_str:
                     pref, val = p_str.split(":", 1)
                     if pref.lower() in ns_map:
                         p_obj = getattr(ns_map[pref.lower()], val)
 
+                # Resolve object string to actual Namespace object
                 if ":" in o_str:
                     pref, val = o_str.split(":", 1)
                     if pref.lower() in ns_map:
@@ -73,7 +75,7 @@ class TripperQueryModel:
 
                 criteria[p_obj] = o_obj
 
-        print(f"--- Executing Datadoc Search ---\nCriteria built: {criteria}")
+        print(f"--- Executing Datadoc Search ---\nCriteria: {criteria}")
 
         try:
             iris = search(self.ts, criteria=criteria)
@@ -82,6 +84,7 @@ class TripperQueryModel:
             if not results_list:
                 return "No results found."
 
+            # Load JSON-LD context
             branch = "main"
             CONTEXT_URL = (
                 "https://raw.githubusercontent.com/SINTEF/"
@@ -90,13 +93,17 @@ class TripperQueryModel:
             )
             context = get_context(CONTEXT_URL, default_theme=None)
 
+            # Acquire dictionaries
             dicts = [acquire(self.ts, iri, context=context) for iri in results_list]
+
+            # Create a table doc
             td = TableDoc.fromdicts(dicts, context=context)
 
             output_lines = [f"Found {len(results_list)} results:\n", "-" * 40]
-            output_lines.append(f"Headers: {td.headers}")
+            output_lines.append(f"Result table headers: {td.headers}")
             output_lines.append("-" * 40)
 
+            # Neatly format tabular rows to text
             for i, row in enumerate(td.data, 1):
                 output_lines.append(f"Result {i}:")
                 for header, val in zip(td.headers, row):
@@ -200,6 +207,7 @@ class GraphiaTool(pn.viewable.Viewer):
         return self._layout
 
     def _build_combo_data(self):
+        """Restored placeholder data so the hierarchy renders immediately."""
         return {
             "entities": [
                 {
@@ -271,7 +279,7 @@ class GraphiaTool(pn.viewable.Viewer):
                     p = item.get("predicate", "").strip()
                     o = item.get("object", "").strip()
                     if p and o:
-                        # Make ui text look like Namespace calls (e.g. RDF.type instead of rdf:type)
+                        # Make UI text visually look like Namespace calls (e.g. RDF.type instead of rdf:type)
                         p_fmt = p.replace(":", ".") if ":" in p else p
                         o_fmt = o.replace(":", ".") if ":" in o else o
 
@@ -317,8 +325,6 @@ class GraphiaTool(pn.viewable.Viewer):
 
 session = Session("session.yaml")
 ts = session.get_triplestore("MemKB")
-
-PERS = ts.bind("pers", "https://www.ntnu.edu/physmet/people/")
 
 model = TripperQueryModel(ts)
 app = GraphiaTool(model)

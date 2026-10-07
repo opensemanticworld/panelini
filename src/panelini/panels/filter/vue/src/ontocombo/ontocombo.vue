@@ -3,8 +3,8 @@
         <div class="ontocombo-header form-control p-0 d-flex align-items-stretch" @click.stop="openDropdown">
             <input type="text" class="ontocombo-input flex-grow-1 px-2 border-0 bg-transparent" v-model="searchQuery"
                 @focus="openDropdown" @click.stop="openDropdown" @input="onInput" :placeholder="placeholder"
-                :readonly="!isSearchable"
-                :style="!isSearchable ? 'cursor: pointer; outline: none !important; box-shadow: none !important; min-width: 0;' : 'outline: none !important; box-shadow: none !important; min-width: 0;'" />
+                :readonly="isFlatList"
+                :style="isFlatList ? 'cursor: pointer; outline: none !important; box-shadow: none !important; min-width: 0;' : 'outline: none !important; box-shadow: none !important; min-width: 0;'" />
             <div class="ontocombo-arrow d-flex align-items-center px-2 flex-shrink-0" @click.stop="toggleDropdown"
                 style="cursor: pointer;">
                 <i class="fas" :class="isOpen ? 'fa-caret-down' : 'fa-caret-right'"></i>
@@ -17,13 +17,16 @@
                     <div v-if="item.isGroup" class="ontocombo-row is-group" :class="getDepthClass(item.level, true)"
                         :style="{ display: 'flex', cursor: 'pointer', 'align-items': 'center', padding: `0 ${item.level * 16 + 8}px` }"
                         @click.stop="toggleGroup(item.id)">
-                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label }}</span>
+                        <!-- Use a non-breaking space if the label is exactly empty so the row stays clickable -->
+                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label === '' ?
+                            '\u00A0' : item.label }}</span>
                         <i class="fas row-toggle" :class="item.expanded ? 'fa-caret-down' : 'fa-caret-right'"></i>
                     </div>
                     <div v-else class="ontocombo-row is-element" :class="getDepthClass(item.level, false)"
                         :style="{ cursor: 'pointer', paddingLeft: `${item.level * 16 + 8}px` }"
                         @click.stop="selectItem(item)">
-                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label }}</span>
+                        <span class="row-label flex-grow-1 text-start" :title="item.label">{{ item.label === '' ?
+                            '\u00A0' : item.label }}</span>
                     </div>
                 </template>
                 <div v-if="visibleItems.length === 0" class="ontocombo-empty">
@@ -51,8 +54,10 @@ const searchQuery = ref('');
 const expandedGroups = ref(new Set());
 const dropdownStyle = ref({});
 
-const isSearchable = computed(() => {
-    return props.options.some(opt => opt.children && opt.children.length > 0) || props.options.length > 5;
+// If it's a flat list with <= 2 items (like Logic/Modifier), make it readonly to act as a pure dropdown
+const isFlatList = computed(() => {
+    if (!props.options || props.options.length === 0) return false;
+    return props.options.length <= 2 && !props.options.some(opt => opt.children);
 });
 
 const updatePosition = () => {
@@ -73,6 +78,7 @@ const updatePosition = () => {
     }
 };
 
+// Safely handles programmatic updates (like pressing Cancel)
 const updateFromExternal = (newVal) => {
     const findLabel = (nodes) => {
         for (const node of nodes) {
@@ -87,6 +93,7 @@ const updateFromExternal = (newVal) => {
     searchQuery.value = findLabel(props.options) || newVal || '';
 };
 
+// Expose so json_editor_bridge can trigger it
 defineExpose({ updateFromExternal });
 
 watch(() => props.modelValue, (newVal) => {
@@ -104,7 +111,8 @@ const onInput = () => {
 };
 
 const visibleItems = computed(() => {
-    const query = isSearchable.value ? searchQuery.value.toLowerCase() : '';
+    // If it's a flat non-editable list, ignore the search query so options aren't filtered out
+    const query = isFlatList.value ? '' : searchQuery.value.toLowerCase();
 
     const processNodes = (nodes, level = 0, forceExpand = false) => {
         let result = [];

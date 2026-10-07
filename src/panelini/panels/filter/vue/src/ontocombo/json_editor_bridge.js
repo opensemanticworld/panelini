@@ -17,7 +17,7 @@ export function register_ontocombo(JSONEditor, createApp) {
 
             this.vueApp = createApp(ontocombo, {
                 options: ontologyData,
-                modelValue: this.value,
+                modelValue: this.value || this.schema.default || '',
                 placeholder: '',
                 'onUpdate:modelValue': (newVal) => {
                     this.value = newVal;
@@ -31,8 +31,9 @@ export function register_ontocombo(JSONEditor, createApp) {
 
         setValue(val) {
             super.setValue(val);
+            // Safely push Cancel event to Vue, falling back to default if cleared
             if (this.vueInstance && typeof this.vueInstance.updateFromExternal === 'function') {
-                this.vueInstance.updateFromExternal(val);
+                this.vueInstance.updateFromExternal(val || this.schema.default || '');
             }
         }
 
