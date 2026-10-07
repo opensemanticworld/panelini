@@ -1,4 +1,3 @@
-import json
 import panel as pn
 from tripper import Session, RDF, EMMO, DCTERMS, Namespace
 from tripper.datadoc import search, acquire, get_context, TableDoc
