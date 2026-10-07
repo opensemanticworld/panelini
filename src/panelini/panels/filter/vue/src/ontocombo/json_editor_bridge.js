@@ -4,8 +4,6 @@ export function register_ontocombo(JSONEditor, createApp) {
     JSONEditor.defaults.editors.ontocombo = class extends JSONEditor.defaults.editors.string {
         build() {
             super.build();
-
-            // FIX: Hide the default text input completely by making it hidden
             if (this.input) {
                 this.input.type = 'hidden';
                 this.input.style.setProperty('display', 'none', 'important');
@@ -13,7 +11,6 @@ export function register_ontocombo(JSONEditor, createApp) {
 
             this.vueContainer = document.createElement('div');
             this.vueContainer.style.width = '100%';
-
             this.input.parentNode.insertBefore(this.vueContainer, this.input.nextSibling);
 
             const ontologyData = this.schema.options?.ontology_data || [];
@@ -34,8 +31,8 @@ export function register_ontocombo(JSONEditor, createApp) {
 
         setValue(val) {
             super.setValue(val);
-            if (this.vueInstance) {
-                this.vueInstance.$props.modelValue = val;
+            if (this.vueInstance && typeof this.vueInstance.updateFromExternal === 'function') {
+                this.vueInstance.updateFromExternal(val);
             }
         }
 

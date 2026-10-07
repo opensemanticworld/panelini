@@ -101,16 +101,26 @@ const filterSchema = {
                     "logic": {
                         "type": "string",
                         "title": "Relation Logic",
-                        "enum": ["AND", "OR"],
+                        "format": "ontocombo",
                         "default": "AND",
-                        "options": { "grid_columns": 2, "inputAttributes": bsSelect }
+                        "options": {
+                            "grid_columns": 6, "ontology_data": [
+                                { "id": "AND", "label": "AND", "value": "AND" },
+                                { "id": "OR", "label": "OR", "value": "OR" }
+                            ]
+                        }
                     },
                     "modifier": {
                         "type": "string",
                         "title": "Modifier",
-                        "enum": ["", "NOT"],
+                        "format": "ontocombo",
                         "default": "",
-                        "options": { "grid_columns": 2, "inputAttributes": bsSelect }
+                        "options": {
+                            "grid_columns": 6, "ontology_data": [
+                                { "id": "NONE", "label": "", "value": "" },
+                                { "id": "NOT", "label": "NOT", "value": "NOT" }
+                            ]
+                        }
                     }
                 }
             },
@@ -160,10 +170,14 @@ const getActiveTab = (shadowRoot) => {
 const cancelQuery = () => {
     if (props.model && editor) {
         isUpdating = true;
+
+        // FIX: Specific updates prevent JSON-Editor from wiping out the active tab state
         const basicEditor = editor.getEditor('root.Basic');
         if (basicEditor) basicEditor.setValue([{ "predicate": "", "object": "" }]);
+
         const simpleEditor = editor.getEditor('root.Simple');
         if (simpleEditor) simpleEditor.setValue([{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }]);
+
         const advEditor = editor.getEditor('root.Advanced.query');
         if (advEditor) advEditor.setValue("SELECT * WHERE {\n  ?s ?p ?o .\n}");
 
@@ -226,10 +240,8 @@ onMounted(async () => {
     injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css', document.head);
     injectCSS('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', document.head);
 
-
     try {
         const JSONEditor = jsonEditorModule.JSONEditor || jsonEditorModule.default?.JSONEditor || window.JSONEditor;
-
         register_ontocombo(JSONEditor, createApp);
 
         const rawData = props.model?.get('schema') || {};

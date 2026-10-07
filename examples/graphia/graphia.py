@@ -61,13 +61,11 @@ class TripperQueryModel:
                 p_obj = p_str
                 o_obj = o_str
 
-                # Resolve predicate to Namespace object (e.g., "rdf:type" -> RDF.type)
                 if ":" in p_str:
                     pref, val = p_str.split(":", 1)
                     if pref.lower() in ns_map:
                         p_obj = getattr(ns_map[pref.lower()], val)
 
-                # Resolve object to Namespace object
                 if ":" in o_str:
                     pref, val = o_str.split(":", 1)
                     if pref.lower() in ns_map:
@@ -84,7 +82,7 @@ class TripperQueryModel:
             if not results_list:
                 return "No results found."
 
-            branch = "pattern-mappings"
+            branch = "main"
             CONTEXT_URL = (
                 "https://raw.githubusercontent.com/SINTEF/"
                 f"physmet-data-documentation-templates/refs/heads/{branch}/"

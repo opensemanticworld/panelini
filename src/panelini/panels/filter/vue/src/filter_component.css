@@ -1,4 +1,3 @@
-/* Safely flattens the root wrapper without deleting the tab headers */
 .json-editor-scroll-area {
     max-height: calc(100vh - 88px);
     overflow-x: hidden;
