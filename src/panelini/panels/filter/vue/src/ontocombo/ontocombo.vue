@@ -30,7 +30,8 @@
                     </div>
                 </template>
                 <div v-if="visibleItems.length === 0" class="ontocombo-empty">
-                    Using custom value: "{{ searchQuery }}"
+                    Using custom value:<br>
+                    {{ searchQuery }}
                 </div>
             </div>
         </Teleport>
