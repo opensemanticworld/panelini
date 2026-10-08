@@ -130,12 +130,15 @@ class GraphiaTool(pn.viewable.Viewer):
 
         # Top Right Controls (Combobox & Editor Button)
         self.ts_select = pn.widgets.Select(
-            options=self._get_ts_names(), value="MemKB", width=150, margin=(10, 5, 0, 0)
+            options=self._get_ts_names(),
+            value="MemKB",
+            width=150,
+            margin=(10, 0, 0, 0),
         )
         self.ts_select.param.watch(self._on_ts_change, "value")
 
         self.edit_btn = pn.widgets.Button(
-            icon="settings", width=40, margin=(10, 10, 0, 0), button_type="light"
+            icon="settings", width=40, margin=(10, 0, 0, 10), button_type="light"
         )
         self.edit_btn.on_click(self._open_editor)
 
@@ -221,6 +224,7 @@ class GraphiaTool(pn.viewable.Viewer):
             self.edit_btn,
             sizing_mode="stretch_width",
             align="center",
+            margin=(0, 16, 0, 0),
         )
 
         # Filter Container Wrapper (Allows replacing the Filter widget on TS change)
