@@ -1,3 +1,5 @@
+import yaml
+from pathlib import Path
 import panel as pn
 from tripper import Session, RDF, EMMO, DCTERMS, Namespace
 from tripper.datadoc import search, acquire, get_context, TableDoc
@@ -124,20 +126,106 @@ class GraphiaTool(pn.viewable.Viewer):
     def __init__(self, model: TripperQueryModel):
         super().__init__()
         self.model = model
+        self.session_path = Path("session.yaml")
 
-        combo_data = self._build_combo_data()
-
-        initial_val = {
-            "Advanced": {
-                "query": "SELECT ?s WHERE {\n  ?s dcterms:creator pers:ArmelPerrotin .\n}"
-            },
-            "Basic": [{"predicate": "dcterms:creator", "object": "pers:ArmelPerrotin"}],
-        }
-
-        self.filter_widget = Filter(
-            schema=combo_data, value=initial_val, sizing_mode="stretch_both"
+        # Top Right Controls (Combobox & Editor Button)
+        self.ts_select = pn.widgets.Select(
+            options=self._get_ts_names(), value="MemKB", width=150, margin=(10, 5, 0, 0)
         )
-        self.filter_widget.param.watch(self._on_filter_change, "value")
+        self.ts_select.param.watch(self._on_ts_change, "value")
+
+        self.edit_btn = pn.widgets.Button(
+            icon="settings", width=40, margin=(10, 10, 0, 0), button_type="light"
+        )
+        self.edit_btn.on_click(self._open_editor)
+
+        # --- MODAL OVERLAY SETUP ---
+        self.yaml_editor = pn.widgets.TextAreaInput(
+            value=self.session_path.read_text() if self.session_path.exists() else "",
+            height=250,
+            sizing_mode="stretch_width",
+        )
+        self.editor_error = pn.pane.Alert(alert_type="danger", visible=False)
+        self.save_btn = pn.widgets.Button(name="Save", button_type="primary", width=100)
+        self.save_btn.on_click(self._save_editor)
+        self.cancel_btn = pn.widgets.Button(
+            name="Cancel", button_type="default", width=100
+        )
+        self.cancel_btn.on_click(self._close_editor)
+
+        self.close_btn = pn.widgets.Button(
+            icon="x",
+            width=35,
+            height=35,
+            styles={
+                "background": "transparent",
+                "border": "none",
+                "box-shadow": "none",
+            },
+        )
+        self.close_btn.on_click(self._close_editor)
+
+        modal_header = pn.Row(
+            pn.pane.Markdown("### Edit session.yaml", margin=(5, 0, 0, 0)),
+            pn.layout.HSpacer(),
+            self.close_btn,
+            sizing_mode="stretch_width",
+            margin=(0, 0, 10, 0),
+        )
+
+        # Inner Dialog Box - Positioned like standard Bootstrap modal
+        self.editor_pane = pn.Column(
+            modal_header,
+            self.editor_error,
+            self.yaml_editor,
+            pn.Row(
+                pn.layout.HSpacer(),
+                self.cancel_btn,
+                self.save_btn,
+                margin=(10, 0, 0, 0),
+            ),
+            width=600,
+            align="center",  # Centers horizontally in the overlay column
+            margin=(50, 0, 0, 0),  # Pushes it 50px down from the top
+            styles={
+                "padding": "20px",
+                "background": "white",
+                "border-radius": "8px",
+                "box-shadow": "0 4px 12px rgba(0,0,0,0.2)",
+            },
+        )
+
+        # Fixed Full-Screen Background Overlay
+        self.modal_overlay = pn.Column(
+            self.editor_pane,
+            sizing_mode="stretch_both",
+            visible=False,  # Panel handles display mapping natively now
+            styles={
+                "position": "fixed",
+                "top": "0",
+                "left": "0",
+                "width": "100vw",
+                "height": "100vh",
+                "background": "rgba(0,0,0,0.5)",
+                "z-index": "1050",
+            },
+        )
+        # ---------------------------
+
+        header_row = pn.Row(
+            pn.pane.Markdown(
+                "### Semantic Filter", align="center", margin=(10, 0, 10, 10)
+            ),
+            pn.layout.HSpacer(),
+            self.ts_select,
+            self.edit_btn,
+            sizing_mode="stretch_width",
+            align="center",
+        )
+
+        # Filter Container Wrapper (Allows replacing the Filter widget on TS change)
+        self.filter_container = pn.Column(sizing_mode="stretch_both")
+        self._create_filter_widget()
 
         wrap_css = """
         .codehilite { display: block !important; }
@@ -191,10 +279,11 @@ class GraphiaTool(pn.viewable.Viewer):
             },
         )
 
-        self._layout = pn.Row(
+        # Original Layout
+        self._main_layout = pn.Row(
             pn.Column(
-                "### Semantic Filter",
-                self.filter_widget,
+                header_row,
+                self.filter_container,
                 sizing_mode="stretch_both",
                 styles={"flex": "3", "max-width": "30%", "overflow": "hidden"},
             ),
@@ -207,8 +296,99 @@ class GraphiaTool(pn.viewable.Viewer):
             min_height=800,
         )
 
+        # Combine modal overlay with main layout
+        self._layout = pn.Column(
+            self.modal_overlay, self._main_layout, sizing_mode="stretch_both"
+        )
+
     def __panel__(self):
         return self._layout
+
+    def _get_ts_names(self):
+        """Reads available triplestores strictly from session.yaml."""
+        try:
+            if not self.session_path.exists():
+                return ["MemKB"]
+            with open(self.session_path, "r") as f:
+                data = yaml.safe_load(f)
+                return list(data.keys()) if data else []
+        except Exception:
+            return ["MemKB"]
+
+    def _open_editor(self, event):
+        self.yaml_editor.value = (
+            self.session_path.read_text() if self.session_path.exists() else ""
+        )
+        self.editor_error.visible = False
+        self.modal_overlay.visible = True
+
+    def _close_editor(self, event):
+        self.modal_overlay.visible = False
+
+    def _save_editor(self, event):
+        try:
+            # Validate YAML formatting before saving to disk
+            yaml.safe_load(self.yaml_editor.value)
+            self.session_path.write_text(self.yaml_editor.value)
+
+            # Refresh combobox options
+            current_val = self.ts_select.value
+            new_options = self._get_ts_names()
+            self.ts_select.options = new_options
+
+            # Keep selection if it still exists, else fallback to first option
+            if current_val in new_options:
+                self.ts_select.value = current_val
+            elif new_options:
+                self.ts_select.value = new_options[0]
+
+            self.editor_error.visible = False
+            self._close_editor(None)
+            print("session.yaml updated successfully.")
+        except Exception as e:
+            self.editor_error.object = f"**Invalid YAML:** {str(e)}"
+            self.editor_error.visible = True
+
+    def _on_ts_change(self, event):
+        """Triggered when the Triplestore combobox selection changes."""
+        new_ts_name = event.new
+        print(f"Switching triplestore to {new_ts_name}...")
+        try:
+            # Establish new session connection and update the model
+            session = Session(str(self.session_path))
+            self.model.ts = session.get_triplestore(new_ts_name)
+
+            # Rebuild the Filter widget to fetch updated schema ontologies
+            self._create_filter_widget()
+            print("Triplestore switched successfully.")
+        except Exception as e:
+            print(f"Failed to switch triplestore: {e}")
+
+    def _create_filter_widget(self):
+        """Builds or rebuilds the Filter widget into the container."""
+        combo_data = self._build_combo_data()
+
+        # Preserve the UI state if recreating, otherwise load defaults
+        if hasattr(self, "filter_widget") and self.filter_widget is not None:
+            initial_val = self.filter_widget.value
+        else:
+            initial_val = {
+                "Advanced": {
+                    "query": "SELECT ?s WHERE {\n  ?s dcterms:creator pers:ArmelPerrotin .\n}"
+                },
+                "Basic": [
+                    {"predicate": "dcterms:creator", "object": "pers:ArmelPerrotin"}
+                ],
+            }
+
+        # The Filter component registers itself with Vue via Javascript automatically
+        self.filter_widget = Filter(
+            schema=combo_data, value=initial_val, sizing_mode="stretch_both"
+        )
+        self.filter_widget.param.watch(self._on_filter_change, "value")
+
+        # Swaps out the old Filter instance in the Panel Column to trigger a Vue re-mount
+        self.filter_container[:] = [self.filter_widget]
 
     def _build_combo_data(self):
         """Dynamically fetch elements, categorizing them strictly by namespace prefix."""
@@ -405,7 +585,6 @@ class GraphiaTool(pn.viewable.Viewer):
 
 session = Session("session.yaml")
 ts = session.get_triplestore("MemKB")
-
 model = TripperQueryModel(ts)
 app = GraphiaTool(model)
 app.servable(title="Text-based SPARQL Filter")

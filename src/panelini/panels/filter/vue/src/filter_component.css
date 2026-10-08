@@ -4,13 +4,15 @@
     overflow-y: auto;
 
     .card {
-        border: none !important;
+        border: none;
         background: transparent !important;
-        padding: 0 2px !important;
         margin: 0 !important;
+        padding: 0;
+
     }
 
     .card-header {
+        border-radius: 0;
         margin-bottom: 10px;
     }
 
