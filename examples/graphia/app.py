@@ -121,8 +121,7 @@ class GraphiaTool(pn.viewable.Viewer):
 
         markdown_css = """
         .codehilite { 
-            display: block !important; 
-            padding": "10px;
+            display: block !important;
         }
         """
 
@@ -139,6 +138,7 @@ class GraphiaTool(pn.viewable.Viewer):
             sizing_mode="stretch_both",
             margin=0,
             styles={"padding": "10px"},
+            stylesheets=[markdown_css],
         )
 
         self.results_container = pn.Column(
