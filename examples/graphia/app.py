@@ -117,8 +117,6 @@ class GraphiaTool(pn.viewable.Viewer):
         self.filter_container = pn.Column(sizing_mode="stretch_both")
         self._create_filter_widget()
 
-        # Shadow DOM CSS injection to override Pygments syntax highlighting defaults
-
         markdown_css = """
         .codehilite { 
             display: block !important;
