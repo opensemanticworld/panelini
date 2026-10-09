@@ -68,7 +68,7 @@ const updatePosition = () => {
             position: 'fixed',
             top: `${rect.bottom + 4}px`,
             left: `${rect.left}px`,
-            width: `${rect.width}px`,
+            minWidth: `${rect.width}px`,
             zIndex: 999999,
             backgroundColor: '#ffffff',
             border: '1px solid #ced4da',

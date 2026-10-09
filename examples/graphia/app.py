@@ -4,7 +4,7 @@ import yaml
 from pathlib import Path
 
 import panel as pn
-from tripper import Session, RDF, EMMO, DCTERMS
+from tripper import RDF, EMMO, DCTERMS
 from panelini.panels.filter.filter import Filter
 
 from model import TripperQueryModel
@@ -15,15 +15,15 @@ pn.extension()
 class GraphiaTool(pn.viewable.Viewer):
     """Main Panel UI View for the Semantic Filter."""
 
-    def __init__(self, model: TripperQueryModel):
+    def __init__(self, model: TripperQueryModel, session_path: str):
         super().__init__()
         self.model = model
-        self.session_path = Path("session.yaml")
+        self.session_path = Path(session_path)
 
         # Top Right Controls
         self.ts_select = pn.widgets.Select(
             options=self._get_ts_names(),
-            value="MemKB",
+            value=self.model.triplestore_name,
             width=150,
             margin=(10, 0, 0, 0),
         )
@@ -49,12 +49,7 @@ class GraphiaTool(pn.viewable.Viewer):
             name="Cancel", button_type="default", width=100
         )
         self.cancel_btn.on_click(self._close_editor)
-
-        self.close_btn = pn.widgets.Button(
-            icon="x",
-            width=35,
-            height=35,
-        )
+        self.close_btn = pn.widgets.Button(icon="x", width=35, height=35)
         self.close_btn.on_click(self._close_editor)
 
         modal_header = pn.Row(
@@ -80,7 +75,7 @@ class GraphiaTool(pn.viewable.Viewer):
             margin=(50, 0, 0, 0),
             styles={
                 "padding": "25px",
-                "background": "var(--design-background-color, white)",
+                "background": "white",
                 "border-radius": "8px",
                 "box-shadow": "0 4px 12px rgba(0,0,0,0.3)",
             },
@@ -101,7 +96,6 @@ class GraphiaTool(pn.viewable.Viewer):
             },
         )
 
-        # Main Layout Setup
         header_row = pn.Row(
             pn.pane.Markdown(
                 "### Semantic Filter", align="center", margin=(10, 0, 10, 10)
@@ -117,12 +111,7 @@ class GraphiaTool(pn.viewable.Viewer):
         self.filter_container = pn.Column(sizing_mode="stretch_both")
         self._create_filter_widget()
 
-        markdown_css = """
-        .codehilite { 
-            display: block !important;
-        }
-        """
-
+        markdown_css = ".codehilite { display: block !important; }"
         self.query_pane = pn.pane.Markdown(
             "### Executed Query\n\n*(Waiting for input...)*",
             sizing_mode="stretch_width",
@@ -130,7 +119,6 @@ class GraphiaTool(pn.viewable.Viewer):
             styles={"padding": "10px"},
             stylesheets=[markdown_css],
         )
-
         self.results_pane = pn.pane.Markdown(
             "### Results\n\nClick **Apply** to run the query.",
             sizing_mode="stretch_both",
@@ -150,7 +138,7 @@ class GraphiaTool(pn.viewable.Viewer):
                 "min-width": "0",
                 "overflow-y": "auto",
                 "overflow-x": "hidden",
-                "border": "1px solid var(--design-border-color, #ddd)",
+                "border": "1px solid #ddd",
             },
         )
 
@@ -173,30 +161,15 @@ class GraphiaTool(pn.viewable.Viewer):
             min_height=800,
         )
 
-        # Optional: Load remaining CSS for layout (modal overlay position)
-        css_path = Path(__file__).parent / "style.css"
-        css_content = css_path.read_text() if css_path.exists() else ""
-
         self._layout = pn.Column(
-            self.modal_overlay,
-            self._main_layout,
-            sizing_mode="stretch_both",
-            margin=0,
-            stylesheets=[css_content],
+            self.modal_overlay, self._main_layout, sizing_mode="stretch_both", margin=0
         )
 
     def __panel__(self):
         return self._layout
 
     def _get_ts_names(self):
-        try:
-            if not self.session_path.exists():
-                return ["MemKB"]
-            with open(self.session_path, "r") as f:
-                data = yaml.safe_load(f)
-                return list(data.keys()) if data else []
-        except Exception:
-            return ["MemKB"]
+        return self.model.session.get_names()
 
     def _open_editor(self, event):
         self.yaml_editor.value = (
@@ -213,30 +186,28 @@ class GraphiaTool(pn.viewable.Viewer):
             yaml.safe_load(self.yaml_editor.value)
             self.session_path.write_text(self.yaml_editor.value)
 
-            current_val = self.ts_select.value
+            # Reload session in model
+            self.model.session = Session(str(self.session_path))
             new_options = self._get_ts_names()
             self.ts_select.options = new_options
 
-            if current_val in new_options:
-                self.ts_select.value = current_val
+            if self.ts_select.value in new_options:
+                self._on_ts_change(
+                    type("Event", (object,), {"new": self.ts_select.value})()
+                )
             elif new_options:
                 self.ts_select.value = new_options[0]
 
             self.editor_error.visible = False
             self._close_editor(None)
-            print("session.yaml updated successfully.")
         except Exception as e:
             self.editor_error.object = f"**Invalid YAML:** {str(e)}"
             self.editor_error.visible = True
 
     def _on_ts_change(self, event):
-        new_ts_name = event.new
-        print(f"Switching triplestore to {new_ts_name}...")
         try:
-            session = Session(str(self.session_path))
-            self.model.ts = session.get_triplestore(new_ts_name)
+            self.model.load_triplestore(event.new)
             self._create_filter_widget()
-            print("Triplestore switched successfully.")
         except Exception as e:
             print(f"Failed to switch triplestore: {e}")
 
@@ -263,62 +234,61 @@ class GraphiaTool(pn.viewable.Viewer):
 
     def _build_combo_data(self):
         ts = self.model.ts
-
-        ts.bind("rdf", str(RDF))
-        ts.bind("emmo", str(EMMO))
-        ts.bind("dcterms", str(DCTERMS))
-        ts.bind("pers", "https://www.ntnu.edu/physmet/people/")
-
         entities_tree = {"classes": {}, "instances": {}}
         predicates_tree = {}
 
-        def parse_iri(iri_val):
-            iri_str = str(iri_val)
-            if not iri_str.startswith("http"):
-                return None, None, None
-
-            for prefix, uri in ts.namespaces.items():
-                uri_str = str(uri)
-                if iri_str.startswith(uri_str):
-                    name = iri_str[len(uri_str) :]
-                    return prefix, name, f"{prefix}:{name}"
-
-            if "#" in iri_str:
-                base, name = iri_str.rsplit("#", 1)
-                prefix = base.split("/")[-1] if "/" in base else "unknown"
-                ns_uri = base + "#"
-            elif "/" in iri_str:
-                base, name = iri_str.rsplit("/", 1)
-                prefix = base.split("/")[-1] if "/" in base else "unknown"
-                ns_uri = base + "/"
-            else:
-                return "other", iri_str, iri_str
-
-            prefix = "".join(e for e in prefix if e.isalnum()) or "other"
-
-            if prefix != "other" and prefix not in ts.namespaces:
-                ts.bind(prefix, ns_uri)
-
-            return prefix, name, f"{prefix}:{name}"
-
         def add_to_tree(tree, iri_val):
-            prefix, name, value = parse_iri(iri_val)
-            if not prefix:
-                return
+            try:
+                simplified = self.model.simplify_iris([str(iri_val)])[0]
 
-            if prefix not in tree:
-                tree[prefix] = []
+                if ":" in simplified and not simplified.startswith("http"):
+                    prefix, name = simplified.split(":", 1)
+                else:
+                    prefix = "other"
+                    if "#" in simplified:
+                        name = simplified.split("#")[-1]
+                    elif "/" in simplified:
+                        name = simplified.split("/")[-1]
+                    else:
+                        name = simplified
 
-            if not any(x["value"] == value for x in tree[prefix]):
-                tree[prefix].append({"id": value, "label": name, "value": value})
+                if prefix not in tree:
+                    tree[prefix] = []
 
-        add_to_tree(predicates_tree, RDF.type)
-        add_to_tree(predicates_tree, DCTERMS.creator)
-        add_to_tree(entities_tree["classes"], EMMO.Dataset)
-        add_to_tree(
-            entities_tree["instances"],
-            self.model.ts.namespaces.get("pers") + "ArmelPerrotin",
-        )
+                if not any(x["value"] == simplified for x in tree[prefix]):
+                    tree[prefix].append(
+                        {"id": simplified, "label": name, "value": simplified}
+                    )
+            except Exception as e:
+                print(f"Warning: Failed to add {iri_val} to tree: {e}")
+
+        # New helper specifically for categorizing instances by their Class
+        def add_categorized_instance(tree, instance_iri, class_iri):
+            try:
+                inst_simplified = self.model.simplify_iris([str(instance_iri)])[0]
+                class_simplified = self.model.simplify_iris([str(class_iri)])[0]
+
+                # Use the class name as the category header
+                if ":" in class_simplified and not class_simplified.startswith("http"):
+                    category = class_simplified.split(":", 1)[1]
+                else:
+                    category = class_simplified.split("#")[-1].split("/")[-1]
+
+                # Extract the instance short name for the label
+                if ":" in inst_simplified and not inst_simplified.startswith("http"):
+                    name = inst_simplified.split(":", 1)[1]
+                else:
+                    name = inst_simplified.split("#")[-1].split("/")[-1]
+
+                if category not in tree:
+                    tree[category] = []
+
+                if not any(x["value"] == inst_simplified for x in tree[category]):
+                    tree[category].append(
+                        {"id": inst_simplified, "label": name, "value": inst_simplified}
+                    )
+            except Exception as e:
+                print(f"Warning: Failed to categorize instance {instance_iri}: {e}")
 
         def extract_val(row, key, idx):
             if isinstance(row, dict) or hasattr(row, "get"):
@@ -340,22 +310,31 @@ class GraphiaTool(pn.viewable.Viewer):
             print(f"Warning: Classes query failed: {e}")
 
         try:
-            for row in ts.query("SELECT DISTINCT ?s WHERE { ?s a ?c }"):
-                add_to_tree(entities_tree["instances"], extract_val(row, "s", 0))
+            # Modified query to fetch both the instance (?s) and its class (?c)
+            for row in ts.query("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"):
+                s_val = extract_val(row, "s", 0)
+                c_val = extract_val(row, "c", 1)
+                add_categorized_instance(entities_tree["instances"], s_val, c_val)
         except Exception as e:
             print(f"Warning: Instances query failed: {e}")
 
         def dict_to_grouped_list(d, parent_id, parent_label):
             children = []
-            for prefix, items in d.items():
+            for category_name, items in d.items():
                 items.sort(key=lambda x: str(x["label"]).lower())
                 children.append(
-                    {"id": f"{parent_id}_{prefix}", "label": prefix, "children": items}
+                    {
+                        "id": f"{parent_id}_{category_name}",
+                        "label": category_name,
+                        "children": items,
+                    }
                 )
             children.sort(key=lambda x: str(x["label"]).lower())
-            if not children:
-                return []
-            return [{"id": parent_id, "label": parent_label, "children": children}]
+            return (
+                [{"id": parent_id, "label": parent_label, "children": children}]
+                if children
+                else []
+            )
 
         entities_list = dict_to_grouped_list(
             entities_tree["classes"], "classes", "Classes"
@@ -378,70 +357,45 @@ class GraphiaTool(pn.viewable.Viewer):
         if not val:
             return
 
-        new_apply = val.get("_trigger_apply", 0)
-        old_apply = old_val.get("_trigger_apply", 0)
-        new_cancel = val.get("_trigger_cancel", 0)
-        old_cancel = old_val.get("_trigger_cancel", 0)
-
-        active_tab = val.get("active_tab", "Advanced")
-
-        if new_apply != old_apply:
-            if active_tab == "Basic":
+        if val.get("_trigger_apply", 0) != old_val.get("_trigger_apply", 0):
+            if val.get("active_tab", "Advanced") == "Basic":
                 basic_data = val.get("Basic", [])
                 criteria_str = "criteria = {\n"
                 for item in basic_data:
                     p = item.get("predicate", "").strip()
                     o = item.get("object", "").strip()
                     if p and o:
-                        p_fmt = p.replace(":", ".") if ":" in p else p
-                        o_fmt = o.replace(":", ".") if ":" in o else o
-
-                        p_parts = p_fmt.split(".")
-                        if len(p_parts) == 2:
-                            p_fmt = f"{p_parts[0].upper()}.{p_parts[1]}"
-
-                        o_parts = o_fmt.split(".")
-                        if len(o_parts) == 2:
-                            o_fmt = f"{o_parts[0].upper()}.{o_parts[1]}"
-
-                        criteria_str += f"    {p_fmt}: {o_fmt},\n"
+                        criteria_str += f"    '{p}': '{o}',\n"
                 criteria_str += "}"
 
                 self.query_pane.object = (
                     f"### Executed Search Criteria\n```python\n{criteria_str}\n```"
                 )
-                self.results_pane.object = "### Results\n*Executing search...*"
-
-                formatted_results = self.model.execute_datadoc_search(basic_data)
-                self.results_pane.object = (
-                    f"### Results\n```text\n{formatted_results}\n```"
-                )
+                self.results_pane.object = f"### Results\n```text\n{self.model.execute_datadoc_search(basic_data)}\n```"
             else:
                 query = val.get("Advanced", {}).get("query", "")
                 if query:
                     self.query_pane.object = (
                         f"### Executed Query\n```sparql\n{query}\n```"
                     )
-                    self.results_pane.object = "### Results\n*Executing query...*"
-
-                    formatted_results = self.model.execute_query(query)
                     self.results_pane.object = (
-                        f"### Results\n```text\n{formatted_results}\n```"
+                        f"### Results\n```text\n{self.model.execute_query(query)}\n```"
                     )
 
-        elif new_cancel != old_cancel:
+        elif val.get("_trigger_cancel", 0) != old_val.get("_trigger_cancel", 0):
             self.query_pane.object = "### Executed Query\n\n*(Waiting for input...)*"
             self.results_pane.object = (
                 "### Results\n\nClick **Apply** to run the query."
             )
 
 
-# Application execution trigger
 if __name__ == "__main__" or str(__name__).startswith("bokeh"):
-    session = Session("session.yaml")
-    ts = session.get_triplestore("MemKB")
+    # Pass data configuration paths into the unified query model
+    model = TripperQueryModel(
+        session_file="data/session.yaml",
+        settings_file="data/settings.yaml",
+    )
+    model.load_triplestore("MemKB")
 
-    model = TripperQueryModel(ts)
-    app = GraphiaTool(model)
-
+    app = GraphiaTool(model, session_path="data/session.yaml")
     app.servable(title="Text-based SPARQL Filter")

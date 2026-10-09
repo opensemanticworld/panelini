@@ -16194,7 +16194,7 @@ const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onCl
           position: "fixed",
           top: `${A.bottom + 4}px`,
           left: `${A.left}px`,
-          width: `${A.width}px`,
+          minWidth: `${A.width}px`,
           zIndex: 999999,
           backgroundColor: "#ffffff",
           border: "1px solid #ced4da",

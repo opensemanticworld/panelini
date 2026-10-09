@@ -1,6 +1,6 @@
 MemKB:
   backend: rdflib
-  triplestore_url: kb.ttl
+  triplestore_url: data/kb.ttl
 
 GraphDBTest:
   backend: sparqlwrapper

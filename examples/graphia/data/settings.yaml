@@ -1,0 +1,14 @@
+# Default settings
+
+# Settings for each registered triplestore.
+# For now we keep this separate from the session file. May change in the future...
+triplestores:
+  MemKB:
+    context:
+      - "https://raw.githubusercontent.com/SINTEF/PhysMetDoc/refs/heads/main/context/context.json"
+    translated_namespaces:
+      # Prefixes to namespaces that needs translations
+      emmo:
+        iri: "https://w3id.org/emmo#"
+        label_annotations: true
+        check: true
