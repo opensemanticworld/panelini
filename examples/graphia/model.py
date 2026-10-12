@@ -6,27 +6,44 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from tripper import RDF, EMMO, DCTERMS, Namespace, Session
-from tripper.datadoc import search, acquire, get_context, TableDoc, Context
+from tripper.datadoc import search, acquire, TableDoc, Context
 
 
 class TripperQueryModel:
     """Handles SPARQL queries and datadoc searches against a Triplestore."""
 
     def __init__(self, session_file: str, settings_file: str):
+        self.session_file = session_file
+        self.settings_file = settings_file
         self.session = Session(session_file)
 
         with open(settings_file, encoding="utf-8") as f:
             self.settings = yaml.safe_load(f)
 
-        self.ts = None
-        self.triplestore_name: Optional[str] = None
-        self.prefixes: dict[str, Namespace] = {}
-        self.context: Optional[Context] = None
+        self.load_triplestore()
+
+    def reload_session(self) -> None:
+        """Reload session configuration from session file."""
+        self.session = Session(str(self.session_file))
+
+    def get_triplestore_names(self) -> list[str]:
+        """Return names of all configured triplestores in the session."""
+        return self.session.get_names()
+
+    def get_current_triplestore_name(self) -> Optional[str]:
+        """Return the currently selected triplestore name."""
+        return self.triplestore_name
+
+    def query_triplestore(self, query_str: str):
+        """Execute query directly against active triplestore for schema discovery."""
+        if self.ts is None:
+            return []
+        return self.ts.query(query_str)
 
     def load_triplestore(self, name: Optional[str] = None) -> None:
         """Load triplestore, context, and prefixes based on settings."""
         if name is None:
-            names = self.session.get_names()
+            names = self.get_triplestore_names()
             if not names:
                 raise Exception("No configured triplestores.")
             name = names[0]
@@ -89,6 +106,9 @@ class TripperQueryModel:
 
     def execute_query(self, query: str) -> str:
         """Executes a SPARQL query after injecting prefixes and translating namespaces."""
+        if self.ts is None:
+            return "No triplestore loaded."
+
         # Ensure standard prefixes are bound in the triplestore
         std_ns = {
             "rdf": RDF,
@@ -100,14 +120,14 @@ class TripperQueryModel:
             if prefix not in self.ts.namespaces:
                 self.ts.bind(prefix, str(ns))
 
-        # 1. Dynamically build SPARQL PREFIX headers from the triplestore
+        # Dynamically build SPARQL PREFIX headers from the triplestore
         prefix_lines = [f"PREFIX {p}: <{u}>" for p, u in self.ts.namespaces.items()]
         prefix_header = "\n".join(prefix_lines) + "\n\n"
 
-        # 2. Translate prefixes and wrap bare URLs
+        # Translate prefixes and wrap bare URLs
         translated_query = self.update_sparql_query(query)
 
-        # 3. Inject the header if the query doesn't already have one
+        # Inject the header if the query doesn't already have one
         if "PREFIX " not in translated_query.upper():
             final_query = prefix_header + translated_query
         else:
@@ -139,6 +159,9 @@ class TripperQueryModel:
 
     def execute_datadoc_search(self, basic_criteria: list) -> str:
         """Executes tripper.datadoc search utilizing loaded settings contexts."""
+        if self.ts is None:
+            return "No triplestore loaded."
+
         # Build mapping from registered namespaces + prefixes
         ns_map = {
             prefix.lower(): Namespace(str(uri))

@@ -4,7 +4,6 @@ import yaml
 from pathlib import Path
 
 import panel as pn
-from tripper import RDF, EMMO, DCTERMS
 from panelini.panels.filter.filter import Filter
 
 from model import TripperQueryModel
@@ -15,15 +14,16 @@ pn.extension()
 class GraphiaTool(pn.viewable.Viewer):
     """Main Panel UI View for the Semantic Filter."""
 
-    def __init__(self, model: TripperQueryModel, session_path: str):
+    def __init__(self, model: TripperQueryModel):
         super().__init__()
         self.model = model
-        self.session_path = Path(session_path)
+        # Extract the session path directly from the model
+        self.session_path = Path(self.model.session_file)
 
         # Top Right Controls
         self.ts_select = pn.widgets.Select(
             options=self._get_ts_names(),
-            value=self.model.triplestore_name,
+            value=self.model.get_current_triplestore_name(),
             width=150,
             margin=(10, 0, 0, 0),
         )
@@ -169,7 +169,7 @@ class GraphiaTool(pn.viewable.Viewer):
         return self._layout
 
     def _get_ts_names(self):
-        return self.model.session.get_names()
+        return self.model.get_triplestore_names()
 
     def _open_editor(self, event):
         self.yaml_editor.value = (
@@ -186,8 +186,8 @@ class GraphiaTool(pn.viewable.Viewer):
             yaml.safe_load(self.yaml_editor.value)
             self.session_path.write_text(self.yaml_editor.value)
 
-            # Reload session in model
-            self.model.session = Session(str(self.session_path))
+            # Reload session via model interface
+            self.model.reload_session()
             new_options = self._get_ts_names()
             self.ts_select.options = new_options
 
@@ -214,26 +214,11 @@ class GraphiaTool(pn.viewable.Viewer):
     def _create_filter_widget(self):
         combo_data = self._build_combo_data()
 
-        if hasattr(self, "filter_widget") and self.filter_widget is not None:
-            initial_val = self.filter_widget.value
-        else:
-            initial_val = {
-                "Advanced": {
-                    "query": "SELECT ?s WHERE {\n  ?s dcterms:creator pers:ArmelPerrotin .\n}"
-                },
-                "Basic": [
-                    {"predicate": "dcterms:creator", "object": "pers:ArmelPerrotin"}
-                ],
-            }
-
-        self.filter_widget = Filter(
-            schema=combo_data, value=initial_val, sizing_mode="stretch_both"
-        )
+        self.filter_widget = Filter(schema=combo_data, sizing_mode="stretch_both")
         self.filter_widget.param.watch(self._on_filter_change, "value")
         self.filter_container[:] = [self.filter_widget]
 
     def _build_combo_data(self):
-        ts = self.model.ts
         entities_tree = {"classes": {}, "instances": {}}
         predicates_tree = {}
 
@@ -262,19 +247,16 @@ class GraphiaTool(pn.viewable.Viewer):
             except Exception as e:
                 print(f"Warning: Failed to add {iri_val} to tree: {e}")
 
-        # New helper specifically for categorizing instances by their Class
         def add_categorized_instance(tree, instance_iri, class_iri):
             try:
                 inst_simplified = self.model.simplify_iris([str(instance_iri)])[0]
                 class_simplified = self.model.simplify_iris([str(class_iri)])[0]
 
-                # Use the class name as the category header
                 if ":" in class_simplified and not class_simplified.startswith("http"):
                     category = class_simplified.split(":", 1)[1]
                 else:
                     category = class_simplified.split("#")[-1].split("/")[-1]
 
-                # Extract the instance short name for the label
                 if ":" in inst_simplified and not inst_simplified.startswith("http"):
                     name = inst_simplified.split(":", 1)[1]
                 else:
@@ -298,20 +280,25 @@ class GraphiaTool(pn.viewable.Viewer):
             return row
 
         try:
-            for row in ts.query("SELECT DISTINCT ?p WHERE { ?s ?p ?o }"):
+            for row in self.model.query_triplestore(
+                "SELECT DISTINCT ?p WHERE { ?s ?p ?o }"
+            ):
                 add_to_tree(predicates_tree, extract_val(row, "p", 0))
         except Exception as e:
             print(f"Warning: Predicates query failed: {e}")
 
         try:
-            for row in ts.query("SELECT DISTINCT ?c WHERE { ?s a ?c }"):
+            for row in self.model.query_triplestore(
+                "SELECT DISTINCT ?c WHERE { ?s a ?c }"
+            ):
                 add_to_tree(entities_tree["classes"], extract_val(row, "c", 0))
         except Exception as e:
             print(f"Warning: Classes query failed: {e}")
 
         try:
-            # Modified query to fetch both the instance (?s) and its class (?c)
-            for row in ts.query("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"):
+            for row in self.model.query_triplestore(
+                "SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"
+            ):
                 s_val = extract_val(row, "s", 0)
                 c_val = extract_val(row, "c", 1)
                 add_categorized_instance(entities_tree["instances"], s_val, c_val)
@@ -390,12 +377,10 @@ class GraphiaTool(pn.viewable.Viewer):
 
 
 if __name__ == "__main__" or str(__name__).startswith("bokeh"):
-    # Pass data configuration paths into the unified query model
     model = TripperQueryModel(
         session_file="data/session.yaml",
         settings_file="data/settings.yaml",
     )
-    model.load_triplestore("MemKB")
 
-    app = GraphiaTool(model, session_path="data/session.yaml")
+    app = GraphiaTool(model)
     app.servable(title="Text-based SPARQL Filter")
