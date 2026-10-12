@@ -362,8 +362,10 @@ class GraphiaTool(pn.viewable.Viewer):
             else:
                 query = val.get("Advanced", {}).get("query", "")
                 if query:
+                    executed_query_display = self.model.update_sparql_query(query)
+
                     self.query_pane.object = (
-                        f"### Executed Query\n```sparql\n{query}\n```"
+                        f"### Executed Query\n```sparql\n{executed_query_display}\n```"
                     )
                     self.results_pane.object = (
                         f"### Results\n```text\n{self.model.execute_query(query)}\n```"

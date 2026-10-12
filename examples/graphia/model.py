@@ -49,6 +49,18 @@ class TripperQueryModel:
             name = names[0]
 
         self.ts = self.session.get_triplestore(name)
+
+        std_ns = {
+            "rdf": RDF,
+            "emmo": EMMO,
+            "dcterms": DCTERMS,
+            "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
+            "arp": Namespace("https://www.ntnu.edu/physmet/data/arp/"),
+        }
+        for prefix, ns in std_ns.items():
+            if prefix not in self.ts.namespaces:
+                self.ts.bind(prefix, str(ns))
+
         conf = self.settings.get("triplestores", {}).get(name, {})
 
         self.context = Context(theme=None)
@@ -73,8 +85,9 @@ class TripperQueryModel:
         for prefix in self.prefixes:
             query = re.sub(rf"({prefix}):([^\s<>\.]+)", translate, query)
 
-        # Wrap bare HTTP/HTTPS URLs safely (ignoring trailing punctuation like dots)
-        query = re.sub(r"(?<!<)(https?://[^\s<>]*[^.,;\s<>])", r"<\1>", query)
+        query = re.sub(
+            r'(?<![<"\'])(https?://[^\s<>"\']*[^.,;\s<>"\'])', r"<\1>", query
+        )
 
         return query
 
@@ -83,19 +96,31 @@ class TripperQueryModel:
         retval = []
         for iri in iris:
             if isinstance(iri, str):
+                # 1. Check explicitly translated prefixes from settings
                 for prefix, ns in self.prefixes.items():
                     if iri.startswith(str(ns)):
                         retval.append(f"{prefix}:{ns(iri)}")
                         break
                 else:
-                    # Fallback to context-based prefixing or raw IRI
-                    if self.context:
-                        try:
-                            retval.append(self.context.prefixed(iri))
-                        except Exception:
+                    # 2. Check triplestore's registered namespaces
+                    prefix_found = False
+                    if self.ts:
+                        for prefix, uri in self.ts.namespaces.items():
+                            if iri.startswith(str(uri)):
+                                name = iri[len(str(uri)) :]
+                                retval.append(f"{prefix}:{name}")
+                                prefix_found = True
+                                break
+
+                    if not prefix_found:
+                        # 3. Fallback to context-based prefixing or raw IRI
+                        if self.context:
+                            try:
+                                retval.append(self.context.prefixed(iri))
+                            except Exception:
+                                retval.append(iri)
+                        else:
                             retval.append(iri)
-                    else:
-                        retval.append(iri)
             elif isinstance(iri, Sequence):
                 retval.append(self.simplify_iris(iri))
             else:
@@ -108,17 +133,6 @@ class TripperQueryModel:
         """Executes a SPARQL query after injecting prefixes and translating namespaces."""
         if self.ts is None:
             return "No triplestore loaded."
-
-        # Ensure standard prefixes are bound in the triplestore
-        std_ns = {
-            "rdf": RDF,
-            "emmo": EMMO,
-            "dcterms": DCTERMS,
-            "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
-        }
-        for prefix, ns in std_ns.items():
-            if prefix not in self.ts.namespaces:
-                self.ts.bind(prefix, str(ns))
 
         # Dynamically build SPARQL PREFIX headers from the triplestore
         prefix_lines = [f"PREFIX {p}: <{u}>" for p, u in self.ts.namespaces.items()]
