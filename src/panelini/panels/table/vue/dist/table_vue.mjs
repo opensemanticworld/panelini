@@ -15899,7 +15899,7 @@ const la = /* @__PURE__ */ Vm(zc), zm = {
       }, null, 512)
     ]));
   }
-}, Um = ".json-editor-scroll-area{height:100%;overflow-x:auto;overflow-y:auto}.json-editor-scroll-area .card-title,.json-editor-scroll-area .je-object__controls,.json-editor-scroll-area .btn-group{display:none!important}.json-editor-scroll-area .card{border:none;background:transparent!important}";
+}, Um = ".json-editor-scroll-area{height:100%;overflow-x:auto;overflow-y:auto}.json-editor-scroll-area .card-title,.json-editor-scroll-area .je-object__controls,.json-editor-scroll-area .btn-group{display:none!important}.json-editor-scroll-area .card{border:none;background:transparent!important;margin:0!important;padding:0!important}";
 function $m({ model: l, el: c }) {
   const y = document.createElement("style");
   y.innerHTML = Um, c.append(y);
