@@ -1,0 +1,16 @@
+.json-editor-scroll-area {
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+.json-editor-scroll-area .card-title,
+.json-editor-scroll-area .je-object__controls,
+.json-editor-scroll-area .btn-group {
+    display: none !important;
+}
+
+.json-editor-scroll-area .card {
+    border: none;
+    background: transparent !important;
+}

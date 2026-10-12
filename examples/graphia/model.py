@@ -129,19 +129,28 @@ class TripperQueryModel:
                 )
         return retval
 
-    def execute_query(self, query: str) -> str:
-        """Executes a SPARQL query after injecting prefixes and translating namespaces."""
+    def execute_query(self, query: str) -> dict:
+        """Executes a SPARQL query and returns structured data for the table component."""
         if self.ts is None:
-            return "No triplestore loaded."
+            return {"error": "No triplestore loaded."}
+
+        # Ensure standard prefixes are bound in the triplestore
+        std_ns = {
+            "rdf": RDF,
+            "emmo": EMMO,
+            "dcterms": DCTERMS,
+            "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
+            "arp": Namespace("https://www.ntnu.edu/physmet/data/arp/"),
+        }
+        for prefix, ns in std_ns.items():
+            if prefix not in self.ts.namespaces:
+                self.ts.bind(prefix, str(ns))
 
         # Dynamically build SPARQL PREFIX headers from the triplestore
         prefix_lines = [f"PREFIX {p}: <{u}>" for p, u in self.ts.namespaces.items()]
         prefix_header = "\n".join(prefix_lines) + "\n\n"
 
-        # Translate prefixes and wrap bare URLs
         translated_query = self.update_sparql_query(query)
-
-        # Inject the header if the query doesn't already have one
         if "PREFIX " not in translated_query.upper():
             final_query = prefix_header + translated_query
         else:
@@ -154,22 +163,33 @@ class TripperQueryModel:
             rows = list(results)
 
             if not rows:
-                return "No results found."
+                return {"headers": [], "data": []}
 
-            output_lines = [f"Found {len(rows)} results:\n", "-" * 40]
-            for i, row in enumerate(rows, 1):
-                output_lines.append(f"Result {i}:")
+            # 1. Attempt to get headers natively (works for rdflib)
+            if hasattr(results, "vars"):
+                headers = [str(v) for v in results.vars]
+            else:
+                # 2. Fallback: Parse SELECT variables from the query string (works for lists)
+                select_clause = re.split(r"WHERE", final_query, flags=re.IGNORECASE)[0]
+                headers = [
+                    var for var in re.findall(r"\?([a-zA-Z0-9_]+)", select_clause)
+                ]
+
+                # 3. Final Fallback: Generate generic columns if SELECT * is used
+                if not headers:
+                    headers = [f"Column_{i+1}" for i in range(len(rows[0]))]
+
+            data = []
+            for row in rows:
                 simplified_row = self.simplify_iris(
-                    [str(term) for term in row if term is not None]
+                    [str(term) if term is not None else "" for term in row]
                 )
-                for term in simplified_row:
-                    output_lines.append(f"  - {term}")
-                output_lines.append("-" * 40)
+                data.append(dict(zip(headers, simplified_row)))
 
-            return "\n".join(output_lines)
+            return {"headers": headers, "data": data}
 
         except Exception as e:
-            return f"Error executing query:\n{str(e)}"
+            return {"error": f"Error executing query: {str(e)}"}
 
     def execute_datadoc_search(self, basic_criteria: list) -> str:
         """Executes tripper.datadoc search utilizing loaded settings contexts."""
@@ -212,7 +232,7 @@ class TripperQueryModel:
             iris = search(self.ts, criteria=criteria)
             results_list = list(iris)
             if not results_list:
-                return "No results found."
+                return {"headers": [], "data": []}
 
             dicts = [
                 acquire(self.ts, iri, context=self.context) for iri in results_list
@@ -220,20 +240,15 @@ class TripperQueryModel:
             td = TableDoc.fromdicts(dicts, context=self.context)
 
             clean_headers = self.simplify_iris([str(h) for h in td.headers])
+            data = []
 
-            output_lines = [f"Found {len(results_list)} results:\n", "-" * 40]
-            output_lines.append(f"Result table headers: {clean_headers}")
-            output_lines.append("-" * 40)
+            for row in td.data:
+                clean_row = self.simplify_iris(
+                    [str(val) if val is not None else "" for val in row]
+                )
+                data.append(dict(zip(clean_headers, clean_row)))
 
-            for i, row in enumerate(td.data, 1):
-                output_lines.append(f"Result {i}:")
-                # Simplify row values
-                clean_row = self.simplify_iris([str(val) for val in row])
-                for header, val in zip(clean_headers, clean_row):
-                    output_lines.append(f"  {header}: {val}")
-                output_lines.append("-" * 40)
-
-            return "\n".join(output_lines)
+            return {"headers": clean_headers, "data": data}
 
         except Exception as e:
-            return f"Error executing datadoc search:\n{str(e)}"
+            return {"error": f"Error executing datadoc search: {str(e)}"}

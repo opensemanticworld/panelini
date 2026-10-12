@@ -6,6 +6,9 @@ from pathlib import Path
 import panel as pn
 from panelini.panels.filter.filter import Filter
 
+# Import your new Table component
+from panelini.panels.table.table import Table
+
 from model import TripperQueryModel
 
 pn.extension()
@@ -17,10 +20,8 @@ class GraphiaTool(pn.viewable.Viewer):
     def __init__(self, model: TripperQueryModel):
         super().__init__()
         self.model = model
-        # Extract the session path directly from the model
         self.session_path = Path(self.model.session_file)
 
-        # Top Right Controls
         self.ts_select = pn.widgets.Select(
             options=self._get_ts_names(),
             value=self.model.get_current_triplestore_name(),
@@ -34,7 +35,6 @@ class GraphiaTool(pn.viewable.Viewer):
         )
         self.edit_btn.on_click(self._open_editor)
 
-        # Modal Overlay Setup
         self.yaml_editor = pn.widgets.TextAreaInput(
             value=self.session_path.read_text() if self.session_path.exists() else "",
             height=250,
@@ -119,17 +119,15 @@ class GraphiaTool(pn.viewable.Viewer):
             styles={"padding": "10px"},
             stylesheets=[markdown_css],
         )
-        self.results_pane = pn.pane.Markdown(
-            "### Results\n\nClick **Apply** to run the query.",
-            sizing_mode="stretch_both",
-            margin=0,
-            styles={"padding": "10px"},
-            stylesheets=[markdown_css],
+
+        # Replaced the Markdown results pane with the new Table component
+        self.results_table = Table(
+            value={"headers": [], "data": []}, sizing_mode="stretch_both"
         )
 
         self.results_container = pn.Column(
             self.query_pane,
-            self.results_pane,
+            self.results_table,
             sizing_mode="stretch_both",
             margin=0,
             styles={
@@ -186,7 +184,6 @@ class GraphiaTool(pn.viewable.Viewer):
             yaml.safe_load(self.yaml_editor.value)
             self.session_path.write_text(self.yaml_editor.value)
 
-            # Reload session via model interface
             self.model.reload_session()
             new_options = self._get_ts_names()
             self.ts_select.options = new_options
@@ -358,24 +355,25 @@ class GraphiaTool(pn.viewable.Viewer):
                 self.query_pane.object = (
                     f"### Executed Search Criteria\n```python\n{criteria_str}\n```"
                 )
-                self.results_pane.object = f"### Results\n```text\n{self.model.execute_datadoc_search(basic_data)}\n```"
+
+                # Pass structured dictionary output to Table component
+                self.results_table.value = self.model.execute_datadoc_search(basic_data)
             else:
                 query = val.get("Advanced", {}).get("query", "")
                 if query:
                     executed_query_display = self.model.update_sparql_query(query)
-
                     self.query_pane.object = (
                         f"### Executed Query\n```sparql\n{executed_query_display}\n```"
                     )
-                    self.results_pane.object = (
-                        f"### Results\n```text\n{self.model.execute_query(query)}\n```"
-                    )
+
+                    # Pass structured dictionary output to Table component
+                    self.results_table.value = self.model.execute_query(query)
 
         elif val.get("_trigger_cancel", 0) != old_val.get("_trigger_cancel", 0):
             self.query_pane.object = "### Executed Query\n\n*(Waiting for input...)*"
-            self.results_pane.object = (
-                "### Results\n\nClick **Apply** to run the query."
-            )
+
+            # Clear Table component
+            self.results_table.value = {"headers": [], "data": []}
 
 
 if __name__ == "__main__" or str(__name__).startswith("bokeh"):
