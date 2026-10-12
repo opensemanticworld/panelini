@@ -205,13 +205,17 @@ class TripperQueryModel:
             ]
             td = TableDoc.fromdicts(dicts, context=self.context)
 
+            clean_headers = self.simplify_iris([str(h) for h in td.headers])
+
             output_lines = [f"Found {len(results_list)} results:\n", "-" * 40]
-            output_lines.append(f"Result table headers: {td.headers}")
+            output_lines.append(f"Result table headers: {clean_headers}")
             output_lines.append("-" * 40)
 
             for i, row in enumerate(td.data, 1):
                 output_lines.append(f"Result {i}:")
-                for header, val in zip(td.headers, row):
+                # Simplify row values
+                clean_row = self.simplify_iris([str(val) for val in row])
+                for header, val in zip(clean_headers, clean_row):
                     output_lines.append(f"  {header}: {val}")
                 output_lines.append("-" * 40)
 
