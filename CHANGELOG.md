@@ -5,6 +5,94 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.1.0 (2026-10-14)
+
+### Bug Fixes
+
+- **monacoeditor**: Guard optional viewport_size in the OO-LD example test
+  ([`1f341c7`](https://github.com/opensemanticworld/panelini/commit/1f341c72861f43844537bbd27e5b7606a7d1e6d8))
+
+- **monacoeditor**: No console error for inmemory:// schema requests
+  ([`5a4bccf`](https://github.com/opensemanticworld/panelini/commit/5a4bccf85a052b477879e23e31fc2f4a6300297b))
+
+- **monacoeditor**: Readable suggest rows inside a shadow root
+  ([`23a0ee2`](https://github.com/opensemanticworld/panelini/commit/23a0ee2ca842766b28c2392c37d24272ceecf76d))
+
+- **monacoeditor**: Repoint the CDN bundle pin at the current dist
+  ([`787ee9b`](https://github.com/opensemanticworld/panelini/commit/787ee9b1d392e8cdbca1f0c16f3824694193c0f1))
+
+- **monacoeditor**: Shield suggest rows from host layout CSS
+  ([`6509388`](https://github.com/opensemanticworld/panelini/commit/6509388cda31837f54ecc20371e0a8a18dfc7422))
+
+- **monacoeditor**: Show hover tooltips and icons in the shadow root
+  ([`5c407ec`](https://github.com/opensemanticworld/panelini/commit/5c407ecb4869073acdbb1055cae83c25766ca07f))
+
+- **monacoeditor**: Stretch editor width so it is usable
+  ([`20eec19`](https://github.com/opensemanticworld/panelini/commit/20eec19da23cef0479792f83e8338abc30f0fbff))
+
+### Build System
+
+- **monacoeditor**: Bundle monaco-editor for the panel
+  ([`41e818d`](https://github.com/opensemanticworld/panelini/commit/41e818d1f23a22d9f76ba96d6dc8ac503955770a))
+
+### Chores
+
+- **monacoeditor**: Repoint the CDN bundle pin at the rebuilt dist
+  ([`38123ad`](https://github.com/opensemanticworld/panelini/commit/38123add1831d68b935dcb12df7ae408f08262ee))
+
+### Continuous Integration
+
+- Monacoeditor render selector; keep fixers out of generated bundles
+  ([`b299390`](https://github.com/opensemanticworld/panelini/commit/b2993906808ab4195c1563618a7755a00abebb8e))
+
+### Documentation
+
+- **examples**: Add minimal monacoeditor schema and data editor example
+  ([`45a44de`](https://github.com/opensemanticworld/panelini/commit/45a44de4beb430aa88dd5434b08e573cd3162435))
+
+- **monacoeditor**: Add panel guide, examples, media, and portfolio wiring
+  ([`c424eeb`](https://github.com/opensemanticworld/panelini/commit/c424eeb870b5186323eaf9f89b8a9078f36fa5d7))
+
+### Features
+
+- **monacoeditor**: Add MonacoEditor panel
+  ([`7273b48`](https://github.com/opensemanticworld/panelini/commit/7273b48da6f98346b24854107f0bcb4d22737c16))
+
+- **monacoeditor**: Add schema_request severity and an OO-LD example
+  ([`d09b4d7`](https://github.com/opensemanticworld/panelini/commit/d09b4d720064582a7f66edb02fb83ccf5721dce7))
+
+- **monacoeditor**: Expose the monaco API as self.monaco
+  ([`a748bb7`](https://github.com/opensemanticworld/panelini/commit/a748bb7cbbab8798b6abe8e858e013968dbc35d6))
+
+- **monacoeditor**: Ready flag, set once the editor exists in the browser
+  ([`4e2f65c`](https://github.com/opensemanticworld/panelini/commit/4e2f65c62ee3d2bed75921346c7c6a52e0212f75))
+
+- **monacoeditor**: Schema_store, yaml highlighting, turtle tokenizer
+  ([`98612af`](https://github.com/opensemanticworld/panelini/commit/98612af88d38a62c526c88f3a47856d608cc2dff))
+
+- **monacoeditor**: Yaml language service, schema fetch opt-in
+  ([`3c09b37`](https://github.com/opensemanticworld/panelini/commit/3c09b3744758fd29b989b3acea2d1603e111f801))
+
+### Performance Improvements
+
+- **monacoeditor**: Coalesce schema registrations into one service update
+  ([`4ba35bb`](https://github.com/opensemanticworld/panelini/commit/4ba35bbb050cae5aa7f3f0a29a17f85417a772fe))
+
+- **monacoeditor**: Load the bundle once via import map, not per instance
+  ([`2b763e2`](https://github.com/opensemanticworld/panelini/commit/2b763e2f645f640228434e263759aae4301d7082))
+
+### Testing
+
+- **monacoeditor**: Cover inline bundle branch for full coverage
+  ([`19f6dbf`](https://github.com/opensemanticworld/panelini/commit/19f6dbfbb6b8d34dd2b980ea61fe10c11596bdf7))
+
+- **monacoeditor**: Cover MonacoEditor JSON round-trip
+  ([`c6f89ec`](https://github.com/opensemanticworld/panelini/commit/c6f89ecf3731ec26589f07bd39d479a92cb2b434))
+
+- **monacoeditor**: Mark example tests for docs media capture
+  ([`8dcd7bd`](https://github.com/opensemanticworld/panelini/commit/8dcd7bdeb2d36512ad3b48adf7c02d1f5092f12a))
+
+
 ## v1.0.1 (2026-09-21)
 
 ### Bug Fixes
