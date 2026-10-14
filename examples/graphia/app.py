@@ -120,9 +120,10 @@ class GraphiaTool(pn.viewable.Viewer):
             stylesheets=[markdown_css],
         )
 
-        # Replaced the Markdown results pane with the new Table component
+        # Added has_run state flag to initial setup
         self.results_table = Table(
-            value={"headers": [], "data": []}, sizing_mode="stretch_both"
+            value={"headers": [], "data": [], "has_run": False},
+            sizing_mode="stretch_both",
         )
 
         self.results_container = pn.Column(
@@ -134,8 +135,7 @@ class GraphiaTool(pn.viewable.Viewer):
                 "flex": "7",
                 "max-width": "70%",
                 "min-width": "0",
-                "overflow-y": "auto",
-                "overflow-x": "hidden",
+                "overflow": "auto",
                 "border": "1px solid #ddd",
             },
         )
@@ -356,8 +356,10 @@ class GraphiaTool(pn.viewable.Viewer):
                     f"### Executed Search Criteria\n```python\n{criteria_str}\n```"
                 )
 
-                # Pass structured dictionary output to Table component
-                self.results_table.value = self.model.execute_datadoc_search(basic_data)
+                # Set has_run flag for Basic searches
+                results = self.model.execute_datadoc_search(basic_data)
+                results["has_run"] = True
+                self.results_table.value = results
             else:
                 query = val.get("Advanced", {}).get("query", "")
                 if query:
@@ -366,14 +368,16 @@ class GraphiaTool(pn.viewable.Viewer):
                         f"### Executed Query\n```sparql\n{executed_query_display}\n```"
                     )
 
-                    # Pass structured dictionary output to Table component
-                    self.results_table.value = self.model.execute_query(query)
+                    # Set has_run flag for Advanced queries
+                    results = self.model.execute_query(query)
+                    results["has_run"] = True
+                    self.results_table.value = results
 
         elif val.get("_trigger_cancel", 0) != old_val.get("_trigger_cancel", 0):
             self.query_pane.object = "### Executed Query\n\n*(Waiting for input...)*"
 
-            # Clear Table component
-            self.results_table.value = {"headers": [], "data": []}
+            # Clear Table component and hide label
+            self.results_table.value = {"headers": [], "data": [], "has_run": False}
 
 
 if __name__ == "__main__" or str(__name__).startswith("bokeh"):

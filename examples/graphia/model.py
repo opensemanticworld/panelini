@@ -74,20 +74,25 @@ class TripperQueryModel:
         self.triplestore_name = name
 
     def update_sparql_query(self, query: str) -> str:
-        """Translate prefixes that need translations and wrap bare URLs in SPARQL."""
+        """Update SPARQL query `query` by translating all prefixes that needs
+        translations.
+
+        Examples:
+            A CURIE `emmo:Atom` in `query` will e.g. be replaced with
+                <https://w3id.org/emmo#EMMO_eb77076b_a104_42ac_a065_798b2d2809ad>
+
+        Notes:
+            This functions assumes that `query` is well-formatted,
+            i.e. all CURIEs that should be translated are terminated with
+            a blank.
+        """
 
         def translate(m):
             prefix, name = m.groups()
-            if prefix in self.prefixes:
-                return f"<{self.prefixes[prefix]}{name}>"
-            return m.group(0)
+            return f"<{self.prefixes[prefix][name]}>"
 
         for prefix in self.prefixes:
-            query = re.sub(rf"({prefix}):([^\s<>\.]+)", translate, query)
-
-        query = re.sub(
-            r'(?<![<"\'])(https?://[^\s<>"\']*[^.,;\s<>"\'])', r"<\1>", query
-        )
+            query = re.sub(rf"(?<=\s)({prefix}):(\S+)", translate, query)
 
         return query
 

@@ -1,18 +1,25 @@
-.json-editor-scroll-area {
-    height: 100%;
-    overflow-x: auto;
-    overflow-y: auto;
-}
+.je-ready {
+    .card {
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
 
-.json-editor-scroll-area .card-title,
-.json-editor-scroll-area .je-object__controls,
-.json-editor-scroll-area .btn-group {
-    display: none !important;
-}
+    .card-title {
+        display: none !important;
+    }
 
-.json-editor-scroll-area .card {
-    border: none;
-    background: transparent !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    table {
+        width: max-content !important;
+    }
+
+    table th,
+    table td {
+        max-width: 300px;
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }

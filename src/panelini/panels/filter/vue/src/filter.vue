@@ -27,8 +27,6 @@ const errorMsg = ref('');
 let editor = null;
 let isUpdating = false;
 
-const bsSelect = { "class": "form-select" };
-
 const filterSchema = {
     "type": "object",
     "format": "categories",
@@ -139,7 +137,7 @@ const filterSchema = {
                     "type": "string",
                     "title": " ",
                     "format": "textarea",
-                    "default": "SELECT * WHERE {\n  ?s ?p ?o .\n}",
+                    "default": "SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}",
                     "options": {
                         "inputAttributes": {
                             "class": "form-control",
@@ -178,7 +176,7 @@ const cancelQuery = () => {
         editor.setValue({
             Basic: [{ "predicate": "", "object": "" }],
             Simple: [{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }],
-            Advanced: { query: "SELECT * WHERE {\n  ?s ?p ?o .\n}" }
+            Advanced: { query: "SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}" }
         });
 
         // The global reset causes JSON-Editor to revert to the first tab, so we instantly click back
@@ -300,8 +298,24 @@ onMounted(async () => {
                 let parts = [];
                 let currentOrGroup = [];
 
+                // Helper to format terms: automatically wraps bare http URLs for the strict query model
+                const formatTerm = (term) => {
+                    if (!term) return '';
+                    term = term.trim();
+                    if (/^https?:\/\//.test(term) && !term.startsWith('<') && !term.startsWith('"')) {
+                        return `<${term}>`;
+                    }
+                    return term;
+                };
+
                 val.Simple.forEach((row, i) => {
-                    let rowText = `${row.subject || '?s'} ${row.predicate || '?p'} ${row.object || '?o'}`;
+                    // Apply the formatter and default fallback spaces
+                    let s = formatTerm(row.subject) || '?s';
+                    let p = formatTerm(row.predicate) || '?p';
+                    let o = formatTerm(row.object) || '?o';
+
+                    // The spaces surrounding variables guarantee compatibility with the strict regex
+                    let rowText = `${s} ${p} ${o}`;
 
                     if (i > 0) {
                         let prevRow = val.Simple[i - 1];
@@ -331,9 +345,14 @@ onMounted(async () => {
                     parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
                 }
 
+                // Add spaces before the dots for strict regex safety
                 let queryBody = parts.join(' .\n  ');
 
-                const newAdvanced = `SELECT * WHERE {\n  ${queryBody} \n}`;
+                // Extract unique variables (e.g., ?s, ?p, ?label) to replace SELECT *
+                let matches = queryBody.match(/\?[a-zA-Z0-9_]+/g);
+                let selectVars = matches ? Array.from(new Set(matches)).join(' ') : '*';
+
+                const newAdvanced = `SELECT ${selectVars} WHERE {\n  ${queryBody} \n}`;
 
                 if (!val.Advanced) val.Advanced = {};
 

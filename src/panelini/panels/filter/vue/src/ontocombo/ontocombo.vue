@@ -203,5 +203,3 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', updatePosition);
 });
 </script>
-
-<style src="./ontocombo.css"></style>
