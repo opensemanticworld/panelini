@@ -45,6 +45,7 @@ _CATEGORY_SELECTOR = {
     # The chat runs against the LangChain stand-ins (see panelini.ai_testing); its
     # prompt box is the signature widget.
     "ai": "textarea",
+    "monacoeditor": ".monaco-editor",
 }
 
 # First load fetches Pyodide + wheels over the network; keep this well above a normal

@@ -210,11 +210,14 @@ else:
 # is no repository in the Pyodide WASM filesystem, so it stays media-only too.
 # ``chat_sqlite_history`` opens a file-backed SQLite store at module level, and Pyodide
 # ships no ``sqlite3``; only the localStorage and in-memory backends run under WASM.
+# ``monacoeditor_oold_min`` fetches its schema over the network with ``urlopen`` at import
+# time, and Pyodide has no sockets, so it stays media-only.
 _EXCLUDE_STEMS = {
     "plot_by_code",
     "drawai_beautify",
     "tst_fsbrowser",
     "chat_sqlite_history",
+    "monacoeditor_oold_min",
 }
 _EXCLUDE_CATEGORIES: set[str] = set()
 
@@ -222,6 +225,7 @@ _EXCLUDE_CATEGORIES: set[str] = set()
 _CATEGORY_META: dict[str, tuple[tuple[int, int, int], str]] = {
     "ai": ((124, 58, 237), "AI"),
     "jsoneditor": ((13, 148, 136), "JSON Editor"),
+    "monacoeditor": ((0, 122, 204), "Monaco Editor"),
     "visnetwork": ((37, 99, 235), "VisNetwork"),
     "wunderbaum": ((217, 119, 6), "Wunderbaum"),
     "tanstack": ((5, 150, 105), "TanStack Table"),

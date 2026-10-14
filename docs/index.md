@@ -153,6 +153,7 @@ getting_started/quickstart
 
 Overview <panels/index>
 panels/jsoneditor
+panels/monacoeditor
 panels/visnetwork
 panels/wunderbaum
 panels/tanstack_table
@@ -169,6 +170,7 @@ panels/terminalmirror
 Overview <examples/index>
 examples/chat/index
 examples/jsoneditor/index
+examples/monacoeditor/index
 examples/visnetwork/index
 examples/wunderbaum/index
 examples/tanstack/index

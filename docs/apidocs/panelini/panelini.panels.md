@@ -17,6 +17,7 @@ panelini.panels.ai
 panelini.panels.tanstack
 panelini.panels.terminalmirror
 panelini.panels.jsoneditor
+panelini.panels.monacoeditor
 panelini.panels.visnetwork
 panelini.panels.wunderbaum
 ```

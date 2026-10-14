@@ -13,8 +13,13 @@ repos:
       - id: pretty-format-json
         exclude: ^.devcontainer/devcontainer.json
         args: [--autofix, --no-sort-keys]
+      # Generated bundles are excluded from the fixers: minified code may legitimately end
+      # a line inside a template literal with whitespace, and rewriting it would corrupt
+      # the artifact the CDN pin serves byte-for-byte.
       - id: end-of-file-fixer
+        exclude: '(^|/)(dist|node_modules)/'
       - id: trailing-whitespace
+        exclude: '(^|/)(dist|node_modules)/'
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.5"

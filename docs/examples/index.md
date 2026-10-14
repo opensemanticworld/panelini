@@ -19,6 +19,13 @@ LLM chat panels - drop-in, tool-augmented, and multi-tab.
 Schema-driven forms, including a Pydantic-backed variant.
 :::
 
+:::{grid-item-card} Monaco Editor
+:link: monacoeditor/index
+:link-type: doc
+:img-top: /_static/media/monacoeditor/monacoeditor_panel_min_feature.png
+Local schema validation in the editor that powers VS Code.
+:::
+
 :::{grid-item-card} VisNetwork
 :link: visnetwork/index
 :link-type: doc
