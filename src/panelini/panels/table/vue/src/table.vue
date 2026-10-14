@@ -186,9 +186,9 @@ const applySortingUI = () => {
             th.style.whiteSpace = 'nowrap';
 
             if (currentSortCol.value === colName) {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; margin-left: 5px;">${currentSortAsc.value ? '▲' : '▼'}</span>`;
+                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right;">${currentSortAsc.value ? '▲' : '▼'}</span>`;
             } else {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; margin-left: 5px; color: #ccc;">↕</span>`;
+                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right;">↕</span>`;
             }
 
             th.onclick = () => {

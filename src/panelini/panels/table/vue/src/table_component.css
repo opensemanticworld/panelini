@@ -16,10 +16,11 @@
 
     table th,
     table td {
-        max-width: 300px;
         vertical-align: middle;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+
 }
