@@ -10,8 +10,10 @@
         display: none !important;
     }
 
+    /* Column widths come from the <th> widths set in table.vue; the table width
+       is set inline there as the sum of the columns. */
     table {
-        width: max-content !important;
+        table-layout: fixed;
     }
 
     table th,
@@ -22,5 +24,31 @@
         text-overflow: ellipsis;
     }
 
+    /* ReadonlyTextEditor wraps the text in a block div, so it needs its own ellipsis */
+    .truncate-cell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
+    /* Column resize handle */
+    table thead th {
+        position: relative;
+    }
+
+    .col-resizer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 6px;
+        cursor: col-resize;
+        user-select: none;
+        touch-action: none;
+    }
+
+    .col-resizer:hover,
+    .col-resizer.active {
+        background: rgba(13, 110, 253, 0.5);
+    }
 }

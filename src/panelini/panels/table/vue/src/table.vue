@@ -1,10 +1,8 @@
 <template>
-    <div class="d-flex flex-column h-100 w-100" data-bs-theme="light" style="min-height: 0;">
+    <div class="d-flex flex-column h-100 w-100" data-bs-theme="light">
 
-        <!-- Header Row -->
-        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center"
-            style="flex: 0 0 auto; padding: 10px; border-bottom: 1px solid #dee2e6; color: var(--background-text-color);">
-            <div style="font-size: 1.17em; font-weight: 600;">
+        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center">
+            <div>
                 Results: {{ totalRows }}
             </div>
             <button class="btn btn-sm btn-outline-primary" @click="showColModal = true">
@@ -12,8 +10,7 @@
             </button>
         </div>
 
-        <!-- Scrollable Wrapper -->
-        <div style="flex: 1 1 auto; overflow: auto; min-height: 0; background-color: white; padding: 10px;">
+        <div>
             <div ref="editorHolder"></div>
         </div>
 
@@ -54,6 +51,12 @@ const visibleColumns = ref([]);
 const showColModal = ref(false);
 const showRowModal = ref(false);
 const selectedRowData = ref({});
+
+// Column sizing
+const DEFAULT_COL_WIDTH = 200; // px - starting width of every data column
+const MIN_COL_WIDTH = 60;      // px - smallest width allowed while dragging
+const ACTION_COL_WIDTH = 48;   // px - magnifier column
+const columnWidths = {};       // colName -> px; survives sorting and column changes
 
 const injectCSS = (href, targetNode) => {
     if (targetNode && !targetNode.querySelector(`link[href="${href}"]`)) {
@@ -171,25 +174,98 @@ const getEditorData = () => {
     });
 };
 
+// With table-layout: fixed the table must be as wide as the sum of its columns
+const updateTableWidth = () => {
+    const table = editorHolder.value?.querySelector('table');
+    if (!table) return;
+    let total = 0;
+    table.querySelectorAll('thead th').forEach(th => {
+        if (getComputedStyle(th).display === 'none') return; // hidden _rowIndex column
+        total += parseFloat(th.style.width) || th.offsetWidth;
+    });
+    table.style.width = `${total}px`;
+};
+
+const addResizeHandle = (th, colName) => {
+    const handle = document.createElement('span');
+    handle.className = 'col-resizer';
+    handle.title = 'Drag to resize, double-click to reset';
+
+    // A click on the handle must not trigger the header's sort
+    handle.addEventListener('click', (e) => e.stopPropagation());
+
+    handle.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        columnWidths[colName] = DEFAULT_COL_WIDTH;
+        th.style.width = `${DEFAULT_COL_WIDTH}px`;
+        updateTableWidth();
+    });
+
+    handle.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startWidth = th.offsetWidth;
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add('active');
+
+        const onMove = (ev) => {
+            const width = Math.max(MIN_COL_WIDTH, Math.round(startWidth + ev.clientX - startX));
+            columnWidths[colName] = width;
+            th.style.width = `${width}px`;
+            updateTableWidth();
+        };
+        const onUp = (ev) => {
+            handle.releasePointerCapture(ev.pointerId);
+            handle.classList.remove('active');
+            handle.removeEventListener('pointermove', onMove);
+            handle.removeEventListener('pointerup', onUp);
+            handle.removeEventListener('pointercancel', onUp);
+        };
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+    });
+
+    th.appendChild(handle);
+};
+
 const applySortingUI = () => {
     const ths = editorHolder.value.querySelectorAll('table thead th');
 
     ths.forEach((th, index) => {
-        if (index === 0) return; // Skip _action column
+        if (index === 0) { // _action column: fixed width, not sortable/resizable
+            th.style.width = `${ACTION_COL_WIDTH}px`;
+            return;
+        }
         if (index === 1) return; // Skip hidden _rowIndex column
 
         // Shift by 2 to perfectly match the remaining visible columns
         const colName = visibleColumns.value[index - 2];
         if (colName) {
+            th.style.width = `${columnWidths[colName] ?? DEFAULT_COL_WIDTH}px`;
             th.style.cursor = 'pointer';
             th.style.userSelect = 'none';
             th.style.whiteSpace = 'nowrap';
 
             if (currentSortCol.value === colName) {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right;">${currentSortAsc.value ? '▲' : '▼'}</span>`;
+                th.innerHTML = `
+                    <div class="d-flex align-items-center justify-content-between w-100 min-w-0">
+                        <span class="text-truncate">${colName}</span>
+                        <span class="small ms-2 flex-shrink-0">${currentSortAsc.value ? '▲' : '▼'}</span>
+                    </div>
+                `;
             } else {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right;">↕</span>`;
+                th.innerHTML = `
+                    <div class="d-flex align-items-center justify-content-between w-100 min-w-0">
+                        <span class="text-truncate">${colName}</span>
+                        <span class="small ms-2 flex-shrink-0 text-muted">↕</span>
+                    </div>
+                `;
             }
+
+
+            addResizeHandle(th, colName);
 
             th.onclick = () => {
                 if (currentSortCol.value === colName) {
@@ -209,6 +285,8 @@ const applySortingUI = () => {
             };
         }
     });
+
+    updateTableWidth();
 };
 
 const updatePageView = () => {
@@ -263,6 +341,9 @@ onMounted(async () => {
     await nextTick();
     const shadowRoot = editorHolder.value.getRootNode();
 
+    // The magnifier button dispatches a bubbling 'action-click' event
+    editorHolder.value.addEventListener('action-click', handleRowAction);
+
     injectCSS('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', shadowRoot);
     injectCSS('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css', shadowRoot);
     injectCSS('https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css', document.head);
@@ -290,6 +371,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    editorHolder.value?.removeEventListener('action-click', handleRowAction);
     if (editor) editor.destroy();
 });
 </script>
