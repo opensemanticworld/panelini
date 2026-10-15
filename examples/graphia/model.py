@@ -97,40 +97,32 @@ class TripperQueryModel:
         return query
 
     def simplify_iris(self, iris: Sequence) -> list:
-        """Convert all IRIs in the sequence to CURIEs for the UI."""
+        """Convert all IRIs in the (possible nested) sequence `iris` to CURIEs.
+
+        For prefixes to namespaces that needs translations, IRIs will be
+        translated to simple (formally invalid) human readable CURIEs.
+        """
         retval = []
         for iri in iris:
             if isinstance(iri, str):
-                # 1. Check explicitly translated prefixes from settings
                 for prefix, ns in self.prefixes.items():
                     if iri.startswith(str(ns)):
-                        retval.append(f"{prefix}:{ns(iri)}")
+                        suffix = iri[len(str(ns)) :]
+                        retval.append(f"{prefix}:{suffix}")
                         break
                 else:
-                    # 2. Check triplestore's registered namespaces
-                    prefix_found = False
-                    if self.ts:
-                        for prefix, uri in self.ts.namespaces.items():
-                            if iri.startswith(str(uri)):
-                                name = iri[len(str(uri)) :]
-                                retval.append(f"{prefix}:{name}")
-                                prefix_found = True
-                                break
-
-                    if not prefix_found:
-                        # 3. Fallback to context-based prefixing or raw IRI
-                        if self.context:
-                            try:
-                                retval.append(self.context.prefixed(iri))
-                            except Exception:
-                                retval.append(iri)
-                        else:
-                            retval.append(iri)
+                    # Safely attempt to use context.prefixed, fallback to original IRI on exception
+                    try:
+                        prefixed = self.context.prefixed(iri)
+                        retval.append(prefixed if prefixed else iri)
+                    except Exception:
+                        retval.append(iri)
             elif isinstance(iri, Sequence):
                 retval.append(self.simplify_iris(iri))
             else:
                 raise TypeError(
-                    f"Elements must be strings or sequences. Got: {type(iri)}"
+                    "Elements in `iris` must be either strings or sequences. "
+                    f"Got: {type(iri)}"
                 )
         return retval
 
@@ -184,6 +176,9 @@ class TripperQueryModel:
                 if not headers:
                     headers = [f"Column_{i+1}" for i in range(len(rows[0]))]
 
+            # Transform the column headers for the table component
+            headers = self.simplify_iris(headers)
+
             data = []
             for row in rows:
                 simplified_row = self.simplify_iris(
@@ -233,6 +228,7 @@ class TripperQueryModel:
 
                 criteria[p_obj] = o_obj
 
+        print(f"--- Performing search, criteria: ---\n{criteria}")
         try:
             iris = search(self.ts, criteria=criteria)
             results_list = list(iris)
