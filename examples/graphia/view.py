@@ -16,8 +16,6 @@ TABLE_HOST_CSS = (
 
 
 class GraphiaToolView(pn.viewable.Viewer):
-    """View layer rendering the main user interface."""
-
     def __init__(self, controller: GraphiaController):
         super().__init__()
         self.controller = controller
@@ -126,7 +124,6 @@ class GraphiaToolView(pn.viewable.Viewer):
         )
 
         self.results_table = Table(
-            value={"headers": [], "data": [], "has_run": False},
             sizing_mode="stretch_both",
             styles={"flex": "1 1 0", "min-height": "0"},
             stylesheets=[TABLE_HOST_CSS],
@@ -184,15 +181,11 @@ class GraphiaToolView(pn.viewable.Viewer):
 
     def _save_editor(self, event):
         try:
-            # Validate YAML format before saving
             yaml.safe_load(self.yaml_editor.value)
-
-            # Delegate saving and session reloading entirely to the controller
             self.controller.save_session_yaml(self.yaml_editor.value)
 
             new_options = self.controller.get_triplestore_names()
             self.ts_select.options = new_options
-
             if self.ts_select.value in new_options:
                 self._on_ts_change(
                     type("Event", (object,), {"new": self.ts_select.value})()
@@ -214,8 +207,12 @@ class GraphiaToolView(pn.viewable.Viewer):
             print(f"Failed to switch triplestore: {e}")
 
     def _create_filter_widget(self):
-        combo_data = self.controller.build_combo_schema()
-        self.filter_widget = Filter(schema=combo_data, sizing_mode="stretch_both")
+        self.filter_widget = Filter(sizing_mode="stretch_both")
+
+        # Component natively builds its own schema from raw dict lists
+        preds_data, ents_data = self.controller.get_ontology_data()
+        self.filter_widget.build_schema_from_data(preds_data, ents_data)
+
         self.filter_widget.param.watch(self._on_filter_change, "value")
         self.filter_container[:] = [self.filter_widget]
 
@@ -226,10 +223,12 @@ class GraphiaToolView(pn.viewable.Viewer):
             return
 
         if val.get("_trigger_apply", 0) != old_val.get("_trigger_apply", 0):
-            query_md, result_data = self.controller.execute_filter(val)
+            query_md, table_result = self.controller.execute_filter(val)
             self.query_pane.object = query_md
-            self.results_table.value = {**result_data, "has_run": True}
+
+            # Component natively digests the tabular.Table instance
+            self.results_table.update_from_table(table_result, has_run=True)
 
         elif val.get("_trigger_cancel", 0) != old_val.get("_trigger_cancel", 0):
             self.query_pane.object = "### Executed Query\n\n*(Waiting for input...)*"
-            self.results_table.value = {"headers": [], "data": [], "has_run": False}
+            self.results_table.update_from_table(None, has_run=False)
