@@ -1,6 +1,6 @@
 MemKB:
   backend: rdflib
-  triplestore_url: data/kb.ttl
+  triplestore_url: /home/mbrigadoi/Workspace/EMMC/panelini/examples/graphia/data/kb.ttl
 
 GraphDBTest:
   backend: sparqlwrapper

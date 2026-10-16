@@ -239,6 +239,7 @@ const applySortingUI = () => {
     ths.forEach((th, index) => {
         if (index === 0) { // _action column: fixed width, not sortable/resizable
             th.style.width = `${ACTION_COL_WIDTH}px`;
+            th.style.minWidth = `${ACTION_COL_WIDTH}px`;
             return;
         }
         if (index === 1) return; // Skip hidden _rowIndex column
@@ -247,15 +248,23 @@ const applySortingUI = () => {
         const colName = visibleColumns.value[index - 2];
         if (colName) {
             th.style.width = `${columnWidths[colName] ?? DEFAULT_COL_WIDTH}px`;
+            th.style.minWidth = `${MIN_COL_WIDTH}px`;
             th.style.cursor = 'pointer';
             th.style.userSelect = 'none';
-            th.style.whiteSpace = 'nowrap';
+            th.style.padding = '0 6px'; // Tighten padding to maximize space
+            th.title = colName; // Provide native tooltip for truncated headers
 
-            if (currentSortCol.value === colName) {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right; margin-right: 6px;">${currentSortAsc.value ? '▲' : '▼'}</span>`;
-            } else {
-                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right; margin-right: 6px;">↕</span>`;
-            }
+            const isSorted = currentSortCol.value === colName;
+            const sortIcon = isSorted ? (currentSortAsc.value ? '▲' : '▼') : '↕';
+            const iconOpacity = isSorted ? '1' : '0.3';
+
+            // Use a highly robust CSS flex container to prevent wrapping
+            th.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 100%; overflow: hidden;">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1;">${colName}</span>
+                    <span style="font-size: 0.85em; flex-shrink: 0; margin-left: 4px; opacity: ${iconOpacity};">${sortIcon}</span>
+                </div>
+            `;
 
             addResizeHandle(th, colName);
 

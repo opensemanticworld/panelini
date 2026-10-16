@@ -10,5 +10,6 @@ triplestores:
       # Prefixes to namespaces that needs translations
       emmo:
         iri: "https://w3id.org/emmo#"
+        # iri: "https://w3id.org/emmo/1.0.4#"
         label_annotations: true
         check: true

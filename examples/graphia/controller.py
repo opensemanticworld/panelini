@@ -34,51 +34,56 @@ class GraphiaController:
         self.reload_session()
 
     def get_ontology_data(self) -> tuple[list[dict], list[dict]]:
-        """Extracts raw ontology data for predicates and entities."""
-
-        def simplify(iri):
-            return self.model.simplify_iris([iri])[0]
+        """Extracts raw ontology data for predicates and entities using batched simplification."""
 
         def split(curie):
             if ":" in curie and not curie.startswith("http"):
                 return curie.split(":", 1)
             return "other", re.split(r"[#/]", curie)[-1] or curie
 
-        def select(query):
+        def get_raw(query):
             try:
-                return self.model.ts.query(self.model.update_sparql_query(query))
+                return self.model.query(query)
             except Exception as e:
                 print(f"Warning: combo query failed ({query}): {e}")
                 return []
 
         preds = []
-        for row in select("SELECT DISTINCT ?p WHERE { ?s ?p ?o }"):
-            val = simplify(str(row[0]))
-            prefix, name = split(val)
-            preds.append({"group": prefix, "value": val, "label": name})
+        raw_preds = get_raw("SELECT DISTINCT ?p WHERE { ?s ?p ?o }")
+        if raw_preds:
+            pred_iris = [str(row[0]) for row in raw_preds]
+            simplified_preds = self.model.simplify_iris(pred_iris)
+
+            for val in simplified_preds:
+                prefix, name = split(val)
+                preds.append({"group": prefix, "value": val, "label": name})
 
         ents = []
-        for row in select("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"):
-            s_val, c_val = simplify(str(row[0])), simplify(str(row[1]))
-            c_prefix, c_name = split(c_val)
-            _, s_name = split(s_val)
+        raw_ents = get_raw("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }")
+        if raw_ents:
+            ent_pairs = [[str(row[0]), str(row[1])] for row in raw_ents]
+            simplified_ents = self.model.simplify_iris(ent_pairs)
 
-            ents.append(
-                {
-                    "category": "Classes",
-                    "group": c_prefix,
-                    "value": c_val,
-                    "label": c_name,
-                }
-            )
-            ents.append(
-                {
-                    "category": "Instances",
-                    "group": c_name,
-                    "value": s_val,
-                    "label": s_name,
-                }
-            )
+            for s_val, c_val in simplified_ents:
+                c_prefix, c_name = split(c_val)
+                _, s_name = split(s_val)
+
+                ents.append(
+                    {
+                        "category": "Classes",
+                        "group": c_prefix,
+                        "value": c_val,
+                        "label": c_name,
+                    }
+                )
+                ents.append(
+                    {
+                        "category": "Instances",
+                        "group": c_name,
+                        "value": s_val,
+                        "label": s_name,
+                    }
+                )
 
         return preds, ents
 
