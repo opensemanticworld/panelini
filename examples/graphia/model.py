@@ -1,47 +1,66 @@
-"""Data model and query execution logic for Tripper."""
+"""Data model for the Semantic Filter: runs SPARQL queries and datadoc searches.
+
+`query()` and `search()` return the same structure, which the table component
+consumes directly:
+
+    {"headers": [str, ...], "data": [{header: value, ...}, ...]}
+
+Failures raise exceptions; presenting them is up to the caller.
+"""
 
 import re
-import yaml
-from pathlib import Path
-from typing import Optional, Sequence
+from typing import Iterable, Optional
 
-from tripper import RDF, EMMO, DCTERMS, Namespace, Session
-from tripper.datadoc import search, acquire, TableDoc, Context
+import yaml
+from tripper import DCTERMS, EMMO, RDF, Namespace, Session
+from tripper.datadoc import Context, TableDoc, acquire, search
+
+# Namespaces that are always bound in the active triplestore
+STD_NAMESPACES = {
+    "rdf": RDF,
+    "emmo": EMMO,
+    "dcterms": DCTERMS,
+    "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
+    "arp": Namespace("https://www.ntnu.edu/physmet/data/arp/"),
+}
+
+# Labels usable as the local part of a CURIE (so `emmo:hasInput` round-trips)
+_LABEL = re.compile(r"[\w\-]+")
+
+
+def _empty() -> dict:
+    return {"headers": [], "data": []}
 
 
 class TripperQueryModel:
-    """Handles SPARQL queries and datadoc searches against a Triplestore."""
+    """Runs SPARQL queries and datadoc searches against a triplestore."""
 
     def __init__(self, session_file: str, settings_file: str):
         self.session_file = session_file
         self.settings_file = settings_file
         self.session = Session(session_file)
-
         with open(settings_file, encoding="utf-8") as f:
             self.settings = yaml.safe_load(f)
 
+        self.ts = None
+        self.triplestore_name: Optional[str] = None
         self.load_triplestore()
 
+    # ------------------------------------------------------------------
+    # Session / triplestore
+    # ------------------------------------------------------------------
     def reload_session(self) -> None:
-        """Reload session configuration from session file."""
         self.session = Session(str(self.session_file))
 
     def get_triplestore_names(self) -> list[str]:
-        """Return names of all configured triplestores in the session."""
         return self.session.get_names()
 
     def get_current_triplestore_name(self) -> Optional[str]:
-        """Return the currently selected triplestore name."""
         return self.triplestore_name
 
-    def query_triplestore(self, query_str: str):
-        """Execute query directly against active triplestore for schema discovery."""
-        if self.ts is None:
-            return []
-        return self.ts.query(query_str)
-
     def load_triplestore(self, name: Optional[str] = None) -> None:
-        """Load triplestore, context, and prefixes based on settings."""
+        """Load a triplestore (the first one by default) with its context and
+        translated namespaces from the settings."""
         if name is None:
             names = self.get_triplestore_names()
             if not names:
@@ -49,15 +68,7 @@ class TripperQueryModel:
             name = names[0]
 
         self.ts = self.session.get_triplestore(name)
-
-        std_ns = {
-            "rdf": RDF,
-            "emmo": EMMO,
-            "dcterms": DCTERMS,
-            "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
-            "arp": Namespace("https://www.ntnu.edu/physmet/data/arp/"),
-        }
-        for prefix, ns in std_ns.items():
+        for prefix, ns in STD_NAMESPACES.items():
             if prefix not in self.ts.namespaces:
                 self.ts.bind(prefix, str(ns))
 
@@ -67,24 +78,103 @@ class TripperQueryModel:
         for ctx in conf.get("context", ()):
             self.context.add_context(ctx)
 
-        self.prefixes = {}
-        for prefix, args in conf.get("translated_namespaces", {}).items():
-            self.prefixes[prefix] = Namespace(**args)
+        self.prefixes = {
+            prefix: Namespace(**args)
+            for prefix, args in conf.get("translated_namespaces", {}).items()
+        }
+
+        # Caches for simplify_iris(); they depend on the loaded triplestore
+        self._label_maps: dict = {}
+        self._simplified: dict = {}
+        self._curie_re = (
+            re.compile(
+                r"(?<![\w/#:\-])("
+                + "|".join(map(re.escape, self.prefixes))
+                + r"):(\w+)"
+            )
+            if self.prefixes
+            else None
+        )
 
         self.triplestore_name = name
 
+    # ------------------------------------------------------------------
+    # Human readable names
+    # ------------------------------------------------------------------
+    def simplify_iris(self, terms: Iterable) -> list[str]:
+        """Return `terms` with IRIs shortened to CURIEs using readable labels.
+
+        Handles both full IRIs and CURIEs whose local part is an opaque id,
+        e.g. `https://w3id.org/emmo#EMMO_36e6...` and `emmo:EMMO_36e6...`
+        both become `emmo:hasInput`. Anything else is returned unchanged.
+        """
+        return [self._simplify(str(t)) for t in terms]
+
+    def _simplify(self, term: str) -> str:
+        if term not in self._simplified:
+            self._simplified[term] = self._simplify_uncached(term)
+        return self._simplified[term]
+
+    def _simplify_uncached(self, term: str) -> str:
+        if "://" not in term:
+            # Not an IRI, but may contain CURIEs (e.g. datadoc table headers)
+            if self._curie_re is None:
+                return term
+            return self._curie_re.sub(self._curie_label, term)
+
+        # 1. Translated namespaces from the settings: use ontology labels
+        for prefix, ns in self.prefixes.items():
+            base = str(ns)
+            if term.startswith(base):
+                label = self._labels(prefix).get(term, term[len(base) :])
+                return f"{prefix}:{label}"
+
+        # 2. Namespaces bound in the triplestore
+        for prefix, uri in self.ts.namespaces.items():
+            if uri and term.startswith(str(uri)):
+                return f"{prefix}:{term[len(str(uri)) :]}"
+
+        # 3. The datadoc context, or the IRI as is
+        try:
+            return self.context.prefixed(term)
+        except Exception:
+            return term
+
+    def _curie_label(self, match: re.Match) -> str:
+        prefix, local = match.groups()
+        base = str(self.prefixes[prefix])
+        return f"{prefix}:{self._labels(prefix).get(base + local, local)}"
+
+    def _labels(self, prefix: str) -> dict:
+        """Map IRI -> label for a translated namespace (built once).
+
+        tripper's `Namespace.__call__` prefers `skos:altLabel` over
+        `skos:prefLabel` when an IRI has several labels. Here the entries of
+        `Namespace._iris` are in order altLabel, rdfs:label, prefLabel, so
+        letting later entries win gives prefLabel the highest precedence.
+        """
+        if prefix not in self._label_maps:
+            ns = self.prefixes[prefix]
+            base = str(ns)
+            try:
+                ns(base + "_")  # triggers the lazy load of the ontology
+            except Exception:
+                pass
+            self._label_maps[prefix] = {
+                iri: label
+                for label, iri in (getattr(ns, "_iris", None) or {}).items()
+                if iri != base + label and _LABEL.fullmatch(label)
+            }
+        return self._label_maps[prefix]
+
+    # ------------------------------------------------------------------
+    # Queries
+    # ------------------------------------------------------------------
     def update_sparql_query(self, query: str) -> str:
-        """Update SPARQL query `query` by translating all prefixes that needs
-        translations.
+        """Replace CURIEs of translated namespaces with full IRIs.
 
-        Examples:
-            A CURIE `emmo:Atom` in `query` will e.g. be replaced with
-                <https://w3id.org/emmo#EMMO_eb77076b_a104_42ac_a065_798b2d2809ad>
-
-        Notes:
-            This functions assumes that `query` is well-formatted,
-            i.e. all CURIEs that should be translated are terminated with
-            a blank.
+        E.g. `emmo:hasInput` becomes `<https://w3id.org/emmo#EMMO_36e6...>`.
+        Assumes every CURIE to translate is terminated by whitespace.
         """
 
         def translate(m):
@@ -93,171 +183,93 @@ class TripperQueryModel:
 
         for prefix in self.prefixes:
             query = re.sub(rf"(?<=\s)({prefix}):(\S+)", translate, query)
-
         return query
 
-    def simplify_iris(self, iris: Sequence) -> list:
-        """Convert all IRIs in the sequence to CURIEs for the UI."""
-        retval = []
-        for iri in iris:
-            if isinstance(iri, str):
-                # 1. Check explicitly translated prefixes from settings
-                for prefix, ns in self.prefixes.items():
-                    if iri.startswith(str(ns)):
-                        retval.append(f"{prefix}:{ns(iri)}")
-                        break
-                else:
-                    # 2. Check triplestore's registered namespaces
-                    prefix_found = False
-                    if self.ts:
-                        for prefix, uri in self.ts.namespaces.items():
-                            if iri.startswith(str(uri)):
-                                name = iri[len(str(uri)) :]
-                                retval.append(f"{prefix}:{name}")
-                                prefix_found = True
-                                break
+    def query(self, sparql: str) -> dict:
+        """Run a SPARQL SELECT and return it in the table format."""
+        final = self._with_prefixes(self.update_sparql_query(sparql))
+        result = self.ts.query(final)
+        rows = list(result)
+        if not rows:
+            return _empty()
 
-                    if not prefix_found:
-                        # 3. Fallback to context-based prefixing or raw IRI
-                        if self.context:
-                            try:
-                                retval.append(self.context.prefixed(iri))
-                            except Exception:
-                                retval.append(iri)
-                        else:
-                            retval.append(iri)
-            elif isinstance(iri, Sequence):
-                retval.append(self.simplify_iris(iri))
-            else:
-                raise TypeError(
-                    f"Elements must be strings or sequences. Got: {type(iri)}"
-                )
-        return retval
-
-    def execute_query(self, query: str) -> dict:
-        """Executes a SPARQL query and returns structured data for the table component."""
-        if self.ts is None:
-            return {"error": "No triplestore loaded."}
-
-        # Ensure standard prefixes are bound in the triplestore
-        std_ns = {
-            "rdf": RDF,
-            "emmo": EMMO,
-            "dcterms": DCTERMS,
-            "pers": Namespace("https://www.ntnu.edu/physmet/people/"),
-            "arp": Namespace("https://www.ntnu.edu/physmet/data/arp/"),
-        }
-        for prefix, ns in std_ns.items():
-            if prefix not in self.ts.namespaces:
-                self.ts.bind(prefix, str(ns))
-
-        # Dynamically build SPARQL PREFIX headers from the triplestore
-        prefix_lines = [f"PREFIX {p}: <{u}>" for p, u in self.ts.namespaces.items()]
-        prefix_header = "\n".join(prefix_lines) + "\n\n"
-
-        translated_query = self.update_sparql_query(query)
-        if "PREFIX " not in translated_query.upper():
-            final_query = prefix_header + translated_query
-        else:
-            final_query = translated_query
-
-        print(f"--- Executing SPARQL ---\n{final_query}")
-
-        try:
-            results = self.ts.query(final_query)
-            rows = list(results)
-
-            if not rows:
-                return {"headers": [], "data": []}
-
-            # 1. Attempt to get headers natively (works for rdflib)
-            if hasattr(results, "vars"):
-                headers = [str(v) for v in results.vars]
-            else:
-                # 2. Fallback: Parse SELECT variables from the query string (works for lists)
-                select_clause = re.split(r"WHERE", final_query, flags=re.IGNORECASE)[0]
-                headers = [
-                    var for var in re.findall(r"\?([a-zA-Z0-9_]+)", select_clause)
-                ]
-
-                # 3. Final Fallback: Generate generic columns if SELECT * is used
-                if not headers:
-                    headers = [f"Column_{i+1}" for i in range(len(rows[0]))]
-
-            # Transform the column headers for the table component
-            headers = self.simplify_iris(headers)
-
-            data = []
-            for row in rows:
-                simplified_row = self.simplify_iris(
-                    [str(term) if term is not None else "" for term in row]
-                )
-                data.append(dict(zip(headers, simplified_row)))
-
-            return {"headers": headers, "data": data}
-
-        except Exception as e:
-            return {"error": f"Error executing query: {str(e)}"}
-
-    def execute_datadoc_search(self, basic_criteria: list) -> str:
-        """Executes tripper.datadoc search utilizing loaded settings contexts."""
-        if self.ts is None:
-            return "No triplestore loaded."
-
-        # Build mapping from registered namespaces + prefixes
-        ns_map = {
-            prefix.lower(): Namespace(str(uri))
-            for prefix, uri in self.ts.namespaces.items()
-        }
-        ns_map.update({"rdf": RDF, "emmo": EMMO, "dcterms": DCTERMS})
-
-        # Add translated namespaces from settings
-        for pref, ns in self.prefixes.items():
-            ns_map[pref.lower()] = ns
-
-        criteria = {}
-        for item in basic_criteria:
-            p_str, o_str = (
-                item.get("predicate", "").strip(),
-                item.get("object", "").strip(),
-            )
-            if p_str and o_str:
-                p_obj, o_obj = p_str, o_str
-
-                if ":" in p_str:
-                    pref, val = p_str.split(":", 1)
-                    if pref.lower() in ns_map:
-                        p_obj = getattr(ns_map[pref.lower()], val)
-
-                if ":" in o_str:
-                    pref, val = o_str.split(":", 1)
-                    if pref.lower() in ns_map:
-                        o_obj = getattr(ns_map[pref.lower()], val)
-
-                criteria[p_obj] = o_obj
-
-        print(f"--- Performing search, criteria: ---\n{criteria}")
-        try:
-            iris = search(self.ts, criteria=criteria)
-            results_list = list(iris)
-            if not results_list:
-                return {"headers": [], "data": []}
-
-            dicts = [
-                acquire(self.ts, iri, context=self.context) for iri in results_list
+        variables = getattr(result, "vars", None)
+        if variables:
+            headers = [str(v) for v in variables]
+        else:  # backends returning plain lists: read the SELECT clause
+            select = re.split("WHERE", final, flags=re.IGNORECASE)[0]
+            headers = re.findall(r"\?(\w+)", select) or [
+                f"Column_{i + 1}" for i in range(len(rows[0]))
             ]
-            td = TableDoc.fromdicts(dicts, context=self.context)
+        return self._table(headers, rows)
 
-            clean_headers = self.simplify_iris([str(h) for h in td.headers])
-            data = []
+    def search(self, criteria: list[dict]) -> dict:
+        """Run a datadoc search and return it in the table format.
 
-            for row in td.data:
-                clean_row = self.simplify_iris(
-                    [str(val) if val is not None else "" for val in row]
-                )
-                data.append(dict(zip(clean_headers, clean_row)))
+        `criteria` is a list of `{"predicate": ..., "object": ...}` dicts
+        holding CURIEs or IRIs; entries with a blank side are ignored.
+        """
+        translated = {p.lower(): ns for p, ns in self.prefixes.items()}
+        bound = {p.lower(): str(u) for p, u in self.ts.namespaces.items()}
 
-            return {"headers": clean_headers, "data": data}
+        def expand(term: str) -> str:
+            prefix, colon, local = term.partition(":")
+            prefix = prefix.lower()
+            if colon and prefix in translated:
+                return str(translated[prefix][local])
+            if colon and prefix in bound:
+                return bound[prefix] + local
+            return term
 
-        except Exception as e:
-            return {"error": f"Error executing datadoc search: {str(e)}"}
+        expanded = {}
+        for item in criteria:
+            p = item.get("predicate", "").strip()
+            o = item.get("object", "").strip()
+            if p and o:
+                expanded[expand(p)] = expand(o)
+
+        iris = list(search(self.ts, criteria=expanded))
+        if not iris:
+            return _empty()
+
+        table = TableDoc.fromdicts(
+            [acquire(self.ts, iri, context=self.context) for iri in iris],
+            context=self.context,
+        )
+        return self._table(table.headers, table.data)
+
+    def select_terms(self, sparql: str) -> list[tuple]:
+        """Run a SELECT and return raw rows as tuples of strings (used to
+        discover the classes, instances and predicates in the triplestore)."""
+        rows = []
+        for row in self.ts.query(sparql):
+            if isinstance(row, str):
+                row = (row,)
+            elif isinstance(row, dict):
+                row = row.values()
+            rows.append(tuple(str(term) for term in row))
+        return rows
+
+    # ------------------------------------------------------------------
+    def _with_prefixes(self, query: str) -> str:
+        if "PREFIX " in query.upper():
+            return query
+        header = "".join(f"PREFIX {p}: <{u}>\n" for p, u in self.ts.namespaces.items())
+        return f"{header}\n{query}"
+
+    def _table(self, headers: Iterable, rows: Iterable) -> dict:
+        headers = self.simplify_iris(headers)
+        data = []
+        for row in rows:
+            record: dict = {}
+            values = self.simplify_iris("" if v is None else v for v in row)
+            for header, value in zip(headers, values):
+                # Repeated headers (e.g. several @type) are merged, not overwritten
+                if value:
+                    record[header] = (
+                        f"{record[header]}, {value}" if record.get(header) else value
+                    )
+                else:
+                    record.setdefault(header, "")
+            data.append(record)
+        return {"headers": list(dict.fromkeys(headers)), "data": data}

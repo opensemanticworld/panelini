@@ -1,8 +1,10 @@
 <template>
-    <div class="d-flex flex-column h-100 w-100" data-bs-theme="light">
+    <div class="d-flex flex-column w-100" data-bs-theme="light" style="flex: 1 1 0; min-height: 0;">
 
-        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center">
-            <div>
+        <!-- Header Row -->
+        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center"
+            style="flex: 0 0 auto; padding: 10px; border-bottom: 1px solid #dee2e6; color: var(--background-text-color);">
+            <div style="font-size: 1.17em; font-weight: 600;">
                 Results: {{ totalRows }}
             </div>
             <button class="btn btn-sm btn-outline-primary" @click="showColModal = true">
@@ -10,7 +12,8 @@
             </button>
         </div>
 
-        <div>
+        <!-- Scrollable Wrapper -->
+        <div style="flex: 1 1 auto; overflow: auto; min-height: 0; background-color: white; padding: 10px;">
             <div ref="editorHolder"></div>
         </div>
 
@@ -249,21 +252,10 @@ const applySortingUI = () => {
             th.style.whiteSpace = 'nowrap';
 
             if (currentSortCol.value === colName) {
-                th.innerHTML = `
-                    <div class="d-flex align-items-center justify-content-between w-100 min-w-0">
-                        <span class="text-truncate">${colName}</span>
-                        <span class="small ms-2 flex-shrink-0">${currentSortAsc.value ? '▲' : '▼'}</span>
-                    </div>
-                `;
+                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right; margin-right: 6px;">${currentSortAsc.value ? '▲' : '▼'}</span>`;
             } else {
-                th.innerHTML = `
-                    <div class="d-flex align-items-center justify-content-between w-100 min-w-0">
-                        <span class="text-truncate">${colName}</span>
-                        <span class="small ms-2 flex-shrink-0 text-muted">↕</span>
-                    </div>
-                `;
+                th.innerHTML = `${colName} <span style="font-size: 0.8em; float: right; margin-right: 6px;">↕</span>`;
             }
-
 
             addResizeHandle(th, colName);
 

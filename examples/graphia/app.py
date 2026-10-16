@@ -1,6 +1,8 @@
 """Main UI and application entry point."""
 
+import re
 import yaml
+from collections import defaultdict
 from pathlib import Path
 
 import panel as pn
@@ -12,6 +14,16 @@ from panelini.panels.table.table import Table
 from model import TripperQueryModel
 
 pn.extension()
+
+# Space taken by the page around the results area; the results panel is capped
+# at the viewport height minus this, so only the table scrolls. Tweak if the
+# page itself still scrolls (or leaves a gap at the bottom).
+PAGE_CHROME_PX = 40
+
+# Makes the table component's shadow host a flex column that can shrink
+TABLE_HOST_CSS = (
+    ":host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }"
+)
 
 
 class GraphiaTool(pn.viewable.Viewer):
@@ -116,7 +128,13 @@ class GraphiaTool(pn.viewable.Viewer):
             "### Executed Query\n\n*(Waiting for input...)*",
             sizing_mode="stretch_width",
             margin=0,
-            styles={"padding": "10px"},
+            # Always visible above the table; very long queries scroll on their own
+            styles={
+                "padding": "10px",
+                "flex": "0 0 auto",
+                "max-height": "30vh",
+                "overflow": "auto",
+            },
             stylesheets=[markdown_css],
         )
 
@@ -124,6 +142,8 @@ class GraphiaTool(pn.viewable.Viewer):
         self.results_table = Table(
             value={"headers": [], "data": [], "has_run": False},
             sizing_mode="stretch_both",
+            styles={"flex": "1 1 0", "min-height": "0"},
+            stylesheets=[TABLE_HOST_CSS],
         )
 
         self.results_container = pn.Column(
@@ -135,7 +155,9 @@ class GraphiaTool(pn.viewable.Viewer):
                 "flex": "7",
                 "max-width": "70%",
                 "min-width": "0",
-                "overflow": "auto",
+                "min-height": "0",
+                "max-height": f"calc(100vh - {PAGE_CHROME_PX}px)",
+                "overflow": "hidden",  # the table component scrolls, not this container
                 "border": "1px solid #ddd",
             },
         )
@@ -216,168 +238,118 @@ class GraphiaTool(pn.viewable.Viewer):
         self.filter_container[:] = [self.filter_widget]
 
     def _build_combo_data(self):
-        entities_tree = {"classes": {}, "instances": {}}
-        predicates_tree = {}
+        """Build the ontocombo dropdown trees from what is in the triplestore."""
 
-        def add_to_tree(tree, iri_val):
+        def simplify(iri):
+            return self.model.simplify_iris([iri])[0]
+
+        def split(curie):
+            """'emmo:hasInput' -> ('emmo', 'hasInput'); bare IRIs -> ('other', last segment)."""
+            if ":" in curie and not curie.startswith("http"):
+                prefix, name = curie.split(":", 1)
+                return prefix, name
+            return "other", re.split(r"[#/]", curie)[-1] or curie
+
+        def select(query):
             try:
-                simplified = self.model.simplify_iris([str(iri_val)])[0]
-
-                if ":" in simplified and not simplified.startswith("http"):
-                    prefix, name = simplified.split(":", 1)
-                else:
-                    prefix = "other"
-                    if "#" in simplified:
-                        name = simplified.split("#")[-1]
-                    elif "/" in simplified:
-                        name = simplified.split("/")[-1]
-                    else:
-                        name = simplified
-
-                if prefix not in tree:
-                    tree[prefix] = []
-
-                if not any(x["value"] == simplified for x in tree[prefix]):
-                    tree[prefix].append(
-                        {"id": simplified, "label": name, "value": simplified}
-                    )
+                return self.model.select_terms(query)
             except Exception as e:
-                print(f"Warning: Failed to add {iri_val} to tree: {e}")
+                print(f"Warning: query failed ({query}): {e}")
+                return []
 
-        def add_categorized_instance(tree, instance_iri, class_iri):
-            try:
-                inst_simplified = self.model.simplify_iris([str(instance_iri)])[0]
-                class_simplified = self.model.simplify_iris([str(class_iri)])[0]
+        def tree(groups, id_prefix):
+            """{group: {value: label}} -> sorted group nodes with their items."""
+            return [
+                {
+                    "id": f"{id_prefix}_{group}",
+                    "label": group,
+                    "children": [
+                        {
+                            "id": f"{id_prefix}_{group}:{value}",
+                            "label": label,
+                            "value": value,
+                        }
+                        for value, label in sorted(
+                            items.items(), key=lambda kv: kv[1].lower()
+                        )
+                    ],
+                }
+                for group, items in sorted(groups.items(), key=lambda kv: kv[0].lower())
+            ]
 
-                if ":" in class_simplified and not class_simplified.startswith("http"):
-                    category = class_simplified.split(":", 1)[1]
-                else:
-                    category = class_simplified.split("#")[-1].split("/")[-1]
+        def top(label, node_id, groups):
+            if not groups:
+                return []
+            return [{"id": node_id, "label": label, "children": tree(groups, node_id)}]
 
-                if ":" in inst_simplified and not inst_simplified.startswith("http"):
-                    name = inst_simplified.split(":", 1)[1]
-                else:
-                    name = inst_simplified.split("#")[-1].split("/")[-1]
+        predicates, classes, instances = (
+            defaultdict(dict),
+            defaultdict(dict),
+            defaultdict(dict),
+        )
 
-                if category not in tree:
-                    tree[category] = []
+        for (p,) in select("SELECT DISTINCT ?p WHERE { ?s ?p ?o }"):
+            value = simplify(p)
+            prefix, name = split(value)
+            predicates[prefix][value] = name
 
-                if not any(x["value"] == inst_simplified for x in tree[category]):
-                    tree[category].append(
-                        {"id": inst_simplified, "label": name, "value": inst_simplified}
-                    )
-            except Exception as e:
-                print(f"Warning: Failed to categorize instance {instance_iri}: {e}")
+        # Classes are grouped by prefix, instances by the (readable) name of their class
+        for s, c in select("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"):
+            class_value = simplify(c)
+            prefix, class_name = split(class_value)
+            classes[prefix][class_value] = class_name
 
-        def extract_val(row, key, idx):
-            if isinstance(row, dict) or hasattr(row, "get"):
-                return row.get(key) or row.get(str(key))
-            if isinstance(row, (tuple, list)) and len(row) > idx:
-                return row[idx]
-            return row
+            value = simplify(s)
+            instances[class_name][value] = split(value)[1]
 
-        try:
-            for row in self.model.query_triplestore(
-                "SELECT DISTINCT ?p WHERE { ?s ?p ?o }"
-            ):
-                add_to_tree(predicates_tree, extract_val(row, "p", 0))
-        except Exception as e:
-            print(f"Warning: Predicates query failed: {e}")
-
-        try:
-            for row in self.model.query_triplestore(
-                "SELECT DISTINCT ?c WHERE { ?s a ?c }"
-            ):
-                add_to_tree(entities_tree["classes"], extract_val(row, "c", 0))
-        except Exception as e:
-            print(f"Warning: Classes query failed: {e}")
-
-        try:
-            for row in self.model.query_triplestore(
-                "SELECT DISTINCT ?s ?c WHERE { ?s a ?c }"
-            ):
-                s_val = extract_val(row, "s", 0)
-                c_val = extract_val(row, "c", 1)
-                add_categorized_instance(entities_tree["instances"], s_val, c_val)
-        except Exception as e:
-            print(f"Warning: Instances query failed: {e}")
-
-        def dict_to_grouped_list(d, parent_id, parent_label):
-            children = []
-            for category_name, items in d.items():
-                items.sort(key=lambda x: str(x["label"]).lower())
-                children.append(
-                    {
-                        "id": f"{parent_id}_{category_name}",
-                        "label": category_name,
-                        "children": items,
-                    }
-                )
-            children.sort(key=lambda x: str(x["label"]).lower())
-            return (
-                [{"id": parent_id, "label": parent_label, "children": children}]
-                if children
-                else []
-            )
-
-        entities_list = dict_to_grouped_list(
-            entities_tree["classes"], "classes", "Classes"
-        ) + dict_to_grouped_list(entities_tree["instances"], "instances", "Instances")
-
-        predicates_list = []
-        for prefix, items in predicates_tree.items():
-            items.sort(key=lambda x: str(x["label"]).lower())
-            predicates_list.append(
-                {"id": f"pred_{prefix}", "label": prefix, "children": items}
-            )
-        predicates_list.sort(key=lambda x: str(x["label"]).lower())
-
-        return {"entities": entities_list, "predicates": predicates_list}
+        return {
+            "entities": top("Classes", "classes", classes)
+            + top("Instances", "instances", instances),
+            "predicates": tree(predicates, "pred"),
+        }
 
     def _on_filter_change(self, event):
         val = event.new
         old_val = event.old if isinstance(event.old, dict) else {}
-
         if not val:
             return
 
         if val.get("_trigger_apply", 0) != old_val.get("_trigger_apply", 0):
-            if val.get("active_tab", "Advanced") == "Basic":
-                basic_data = val.get("Basic", [])
-                criteria_str = "criteria = {\n"
-                for item in basic_data:
-                    p = item.get("predicate", "").strip()
-                    o = item.get("object", "").strip()
-                    if p and o:
-                        criteria_str += f"    '{p}': '{o}',\n"
-                criteria_str += "}"
-
-                self.query_pane.object = (
-                    f"### Executed Search Criteria\n```python\n{criteria_str}\n```"
-                )
-
-                # Set has_run flag for Basic searches
-                results = self.model.execute_datadoc_search(basic_data)
-                results["has_run"] = True
-                self.results_table.value = results
-            else:
-                query = val.get("Advanced", {}).get("query", "")
-                if query:
-                    executed_query_display = self.model.update_sparql_query(query)
-                    self.query_pane.object = (
-                        f"### Executed Query\n```sparql\n{executed_query_display}\n```"
-                    )
-
-                    # Set has_run flag for Advanced queries
-                    results = self.model.execute_query(query)
-                    results["has_run"] = True
-                    self.results_table.value = results
-
+            self._run(val)
         elif val.get("_trigger_cancel", 0) != old_val.get("_trigger_cancel", 0):
             self.query_pane.object = "### Executed Query\n\n*(Waiting for input...)*"
-
-            # Clear Table component and hide label
             self.results_table.value = {"headers": [], "data": [], "has_run": False}
+
+    def _run(self, val):
+        """Run the Basic search or the Advanced/Simple query and show the result."""
+        if val.get("active_tab", "Advanced") == "Basic":
+            criteria = [
+                {
+                    "predicate": i.get("predicate", "").strip(),
+                    "object": i.get("object", "").strip(),
+                }
+                for i in val.get("Basic", [])
+            ]
+            criteria = [c for c in criteria if c["predicate"] and c["object"]]
+            lines = "".join(
+                f"    '{c['predicate']}': '{c['object']}',\n" for c in criteria
+            )
+            self.query_pane.object = f"### Executed Search Criteria\n```python\ncriteria = {{\n{lines}}}\n```"
+            run = lambda: self.model.search(criteria)
+        else:
+            query = val.get("Advanced", {}).get("query", "")
+            if not query:
+                return
+            executed = self.model.update_sparql_query(query)
+            self.query_pane.object = f"### Executed Query\n```sparql\n{executed}\n```"
+            run = lambda: self.model.query(query)
+
+        try:
+            result = run()
+        except Exception as e:
+            self.query_pane.object += f"\n\n> **Error:** {e}"
+            result = {"headers": [], "data": []}
+        self.results_table.value = {**result, "has_run": True}
 
 
 if __name__ == "__main__" or str(__name__).startswith("bokeh"):
