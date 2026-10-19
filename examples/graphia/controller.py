@@ -34,56 +34,34 @@ class GraphiaController:
         self.reload_session()
 
     def get_ontology_data(self) -> tuple[list[dict], list[dict]]:
-        """Extracts raw ontology data for predicates and entities using batched simplification."""
+        """Extracts raw ontology data for predicates and entities using all_iris."""
 
         def split(curie):
             if ":" in curie and not curie.startswith("http"):
                 return curie.split(":", 1)
             return "other", re.split(r"[#/]", curie)[-1] or curie
 
-        def get_raw(query):
-            try:
-                return self.model.query(query)
-            except Exception as e:
-                print(f"Warning: combo query failed ({query}): {e}")
-                return []
+        try:
+            subj, pred = self.model.all_iris()
+        except Exception as e:
+            print(f"Warning: all_iris extraction failed: {e}")
+            return [], []
 
         preds = []
-        raw_preds = get_raw("SELECT DISTINCT ?p WHERE { ?s ?p ?o }")
-        if raw_preds:
-            pred_iris = [str(row[0]) for row in raw_preds]
-            simplified_preds = self.model.simplify_iris(pred_iris)
-
-            for val in simplified_preds:
-                prefix, name = split(val)
-                preds.append({"group": prefix, "value": val, "label": name})
+        for _, curie in pred.items():
+            prefix, name = split(curie)
+            preds.append({"group": prefix, "value": curie, "label": name})
 
         ents = []
-        raw_ents = get_raw("SELECT DISTINCT ?s ?c WHERE { ?s a ?c }")
-        if raw_ents:
-            ent_pairs = [[str(row[0]), str(row[1])] for row in raw_ents]
-            simplified_ents = self.model.simplify_iris(ent_pairs)
-
-            for s_val, c_val in simplified_ents:
-                c_prefix, c_name = split(c_val)
-                _, s_name = split(s_val)
-
-                ents.append(
-                    {
-                        "category": "Classes",
-                        "group": c_prefix,
-                        "value": c_val,
-                        "label": c_name,
-                    }
-                )
-                ents.append(
-                    {
-                        "category": "Instances",
-                        "group": c_name,
-                        "value": s_val,
-                        "label": s_name,
-                    }
-                )
+        for _, curie in subj.items():
+            prefix, name = split(curie)
+            ents.append(
+                {
+                    "group": prefix,
+                    "value": curie,
+                    "label": name,
+                }
+            )
 
         return preds, ents
 
@@ -112,8 +90,7 @@ class GraphiaController:
             if not raw_query:
                 return "### Executed Query\n\n*(Waiting for input...)*", None
 
-            translated = self.model.update_sparql_query(raw_query)
-            query_md = f"### Executed Query\n```sparql\n{translated}\n```"
+            query_md = f"### Executed Query\n```sparql\n{raw_query}\n```"
 
             try:
                 return query_md, self.model.query(raw_query)

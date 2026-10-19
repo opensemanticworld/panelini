@@ -137,7 +137,7 @@ const filterSchema = {
                     "type": "string",
                     "title": " ",
                     "format": "textarea",
-                    "default": "SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}",
+                    "default": "SELECT DISTINCT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}",
                     "options": {
                         "inputAttributes": {
                             "class": "form-control",
@@ -176,7 +176,7 @@ const cancelQuery = () => {
         editor.setValue({
             Basic: [{ "predicate": "", "object": "" }],
             Simple: [{ "subject": "", "predicate": "", "object": "", "logic": "AND", "modifier": "" }],
-            Advanced: { query: "SELECT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}" }
+            Advanced: { query: "SELECT DISTINCT ?s ?p ?o WHERE {\n  ?s ?p ?o .\n}" }
         });
 
         // The global reset causes JSON-Editor to revert to the first tab, so we instantly click back
@@ -352,7 +352,7 @@ onMounted(async () => {
                 let matches = queryBody.match(/\?[a-zA-Z0-9_]+/g);
                 let selectVars = matches ? Array.from(new Set(matches)).join(' ') : '*';
 
-                const newAdvanced = `SELECT ${selectVars} WHERE {\n  ${queryBody} \n}`;
+                const newAdvanced = `SELECT DISTINCT ${selectVars} WHERE {\n  ${queryBody} \n}`;
 
                 if (!val.Advanced) val.Advanced = {};
 

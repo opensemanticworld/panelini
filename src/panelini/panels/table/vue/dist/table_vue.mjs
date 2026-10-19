@@ -16074,8 +16074,8 @@ const ki = /* @__PURE__ */ ob(Aa), sb = {
             We("table", bb, [
               O[2] || (O[2] = We("thead", { class: "table-light sticky-top" }, [
                 We("tr", null, [
-                  We("th", null, "Column"),
-                  We("th", null, "Value")
+                  We("th", { class: "w-25" }, "Column"),
+                  We("th", { class: "w-75" }, "Value")
                 ])
               ], -1)),
               We("tbody", null, [

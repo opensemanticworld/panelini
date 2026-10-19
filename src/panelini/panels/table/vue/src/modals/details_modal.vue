@@ -14,8 +14,8 @@
                     <table class="table m-0">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th>Column</th>
-                                <th>Value</th>
+                                <th class="w-25">Column</th>
+                                <th class="w-75">Value</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -1,6 +1,6 @@
-MemKB:
+PhysMetKG:
   backend: rdflib
-  triplestore_url: /home/mbrigadoi/Workspace/EMMC/panelini/examples/graphia/data/kb.ttl
+  triplestore_url: /home/mbrigadoi/Workspace/EMMC/panelini/examples/graphia/data/kg.ttl
 
 GraphDBTest:
   backend: sparqlwrapper

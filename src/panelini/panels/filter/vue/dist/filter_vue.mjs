@@ -16495,7 +16495,7 @@ const Cb = {
               type: "string",
               title: " ",
               format: "textarea",
-              default: `SELECT ?s ?p ?o WHERE {
+              default: `SELECT DISTINCT ?s ?p ?o WHERE {
   ?s ?p ?o .
 }`,
               options: {
@@ -16525,7 +16525,7 @@ const Cb = {
         b.setValue({
           Basic: [{ predicate: "", object: "" }],
           Simple: [{ subject: "", predicate: "", object: "", logic: "AND", modifier: "" }],
-          Advanced: { query: `SELECT ?s ?p ?o WHERE {
+          Advanced: { query: `SELECT DISTINCT ?s ?p ?o WHERE {
   ?s ?p ?o .
 }` }
         }), Dn(() => {
@@ -16605,7 +16605,7 @@ const Cb = {
             }), N.length > 0 && A.push(N.map((Z) => `{ ${Z} }`).join(" UNION "));
             let z = A.join(` .
   `), V = z.match(/\?[a-zA-Z0-9_]+/g);
-            const J = `SELECT ${V ? Array.from(new Set(V)).join(" ") : "*"} WHERE {
+            const J = `SELECT DISTINCT ${V ? Array.from(new Set(V)).join(" ") : "*"} WHERE {
   ${z} 
 }`;
             if (L.Advanced || (L.Advanced = {}), L.Advanced.query !== J) {

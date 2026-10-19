@@ -22,7 +22,7 @@ class Filter(AnyWidgetComponent):
         Builds the JSON-Editor schema tree internally.
         Expects lists of dicts:
           predicates_data: [{"group": x, "value": y, "label": z}, ...]
-          entities_data: [{"category": w, "group": x, "value": y, "label": z}, ...]
+          entities_data: [{"group": x, "value": y, "label": z}, ...]
         """
 
         def build_tree(items_list, id_prefix=""):
@@ -52,24 +52,6 @@ class Filter(AnyWidgetComponent):
             return tree
 
         pred_tree = build_tree(predicates_data, id_prefix="pred_")
-
-        ent_categories = {}
-        for item in entities_data:
-            cat = item.get("category", "Other")
-            if cat not in ent_categories:
-                ent_categories[cat] = []
-            ent_categories[cat].append(item)
-
-        ent_tree = []
-        for cat, items in sorted(
-            ent_categories.items(), key=lambda kv: str(kv[0]).lower()
-        ):
-            ent_tree.append(
-                {
-                    "id": f"cat_{cat}",
-                    "label": cat,
-                    "children": build_tree(items, id_prefix=f"{cat}_"),
-                }
-            )
+        ent_tree = build_tree(entities_data, id_prefix="ent_")
 
         self.schema = {"predicates": pred_tree, "entities": ent_tree}
