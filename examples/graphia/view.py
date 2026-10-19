@@ -9,7 +9,6 @@ from controller import GraphiaController
 
 pn.extension()
 
-PAGE_CHROME_PX = 40
 TABLE_HOST_CSS = (
     ":host { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }"
 )
@@ -125,7 +124,7 @@ class GraphiaToolView(pn.viewable.Viewer):
 
         self.results_table = Table(
             sizing_mode="stretch_both",
-            styles={"flex": "1 1 0", "min-height": "0"},
+            styles={"flex": "1 1 0", "min-height": "0", "margin": "0"},
             stylesheets=[TABLE_HOST_CSS],
         )
 
@@ -161,7 +160,7 @@ class GraphiaToolView(pn.viewable.Viewer):
             self.results_container,
             sizing_mode="stretch_both",
             margin=0,
-            min_height=800,
+            styles={"height": "100vh", "overflow": "hidden"},
         )
 
         self._layout = pn.Column(

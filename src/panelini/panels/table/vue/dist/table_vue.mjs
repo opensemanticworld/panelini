@@ -16110,8 +16110,8 @@ const ki = /* @__PURE__ */ ob(Aa), sb = {
 }, kb = {
   key: 0,
   class: "d-flex justify-content-between align-items-center",
-  style: { flex: "0 0 auto", padding: "10px", "border-bottom": "1px solid #dee2e6", color: "var(--background-text-color)" }
-}, jb = { style: { "font-size": "1.17em", "font-weight": "600" } }, Ob = { style: { flex: "1 1 auto", overflow: "auto", "min-height": "0", "background-color": "white", padding: "10px" } }, _a = 200, Yu = 60, Qu = 48, Cb = {
+  style: { padding: "10px" }
+}, jb = { style: { "font-size": "1.17em", "font-weight": "600" } }, Ob = { class: "overflow-auto p-0" }, _a = 200, Yu = 60, Qu = 48, Cb = {
   __name: "table",
   props: {
     model: Object
@@ -16329,7 +16329,7 @@ const ki = /* @__PURE__ */ ob(Aa), sb = {
       }, null, 8, ["show", "row-data"])
     ]));
   }
-}, Eb = ".je-ready .card{border:none!important;background:transparent!important;padding:0!important;margin:0!important}.je-ready .card-title{display:none!important}.je-ready table{table-layout:fixed}.je-ready table th,.je-ready table td{vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.je-ready .truncate-cell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.je-ready table thead th{position:relative}.je-ready .col-resizer{position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;-webkit-user-select:none;user-select:none;touch-action:none}.je-ready .col-resizer:hover,.je-ready .col-resizer.active{background:#0d6efd80}";
+}, Eb = ".je-ready .card{border:none!important;background:transparent!important;padding:0!important;margin:0!important}.je-ready .card-title{display:none!important}.je-ready .table-responsive{overflow:visible!important}.je-ready table{table-layout:fixed;margin:0!important}.je-ready table th,.je-ready table td{vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.je-ready table thead th{position:sticky!important;top:0;z-index:10;background-color:#f8f9fa!important;box-shadow:inset 0 -1px #dee2e6}.je-ready .truncate-cell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.je-ready .col-resizer{position:absolute;top:0;right:0;bottom:0;width:6px;cursor:col-resize;-webkit-user-select:none;user-select:none;touch-action:none}.je-ready .col-resizer:hover,.je-ready .col-resizer.active{background:#0d6efd80}.table,div.table{margin:0!important}";
 function Sb({ model: l, el: c }) {
   const f = document.createElement("style");
   f.innerHTML = Eb, c.append(f), Object.assign(c.style, {

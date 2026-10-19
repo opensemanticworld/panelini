@@ -2,8 +2,7 @@
     <div class="d-flex flex-column w-100" data-bs-theme="light" style="flex: 1 1 0; min-height: 0;">
 
         <!-- Header Row -->
-        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center"
-            style="flex: 0 0 auto; padding: 10px; border-bottom: 1px solid #dee2e6; color: var(--background-text-color);">
+        <div v-if="hasQueried" class="d-flex justify-content-between align-items-center" style="padding: 10px;">
             <div style="font-size: 1.17em; font-weight: 600;">
                 Results: {{ totalRows }}
             </div>
@@ -13,7 +12,7 @@
         </div>
 
         <!-- Scrollable Wrapper -->
-        <div style="flex: 1 1 auto; overflow: auto; min-height: 0; background-color: white; padding: 10px;">
+        <div class="overflow-auto p-0">
             <div ref="editorHolder"></div>
         </div>
 
