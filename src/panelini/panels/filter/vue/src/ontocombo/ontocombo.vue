@@ -29,7 +29,7 @@
                             '\u00A0' : item.label }}</span>
                     </div>
                 </template>
-                <div v-if="visibleItems.length === 0" class="ontocombo-empty">
+                <div v-if="visibleItems.length === 0" class="ontocombo-empty p-1">
                     Using custom value:<br>
                     {{ searchQuery }}
                 </div>

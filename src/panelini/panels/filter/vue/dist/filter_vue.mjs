@@ -16177,7 +16177,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
 var _d = gd.exports;
 const Ta = /* @__PURE__ */ bb(_d), vb = ["placeholder", "readonly"], gb = ["onClick"], _b = ["title"], wb = ["onClick"], jb = ["title"], kb = {
   key: 0,
-  class: "ontocombo-empty"
+  class: "ontocombo-empty p-1"
 }, xb = {
   __name: "ontocombo",
   props: {
