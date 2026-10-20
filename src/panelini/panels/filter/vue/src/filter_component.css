@@ -44,8 +44,8 @@
     .json-editor-btntype-add:active,
     .json-editor-btntype-add:focus-visible,
     .json-editor-btntype-add:hover {
-        background-color: var(--bs-success);
-        border-color: var(--bs-success);
+        background-color: var(--bs-success) !important;
+        border-color: var(--bs-success) !important;
         color: #fff;
     }
 
@@ -59,8 +59,8 @@
     .json-editor-btntype-deletelast:active,
     .json-editor-btntype-deletelast:focus-visible,
     .json-editor-btntype-deletelast:hover {
-        background-color: var(--bs-danger);
-        border-color: var(--bs-danger);
+        background-color: var(--bs-danger) !important;
+        border-color: var(--bs-danger) !important;
         color: #fff;
     }
 
