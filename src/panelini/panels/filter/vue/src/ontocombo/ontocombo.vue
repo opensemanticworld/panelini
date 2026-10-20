@@ -2,8 +2,8 @@
     <div class="ontocombo" ref="containerRef">
         <div class="ontocombo-header form-control p-0 d-flex align-items-stretch" @click.stop="openDropdown">
             <input type="text" class="ontocombo-input flex-grow-1 px-2 border-0 bg-transparent" v-model="searchQuery"
-                @focus="openDropdown" @click.stop="openDropdown" @input="onInput" :placeholder="placeholder"
-                :readonly="isFlatList"
+                @focus="openDropdown" @click.stop="openDropdown" @input="onInput" @keydown.tab="closeDropdown"
+                @keydown.esc="closeDropdown" :placeholder="placeholder" :readonly="isFlatList"
                 :style="isFlatList ? 'cursor: pointer; outline: none !important; box-shadow: none !important; min-width: 0;' : 'outline: none !important; box-shadow: none !important; min-width: 0;'" />
             <div class="ontocombo-arrow d-flex align-items-center px-2 flex-shrink-0" @click.stop="toggleDropdown"
                 style="cursor: pointer;">
