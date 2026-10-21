@@ -165,6 +165,81 @@ const getActiveTab = (shadowRoot) => {
     return activeLink ? activeLink.textContent.trim() : 'Basic';
 };
 
+// Builds the SPARQL query for the rows of the Simple tab
+const buildSimpleQuery = (rows) => {
+    let parts = [];
+    let currentOrGroup = [];
+
+    // Helper to format terms: automatically wraps bare http URLs for the strict query model
+    const formatTerm = (term) => {
+        if (!term) return '';
+        term = term.trim();
+        if (/^https?:\/\//.test(term) && !term.startsWith('<') && !term.startsWith('"')) {
+            return `<${term}>`;
+        }
+        return term;
+    };
+
+    rows.forEach((row, i) => {
+        // Apply the formatter and default fallback spaces
+        let s = formatTerm(row.subject) || '?s';
+        let p = formatTerm(row.predicate) || '?p';
+        let o = formatTerm(row.object) || '?o';
+
+        // The spaces surrounding variables guarantee compatibility with the strict regex
+        let rowText = `${s} ${p} ${o}`;
+
+        if (i > 0) {
+            let prevRow = rows[i - 1];
+
+            if (prevRow.modifier === 'NOT') {
+                rowText = `FILTER NOT EXISTS { ${rowText} }`;
+            }
+
+            if (prevRow.logic === 'OR') {
+                if (currentOrGroup.length === 0) {
+                    currentOrGroup.push(parts.pop());
+                }
+                currentOrGroup.push(rowText);
+            } else {
+                if (currentOrGroup.length > 0) {
+                    parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
+                    currentOrGroup = [];
+                }
+                parts.push(rowText);
+            }
+        } else {
+            parts.push(rowText);
+        }
+    });
+
+    if (currentOrGroup.length > 0) {
+        parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
+    }
+
+    // Add spaces before the dots for strict regex safety
+    let queryBody = parts.join(' .\n  ');
+
+    // Extract unique variables (e.g., ?s, ?p, ?label) to replace SELECT *
+    let matches = queryBody.match(/\?[a-zA-Z0-9_]+/g);
+    let selectVars = matches ? Array.from(new Set(matches)).join(' ') : '*';
+
+    return `SELECT DISTINCT ${selectVars} WHERE {\n  ${queryBody} \n}`;
+};
+
+// Writes the query built from the Simple tab into the Advanced tab
+const syncAdvancedFromSimple = () => {
+    const rows = editor?.getValue()?.Simple;
+    const advEditor = editor?.getEditor('root.Advanced.query');
+    if (!Array.isArray(rows) || !advEditor) return;
+    const query = buildSimpleQuery(rows);
+    if (advEditor.getValue() !== query) {
+        isUpdating = true;
+        advEditor.setValue(query);
+        isUpdating = false;
+    }
+};
+
 const cancelQuery = () => {
     if (props.model && editor) {
         isUpdating = true;
@@ -204,6 +279,10 @@ const cancelQuery = () => {
 
 const applyQuery = () => {
     if (props.model && editor) {
+        // The Advanced query is only regenerated while Simple rows are edited, so it may
+        // be stale after a visit to the Advanced tab: rebuild it from what Simple shows now
+        if (getActiveTab(editorHolder.value?.getRootNode()) === 'Simple') syncAdvancedFromSimple();
+
         setTimeout(() => {
             let val = editor.getValue();
             val = JSON.parse(JSON.stringify(val || {}));
@@ -295,64 +374,7 @@ onMounted(async () => {
             });
 
             if (isSimpleActive && val && val.Simple && Array.isArray(val.Simple)) {
-                let parts = [];
-                let currentOrGroup = [];
-
-                // Helper to format terms: automatically wraps bare http URLs for the strict query model
-                const formatTerm = (term) => {
-                    if (!term) return '';
-                    term = term.trim();
-                    if (/^https?:\/\//.test(term) && !term.startsWith('<') && !term.startsWith('"')) {
-                        return `<${term}>`;
-                    }
-                    return term;
-                };
-
-                val.Simple.forEach((row, i) => {
-                    // Apply the formatter and default fallback spaces
-                    let s = formatTerm(row.subject) || '?s';
-                    let p = formatTerm(row.predicate) || '?p';
-                    let o = formatTerm(row.object) || '?o';
-
-                    // The spaces surrounding variables guarantee compatibility with the strict regex
-                    let rowText = `${s} ${p} ${o}`;
-
-                    if (i > 0) {
-                        let prevRow = val.Simple[i - 1];
-
-                        if (prevRow.modifier === 'NOT') {
-                            rowText = `FILTER NOT EXISTS { ${rowText} }`;
-                        }
-
-                        if (prevRow.logic === 'OR') {
-                            if (currentOrGroup.length === 0) {
-                                currentOrGroup.push(parts.pop());
-                            }
-                            currentOrGroup.push(rowText);
-                        } else {
-                            if (currentOrGroup.length > 0) {
-                                parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
-                                currentOrGroup = [];
-                            }
-                            parts.push(rowText);
-                        }
-                    } else {
-                        parts.push(rowText);
-                    }
-                });
-
-                if (currentOrGroup.length > 0) {
-                    parts.push(currentOrGroup.map(item => `{ ${item} }`).join(' UNION '));
-                }
-
-                // Add spaces before the dots for strict regex safety
-                let queryBody = parts.join(' .\n  ');
-
-                // Extract unique variables (e.g., ?s, ?p, ?label) to replace SELECT *
-                let matches = queryBody.match(/\?[a-zA-Z0-9_]+/g);
-                let selectVars = matches ? Array.from(new Set(matches)).join(' ') : '*';
-
-                const newAdvanced = `SELECT DISTINCT ${selectVars} WHERE {\n  ${queryBody} \n}`;
+                const newAdvanced = buildSimpleQuery(val.Simple);
 
                 if (!val.Advanced) val.Advanced = {};
 
