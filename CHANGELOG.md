@@ -5,6 +5,14 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.1.1 (2026-11-04)
+
+### Bug Fixes
+
+- Move watchfiles out of the runtime dependencies
+  ([`b38f98d`](https://github.com/opensemanticworld/panelini/commit/b38f98d3433ed0f81de871eb5180a00fc872c35d))
+
+
 ## v1.1.0 (2026-10-14)
 
 ### Bug Fixes
