@@ -1,5 +1,6 @@
 """AI interface for interacting with various LLM providers."""
 
+import re
 from collections.abc import AsyncGenerator, Callable
 from typing import Any
 
@@ -22,15 +23,28 @@ from .config import ModelConfig, ProviderConfig, parse_model_value
 
 _ClientFactory = Callable[[ProviderConfig, str, float, int], BaseChatModel]
 
-# Models that reject the ``temperature`` parameter. Claude Opus 4.7 samples
-# adaptively and returns 400 "temperature is deprecated for this model" if
-# temperature is sent. Extend this set as Anthropic expands the list.
-_TEMPERATURE_FREE_MODELS = frozenset({"claude-opus-4-7"})
+# Models that reject a custom ``temperature``. Claude Opus 4.7 samples
+# adaptively and returns 400 "temperature is deprecated for this model";
+# langchain-anthropic raises for non-default values on Fable 5 and Sonnet 5.5.
+# OpenAI reasoning models (o-series, gpt-5 and later, incl. gpt-5.6 and the
+# gpt-6 family) accept it only without reasoning, so it is always omitted.
+# Prefixes match dated variants.
+_TEMPERATURE_FREE_PREFIXES = (
+    "claude-opus-4-7",
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-fable-5",
+)
+# ``gpt-35`` is Azure's legacy name for GPT-3.5, not a version 35.
+_OPENAI_REASONING = re.compile(r"o\d|gpt-(?!35\b)(?:[5-9]|\d{2,})")
 
 
 def _model_supports_temperature(model_name: str) -> bool:
     """Return False for models that reject the ``temperature`` parameter."""
-    return model_name not in _TEMPERATURE_FREE_MODELS
+    name = model_name.lower()
+    if name.startswith("gpt-") and "chat" in name:
+        return True  # gpt-5-chat keeps sampling controls
+    return not (name.startswith(_TEMPERATURE_FREE_PREFIXES) or _OPENAI_REASONING.match(name))
 
 
 def _create_anthropic_client(
@@ -75,13 +89,18 @@ def _create_azure_openai_client(
     endpoint = provider.env_vars.get("endpoint", "")
     api_version = provider.env_vars.get("api_version", "")
 
-    return AzureChatOpenAI(  # type: ignore[call-arg]
-        azure_deployment=model_name,
-        temperature=temperature,
-        openai_api_key=api_key,
-        azure_endpoint=endpoint,
-        openai_api_version=api_version,
-    )
+    # ``model`` lets langchain-openai route GPT-6 tool calls to the Responses API.
+    kwargs: dict[str, Any] = {
+        "azure_deployment": model_name,
+        "model": model_name,
+        "openai_api_key": api_key,
+        "azure_endpoint": endpoint,
+        "openai_api_version": api_version,
+    }
+    if _model_supports_temperature(model_name):
+        kwargs["temperature"] = temperature
+
+    return AzureChatOpenAI(**kwargs)
 
 
 PROVIDER_CLASS_REGISTRY: dict[str, _ClientFactory] = {
