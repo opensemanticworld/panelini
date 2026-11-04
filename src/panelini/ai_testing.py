@@ -197,8 +197,6 @@ def install(reply: str = DEFAULT_REPLY) -> None:
     _module("langchain_core.language_models.chat_models", BaseChatModel=StubChatModel)
     _module("langchain_anthropic", ChatAnthropic=_model_factory)
     _module("langchain_openai", AzureChatOpenAI=_model_factory, ChatOpenAI=_model_factory)
-    _module("langchain", __version__="stub")
-    _module("langchain_community")
 
     # ``import langchain_core.messages`` works through sys.modules, but attribute access
     # on the parent package (``langchain_core.messages`` after ``import langchain_core``)

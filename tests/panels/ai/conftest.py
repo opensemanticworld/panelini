@@ -10,8 +10,8 @@ import pytest
 
 from panelini.testing import free_port
 
-# Skip the entire directory when langchain is not installed
-langchain = pytest.importorskip("langchain")
+# Skip the entire directory when langchain-core is not installed
+langchain_core = pytest.importorskip("langchain_core")
 
 from panelini.panels.ai.utils.config import AppConfig, ModelConfig, ProviderConfig  # noqa: E402
 

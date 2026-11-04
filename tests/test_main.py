@@ -380,7 +380,7 @@ def test_panelini_use_ai_false_no_import():
 
 def test_panelini_use_ai_true_initializes(tmp_path):
     """Panelini(use_ai=True) initializes AI frontend into sidebar and main."""
-    pytest.importorskip("langchain")
+    pytest.importorskip("langchain_core")
 
     # Write a minimal config that requires no real env vars
     cfg = tmp_path / "config.yml"
