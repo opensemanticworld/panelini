@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10, <4.0"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -2717,7 +2717,6 @@ source = { editable = "." }
 dependencies = [
     { name = "panel" },
     { name = "param" },
-    { name = "watchfiles" },
 ]
 
 [package.optional-dependencies]
@@ -2792,6 +2791,7 @@ dev = [
     { name = "sphinxcontrib-mermaid" },
     { name = "tox-uv" },
     { name = "ty" },
+    { name = "watchfiles" },
 ]
 plotting = [
     { name = "pandas" },
@@ -2823,7 +2823,6 @@ requires-dist = [
     { name = "python-dotenv", marker = "extra == 'ai-osw'", specifier = ">=1.0.0" },
     { name = "pyyaml", marker = "extra == 'ai'", specifier = ">=6.0" },
     { name = "sparqlwrapper", marker = "extra == 'ai-osw'", specifier = ">=2.0" },
-    { name = "watchfiles", specifier = ">=1.1.0" },
 ]
 provides-extras = ["plotting", "standard", "ai", "ai-drawio", "ai-llm-sandbox", "ai-osw"]
 
@@ -2858,6 +2857,7 @@ dev = [
     { name = "sphinxcontrib-mermaid", specifier = ">=1.0.0" },
     { name = "tox-uv", specifier = ">=1.11.3" },
     { name = "ty", specifier = ">=0.0.68" },
+    { name = "watchfiles", specifier = ">=1.1.0" },
 ]
 plotting = [
     { name = "pandas", specifier = ">=2.0.0" },
