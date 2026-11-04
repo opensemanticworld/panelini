@@ -52,8 +52,10 @@ def _create_anthropic_client(
         "model_name": model_name,
         "max_tokens_to_sample": max_tokens,
         "anthropic_api_key": api_key,
-        "base_url": endpoint,
     }
+    # An empty base_url reaches the client as-is and overrides its default endpoint.
+    if endpoint:
+        kwargs["base_url"] = endpoint
     if _model_supports_temperature(model_name):
         kwargs["temperature"] = temperature
 
