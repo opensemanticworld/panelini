@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, AIMessageChunk
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from panelini.panels.ai.utils.ai_interface import (
     AiInterface,
@@ -121,6 +121,18 @@ class TestAzureFactory:
         provider = _provider("azure_openai", api_key="k", endpoint="https://x.openai.azure.com", api_version="preview")
         model = _create_azure_openai_client(provider, name, 0.5, 4096)
         assert isinstance(model, AzureChatOpenAI)
+        tool = {"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {}}}}
+        assert model._use_responses_api({"tools": [tool]})
+
+    @pytest.mark.parametrize(
+        "endpoint", ["https://x.openai.azure.com/openai/v1", "https://x.openai.azure.com/openai/v1/"]
+    )
+    def test_v1_endpoint_uses_base_url_without_deployment_path(self, endpoint: str) -> None:
+        provider = _provider("azure_openai", api_key="k", endpoint=endpoint, api_version="2024-08-01-preview")
+        model = _create_azure_openai_client(provider, "gpt-6-luna", 0.5, 4096)
+        assert type(model) is ChatOpenAI
+        assert str(model.root_async_client.base_url) == "https://x.openai.azure.com/openai/v1/"
+        assert model.temperature is None
         tool = {"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {}}}}
         assert model._use_responses_api({"tools": [tool]})
 

@@ -9,7 +9,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from .config import ModelConfig, ProviderConfig, parse_model_value
 
@@ -89,18 +89,21 @@ def _create_azure_openai_client(
     endpoint = provider.env_vars.get("endpoint", "")
     api_version = provider.env_vars.get("api_version", "")
 
-    # ``model`` lets langchain-openai route GPT-6 tool calls to the Responses API.
-    kwargs: dict[str, Any] = {
-        "azure_deployment": model_name,
-        "model": model_name,
-        "openai_api_key": api_key,
-        "azure_endpoint": endpoint,
-        "openai_api_version": api_version,
-    }
+    kwargs: dict[str, Any] = {"model": model_name, "openai_api_key": api_key}
     if _model_supports_temperature(model_name):
         kwargs["temperature"] = temperature
 
-    return AzureChatOpenAI(**kwargs)
+    # The v1 endpoint takes the deployment as ``model`` and needs no api version.
+    if endpoint.rstrip("/").endswith("/openai/v1"):
+        return ChatOpenAI(base_url=endpoint, **kwargs)
+
+    # ``model`` lets langchain-openai route GPT-6 tool calls to the Responses API.
+    return AzureChatOpenAI(
+        azure_deployment=model_name,
+        azure_endpoint=endpoint,
+        openai_api_version=api_version,
+        **kwargs,
+    )
 
 
 PROVIDER_CLASS_REGISTRY: dict[str, _ClientFactory] = {
