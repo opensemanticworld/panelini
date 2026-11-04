@@ -70,7 +70,7 @@ or with pip:
 pip install panelini[ai]
 ```
 
-This installs the required dependencies: `langchain`, `langchain-anthropic`, `langchain-openai`, `pyyaml`, and `python-dotenv`.
+This installs the required dependencies: `langchain-core`, `langchain-anthropic`, `langchain-openai`, `pyyaml`, and `python-dotenv`.
 
 ## Quick Start
 
@@ -191,6 +191,12 @@ Environment variables referenced with `${VAR_NAME}` are resolved at load time. A
   - `azure_openai`
   - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`
 ```
+
+### Model Notes
+
+- **Temperature** -- Omitted automatically for models that reject it (Claude Opus 4.7 and Opus 5, Sonnet 5, Fable 5, OpenAI o-series, `gpt-5` and later except chat variants). The slider has no effect on them.
+- **Azure OpenAI deployments** -- The model value must equal the deployment name. For GPT-6 and `gpt-5.6-sol`, tool calls go through the Responses API, so `AZURE_OPENAI_API_VERSION` must be a version that supports it.
+- **Responses and tool output** -- Only the text of a reply is shown and stored; reasoning and tool-use blocks are dropped.
 
 ## UI Layout
 
