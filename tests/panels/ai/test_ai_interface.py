@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
+from collections.abc import Coroutine
+from typing import Any
+from unittest.mock import patch
+
 import pytest
 from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, AIMessageChunk
 from langchain_openai import AzureChatOpenAI
 
 from panelini.panels.ai.utils.ai_interface import (
+    AiInterface,
     _create_anthropic_client,
     _create_azure_openai_client,
     _model_supports_temperature,
@@ -115,3 +123,57 @@ class TestAzureFactory:
         assert isinstance(model, AzureChatOpenAI)
         tool = {"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {}}}}
         assert model._use_responses_api({"tools": [tool]})
+
+
+BLOCKS: list[str | dict[Any, Any]] = [
+    {"type": "reasoning", "summary": []},
+    {"type": "text", "text": "Hello "},
+    {"type": "tool_use", "id": "t1", "name": "x", "input": {}},
+    {"type": "text", "text": "world"},
+]
+
+
+class _FakeModel:
+    """Chat model returning block-list content, as Anthropic tools and the Responses API do."""
+
+    async def ainvoke(self, messages: object) -> AIMessage:
+        return AIMessage(content=BLOCKS)
+
+    async def astream(self, messages: object):
+        for block in BLOCKS:
+            yield AIMessageChunk(content=[block])
+
+
+@pytest.fixture
+def interface() -> AiInterface:
+    provider = _provider("anthropic", api_key="k")
+    with patch.object(AiInterface, "_initialize_model", return_value=_FakeModel()):
+        return AiInterface(provider, "model-x")
+
+
+def _run(coro: Coroutine[Any, Any, Any]) -> Any:
+    """Run a coroutine on a fresh loop in a worker thread (the main thread may already have one)."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+class TestBlockContent:
+    def test_non_streaming_returns_text_blocks_only(self, interface: AiInterface) -> None:
+        history: list[Any] = []
+        assert _run(interface.get_response("hi", stream=False, history=history)) == "Hello world"
+        assert history[-1].content == "Hello world"
+
+    def test_streaming_yields_text_blocks_only(self, interface: AiInterface) -> None:
+        history: list[Any] = []
+
+        async def collect() -> list[str]:
+            stream = await interface.get_response("hi", stream=True, history=history)
+            assert not isinstance(stream, str)
+            return [chunk async for chunk in stream]
+
+        assert _run(collect()) == ["Hello ", "world"]
+        assert history[-1].content == "Hello world"
+
+    def test_with_tools_returns_text_blocks_only(self, interface: AiInterface) -> None:
+        result = _run(interface.get_response_with_tools("hi", history=[]))
+        assert result["text"] == "Hello world"

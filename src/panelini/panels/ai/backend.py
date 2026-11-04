@@ -235,8 +235,7 @@ class AiBackend:
         self.conversation_id = conversation.id
         for message in self.ai_interface.conversation_history:
             role = "human" if isinstance(message, HumanMessage) else "ai"
-            content = message.content if isinstance(message.content, str) else str(message.content)
-            self.history_store.append_message(self.user_id, conversation.id, role, content)
+            self.history_store.append_message(self.user_id, conversation.id, role, message.text)
 
     def clear_history(self) -> None:
         """Clear the conversation history."""
@@ -339,7 +338,7 @@ class AiBackend:
             else:
                 # Subsequent iterations: invoke model with existing conversation history
                 response = await self.ai_interface.model.ainvoke(history)
-                response_text = response.content if isinstance(response.content, str) else str(response.content)
+                response_text = response.text
                 tool_calls = getattr(response, "tool_calls", [])
 
                 # Add AI response to history
@@ -472,7 +471,7 @@ class AiBackend:
                     conversation_id=record.id,
                     user_id="",
                     role="human" if isinstance(message, HumanMessage) else "ai",
-                    content=message.content if isinstance(message.content, str) else str(message.content),
+                    content=message.text,
                     extra=None,
                     parent_message_id=None,
                     created_at=now,

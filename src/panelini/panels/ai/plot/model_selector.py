@@ -67,8 +67,7 @@ def _invoke_model_sync(interface: Any, prompt: str) -> str:
 
     async def _call() -> str:
         response = await interface.model.ainvoke([HumanMessage(content=prompt)])
-        content = response.content
-        return content if isinstance(content, str) else str(content)
+        return response.text
 
     try:
         asyncio.get_running_loop()

@@ -52,6 +52,12 @@ class _Message:
         self.tool_call_id = kwargs.pop("tool_call_id", None)
         self.additional_kwargs = kwargs
 
+    @property
+    def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        return "".join(b.get("text", "") for b in self.content if isinstance(b, dict) and b.get("type") == "text")
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.content!r})"
 
@@ -81,6 +87,7 @@ class _Chunk:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        self.text = content
 
 
 class StubChatModel:

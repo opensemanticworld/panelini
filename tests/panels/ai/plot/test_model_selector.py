@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 from PIL import Image
 
 from panelini.panels.ai.plot.model_selector import (
@@ -101,7 +102,7 @@ class TestBuildPlotContextSidebar:
 
             fake_interface = MagicMock()
             fake_interface.model = MagicMock()
-            fake_interface.model.ainvoke = AsyncMock(return_value=MagicMock(content="```python\nprint('regen')\n```"))
+            fake_interface.model.ainvoke = AsyncMock(return_value=AIMessage(content="```python\nprint('regen')\n```"))
             mock_create.return_value = fake_interface
 
             panel = PlotPanel(data_path=tmp_path)

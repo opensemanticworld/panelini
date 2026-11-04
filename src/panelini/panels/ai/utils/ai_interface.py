@@ -268,7 +268,7 @@ class AiInterface:
         else:
             # Non-streaming response
             response = await self.model.ainvoke(messages)
-            response_text = response.content if isinstance(response.content, str) else str(response.content)
+            response_text = response.text
 
             # Add AI response to history
             history.append(AIMessage(content=response_text))
@@ -292,10 +292,9 @@ class AiInterface:
         full_response = ""
 
         async for chunk in self.model.astream(messages):
-            if hasattr(chunk, "content") and chunk.content:
-                content = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
-                full_response += content
-                yield content
+            if chunk.text:
+                full_response += chunk.text
+                yield chunk.text
 
         # Add complete response to history
         history.append(AIMessage(content=full_response))
@@ -326,7 +325,7 @@ class AiInterface:
         response = await self.model.ainvoke(messages)
 
         # Extract response content and tool calls
-        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        response_text = response.text
         tool_calls = getattr(response, "tool_calls", [])
 
         # Add AI response to history
