@@ -5,9 +5,175 @@
 :class: docs-media
 ```
 
-The AI chat panel adds an LLM-powered chat interface to any Panel application or Panelini dashboard. It supports multiple providers, tool execution, streaming responses, and a live preview pane.
+A chat interface for any Panel app or Panelini dashboard, with several LLM providers, tools, streaming replies and a markdown preview pane.
 
-## Overview
+## Installation
+
+```bash
+uv add panelini[ai]    # or: pip install panelini[ai]
+```
+
+## Quick Start
+
+```python
+from panelini import Panelini
+
+app = Panelini(title="My AI App", use_ai=True)
+app.servable()
+```
+
+`use_ai=True` adds the chat to the main area and the controls to the left sidebar.
+
+Without Panelini, place the widget lists in any Panel layout:
+
+```python
+import panel as pn
+
+from panelini.panels.ai import AiChat
+
+chat = AiChat(system_message="You are a helpful assistant.")
+pn.Row(*chat.main_objects).servable()  # chat.sidebar_objects holds the controls
+```
+
+## Parameters
+
+```{list-table}
+:header-rows: 1
+:widths: 28 27 45
+
+* - Parameter
+  - Default
+  - Description
+* - `use_ai`
+  - `False`
+  - Enable the AI chat.
+* - `ai_system_message`
+  - `"You are a helpful assistant."`
+  - System message.
+* - `ai_welcome_message`
+  - `None`
+  - Greeting posted into a new chat.
+* - `ai_show_preview`
+  - `False`
+  - Show the markdown preview pane next to the chat.
+* - `ai_config_path`
+  - `None`
+  - Custom `config.yml`, auto-discovered if unset.
+* - `ai_history_store`
+  - `None`
+  - Where conversations are kept, see [Conversation History](#conversation-history).
+* - `ai_history_view`
+  - `"tree"`
+  - Initial sidebar style, `"tree"` or `"list"`.
+```
+
+`AiChat` takes the same options without the `ai_` prefix (`system_message`, `show_preview`, ...) plus `tools`.
+
+## Providers and Models
+
+Providers and models are defined in YAML. The panel looks for the file in this order:
+
+1. the `PANELINI_AI_CONFIG_PATH` environment variable
+2. `config.yml` or `config.yaml`, searched upward from the working directory
+3. the bundled `default_config.yml`
+
+```yaml
+providers:
+  anthropic:
+    display_name: "Anthropic"
+    client_type: "anthropic"
+    env_vars:
+      api_key: "${ANTHROPIC_API_KEY}"
+      endpoint: "${ANTHROPIC_ENDPOINT}"
+    models:
+      - name: "Claude Sonnet 5.5"
+        value: "anthropic/claude-sonnet-5-5"
+
+  azure_openai:
+    display_name: "Azure OpenAI"
+    client_type: "azure_openai"
+    env_vars:
+      api_key: "${AZURE_OPENAI_API_KEY}"
+      endpoint: "${AZURE_OPENAI_ENDPOINT}"
+      api_version: "${AZURE_OPENAI_API_VERSION}"
+    models:
+      - name: "GPT-6.1 Sol"
+        value: "azure_openai/gpt-6.1-sol"
+```
+
+- `client_type` is `anthropic` or `azure_openai`.
+- `${VAR}` is resolved from the environment at load time. A missing variable raises `ValueError`.
+- Model values are `provider/model-id`, as in [LiteLLM](https://docs.litellm.ai/docs/providers). The prefix is stripped before the name reaches LangChain, and `client_type` defaults to the first model's prefix.
+
+### Model notes
+
+- **Temperature:** not sent to Claude models, which the Anthropic endpoint rejects, nor to OpenAI reasoning models.
+- **Reasoning effort:** the setup tab offers the levels the model supports (Low to Max, plus None where allowed) and starts at High. It is disabled for models without effort control. An unsupported level falls back to the nearest lower one.
+- **Azure OpenAI:** the model value must be the deployment name. An endpoint ending in `/openai/v1` uses Azure's v1 API and ignores the api version. Otherwise, GPT-6 and `gpt-5.6` tool calls use the Responses API, so `AZURE_OPENAI_API_VERSION` must support it.
+- **Replies:** only the text is shown and stored. Reasoning and tool-use blocks are dropped.
+
+## Interface
+
+- **Conversations tab (💬):** new chat and folder, import and export as JSON, search, and your conversations as a folder tree or a date-grouped list.
+- **Setup tab (⚙️):** provider, model, reasoning effort and tool toggles.
+- **Main area:** the chat with streaming replies. With `ai_show_preview=True` a preview pane sits next to it, filled by the `update_preview` tool.
+
+## Conversation History
+
+Conversations are kept per user. Where they are stored:
+
+- **Default:** in memory, lost on restart.
+- **SQLite:** set `PANELINI_HISTORY_DB` to a file path.
+- **Browser:** `ai_history_store="browser"` keeps each user's history in their browser's localStorage (about 5 MB, no server database).
+- **Custom:** pass any `ChatHistoryStore` as `ai_history_store`.
+
+Conversations belong to the resolved user (see `user_resolver`). Anonymous visitors get a cookie-backed id.
+
+`ai_history_view` sets the initial sidebar style, and an icon in the New Chat row switches it at runtime. In the folder tree:
+
+- A chat can sit in several folders at once. Drag a row to move it, or hold Ctrl or Alt to also file it in the target.
+- Rename, delete, indent and outdent are in the row's context menu (F2, Delete, Alt+Arrow).
+- Deleting a folder whose chats are filed nowhere else asks for confirmation first.
+
+Each conversation is one JSON document, defined by the bundled [`chat_history_schema.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema.json) ([OO-LD](https://github.com/OO-LD/oold-schema)). The same document is the import and export format, so an exported chat re-imports losslessly. All stores implement `DocumentHistoryStore`.
+
+## Tools
+
+Tools are LangChain `BaseTool`s, toggled with sidebar checkboxes.
+
+- `get_current_time` (on by default): current date and time, with optional timezone.
+- `update_preview`: renders markdown in the preview pane.
+
+Without tools, replies stream token by token. With tools, the model runs a tool loop (up to 10 iterations) and the final text appears when it finishes.
+
+### Custom tools
+
+Pass `BaseTool` subclasses to `AiChat(tools=[MyTool()])`. They appear as extra checkboxes next to the built-in tools.
+
+```python
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
+
+
+class MyToolInput(BaseModel):
+    query: str = Field(description="The search query")
+
+
+class MyTool(BaseTool):
+    name: str = "my_tool"
+    description: str = "Describe what this tool does."
+    args_schema: type[BaseModel] = MyToolInput
+
+    def _run(self, query: str) -> str:
+        return f"Result for: {query}"
+
+    async def _arun(self, query: str) -> str:
+        return self._run(query=query)
+```
+
+See {doc}`../examples/chat/ai_chat_custom_tool` for a complete example.
+
+## Architecture
 
 ```{mermaid}
 graph TB
@@ -48,449 +214,9 @@ graph TB
     class anthropic,azure providerNode
 ```
 
-The panel is structured in layers:
-
-- **AiChat** -- UI widgets (chat interface, sidebar controls, preview pane)
-- **AiBackend** -- Business logic (provider management, tool execution, message routing)
-- **AiInterface** -- Provider-agnostic LLM wrapper (LangChain-based)
-- **Config** -- YAML configuration with environment variable resolution
-- **Tools** -- Extensible LangChain tool system
-
-## Installation
-
-The AI chat panel is an optional extra:
-
-```bash
-uv add panelini[ai]
-```
-
-or with pip:
-
-```bash
-pip install panelini[ai]
-```
-
-This installs the required dependencies: `langchain-core`, `langchain-anthropic`, `langchain-openai`, `pyyaml`, and `python-dotenv`.
-
-## Quick Start
-
-```python
-from panelini import Panelini
-
-app = Panelini(title="My AI App", use_ai=True)
-app.servable()
-```
-
-That's it. The `use_ai=True` flag adds the chat interface to the main area and provider/model controls to the left sidebar.
-
-### Standalone Usage (without Panelini)
-
-```python
-import panel as pn
-
-from panelini.panels.ai import AiChat
-
-chat = AiChat(
-    system_message="You are a helpful assistant.",
-)
-
-# Use sidebar_objects and main_objects in any Panel layout
-app = pn.Row(*chat.main_objects)
-app.servable()
-```
-
-### Configuration Parameters
-
-```python
-app = Panelini(
-    title="My AI App",
-    use_ai=True,
-    ai_system_message="You are a data analysis assistant.",
-    ai_welcome_message="Hello! How can I help you today?",
-    ai_config_path="/path/to/config.yml",
-)
-```
-
-```{list-table}
-:header-rows: 1
-:widths: 25 15 60
-
-* - Parameter
-  - Type
-  - Description
-* - `use_ai`
-  - `Boolean`
-  - Enable the AI chat panel (default: `False`).
-* - `ai_system_message`
-  - `String`
-  - System message for the AI backend (default: `"You are a helpful assistant."`).
-* - `ai_welcome_message`
-  - `String`
-  - Optional greeting posted into a new chat. `None` (the default) starts it empty.
-* - `ai_show_preview`
-  - `Boolean`
-  - Show the markdown preview pane next to the chat (default: `False`).
-* - `ai_config_path`
-  - `str | Path`
-  - Path to a custom `config.yml`. Auto-discovered if `None`.
-```
-
-## Provider Configuration
-
-Providers and models are defined in a YAML configuration file. The panel searches for configuration in this order:
-
-1. `PANELINI_AI_CONFIG_PATH` environment variable
-2. Walk upward from the working directory looking for `config.yml` or `config.yaml`
-3. Fall back to the bundled default configuration
-
-### Configuration Format
-
-```yaml
-providers:
-  anthropic:
-    display_name: "Anthropic"
-    client_type: "anthropic"
-    env_vars:
-      api_key: "${ANTHROPIC_API_KEY}"
-      endpoint: "${ANTHROPIC_ENDPOINT}"
-    models:
-      - name: "Claude Sonnet 4.5"
-        value: "anthropic/claude-sonnet-4-5"
-      - name: "Claude Haiku 4.5"
-        value: "anthropic/claude-haiku-4-5"
-
-  azure_openai:
-    display_name: "Azure OpenAI"
-    client_type: "azure_openai"
-    env_vars:
-      api_key: "${AZURE_OPENAI_API_KEY}"
-      endpoint: "${AZURE_OPENAI_ENDPOINT}"
-      api_version: "${AZURE_OPENAI_API_VERSION}"
-    models:
-      - name: "GPT-4o"
-        value: "azure_openai/gpt-4o-2024-11-20"
-```
-
-Model values use the [LiteLLM naming convention](https://docs.litellm.ai/docs/providers): `provider_prefix/model-id`. The prefix is stripped before passing the model name to LangChain. When `client_type` is omitted, it is derived directly from the first model's prefix. Bare model names (without a prefix) still work when `client_type` is set explicitly.
-
-Environment variables referenced with `${VAR_NAME}` are resolved at load time. A `ValueError` is raised if a referenced variable is not set.
-
-### Supported Providers
-
-```{list-table}
-:header-rows: 1
-:widths: 25 25 50
-
-* - Provider
-  - `client_type`
-  - Required Environment Variables
-* - Anthropic
-  - `anthropic`
-  - `ANTHROPIC_API_KEY`, `ANTHROPIC_ENDPOINT`
-* - Azure OpenAI
-  - `azure_openai`
-  - `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`
-```
-
-### Model Notes
-
-- **Temperature** -- Omitted automatically for models that reject it (Claude Opus 4.7 and Opus 5, Sonnet 5, Fable 5, OpenAI o-series, `gpt-5` and later except chat variants). The slider has no effect on them.
-- **Azure OpenAI deployments** -- The model value must equal the deployment name. For GPT-6 and `gpt-5.6-sol`, tool calls go through the Responses API, so `AZURE_OPENAI_API_VERSION` must be a version that supports it.
-- **Responses and tool output** -- Only the text of a reply is shown and stored; reasoning and tool-use blocks are dropped.
-
-## UI Layout
-
-When `use_ai=True`, the panel injects two areas into the Panelini dashboard:
-
-### Sidebar Controls
-
-The left sidebar receives two icon tabs. The conversations tab (💬, active by
-default) holds a single card:
-
-- **Conversations** -- New chat, new folder, import/export chat as JSON,
-  a tree/list view toggle, search over titles and messages, and the
-  user's conversations in a drag-and-drop folder tree (inline rename,
-  delete with undo); the list view groups them by date instead
-
-The setup tab (⚙️) holds the model controls:
-
-- **Provider Settings** -- Select the LLM provider
-- **Model Settings** -- Select the model and adjust temperature
-- **Basic Tools** -- Toggle available tools on/off
-
-### Main Content
-
-The main area receives the chat interface with streaming responses. With
-`ai_show_preview=True` (`show_preview=True` on `AiChat`) it turns into a
-two-column layout:
-
-- **Chat** (left) -- The chat interface with streaming responses
-- **Preview** (right) -- A markdown preview pane updated by the `update_preview` tool
-
-### Conversation History
-
-Every chat keeps its conversations per user. Without configuration they live
-in memory for the lifetime of the process; set `PANELINI_HISTORY_DB` to a file
-path to persist them in SQLite, pass your own store as `ai_history_store`, or
-pass `ai_history_store="browser"` to keep each user's history in their
-browser's localStorage (per-browser persistence across reloads and restarts,
-no server-side database, ~5MB quota).
-`ai_history_view` picks the initial sidebar style: `"tree"` (a
-drag-and-drop folder tree, the default: organize chats like a filesystem)
-or `"list"` (date-grouped); an icon in the New Chat row switches between
-the two at runtime (per session; a reload starts from `ai_history_view`
-again, and a typed search filter carries over the switch). Conversations
-are owned by the resolved user id (see `user_resolver`); anonymous
-visitors get a cookie-backed id.
-
-#### Folder tree
-
-A chat can be filed in several folders at once, so it appears as one row
-under each of them. Dragging a row moves that filing; holding Ctrl or Alt
-over the drop files the chat in the target as well and leaves the row it
-came from. Taking a row to the top level takes that filing out of its
-folder and leaves the chat's other rows alone, the top level being the
-absence of a folder rather than another folder to file into. A row is one
-filing, so moving it never changes a row left behind.
-Rename, delete, outdent and indent are in the row's context menu,
-on F2, Delete and Alt+Arrow, and delete is a button on the row as well,
-at its trailing edge and dimmed until the row is hovered. New chat and
-new folder are the header buttons. Outdent takes the selected row out of
-its folder without touching the chat, which is the distinction deleting a
-row cannot make, and indent files it in the folder above; both are
-reported as the move a drag is. Deleting a folder that holds chats kept
-nowhere else asks for a second Delete before removing the folder, its
-subfolders and those chats; the folder turns red while it waits, and a
-Cancel appears beside the warning for anyone who changes their mind.
-
-#### Document model
-
-Each conversation is stored as one JSON document with embedded messages,
-defined by the bundled
-[`chat_history_schema.json`](https://github.com/opensemanticworld/panelini/blob/main/src/panelini/panels/ai/history/chat_history_schema.json).
-The schema is an [OO-LD](https://github.com/OO-LD/oold-schema) document: a
-plain JSON-Schema carrying a JSON-LD `@context` that maps properties to
-vocabulary terms (schema.org where a term exists). Its root is a `oneOf`
-over two document kinds sharing that context: a conversation and a folder.
-The same document is the import/export format of the sidebar icons, so a
-downloaded chat re-imports losslessly here or in any other store.
-
-Three parts of the document the panel carries but does not yet author, so
-that a chat exported from elsewhere survives the round trip: `folder_ids`
-(the set of folders a chat is filed in), `parent_id` with
-`forked_from_message_id` (which chat a fork came from and where it
-diverged), and per-message `attachments`. An attachment carries its
-payload in `url`, a `data:` URI when inline and a reference otherwise; a
-store that dropped the bytes for size reasons says so with `omitted`
-rather than leaving the reader to guess.
-
-All backends implement a shared document contract
-(`DocumentHistoryStore`): SQLite keeps one `documents` row per conversation
-or folder, the in-memory store keeps plain dicts, and the shape maps 1:1
-onto a Postgres JSONB column or a browser object store.
-
-## Tools
-
-The panel includes a tool system based on LangChain's `BaseTool`. Tools are toggled via sidebar checkboxes.
-
-### Built-in Tools
-
-```{list-table}
-:header-rows: 1
-:widths: 25 75
-
-* - Tool
-  - Description
-* - `get_current_time`
-  - Returns the current date and time with optional timezone support. Enabled by default.
-* - `update_preview`
-  - Renders markdown content in the preview pane. Supports headers, tables, code blocks, and images.
-```
-
-### Streaming vs Tool Mode
-
-- **No tools selected** -- Responses stream token-by-token inside a collapsible `<details>` block, then expand when complete.
-- **Tools selected** -- The model runs a tool execution loop (up to 10 iterations). The final text response is displayed after all tool calls complete.
-
-### Adding Custom Tools
-
-Custom tools can be passed directly to `AiChat` via the `tools` parameter. They appear as additional checkboxes in the sidebar alongside the built-in tools:
-
-```python
-from panelini.panels.ai import AiChat
-
-chat = AiChat(tools=[MyTool()])
-```
-
-To create a custom tool, subclass LangChain's `BaseTool`:
-
-```python
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-
-
-class MyToolInput(BaseModel):
-    query: str = Field(description="The search query")
-
-
-class MyTool(BaseTool):
-    name: str = "my_tool"
-    description: str = "Describe what this tool does."
-    args_schema: type[BaseModel] = MyToolInput
-
-    def _run(self, query: str) -> str:
-        return f"Result for: {query}"
-
-    async def _arun(self, query: str) -> str:
-        return self._run(query=query)
-```
-
-See ``examples/panels/ai/ai_chat_custom_tool.py`` for a complete working example with a LocalStorage tool.
-
-## Module Structure
-
-```text
-panelini/panels/ai/
-├── __init__.py
-├── frontend.py          # UI layer (AiChat class)
-├── backend.py           # Business logic (AiBackend class)
-├── default_config.yml   # Bundled default provider config
-├── history/
-│   ├── __init__.py
-│   ├── store.py                      # Records + ChatHistoryStore interface
-│   ├── document.py                   # Document layer + in-memory backend
-│   ├── sqlite_store.py               # SQLite backend
-│   ├── local_storage_store.py        # Browser localStorage backend
-│   ├── default.py                    # Shared default store
-│   ├── panel.py                      # Date-grouped sidebar list
-│   ├── tree.py                       # TanstackTable folder tree
-│   ├── chat_history_schema.json      # Conversation + folder document schema (OO-LD)
-│   └── chat_history_schema.sql       # SQLite document table DDL
-├── tools/
-│   ├── __init__.py
-│   └── basic_tools.py   # Built-in tools
-└── utils/
-    ├── __init__.py
-    ├── ai_interface.py   # Provider-agnostic LLM interface
-    └── config.py         # YAML config loader
-```
-
-## API Reference
-
-### `AiChat`
-
-Standalone AI chat panel. Can be used independently in any Panel app or integrated into Panelini. Exposes widget lists for integration.
-
-```{list-table}
-:header-rows: 1
-:widths: 35 65
-
-* - Property / Method
-  - Description
-* - `AiChat(system_message, welcome_message, config_path, tools)`
-  - Constructor. All parameters are optional. Pass custom ``BaseTool`` instances via ``tools``.
-* - `sidebar_objects`
-  - Property returning a list of Panel viewables for the sidebar.
-* - `main_objects`
-  - Property returning a list of Panel viewables for the main area.
-```
-
-### `AiBackend`
-
-Business logic layer managing providers, models, tools, and message processing.
-
-```{list-table}
-:header-rows: 1
-:widths: 35 65
-
-* - Method
-  - Description
-* - `AiBackend(system_message, config_path)`
-  - Constructor. Loads config and creates the initial AI interface.
-* - `get_available_providers()`
-  - Returns `{display_name: ProviderConfig}` dict.
-* - `get_available_models(provider)`
-  - Returns `{display_name: ModelConfig}` dict for a given provider.
-* - `update_provider(provider)`
-  - Switch provider, reset model, clear history.
-* - `update_model(model)`
-  - Switch model, preserve history.
-* - `update_temperature(temperature)`
-  - Update sampling temperature, preserve history.
-* - `update_tools(tools)`
-  - Update available tools, preserve history.
-* - `process_message(message, use_tools)`
-  - Process a user message. Returns `{"response": str, "preview_updates": list}`.
-* - `stream_message(message)`
-  - Async generator yielding response token chunks.
-* - `clear_history()`
-  - Clear conversation history.
-* - `export_chat_data(provider, model, temperature)`
-  - Export the active conversation as a v2 conversation document.
-* - `restore_chat_data(chat_data)`
-  - Restore the model context from a v2 document (or legacy export).
-```
-
-### `AiInterface`
-
-Low-level provider-agnostic LLM interface built on LangChain.
-
-```{list-table}
-:header-rows: 1
-:widths: 35 65
-
-* - Method
-  - Description
-* - `AiInterface(provider, model_name, temperature, max_tokens, tools, system_message)`
-  - Constructor. Initializes the LLM client and binds tools.
-* - `get_response(user_message, stream)`
-  - Get a response (streaming or non-streaming).
-* - `get_response_with_tools(user_message)`
-  - Get a response that may include tool calls.
-* - `add_tool(tool)`
-  - Dynamically add a tool to the interface.
-* - `clear_history()`
-  - Clear conversation history.
-```
-
-### Configuration Classes
-
-```{list-table}
-:header-rows: 1
-:widths: 30 70
-
-* - Class / Function
-  - Description
-* - `AppConfig`
-  - Top-level config dataclass. Contains a `providers` dict and a `default_provider` property.
-* - `ProviderConfig`
-  - Frozen dataclass for a provider (key, display_name, client_type, env_vars, models).
-* - `ModelConfig`
-  - Frozen dataclass for a model (name, value).
-* - `load_config(path=None)`
-  - Load and validate a YAML config file. Auto-discovers if path is `None`.
-```
-
-### Data Flow
-
-```{mermaid}
-sequenceDiagram
-    participant User as User
-    participant Chat as ChatInterface
-    participant FE as AiChat
-    participant BE as AiBackend
-    participant AI as AiInterface
-    participant LLM as LLM Provider
-
-    User->>Chat: Type message
-    Chat->>FE: _handle_message()
-    FE->>BE: process_message() or stream_message()
-    BE->>AI: get_response() or get_response_with_tools()
-    AI->>LLM: ainvoke() / astream()
-    LLM-->>AI: Response / chunks
-    AI-->>BE: Text + tool_calls
-    BE->>BE: Execute tools (if any)
-    BE-->>FE: {"response", "preview_updates"}
-    FE-->>Chat: Yield response
-    Chat-->>User: Display message
-```
+- `AiChat`: the UI. `sidebar_objects` and `main_objects` return the widgets to place in a layout.
+- `AiBackend`: provider and model state, tool execution and message routing.
+- `AiInterface`: provider-agnostic LangChain wrapper.
+- `load_config`, `AppConfig`, `ProviderConfig`, `ModelConfig`: configuration loading.
+
+Full signatures are in the {doc}`generated API reference <../apidocs/panelini/panelini.panels.ai>`.
