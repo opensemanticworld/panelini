@@ -35,7 +35,7 @@ DEFAULT_REPLY = (
 # Environment variables referenced by the packaged default_config.yml. Values are
 # placeholders; nothing is ever sent anywhere because the model is a stub.
 _PLACEHOLDER_ENV = {
-    "ANTHROPIC_API_KEY": "stub-key",
+    "ANTHROPIC_FOUNDRY_API_KEY": "stub-key",
     "ANTHROPIC_ENDPOINT": "https://localhost",
     "AZURE_OPENAI_API_KEY": "stub-key",
     "AZURE_OPENAI_ENDPOINT": "https://localhost",

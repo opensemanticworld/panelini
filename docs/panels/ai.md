@@ -83,7 +83,7 @@ providers:
     display_name: "Anthropic"
     client_type: "anthropic"
     env_vars:
-      api_key: "${ANTHROPIC_API_KEY}"
+      api_key: "${ANTHROPIC_FOUNDRY_API_KEY}"
       endpoint: "${ANTHROPIC_ENDPOINT}"
     models:
       - name: "Claude Sonnet 5.5"

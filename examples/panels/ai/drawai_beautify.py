@@ -7,7 +7,8 @@ through the anthropic SDK with prompt caching on the XML.
 
 Prerequisites:
     pip install panelini[ai,ai-drawio]
-    export ANTHROPIC_API_KEY=...
+    export ANTHROPIC_FOUNDRY_API_KEY=...
+    export ANTHROPIC_ENDPOINT=...
 
 Run:
     python examples/panels/ai/drawai_beautify.py

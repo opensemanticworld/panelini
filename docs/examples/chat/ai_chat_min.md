@@ -68,7 +68,7 @@ graph LR
 panelini reads provider credentials from environment variables. Drop a `.env` file next to your script:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_FOUNDRY_API_KEY=sk-ant-...
 ANTHROPIC_ENDPOINT=https://api.anthropic.com
 ```
 
