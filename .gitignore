@@ -163,3 +163,6 @@ docs/_static/media/_videos/
 # Generated docs portfolio (build artifacts)
 docs/portfolio/
 docs/_static/portfolio/
+
+# Ai Config at root
+config.yml
