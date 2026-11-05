@@ -3,16 +3,28 @@
 
 providers:
   anthropic:
-    display_name: "Anthropic"
+    display_name: "Anthropic Foundry"
     client_type: "anthropic"
     env_vars:
-      api_key: "${ANTHROPIC_API_KEY}"
-      endpoint: "${ANTHROPIC_ENDPOINT}"
+      api_key: "${ANTHROPIC_FOUNDRY_API_KEY}"
+      endpoint: "${ENDPOINT}"
     models:
-      - name: "Claude Sonnet 4.5"
-        value: "anthropic/claude-sonnet-4-5"
       - name: "Claude Haiku 4.5"
         value: "anthropic/claude-haiku-4-5"
+      - name: "Claude Sonnet 5.5"
+        value: "anthropic/claude-sonnet-5-5"
+      - name: "Claude Sonnet 5"
+        value: "anthropic/claude-sonnet-5"
+      - name: "Claude Sonnet 4.6"
+        value: "anthropic/claude-sonnet-4-6"
+      - name: "Claude Opus 5"
+        value: "anthropic/claude-opus-5"
+      - name: "Claude Opus 4.7"
+        value: "anthropic/claude-opus-4-7"
+      - name: "Claude Opus 4.6"
+        value: "anthropic/claude-opus-4-6"
+      - name: "Claude Opus 5.5"
+        value: "anthropic/claude-opus-5-5"
 
   azure_openai:
     display_name: "Azure OpenAI"
@@ -22,5 +34,9 @@ providers:
       endpoint: "${AZURE_OPENAI_ENDPOINT}"
       api_version: "${AZURE_OPENAI_API_VERSION}"
     models:
-      - name: "GPT-4o"
-        value: "azure_openai/gpt-4o-2024-11-20"
+      - name: "GPT-6 Luna"
+        value: "azure_openai/gpt-6-luna"
+      - name: "GPT-6 Astra"
+        value: "azure_openai/gpt-6-astra"
+      - name: "GPT-6.1 Sol"
+        value: "azure_openai/gpt-6.1-sol"
