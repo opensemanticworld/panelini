@@ -38,7 +38,7 @@ def _provider(models: tuple[ModelConfig, ...]) -> ProviderConfig:
 @pytest.fixture(autouse=True)
 def _env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide env vars referenced by default_config.yml so load_config works."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_FOUNDRY_API_KEY", "test-key")
     monkeypatch.setenv("ANTHROPIC_ENDPOINT", "https://example.invalid")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "x")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://azure.invalid")
