@@ -82,3 +82,71 @@ class TestUserSuppliedToolsDefaultEnabled:
         tool_names = {t.name for t in chat.backend.current_tools}
         assert "echo_tool" in tool_names
         assert "get_current_time" in tool_names
+
+
+@pytest.fixture()
+def _effort_providers():
+    """Real Claude and GPT-4o models (no network): effort levels come from their profiles."""
+    claude = ProviderConfig(
+        key="claude",
+        display_name="Claude",
+        client_type="anthropic",
+        env_vars={"api_key": "fake", "endpoint": "https://localhost"},
+        models=(ModelConfig(name="Opus", value="claude-opus-5-5"), ModelConfig(name="Haiku", value="claude-haiku-4-5")),
+    )
+    azure = ProviderConfig(
+        key="azure",
+        display_name="Azure",
+        client_type="azure_openai",
+        env_vars={"api_key": "fake", "endpoint": "https://x.openai.azure.com", "api_version": "v"},
+        models=(ModelConfig(name="GPT-4o", value="gpt-4o-2024-11-20"),),
+    )
+    config = AppConfig(providers={"claude": claude, "azure": azure})
+    with patch("panelini.panels.ai.backend.load_config", return_value=config):
+        yield claude, azure
+
+
+class TestReasoningEffortSelector:
+    def test_lists_supported_levels_with_high_selected(self, _effort_providers) -> None:
+        from panelini.panels.ai.frontend import AiChat
+
+        selector = AiChat(tools=None).reasoning_effort_selector
+
+        assert list(selector.options) == ["Low", "Medium", "High", "Extra high", "Max"]
+        assert selector.value == "high"
+        assert not selector.disabled
+
+    def test_choosing_a_level_reaches_the_model(self, _effort_providers) -> None:
+        from panelini.panels.ai.frontend import AiChat
+
+        chat = AiChat(tools=None)
+        chat.reasoning_effort_selector.value = "max"
+
+        assert chat.backend.ai_interface is not None
+        assert chat.backend.ai_interface.reasoning_effort == "max"
+
+    def test_disabled_while_the_model_has_no_effort_support(self, _effort_providers) -> None:
+        from panelini.panels.ai.frontend import AiChat
+
+        claude, _ = _effort_providers
+        opus, haiku = claude.models
+        chat = AiChat(tools=None)
+        selector = chat.reasoning_effort_selector
+        selector.value = "low"
+
+        chat.model_selector.value = haiku
+        assert selector.disabled
+
+        chat.model_selector.value = opus
+        assert not selector.disabled
+        assert selector.value == "low"
+
+    def test_disabled_after_switching_to_a_provider_without_effort_support(self, _effort_providers) -> None:
+        from panelini.panels.ai.frontend import AiChat
+
+        _, azure = _effort_providers
+        chat = AiChat(tools=None)
+
+        chat.provider_selector.value = azure
+
+        assert chat.reasoning_effort_selector.disabled

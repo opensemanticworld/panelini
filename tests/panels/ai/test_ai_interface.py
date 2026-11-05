@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from panelini.panels.ai.utils.ai_interface import (
@@ -128,6 +128,78 @@ class TestAzureFactory:
         assert model.temperature is None
         tool = {"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {}}}}
         assert model._use_responses_api({"tools": [tool]})
+
+
+class TestResolveReasoningEffort:
+    @pytest.mark.parametrize(
+        ("requested", "levels", "expected"),
+        [
+            ("high", ("low", "medium", "high"), "high"),
+            ("xhigh", ("low", "medium", "high", "max"), "high"),
+            ("max", ("none", "low", "medium", "high", "xhigh"), "xhigh"),
+            ("none", ("low", "medium", "high"), "low"),
+            ("high", (), None),
+            (None, ("low", "high"), None),
+        ],
+    )
+    def test_picks_nearest_supported_level(
+        self, requested: str | None, levels: tuple[str, ...], expected: str | None
+    ) -> None:
+        from panelini.panels.ai.utils.ai_interface import _resolve_reasoning_effort
+
+        assert _resolve_reasoning_effort(requested, levels) == expected
+
+
+def _effort_interface(client_type: str, model: str, effort: str | None) -> AiInterface:
+    env = {"api_key": "k"}
+    if client_type == "azure_openai":
+        env |= {"endpoint": "https://x.openai.azure.com", "api_version": "v"}
+    return AiInterface(_provider(client_type, **env), model, reasoning_effort=effort)
+
+
+class TestReasoningEffort:
+    def test_anthropic_request_carries_effort(self) -> None:
+        model = _effort_interface("anthropic", "claude-opus-4-6", "high").model
+        assert isinstance(model, ChatAnthropic)
+        assert model._get_request_payload([HumanMessage("hi")])["output_config"] == {"effort": "high"}
+
+    def test_anthropic_model_without_effort_support_sends_none(self) -> None:
+        interface = _effort_interface("anthropic", "claude-haiku-4-5", "high")
+        model = interface.model
+        assert isinstance(model, ChatAnthropic)
+        assert "effort" not in (model._get_request_payload([HumanMessage("hi")]).get("output_config") or {})
+        assert interface.reasoning_effort is None
+
+    def test_haiku_5_5_supports_all_effort_levels(self) -> None:
+        interface = _effort_interface("anthropic", "claude-haiku-5-5", "xhigh")
+        model = interface.model
+        assert isinstance(model, ChatAnthropic)
+        assert interface.reasoning_effort_levels == ("low", "medium", "high", "xhigh", "max")
+        assert model._get_request_payload([HumanMessage("hi")])["output_config"] == {"effort": "xhigh"}
+
+    def test_azure_request_carries_effort(self) -> None:
+        model = _effort_interface("azure_openai", "gpt-6-luna", "none").model
+        assert isinstance(model, AzureChatOpenAI)
+        assert model._get_request_payload([HumanMessage("hi")])["reasoning_effort"] == "none"
+
+    def test_unsupported_level_falls_back_to_nearest_lower(self) -> None:
+        interface = _effort_interface("anthropic", "claude-opus-4-6", "xhigh")
+        assert interface.reasoning_effort == "high"
+
+    def test_levels_come_from_model_profile(self) -> None:
+        interface = _effort_interface("anthropic", "claude-opus-4-6", None)
+        assert interface.reasoning_effort_levels == ("low", "medium", "high", "max")
+        assert interface.reasoning_effort is None
+
+    def test_openai_reasoning_model_without_profile_gets_basic_levels(self) -> None:
+        interface = _effort_interface("azure_openai", "gpt-9-nova", "xhigh")
+        assert interface.reasoning_effort_levels == ("low", "medium", "high")
+        assert interface.reasoning_effort == "high"
+
+    def test_non_reasoning_openai_model_has_no_levels(self) -> None:
+        interface = _effort_interface("azure_openai", "gpt-4o-2024-11-20", "high")
+        assert interface.reasoning_effort_levels == ()
+        assert interface.reasoning_effort is None
 
 
 BLOCKS: list[str | dict[Any, Any]] = [

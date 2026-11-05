@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.messages import HumanMessage
 
 from panelini.panels.ai.backend import AiBackend
 from panelini.panels.ai.utils.config import ModelConfig, ProviderConfig
@@ -56,9 +57,59 @@ class TestProviderAndModel:
         result = backend.update_model(model)
         assert result == model.value
 
-    def test_update_temperature(self, backend: AiBackend) -> None:
-        backend.update_temperature(0.3)
-        assert backend.current_temperature == 0.3
+
+@pytest.fixture()
+def effort_backend(tmp_path: Path) -> AiBackend:
+    """Backend whose first model supports effort levels and whose second does not."""
+    config = tmp_path / "config.yml"
+    config.write_text(
+        """\
+providers:
+  test:
+    display_name: "Test Provider"
+    client_type: "anthropic"
+    env_vars:
+      api_key: "test-key"
+      endpoint: "https://localhost"
+    models:
+      - name: "Opus"
+        value: "anthropic/claude-opus-5-5"
+      - name: "Haiku"
+        value: "anthropic/claude-haiku-4-5"
+"""
+    )
+    return AiBackend(config_path=config)
+
+
+class TestReasoningEffort:
+    def test_defaults_to_high(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.current_reasoning_effort == "high"
+        assert effort_backend.ai_interface is not None
+        assert effort_backend.ai_interface.reasoning_effort == "high"
+
+    def test_exposes_levels_of_current_model(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.reasoning_effort_levels == ("low", "medium", "high", "xhigh", "max")
+
+    def test_update_applies_effort_and_keeps_history(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.ai_interface is not None
+        effort_backend.ai_interface.conversation_history = [HumanMessage("earlier question")]
+
+        effort_backend.update_reasoning_effort("max")
+
+        assert effort_backend.ai_interface.reasoning_effort == "max"
+        assert [m.content for m in effort_backend.ai_interface.conversation_history] == ["earlier question"]
+
+    def test_choice_survives_switching_to_a_model_without_effort(self, effort_backend: AiBackend) -> None:
+        opus, haiku = effort_backend.current_provider.models
+        effort_backend.update_reasoning_effort("low")
+
+        effort_backend.update_model(haiku)
+        assert effort_backend.reasoning_effort_levels == ()
+        assert effort_backend.ai_interface is not None
+        assert effort_backend.ai_interface.reasoning_effort is None
+
+        effort_backend.update_model(opus)
+        assert effort_backend.ai_interface.reasoning_effort == "low"
 
 
 class TestHistory:

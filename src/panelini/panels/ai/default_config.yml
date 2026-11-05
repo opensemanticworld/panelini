@@ -9,6 +9,8 @@ providers:
       api_key: "${ANTHROPIC_FOUNDRY_API_KEY}"
       endpoint: "${ENDPOINT}"
     models:
+      - name: "Claude Haiku 5.5"
+        value: "anthropic/claude-haiku-5-5"
       - name: "Claude Haiku 4.5"
         value: "anthropic/claude-haiku-4-5"
       - name: "Claude Sonnet 5.5"
@@ -17,14 +19,14 @@ providers:
         value: "anthropic/claude-sonnet-5"
       - name: "Claude Sonnet 4.6"
         value: "anthropic/claude-sonnet-4-6"
+      - name: "Claude Opus 5.5"
+        value: "anthropic/claude-opus-5-5"
       - name: "Claude Opus 5"
         value: "anthropic/claude-opus-5"
       - name: "Claude Opus 4.7"
         value: "anthropic/claude-opus-4-7"
       - name: "Claude Opus 4.6"
         value: "anthropic/claude-opus-4-6"
-      - name: "Claude Opus 5.5"
-        value: "anthropic/claude-opus-5-5"
 
   azure_openai:
     display_name: "Azure OpenAI"

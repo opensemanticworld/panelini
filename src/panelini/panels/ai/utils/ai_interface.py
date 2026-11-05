@@ -1,7 +1,7 @@
 """AI interface for interacting with various LLM providers."""
 
 import re
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -35,6 +35,39 @@ def _model_supports_temperature(model_name: str) -> bool:
     if name.startswith("gpt-") and "chat" in name:
         return True  # gpt-5-chat keeps sampling controls
     return not _OPENAI_REASONING.match(name)
+
+
+# Reasoning effort levels, weakest to strongest.
+_EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+# Accepted by every OpenAI reasoning model, for those missing from the LangChain profiles.
+_OPENAI_BASIC_EFFORT = ("low", "medium", "high")
+# Claude models that support all five levels but are missing from the LangChain profiles.
+_ANTHROPIC_UNLISTED_EFFORT = ("claude-haiku-5-5",)
+_ANTHROPIC_FULL_EFFORT = ("low", "medium", "high", "xhigh", "max")
+
+
+def _reasoning_effort_levels(client_type: str, model: BaseChatModel, model_name: str) -> tuple[str, ...]:
+    """Return the effort levels the model accepts, empty if it has no effort control."""
+    profile = getattr(model, "profile", None)
+    levels = profile.get("reasoning_effort_levels") if isinstance(profile, Mapping) else None
+    if levels:
+        return tuple(levels)
+    if client_type == "azure_openai" and not _model_supports_temperature(model_name):
+        return _OPENAI_BASIC_EFFORT
+    if client_type == "anthropic" and model_name.startswith(_ANTHROPIC_UNLISTED_EFFORT):
+        return _ANTHROPIC_FULL_EFFORT
+    return ()
+
+
+def _resolve_reasoning_effort(requested: str | None, levels: Sequence[str]) -> str | None:
+    """Return ``requested`` if supported, else the nearest lower level, else the lowest."""
+    if not requested or not levels:
+        return None
+    if requested in levels:
+        return requested
+    rank = _EFFORT_ORDER.index(requested)
+    lower = [lvl for lvl in levels if lvl in _EFFORT_ORDER and _EFFORT_ORDER.index(lvl) < rank]
+    return max(lower, key=_EFFORT_ORDER.index) if lower else levels[0]
 
 
 def _create_anthropic_client(
@@ -126,6 +159,7 @@ class AiInterface:
         max_tokens: int = 4096,
         tools: list[BaseTool] | None = None,
         system_message: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         """Initialize the AI interface.
 
@@ -136,6 +170,8 @@ class AiInterface:
             max_tokens: Maximum tokens in response
             tools: Optional list of LangChain tools
             system_message: Optional system message for the conversation
+            reasoning_effort: Requested effort level; sent only if the model supports
+                it, falling back to the nearest lower supported level
         """
         self.provider = provider
         self.tools = tools or []
@@ -154,6 +190,12 @@ class AiInterface:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+
+        # Effort support is read from the model's profile, so it is set after construction.
+        self.reasoning_effort_levels = _reasoning_effort_levels(provider.client_type, base_model, model_name_str)
+        self.reasoning_effort = _resolve_reasoning_effort(reasoning_effort, self.reasoning_effort_levels)
+        if self.reasoning_effort:
+            setattr(base_model, "reasoning_effort", self.reasoning_effort)  # noqa: B010 - not on BaseChatModel
 
         # Bind tools to model if provided
         self.model: Runnable[Any, Any] = base_model.bind_tools(self.tools) if self.tools else base_model
@@ -339,6 +381,7 @@ def create_interface(
     max_tokens: int = 4096,
     system_message: str | None = None,
     tools: list[BaseTool] | None = None,
+    reasoning_effort: str | None = None,
 ) -> AiInterface:
     """Create an AI interface for any configured provider.
 
@@ -349,6 +392,7 @@ def create_interface(
         max_tokens: Maximum tokens in response
         system_message: Optional system message
         tools: Optional list of tools
+        reasoning_effort: Requested reasoning effort level
 
     Returns:
         Configured AiInterface instance
@@ -360,4 +404,5 @@ def create_interface(
         max_tokens=max_tokens,
         tools=tools,
         system_message=system_message,
+        reasoning_effort=reasoning_effort,
     )

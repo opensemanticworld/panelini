@@ -40,6 +40,15 @@ _UPLOAD_MASK = _tabler_mask(_ARROW_BASE + "<path d='M7 9l5 -5l5 5'/>")
 _ICON_GLYPH_PX = 18
 # Undo/redo stack depth for deleted conversations
 _UNDO_LIMIT = 20
+_EFFORT_LABELS = {
+    "none": "None",
+    "minimal": "Minimal",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "Extra high",
+    "max": "Max",
+}
 _ICON_BOX = "width: 28px; height: 24px; min-height: 0; padding: 0; margin: 0; border: none; border-radius: 6px;"
 
 
@@ -212,16 +221,14 @@ class AiChat:
             margin=(5, 5, 10, 5),
         )
 
-        # Temperature slider
-        self.temperature_slider = pn.widgets.FloatSlider(
-            name="Temperature",
-            start=0.0,
-            end=1.0,
-            step=0.05,
-            value=self.backend.current_temperature,
+        # Reasoning effort; levels depend on the model, see _sync_reasoning_effort_selector
+        self.reasoning_effort_selector = pn.widgets.Select(
+            name="Reasoning effort",
             sizing_mode="stretch_width",
             margin=(5, 5, 10, 5),
         )
+        self._syncing_reasoning_effort = False
+        self._sync_reasoning_effort_selector()
 
         # Create tool selection checkboxes
         self.tool_checkboxes: dict[str, dict[str, Any]] = {}
@@ -267,7 +274,7 @@ class AiChat:
         # Watch for changes
         self.provider_selector.param.watch(self._on_provider_change, "value")
         self.model_selector.param.watch(self._on_model_change, "value")
-        self.temperature_slider.param.watch(self._on_temperature_change, "value")
+        self.reasoning_effort_selector.param.watch(self._on_reasoning_effort_change, "value")
 
         # One feed and model context per conversation; generations stay
         # bound to their session, so switching chats mid-response is safe
@@ -336,7 +343,7 @@ class AiChat:
                 objects=[
                     pn.Column(
                         self.model_selector,
-                        self.temperature_slider,
+                        self.reasoning_effort_selector,
                     )
                 ],
                 styles={
@@ -748,6 +755,7 @@ class AiChat:
         self.model_selector.value = next(iter(new_models.values()))
 
         provider_display_name, model_name = self.backend.update_provider(event.new)
+        self._sync_reasoning_effort_selector()
 
         # Provider switch clears the active session's model context; the
         # stored conversation stays intact, new messages open a fresh one
@@ -768,6 +776,7 @@ class AiChat:
             return
 
         model_name = self.backend.update_model(event.new)
+        self._sync_reasoning_effort_selector()
 
         self.chat_interface.send(
             f"Switched to model `{model_name}`. Conversation history preserved.",
@@ -775,9 +784,31 @@ class AiChat:
             respond=False,
         )
 
-    def _on_temperature_change(self, event: Any) -> None:
-        """Handle temperature slider changes."""
-        self.backend.update_temperature(event.new)
+    def _sync_reasoning_effort_selector(self) -> None:
+        """Show the current model's effort levels and the level in effect.
+
+        Disabled for models without effort control. Programmatic updates do not
+        reach the backend, which keeps the user's own choice across model switches.
+        """
+        selector = self.reasoning_effort_selector
+        levels = self.backend.reasoning_effort_levels
+        self._syncing_reasoning_effort = True
+        try:
+            if levels:
+                selector.options = {_EFFORT_LABELS.get(level, level): level for level in levels}
+                selector.value = self.backend.reasoning_effort
+            else:
+                selector.options = {"Not supported": ""}
+                selector.value = ""
+            selector.disabled = not levels
+        finally:
+            self._syncing_reasoning_effort = False
+
+    def _on_reasoning_effort_change(self, event: Any) -> None:
+        """Handle reasoning effort selection changes."""
+        if self._syncing_reasoning_effort:
+            return
+        self.backend.update_reasoning_effort(event.new)
 
     def _on_tool_change(self, event: Any) -> None:
         """Handle tool selection changes.
