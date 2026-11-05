@@ -104,8 +104,9 @@ _TREE_CSS = """
    picked: several rows are the one chat when it is filed in several folders. */
 .history-active { background: var(--pnl-tst-active); }
 
-/* Rotate the glyph rather than the row it sits in. */
-.history-busy .pnl-tst-icon svg { animation: history-spin 1s linear infinite; }
+/* Rotate the glyph rather than the row it sits in, and not the row's own
+   action buttons, whose icons share the class. */
+.history-busy .pnl-tst-icon:not(.pnl-tst-rbtn .pnl-tst-icon) svg { animation: history-spin 1s linear infinite; }
 @keyframes history-spin { to { transform: rotate(360deg); } }
 .history-ready .pnl-tst-icon { color: #22a06b; }
 
