@@ -27,11 +27,6 @@ def _provider(client_type: str, **env_vars: str) -> ProviderConfig:
 
 
 TEMPERATURE_FREE = [
-    "claude-opus-4-7",
-    "claude-opus-5",
-    "claude-sonnet-5-5",
-    "claude-sonnet-5-5-20260101",
-    "claude-fable-5-1",
     "o1",
     "o1-preview",
     "o3-mini",
@@ -50,9 +45,6 @@ TEMPERATURE_FREE = [
     "o5-mini",
 ]
 TEMPERATURE_OK = [
-    "claude-sonnet-4-5",
-    "claude-haiku-4-5",
-    "claude-opus-4-6",
     "gpt-4o-2024-11-20",
     "gpt-4.1",
     "gpt-5-chat",
@@ -79,11 +71,12 @@ class TestAnthropicFactory:
         model = _create_anthropic_client(provider, "claude-sonnet-4-5", 0.3, 2048)
         assert isinstance(model, ChatAnthropic)
         assert model.max_tokens == 2048
-        assert model.temperature == 0.3
         assert model.anthropic_api_url == "https://proxy.example"
 
-    @pytest.mark.parametrize("name", ["claude-sonnet-5-5", "claude-fable-5-1", "claude-opus-4-7"])
-    def test_temperature_omitted_for_rejecting_models(self, name: str) -> None:
+    @pytest.mark.parametrize(
+        "name", ["claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-6", "claude-opus-4-7", "claude-sonnet-5-5"]
+    )
+    def test_temperature_never_sent(self, name: str) -> None:
         model = _create_anthropic_client(_provider("anthropic", api_key="k"), name, 0.7, 4096)
         assert isinstance(model, ChatAnthropic)
         assert model.temperature is None

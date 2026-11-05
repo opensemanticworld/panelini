@@ -23,28 +23,18 @@ from .config import ModelConfig, ProviderConfig, parse_model_value
 
 _ClientFactory = Callable[[ProviderConfig, str, float, int], BaseChatModel]
 
-# Models that reject a custom ``temperature``. Claude Opus 4.7 samples
-# adaptively and returns 400 "temperature is deprecated for this model";
-# langchain-anthropic raises for non-default values on Fable 5 and Sonnet 5.5.
 # OpenAI reasoning models (o-series, gpt-5 and later, incl. gpt-5.6 and the
-# gpt-6 family) accept it only without reasoning, so it is always omitted.
-# Prefixes match dated variants.
-_TEMPERATURE_FREE_PREFIXES = (
-    "claude-opus-4-7",
-    "claude-opus-5",
-    "claude-sonnet-5",
-    "claude-fable-5",
-)
-# ``gpt-35`` is Azure's legacy name for GPT-3.5, not a version 35.
+# gpt-6 family) accept ``temperature`` only without reasoning, so it is always
+# omitted. ``gpt-35`` is Azure's legacy name for GPT-3.5, not a version 35.
 _OPENAI_REASONING = re.compile(r"o\d|gpt-(?!35\b)(?:[5-9]|\d{2,})")
 
 
 def _model_supports_temperature(model_name: str) -> bool:
-    """Return False for models that reject the ``temperature`` parameter."""
+    """Return False for OpenAI models that reject the ``temperature`` parameter."""
     name = model_name.lower()
     if name.startswith("gpt-") and "chat" in name:
         return True  # gpt-5-chat keeps sampling controls
-    return not (name.startswith(_TEMPERATURE_FREE_PREFIXES) or _OPENAI_REASONING.match(name))
+    return not _OPENAI_REASONING.match(name)
 
 
 def _create_anthropic_client(
@@ -54,6 +44,10 @@ def _create_anthropic_client(
     max_tokens: int,
 ) -> BaseChatModel:
     """Create a ChatAnthropic instance from provider config."""
+    # The Anthropic endpoint rejects ``temperature`` ("Extra inputs are not
+    # permitted") for current Claude models, so it is never sent.
+    _ = temperature
+
     api_key = provider.env_vars.get("api_key", "")
     endpoint = provider.env_vars.get("endpoint", "")
 
@@ -70,8 +64,6 @@ def _create_anthropic_client(
     # An empty base_url reaches the client as-is and overrides its default endpoint.
     if endpoint:
         kwargs["base_url"] = endpoint
-    if _model_supports_temperature(model_name):
-        kwargs["temperature"] = temperature
 
     return ChatAnthropic(**kwargs)
 
