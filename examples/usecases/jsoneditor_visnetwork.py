@@ -6,6 +6,8 @@ Changes in the form automatically update the VisNetwork graph.
 Click on a node to edit it individually, click away to deselect and edit the full network.
 """
 
+import copy
+
 import panel as pn
 
 from panelini import Panelini
@@ -96,7 +98,7 @@ initial_data = {
 # State tracking
 current_mode = "network"  # "network" or "single"
 selected_node_index = None
-network_data = initial_data.copy()
+network_data = copy.deepcopy(initial_data)
 
 
 def json_to_graph(data: dict) -> tuple[list[dict], list[dict]]:
