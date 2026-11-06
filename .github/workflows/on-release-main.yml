@@ -23,7 +23,7 @@ jobs:
     concurrency:
       group: release
       cancel-in-progress: false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     environment:
       name: pypi
     permissions:
