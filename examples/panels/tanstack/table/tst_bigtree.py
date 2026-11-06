@@ -167,12 +167,12 @@ def collapse_everything(_event: Any) -> None:
     report()
 
 
-size_choice = pn.widgets.RadioButtonGroup(name="Size", options=list(SIZES), value=INITIAL, button_type="default")
+size_choice = pn.widgets.RadioButtonGroup(label="Size", options=list(SIZES), value=INITIAL, color="default")
 size_choice.param.watch(resize, "value")
 
-expand_button = pn.widgets.Button(name="Expand all", button_type="primary", width=110)
+expand_button = pn.widgets.Button(label="Expand all", color="primary", width=110)
 expand_button.on_click(expand_everything)
-collapse_button = pn.widgets.Button(name="Collapse all", width=110)
+collapse_button = pn.widgets.Button(label="Collapse all", width=110)
 collapse_button.on_click(collapse_everything)
 mint(SIZES[INITIAL])
 # The view is rebuilt whenever a branch opens or closes, which is exactly when the

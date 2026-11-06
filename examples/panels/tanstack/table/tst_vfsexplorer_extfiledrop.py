@@ -360,8 +360,8 @@ def on_selection_change(*events: object) -> None:
 
 table.param.watch(on_selection_change, ["selected_keys"])
 
-checkboxes = pn.widgets.Checkbox(name="Checkboxes", value=False)
-context_menu = pn.widgets.Checkbox(name="Context menu", value=False)
+checkboxes = pn.widgets.Checkbox(label="Checkboxes", value=False)
+context_menu = pn.widgets.Checkbox(label="Context menu", value=False)
 
 
 def on_checkboxes(event: object) -> None:

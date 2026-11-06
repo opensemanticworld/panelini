@@ -204,7 +204,7 @@ class AiChat:
         # Create provider selection widget dynamically from backend
         provider_options = self.backend.get_available_providers()
         self.provider_selector = pn.widgets.Select(
-            name="Provider",
+            label="Provider",
             options=provider_options,
             value=self.backend.current_provider,
             sizing_mode="stretch_width",
@@ -214,7 +214,7 @@ class AiChat:
         # Create model selection widget (starts with current provider's models)
         initial_models = self.backend.get_available_models(self.backend.current_provider)
         self.model_selector = pn.widgets.Select(
-            name="Model Selection",
+            label="Model Selection",
             options=initial_models,
             value=self.backend.current_model,
             sizing_mode="stretch_width",
@@ -223,7 +223,7 @@ class AiChat:
 
         # Reasoning effort; levels depend on the model, see _sync_reasoning_effort_selector
         self.reasoning_effort_selector = pn.widgets.Select(
-            name="Reasoning effort",
+            label="Reasoning effort",
             sizing_mode="stretch_width",
             margin=(5, 5, 10, 5),
         )
@@ -243,7 +243,7 @@ class AiChat:
             # Enable "get_current_time" + any user-supplied tools by default
             default_enabled = tool.name == "get_current_time" or tool.name in user_tool_names
             checkbox = pn.widgets.Checkbox(
-                name=tool.name.replace("_", " ").title(),
+                label=tool.name.replace("_", " ").title(),
                 value=default_enabled,
                 sizing_mode="stretch_width",
                 margin=(0, 0, 5, 0),

@@ -148,22 +148,22 @@ def build_plot_context_sidebar(
     )
 
     model_select = pn.widgets.Select(
-        name="Plot model",
+        label="Plot model",
         options=list(provider.models),
         value=default_model,
         sizing_mode="stretch_width",
     )
 
     intent_input = pn.widgets.TextAreaInput(
-        name="What should change?",
+        label="What should change?",
         placeholder="e.g. use log scale on y-axis",
         height=80,
         sizing_mode="stretch_width",
     )
 
     regen_button = pn.widgets.Button(
-        name="Regenerate plot",
-        button_type="primary",
+        label="Regenerate plot",
+        color="primary",
         sizing_mode="stretch_width",
     )
 

@@ -59,7 +59,7 @@ def create_demo():
         tree.clear()
         step_index["value"] = 0
 
-    step_btn = pn.widgets.Button(name="Next Step", button_type="primary")
+    step_btn = pn.widgets.Button(label="Next Step", color="primary")
     step_btn.on_click(lambda e: execute_step())
     # ... Reset and Run All buttons
     return pn.Column("# Incremental Tree Update Demo", controls, status, tree)

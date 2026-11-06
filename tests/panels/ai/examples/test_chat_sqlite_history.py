@@ -5,6 +5,7 @@ import os
 import sqlite3
 import time
 import warnings
+from contextlib import closing
 from unittest.mock import patch
 
 import panel as pn
@@ -87,7 +88,7 @@ def test_history_survives_a_server_restart(browser, mock_langchain, history_db):
                 stop_server(server)
 
             # the conversation is a document row in the SQLite file
-            with sqlite3.connect(history_db) as conn:
+            with closing(sqlite3.connect(history_db)) as conn:
                 count = conn.execute("SELECT COUNT(*) FROM documents WHERE kind = 'conversation'").fetchone()[0]
             assert count == 1
 
