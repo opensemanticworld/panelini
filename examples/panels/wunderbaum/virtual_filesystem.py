@@ -248,18 +248,18 @@ tree = Wunderbaum(
 # Python API buttons (demonstrate programmatic manipulation)
 # =========================================================================
 new_folder_parent = pn.widgets.TextInput(
-    name="Parent key",
+    label="Parent key",
     value="/home/user",
     width=200,
 )
 new_folder_name = pn.widgets.TextInput(
-    name="Name",
+    label="Name",
     value="new_folder",
     width=150,
 )
 new_folder_btn = pn.widgets.Button(
-    name="Add Folder",
-    button_type="primary",
+    label="Add Folder",
+    color="primary",
     width=100,
     align="end",
 )
@@ -272,18 +272,18 @@ new_folder_btn.on_click(
 )
 
 new_file_parent = pn.widgets.TextInput(
-    name="Parent key",
+    label="Parent key",
     value="/home/user",
     width=200,
 )
 new_file_name = pn.widgets.TextInput(
-    name="Name",
+    label="Name",
     value="new_file.txt",
     width=150,
 )
 new_file_btn = pn.widgets.Button(
-    name="Add File",
-    button_type="success",
+    label="Add File",
+    color="success",
     width=100,
     align="end",
 )
@@ -297,32 +297,32 @@ new_file_btn.on_click(
 )
 
 delete_key = pn.widgets.TextInput(
-    name="Node key to delete",
+    label="Node key to delete",
     value="",
     width=200,
 )
 delete_btn = pn.widgets.Button(
-    name="Delete",
-    button_type="danger",
+    label="Delete",
+    color="danger",
     width=100,
 )
 delete_btn.on_click(lambda e: (tree.remove_node(delete_key.value) if delete_key.value else None))
 
 delete_checked_btn = pn.widgets.Button(
-    name="Delete Checked",
-    button_type="danger",
+    label="Delete Checked",
+    color="danger",
     width=130,
 )
 delete_checked_btn.on_click(lambda e: delete_checked())
 
 delete_key = pn.widgets.TextInput(
-    name="Node key to delete",
+    label="Node key to delete",
     value="",
     width=200,
 )
 delete_btn = pn.widgets.Button(
-    name="Delete",
-    button_type="danger",
+    label="Delete",
+    color="danger",
     width=100,
     align="end",
 )

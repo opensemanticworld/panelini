@@ -198,7 +198,7 @@ def _panel(title: str, subtitle: str, tree: Wunderbaum) -> pn.Column:
     )
 
 
-reset_btn = pn.widgets.Button(label="Reset all three trees", button_type="primary", width=200)
+reset_btn = pn.widgets.Button(label="Reset all three trees", color="primary", width=200)
 
 
 def _reset(*_: object) -> None:

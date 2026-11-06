@@ -10,7 +10,7 @@ import pytest
 from playwright.sync_api import Page
 
 from panelini.panels.jsoneditor import JsonEditor
-from panelini.testing import stop_server, wait_until
+from panelini.testing import stop_server, wait_for_port, wait_until
 
 
 @pytest.mark.ui
@@ -25,6 +25,7 @@ def test_initial_value_not_reset_on_serve(page: Page, port):
     editor = JsonEditor(value=initial_value)
 
     server = pn.serve(editor, port=port, threaded=True, show=False)
+    wait_for_port(port)
     page.goto(f"http://localhost:{port}")
 
     # 'ready' fires after the initial 'change' event, so once editor.ready

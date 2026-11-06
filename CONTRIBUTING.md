@@ -112,12 +112,14 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       make test-ui
       ```
 
-      This will:
-      - Install Playwright browsers automatically
-      - Run UI tests in headed mode (visible browser) with slow motion
-      - Pause on errors for debugging (--pdb flag)
+      This installs the Playwright browser and runs the UI tests headless.
+      Use `make test-ui-headed` for a visible browser with slow motion and
+      `--pdb` on errors.
 
-      **Note:** UI tests are automatically skipped in CI environments but can be run locally for manual testing and debugging.
+      **Linux:** install Chromium's system libraries once with
+      `uv run playwright install --with-deps chromium` (needs sudo). Without
+      sudo, skip the UI tests: `make test` runs everything else, and CI runs
+      the UI tests on every pull request.
 
 10. Before raising a pull request you should also run tox.
    This will run the tests across different versions of Python:
@@ -196,12 +198,14 @@ driven by your commit messages. Please write commits as
 - `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `style:` for everything
   else that shouldn't trigger a release on its own
 
+The commits in your PR must follow this format. GitHub's own merge
+commit (`Merge pull request ...`) is the one exception.
+
 You do not need to bump the version yourself or edit `CHANGELOG.md`.
-Once your pull request is open, CI posts a comment with the version
-that would be released if it's merged, so you can check the outcome
-before merging. `main` requires one approving review; once merged, CI
-bumps the version, updates the changelog, tags the release, publishes
-to PyPI, and deploys the docs automatically.
+CI comments on your PR with the version it would release. A review is
+recommended but not required. After the merge and a green test run, CI bumps the version,
+updates the changelog, tags the release, publishes to PyPI, and deploys
+the docs.
 
 ## AI Guidelines
 

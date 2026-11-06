@@ -72,13 +72,13 @@ class GraphDetailTool:
     def build_panel(self) -> None:
         """Build the complete panel UI."""
         # Edit mode buttons
-        self.disable_edit_button = pn.widgets.Button(name="Disable Edit", button_type="primary")
+        self.disable_edit_button = pn.widgets.Button(label="Disable Edit", color="primary")
         self.disable_edit_button.on_click(lambda event: self.visnetwork_panel.disable_edit_mode())
 
-        self.add_node_button = pn.widgets.Button(name="Add Node", button_type="success")
+        self.add_node_button = pn.widgets.Button(label="Add Node", color="success")
         self.add_node_button.on_click(lambda event: self.visnetwork_panel.add_node_mode())
 
-        self.add_edge_button = pn.widgets.Button(name="Add Edge", button_type="success")
+        self.add_edge_button = pn.widgets.Button(label="Add Edge", color="success")
         self.add_edge_button.on_click(lambda event: self.visnetwork_panel.add_edge_mode())
 
         self.edit_row = pn.Row(
@@ -546,12 +546,12 @@ class GraphDetailTool:
             default_y = numeric_cols[0]
 
             x_select = pn.widgets.Select(
-                name="X-Axis",
+                label="X-Axis",
                 options=all_cols,
                 value=default_x,
             )
             y_select = pn.widgets.Select(
-                name="Y-Axis",
+                label="Y-Axis",
                 options=numeric_cols,
                 value=default_y,
             )

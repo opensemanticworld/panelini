@@ -314,7 +314,7 @@ class HistoryPanel:
                 stylesheets.append(_READY_CSS)
                 description = "Ready"
             title_widget = pn.widgets.Button(
-                name=conversation.title,
+                label=conversation.title,
                 icon=icon,
                 sizing_mode="stretch_width",
                 margin=0,
@@ -338,7 +338,7 @@ class HistoryPanel:
         armed = self._pending_delete_id == conversation.id
         delete_button = pn.widgets.Button(
             icon="trash-x" if armed else "trash",
-            button_type="danger" if armed else "default",
+            color="danger" if armed else "default",
             width=26,
             margin=0,
             stylesheets=[_ICON_ARMED_CSS if armed else _ICON_CSS],

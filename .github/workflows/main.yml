@@ -1,12 +1,12 @@
 name: Main
 
+# Pull requests run this directly; a merge runs it through release-main, so tests,
+# release and docs show up as one sequence there.
 on:
-  push:
-    branches:
-      - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: >-

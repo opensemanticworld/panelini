@@ -496,7 +496,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
                     objects=[
                         panel.widgets.Button(
                             css_classes=["left-navbar-button"],
-                            button_style="outline",
+                            variant="outline",
                             icon=(
                                 "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'"
                                 " fill='none' stroke='currentColor' stroke-width='2'>"
@@ -554,7 +554,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
                     objects=[
                         panel.widgets.Button(
                             css_classes=["right-navbar-button"],
-                            button_style="outline",
+                            variant="outline",
                             icon=(
                                 "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'"
                                 " fill='none' stroke='currentColor' stroke-width='2'>"

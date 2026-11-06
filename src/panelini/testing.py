@@ -37,6 +37,22 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def wait_for_port(port: int, timeout: float = 15.0) -> None:
+    """Block until something accepts connections on ``localhost:port``.
+
+    ``pn.serve(threaded=True)`` returns before the server loop is listening, so
+    navigating straight away is a connection-refused race on a busy runner.
+    Safe to call repeatedly: it only probes the port.
+    """
+
+    def accepts() -> bool:
+        with socket.socket() as probe:
+            probe.settimeout(0.2)
+            return probe.connect_ex(("localhost", port)) == 0
+
+    wait_until(accepts, timeout=timeout)
+
+
 def stop_server(server: Any) -> None:
     """Stop a threaded ``pn.serve()`` and wait for its thread to die.
 

@@ -379,33 +379,33 @@ def build_app() -> Panelini:  # noqa: C901 - wiring function, flat by design
     )
 
     download_button = pn.widgets.Button(
-        name="Download beautified",
-        button_type="primary",
+        label="Download beautified",
+        color="primary",
         disabled=True,
         sizing_mode="stretch_width",
     )
     download_link = pn.pane.HTML("", sizing_mode="stretch_width")
     use_as_input_button = pn.widgets.Button(
-        name="Use as new input",
-        button_type="success",
+        label="Use as new input",
+        color="success",
         disabled=True,
         sizing_mode="stretch_width",
     )
     clear_input_button = pn.widgets.Button(
-        name="Clear input",
-        button_type="warning",
+        label="Clear input",
+        color="warning",
         disabled=True,
         sizing_mode="stretch_width",
     )
     clear_beautified_button = pn.widgets.Button(
-        name="Clear beautified",
-        button_type="warning",
+        label="Clear beautified",
+        color="warning",
         disabled=True,
         sizing_mode="stretch_width",
     )
     clear_both_button = pn.widgets.Button(
-        name="Clear both",
-        button_type="danger",
+        label="Clear both",
+        color="danger",
         disabled=True,
         sizing_mode="stretch_width",
     )

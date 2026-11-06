@@ -65,7 +65,7 @@ panelini doesn't reinvent reactivity - it plugs straight into Panel's param + `p
 import panel as pn
 from panelini import Panelini
 
-slider = pn.widgets.IntSlider(name="N", start=1, end=100, value=25)
+slider = pn.widgets.IntSlider(label="N", start=1, end=100, value=25)
 
 @pn.depends(slider.param.value)
 def square(n):
