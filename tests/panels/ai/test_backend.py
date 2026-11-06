@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import BaseTool
 
 from panelini.panels.ai.backend import AiBackend
 from panelini.panels.ai.utils.config import ModelConfig, ProviderConfig
@@ -130,6 +133,62 @@ class TestTools:
         count = backend.update_tools([get_current_time_tool])
         assert count == 1
         assert len(backend.current_tools) == 1
+
+
+class _EchoTool(BaseTool):
+    name: str = "echo"
+    description: str = "Echo the given text."
+
+    def _run(self, text: str = "") -> str:
+        return f"echoed {text}"
+
+    async def _arun(self, text: str = "") -> str:
+        return self._run(text)
+
+
+class _ScriptedModel:
+    """Chat model replaying a fixed list of replies, one per call."""
+
+    def __init__(self, replies: list[AIMessage]) -> None:
+        self._replies = iter(replies)
+
+    async def ainvoke(self, messages: Any) -> AIMessage:
+        return next(self._replies)
+
+
+def _run(coro: Any) -> Any:
+    """Run a coroutine on a fresh loop in a worker thread (the main thread may already have one)."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+class TestToolLoop:
+    def test_tool_results_feed_a_follow_up_model_call(self, backend: AiBackend) -> None:
+        backend.current_tools = [_EchoTool()]
+        interface: Any = backend.ai_interface
+        call = {"name": "echo", "args": {"text": "hi"}, "id": "call-1"}
+        interface.model = _ScriptedModel([
+            AIMessage(content="", tool_calls=[call]),
+            AIMessage(content="done"),
+        ])
+
+        result = _run(backend.process_message("use the tool", use_tools=True))
+
+        assert result["response"] == "done"
+        tool_messages = [m for m in backend.get_conversation_history() if isinstance(m, ToolMessage)]
+        assert [m.content for m in tool_messages] == ["echoed hi"]
+
+    def test_follow_up_reply_may_hold_block_content(self, backend: AiBackend) -> None:
+        backend.current_tools = [_EchoTool()]
+        interface: Any = backend.ai_interface
+        call = {"name": "echo", "args": {}, "id": "call-1"}
+        blocks: list[str | dict[Any, Any]] = [{"type": "reasoning"}, {"type": "text", "text": "final"}]
+        interface.model = _ScriptedModel([
+            AIMessage(content="", tool_calls=[call]),
+            AIMessage(content=blocks),
+        ])
+
+        assert _run(backend.process_message("go", use_tools=True))["response"] == "final"
 
 
 class TestExportRestore:
