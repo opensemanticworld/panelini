@@ -5,6 +5,43 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.3.0 (2026-11-06)
+
+### Chores
+
+- Allow merge commits in the commit-msg hook and make reviews optional
+  ([`367964e`](https://github.com/opensemanticworld/panelini/commit/367964e9b1e32aeb6d153908b7f499b224c3ec4e))
+
+- Unify ubuntu-latest runners and require playwright 1.61 or newer
+  ([`cb0f7d6`](https://github.com/opensemanticworld/panelini/commit/cb0f7d6a84daeb384dc0860cc7aa68c15805e16f))
+
+### Continuous Integration
+
+- Release only after the tests passed on main
+  ([`f496f98`](https://github.com/opensemanticworld/panelini/commit/f496f98b8b9b5ded492ff8f9afcca2f531d292c0))
+
+- Run tests, release and docs as one workflow on merge
+  ([`0ff5dca`](https://github.com/opensemanticworld/panelini/commit/0ff5dca67054a6d4409268c338899a4f2e6e0372))
+
+### Documentation
+
+- Fix UI test notes and add the Linux setup hint
+  ([`0413b9d`](https://github.com/opensemanticworld/panelini/commit/0413b9d718b18ef34adf57aa3008dac99319efb3))
+
+### Features
+
+- **deps**: Require panel 1.9 and migrate to label, color and variant
+  ([`1f6aa39`](https://github.com/opensemanticworld/panelini/commit/1f6aa39f93aa49e09c1b324867199079535519b5))
+
+### Testing
+
+- Wait for the served port before navigating
+  ([`c0c8e4e`](https://github.com/opensemanticworld/panelini/commit/c0c8e4e295606738144ea4abc97b815b5b864e6a))
+
+- Wait for the server and a settled graph before clicking a node
+  ([`9fec2c9`](https://github.com/opensemanticworld/panelini/commit/9fec2c922e66a8af4d1574d38c1f040123f17a71))
+
+
 ## v1.2.0 (2026-11-06)
 
 ### Bug Fixes
