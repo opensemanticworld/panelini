@@ -112,12 +112,14 @@ Please note this documentation assumes you already have `uv` and `Git` installed
       make test-ui
       ```
 
-      This will:
-      - Install Playwright browsers automatically
-      - Run UI tests in headed mode (visible browser) with slow motion
-      - Pause on errors for debugging (--pdb flag)
+      This installs the Playwright browser and runs the UI tests headless.
+      Use `make test-ui-headed` for a visible browser with slow motion and
+      `--pdb` on errors.
 
-      **Note:** UI tests are automatically skipped in CI environments but can be run locally for manual testing and debugging.
+      **Linux:** install Chromium's system libraries once with
+      `uv run playwright install --with-deps chromium` (needs sudo). Without
+      sudo, skip the UI tests: `make test` runs everything else, and CI runs
+      the UI tests on every pull request.
 
 10. Before raising a pull request you should also run tox.
    This will run the tests across different versions of Python:
