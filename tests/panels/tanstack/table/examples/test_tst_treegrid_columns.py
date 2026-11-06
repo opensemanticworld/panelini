@@ -13,7 +13,7 @@ from playwright.sync_api import Page, expect
 
 from panelini.panels.tanstack.table import tree
 from panelini.testing import wait_until
-from tests.panels.tanstack.table.helpers import node_at, rows, serve
+from tests.panels.tanstack.table.helpers import focused_title, node_at, rows, serve
 
 MODULE = "examples.panels.tanstack.table.tst_treegrid_columns"
 
@@ -173,11 +173,12 @@ def test_one_undo_reaches_the_edit_past_the_roll_up(page: Page, port, example):
     page.keyboard.press("Enter")
     wait_until(lambda: field_of(example, "eu-fra-api", "instances") == was + 3, timeout=10)
     wait_until(lambda: example.table.can_undo, timeout=10)
-    # The commit hands focus back to the row, which is what the next key acts on, and
-    # that happens a websocket round trip after Python settles. Pressing on `can_undo`
-    # alone lands the key in the editor, which stops its own keydowns so that Ctrl+Z
-    # there means undoing typing, so the undo would never reach the grid.
+    # The editor closes the moment the commit goes out, but focus only returns to the
+    # row when the tree comes back, a websocket round trip after Python settles. A key
+    # pressed in between lands on the body and undoes nothing, so wait for the row to
+    # hold focus: that is what the next key acts on.
     expect(editor(page)).to_have_count(0, timeout=10000)
+    wait_until(lambda: focused_title(page) == "api", timeout=10)
 
     page.keyboard.press("Control+z")
 
