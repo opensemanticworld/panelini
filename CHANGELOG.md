@@ -5,6 +5,68 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.2.0 (2026-11-06)
+
+### Bug Fixes
+
+- **ai**: Align stub env and docs with the default config key name
+  ([`94c2891`](https://github.com/opensemanticworld/panelini/commit/94c2891ada5d33d319b39b9e57ee900260d04be0))
+
+- **ai**: Omit empty anthropic base url
+  ([`675b543`](https://github.com/opensemanticworld/panelini/commit/675b5438a0979f986b2baeb707dd1fdc7b436463))
+
+- **ai**: Read message text via the text property
+  ([`7b08915`](https://github.com/opensemanticworld/panelini/commit/7b0891513be5fd10a532e3bf73b39481cb068ba8))
+
+- **ai**: Spinner of bin removed
+  ([`7f0f1a9`](https://github.com/opensemanticworld/panelini/commit/7f0f1a909653c04090427b26b2a672619b281ce5))
+
+- **ai**: Support Azure OpenAI v1 endpoints
+  ([`bf2a31e`](https://github.com/opensemanticworld/panelini/commit/bf2a31e9fb734bcf32b18c9be1a31cc9938b0b07))
+
+- **ai**: Temp params
+  ([`ee22971`](https://github.com/opensemanticworld/panelini/commit/ee2297101659b82d162d3474f2af7477f4565ce4))
+
+- **deps**: Upgrade langchain stack to 1.x and drop unused packages
+  ([`271668a`](https://github.com/opensemanticworld/panelini/commit/271668a21aa66dc208453f24a6e4e1ffb84661ea))
+
+### Chores
+
+- Ign local config.yml
+  ([`0b5d4bc`](https://github.com/opensemanticworld/panelini/commit/0b5d4bc9c3e059ff85f5b31de61075ddeab5252d))
+
+- Update default ai config, rm root level config
+  ([`9d56ae5`](https://github.com/opensemanticworld/panelini/commit/9d56ae560eecd53001c92772c5d6c7f3b8a6dd99))
+
+- **ai**: Simplify ai docs
+  ([`35770fe`](https://github.com/opensemanticworld/panelini/commit/35770fe15be847c4ef6359b77804521ca3755849))
+
+### Documentation
+
+- **ai**: Update langchain references and add model notes
+  ([`de6971d`](https://github.com/opensemanticworld/panelini/commit/de6971d93e4796965fb2cd85dcc788d7117392f1))
+
+### Features
+
+- **ai**: Add reasoning effort selector and enable it for Haiku 5.5
+  ([`854c6fd`](https://github.com/opensemanticworld/panelini/commit/854c6fd474aaab17143b51a025cafd269f9d3dac))
+
+- **ai**: Omit unsupported temperature for latest Anthropic and OpenAI models
+  ([`5461efa`](https://github.com/opensemanticworld/panelini/commit/5461efadccf43b4434955d34d155a337bbfc59b5))
+
+### Testing
+
+- **ai**: Cover the stub text property and the tool loop follow-up
+  ([`80fab1d`](https://github.com/opensemanticworld/panelini/commit/80fab1d184c831491b7c132c98cd2486e2c040a3))
+
+- **ai**: Stub the env vars the bundled default config references, change ENDPOINT to more
+  semantically correct name ANTHROPIC_ENDPOINT
+  ([`629d29f`](https://github.com/opensemanticworld/panelini/commit/629d29f78e0e2673176e3d5bcd192f68db732281))
+
+- **ai**: Wait for visibility instead of asserting it instantly
+  ([`2e229f1`](https://github.com/opensemanticworld/panelini/commit/2e229f1422912d584a7a7148dae34c9e1c9ece95))
+
+
 ## v1.1.1 (2026-11-04)
 
 ### Bug Fixes
