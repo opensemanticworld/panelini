@@ -8,7 +8,7 @@ from pathlib import Path
 
 import panel as pn
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from panelini.testing import free_port, stop_server
 
@@ -55,9 +55,9 @@ def test_drawai_renders_layout(ready_page: Page):
     page = ready_page
     # Exact heading match: a plain text=Chat locator also matches sidebar
     # text, which is hidden by default (sidebar_visible defaults to False).
-    assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
-    assert page.locator("text=Original").first.is_visible()
-    assert page.locator("text=Beautified").first.is_visible()
+    expect(page.get_by_role("heading", name="Chat", exact=True)).to_be_visible()
+    expect(page.locator("text=Original").first).to_be_visible()
+    expect(page.locator("text=Beautified").first).to_be_visible()
     # Download button disabled until a beautification happens
     download_btn = page.locator("button", has_text="Download beautified").first
     assert download_btn.is_disabled()
@@ -73,7 +73,7 @@ def test_drawai_upload_valid_png_renders_top_pane(ready_page: Page):
     # Wait for the reactive update: top pane should contain an <img> data URL
     page.locator("img[src^='data:image/png;base64']").first.wait_for(timeout=5000)
     # And no error alert
-    assert not page.locator(".alert-danger").first.is_visible()
+    expect(page.locator(".alert-danger").first).not_to_be_visible()
 
 
 def test_drawai_upload_corrupt_png_shows_alert(ready_page: Page):

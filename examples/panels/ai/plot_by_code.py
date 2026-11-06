@@ -12,7 +12,7 @@ silently omitted and the example still runs with the three core plotting tools.
 Environment variables
 ---------------------
 LLM - one of the following provider set-ups (see ``src/panelini/panels/ai/default_config.yml``):
-    ANTHROPIC_API_KEY
+    ANTHROPIC_FOUNDRY_API_KEY, ANTHROPIC_ENDPOINT
   OR
     AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION
 

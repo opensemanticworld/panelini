@@ -66,7 +66,8 @@ export the variables in your shell.
 LLM (one of):
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
+export ANTHROPIC_FOUNDRY_API_KEY=sk-...
+export ANTHROPIC_ENDPOINT=https://api.anthropic.com
 # - or -
 export AZURE_OPENAI_API_KEY=...
 export AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
@@ -117,7 +118,8 @@ The figure appears in the right pane.
 
 ```bash
 pip install "panelini[ai,ai-drawio]"
-export ANTHROPIC_API_KEY=sk-...
+export ANTHROPIC_FOUNDRY_API_KEY=sk-...
+export ANTHROPIC_ENDPOINT=https://api.anthropic.com
 ```
 
 ### Run

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import BaseTool
 
 from panelini.panels.ai.backend import AiBackend
 from panelini.panels.ai.utils.config import ModelConfig, ProviderConfig
@@ -56,9 +60,59 @@ class TestProviderAndModel:
         result = backend.update_model(model)
         assert result == model.value
 
-    def test_update_temperature(self, backend: AiBackend) -> None:
-        backend.update_temperature(0.3)
-        assert backend.current_temperature == 0.3
+
+@pytest.fixture()
+def effort_backend(tmp_path: Path) -> AiBackend:
+    """Backend whose first model supports effort levels and whose second does not."""
+    config = tmp_path / "config.yml"
+    config.write_text(
+        """\
+providers:
+  test:
+    display_name: "Test Provider"
+    client_type: "anthropic"
+    env_vars:
+      api_key: "test-key"
+      endpoint: "https://localhost"
+    models:
+      - name: "Opus"
+        value: "anthropic/claude-opus-5-5"
+      - name: "Haiku"
+        value: "anthropic/claude-haiku-4-5"
+"""
+    )
+    return AiBackend(config_path=config)
+
+
+class TestReasoningEffort:
+    def test_defaults_to_high(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.current_reasoning_effort == "high"
+        assert effort_backend.ai_interface is not None
+        assert effort_backend.ai_interface.reasoning_effort == "high"
+
+    def test_exposes_levels_of_current_model(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.reasoning_effort_levels == ("low", "medium", "high", "xhigh", "max")
+
+    def test_update_applies_effort_and_keeps_history(self, effort_backend: AiBackend) -> None:
+        assert effort_backend.ai_interface is not None
+        effort_backend.ai_interface.conversation_history = [HumanMessage("earlier question")]
+
+        effort_backend.update_reasoning_effort("max")
+
+        assert effort_backend.ai_interface.reasoning_effort == "max"
+        assert [m.content for m in effort_backend.ai_interface.conversation_history] == ["earlier question"]
+
+    def test_choice_survives_switching_to_a_model_without_effort(self, effort_backend: AiBackend) -> None:
+        opus, haiku = effort_backend.current_provider.models
+        effort_backend.update_reasoning_effort("low")
+
+        effort_backend.update_model(haiku)
+        assert effort_backend.reasoning_effort_levels == ()
+        assert effort_backend.ai_interface is not None
+        assert effort_backend.ai_interface.reasoning_effort is None
+
+        effort_backend.update_model(opus)
+        assert effort_backend.ai_interface.reasoning_effort == "low"
 
 
 class TestHistory:
@@ -79,6 +133,62 @@ class TestTools:
         count = backend.update_tools([get_current_time_tool])
         assert count == 1
         assert len(backend.current_tools) == 1
+
+
+class _EchoTool(BaseTool):
+    name: str = "echo"
+    description: str = "Echo the given text."
+
+    def _run(self, text: str = "") -> str:
+        return f"echoed {text}"
+
+    async def _arun(self, text: str = "") -> str:
+        return self._run(text)
+
+
+class _ScriptedModel:
+    """Chat model replaying a fixed list of replies, one per call."""
+
+    def __init__(self, replies: list[AIMessage]) -> None:
+        self._replies = iter(replies)
+
+    async def ainvoke(self, messages: Any) -> AIMessage:
+        return next(self._replies)
+
+
+def _run(coro: Any) -> Any:
+    """Run a coroutine on a fresh loop in a worker thread (the main thread may already have one)."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+class TestToolLoop:
+    def test_tool_results_feed_a_follow_up_model_call(self, backend: AiBackend) -> None:
+        backend.current_tools = [_EchoTool()]
+        interface: Any = backend.ai_interface
+        call = {"name": "echo", "args": {"text": "hi"}, "id": "call-1"}
+        interface.model = _ScriptedModel([
+            AIMessage(content="", tool_calls=[call]),
+            AIMessage(content="done"),
+        ])
+
+        result = _run(backend.process_message("use the tool", use_tools=True))
+
+        assert result["response"] == "done"
+        tool_messages = [m for m in backend.get_conversation_history() if isinstance(m, ToolMessage)]
+        assert [m.content for m in tool_messages] == ["echoed hi"]
+
+    def test_follow_up_reply_may_hold_block_content(self, backend: AiBackend) -> None:
+        backend.current_tools = [_EchoTool()]
+        interface: Any = backend.ai_interface
+        call = {"name": "echo", "args": {}, "id": "call-1"}
+        blocks: list[str | dict[Any, Any]] = [{"type": "reasoning"}, {"type": "text", "text": "final"}]
+        interface.model = _ScriptedModel([
+            AIMessage(content="", tool_calls=[call]),
+            AIMessage(content=blocks),
+        ])
+
+        assert _run(backend.process_message("go", use_tools=True))["response"] == "final"
 
 
 class TestExportRestore:

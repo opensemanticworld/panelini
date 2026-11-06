@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 from PIL import Image
 
 from panelini.panels.ai.plot.model_selector import (
@@ -37,7 +38,7 @@ def _provider(models: tuple[ModelConfig, ...]) -> ProviderConfig:
 @pytest.fixture(autouse=True)
 def _env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide env vars referenced by default_config.yml so load_config works."""
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_FOUNDRY_API_KEY", "test-key")
     monkeypatch.setenv("ANTHROPIC_ENDPOINT", "https://example.invalid")
     monkeypatch.setenv("AZURE_OPENAI_API_KEY", "x")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://azure.invalid")
@@ -101,7 +102,7 @@ class TestBuildPlotContextSidebar:
 
             fake_interface = MagicMock()
             fake_interface.model = MagicMock()
-            fake_interface.model.ainvoke = AsyncMock(return_value=MagicMock(content="```python\nprint('regen')\n```"))
+            fake_interface.model.ainvoke = AsyncMock(return_value=AIMessage(content="```python\nprint('regen')\n```"))
             mock_create.return_value = fake_interface
 
             panel = PlotPanel(data_path=tmp_path)

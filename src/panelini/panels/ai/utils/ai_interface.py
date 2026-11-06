@@ -1,6 +1,7 @@
 """AI interface for interacting with various LLM providers."""
 
-from collections.abc import AsyncGenerator, Callable
+import re
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from typing import Any
 
 from langchain_anthropic import ChatAnthropic
@@ -8,7 +9,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from .config import ModelConfig, ProviderConfig, parse_model_value
 
@@ -22,15 +23,51 @@ from .config import ModelConfig, ProviderConfig, parse_model_value
 
 _ClientFactory = Callable[[ProviderConfig, str, float, int], BaseChatModel]
 
-# Models that reject the ``temperature`` parameter. Claude Opus 4.7 samples
-# adaptively and returns 400 "temperature is deprecated for this model" if
-# temperature is sent. Extend this set as Anthropic expands the list.
-_TEMPERATURE_FREE_MODELS = frozenset({"claude-opus-4-7"})
+# OpenAI reasoning models (o-series, gpt-5 and later, incl. gpt-5.6 and the
+# gpt-6 family) accept ``temperature`` only without reasoning, so it is always
+# omitted. ``gpt-35`` is Azure's legacy name for GPT-3.5, not a version 35.
+_OPENAI_REASONING = re.compile(r"o\d|gpt-(?!35\b)(?:[5-9]|\d{2,})")
 
 
 def _model_supports_temperature(model_name: str) -> bool:
-    """Return False for models that reject the ``temperature`` parameter."""
-    return model_name not in _TEMPERATURE_FREE_MODELS
+    """Return False for OpenAI models that reject the ``temperature`` parameter."""
+    name = model_name.lower()
+    if name.startswith("gpt-") and "chat" in name:
+        return True  # gpt-5-chat keeps sampling controls
+    return not _OPENAI_REASONING.match(name)
+
+
+# Reasoning effort levels, weakest to strongest.
+_EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+# Accepted by every OpenAI reasoning model, for those missing from the LangChain profiles.
+_OPENAI_BASIC_EFFORT = ("low", "medium", "high")
+# Claude models that support all five levels but are missing from the LangChain profiles.
+_ANTHROPIC_UNLISTED_EFFORT = ("claude-haiku-5-5",)
+_ANTHROPIC_FULL_EFFORT = ("low", "medium", "high", "xhigh", "max")
+
+
+def _reasoning_effort_levels(client_type: str, model: BaseChatModel, model_name: str) -> tuple[str, ...]:
+    """Return the effort levels the model accepts, empty if it has no effort control."""
+    profile = getattr(model, "profile", None)
+    levels = profile.get("reasoning_effort_levels") if isinstance(profile, Mapping) else None
+    if levels:
+        return tuple(levels)
+    if client_type == "azure_openai" and not _model_supports_temperature(model_name):
+        return _OPENAI_BASIC_EFFORT
+    if client_type == "anthropic" and model_name.startswith(_ANTHROPIC_UNLISTED_EFFORT):
+        return _ANTHROPIC_FULL_EFFORT
+    return ()
+
+
+def _resolve_reasoning_effort(requested: str | None, levels: Sequence[str]) -> str | None:
+    """Return ``requested`` if supported, else the nearest lower level, else the lowest."""
+    if not requested or not levels:
+        return None
+    if requested in levels:
+        return requested
+    rank = _EFFORT_ORDER.index(requested)
+    lower = [lvl for lvl in levels if lvl in _EFFORT_ORDER and _EFFORT_ORDER.index(lvl) < rank]
+    return max(lower, key=_EFFORT_ORDER.index) if lower else levels[0]
 
 
 def _create_anthropic_client(
@@ -40,6 +77,10 @@ def _create_anthropic_client(
     max_tokens: int,
 ) -> BaseChatModel:
     """Create a ChatAnthropic instance from provider config."""
+    # The Anthropic endpoint rejects ``temperature`` ("Extra inputs are not
+    # permitted") for current Claude models, so it is never sent.
+    _ = temperature
+
     api_key = provider.env_vars.get("api_key", "")
     endpoint = provider.env_vars.get("endpoint", "")
 
@@ -52,10 +93,10 @@ def _create_anthropic_client(
         "model_name": model_name,
         "max_tokens_to_sample": max_tokens,
         "anthropic_api_key": api_key,
-        "base_url": endpoint,
     }
-    if _model_supports_temperature(model_name):
-        kwargs["temperature"] = temperature
+    # An empty base_url reaches the client as-is and overrides its default endpoint.
+    if endpoint:
+        kwargs["base_url"] = endpoint
 
     return ChatAnthropic(**kwargs)
 
@@ -73,12 +114,20 @@ def _create_azure_openai_client(
     endpoint = provider.env_vars.get("endpoint", "")
     api_version = provider.env_vars.get("api_version", "")
 
-    return AzureChatOpenAI(  # type: ignore[call-arg]
+    kwargs: dict[str, Any] = {"model": model_name, "openai_api_key": api_key}
+    if _model_supports_temperature(model_name):
+        kwargs["temperature"] = temperature
+
+    # The v1 endpoint takes the deployment as ``model`` and needs no api version.
+    if endpoint.rstrip("/").endswith("/openai/v1"):
+        return ChatOpenAI(base_url=endpoint, **kwargs)
+
+    # ``model`` lets langchain-openai route GPT-6 tool calls to the Responses API.
+    return AzureChatOpenAI(
         azure_deployment=model_name,
-        temperature=temperature,
-        openai_api_key=api_key,
         azure_endpoint=endpoint,
         openai_api_version=api_version,
+        **kwargs,
     )
 
 
@@ -110,6 +159,7 @@ class AiInterface:
         max_tokens: int = 4096,
         tools: list[BaseTool] | None = None,
         system_message: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> None:
         """Initialize the AI interface.
 
@@ -120,6 +170,8 @@ class AiInterface:
             max_tokens: Maximum tokens in response
             tools: Optional list of LangChain tools
             system_message: Optional system message for the conversation
+            reasoning_effort: Requested effort level; sent only if the model supports
+                it, falling back to the nearest lower supported level
         """
         self.provider = provider
         self.tools = tools or []
@@ -138,6 +190,12 @@ class AiInterface:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+
+        # Effort support is read from the model's profile, so it is set after construction.
+        self.reasoning_effort_levels = _reasoning_effort_levels(provider.client_type, base_model, model_name_str)
+        self.reasoning_effort = _resolve_reasoning_effort(reasoning_effort, self.reasoning_effort_levels)
+        if self.reasoning_effort:
+            setattr(base_model, "reasoning_effort", self.reasoning_effort)  # noqa: B010 - not on BaseChatModel
 
         # Bind tools to model if provided
         self.model: Runnable[Any, Any] = base_model.bind_tools(self.tools) if self.tools else base_model
@@ -247,7 +305,7 @@ class AiInterface:
         else:
             # Non-streaming response
             response = await self.model.ainvoke(messages)
-            response_text = response.content if isinstance(response.content, str) else str(response.content)
+            response_text = response.text
 
             # Add AI response to history
             history.append(AIMessage(content=response_text))
@@ -271,10 +329,9 @@ class AiInterface:
         full_response = ""
 
         async for chunk in self.model.astream(messages):
-            if hasattr(chunk, "content") and chunk.content:
-                content = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
-                full_response += content
-                yield content
+            if chunk.text:
+                full_response += chunk.text
+                yield chunk.text
 
         # Add complete response to history
         history.append(AIMessage(content=full_response))
@@ -305,7 +362,7 @@ class AiInterface:
         response = await self.model.ainvoke(messages)
 
         # Extract response content and tool calls
-        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        response_text = response.text
         tool_calls = getattr(response, "tool_calls", [])
 
         # Add AI response to history
@@ -324,6 +381,7 @@ def create_interface(
     max_tokens: int = 4096,
     system_message: str | None = None,
     tools: list[BaseTool] | None = None,
+    reasoning_effort: str | None = None,
 ) -> AiInterface:
     """Create an AI interface for any configured provider.
 
@@ -334,6 +392,7 @@ def create_interface(
         max_tokens: Maximum tokens in response
         system_message: Optional system message
         tools: Optional list of tools
+        reasoning_effort: Requested reasoning effort level
 
     Returns:
         Configured AiInterface instance
@@ -345,4 +404,5 @@ def create_interface(
         max_tokens=max_tokens,
         tools=tools,
         system_message=system_message,
+        reasoning_effort=reasoning_effort,
     )

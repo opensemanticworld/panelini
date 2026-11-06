@@ -172,7 +172,7 @@ def test_chat_min_renders(ready_page: Page):
 
     # Exact heading match: a plain text=Chat locator also matches unrelated
     # sidebar substrings.
-    assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
+    expect(page.get_by_role("heading", name="Chat", exact=True)).to_be_visible()
     # the chat fills the main area: no preview pane unless asked for
     assert page.get_by_role("heading", name="Preview", exact=True).count() == 0
     # the chat starts empty: no greeting is posted
@@ -204,7 +204,7 @@ def test_new_chat_button_creates_and_selects_node(ready_page: Page):
 def test_message_goes_into_selected_chat(ready_page: Page):
     page = ready_page
     # header shows the current (anonymous) user
-    assert page.locator(".user-chip", has_text="Guest").first.is_visible()
+    expect(page.locator(".user-chip", has_text="Guest").first).to_be_visible()
 
     _send_message(page, "Hello history")
 
@@ -227,7 +227,7 @@ def test_new_chat_and_reopen_replays_conversation(ready_page: Page):
     page.locator(".chat-interface").locator("text=Hello history >> visible=true").first.wait_for()
     reply = page.get_by_text("simulated reply", exact=False).first
     reply.wait_for()
-    assert reply.is_visible()
+    expect(reply).to_be_visible()
 
 
 def test_menu_delete_offers_undo(ready_page: Page):
@@ -255,7 +255,7 @@ def test_menu_delete_offers_undo(ready_page: Page):
 
     wait_until(lambda: _chat_rows(page) == 0)
     # a right-click selects but does not activate: the open chat is unchanged
-    assert page.locator(".pnl-tst-row.history-active", has_text="Hello history").first.is_visible()
+    expect(page.locator(".pnl-tst-row.history-active", has_text="Hello history").first).to_be_visible()
     # the undo icon in the header becomes clickable
     undo = page.locator(".history-undo button:not([disabled])").first
     undo.wait_for()
@@ -293,7 +293,7 @@ def test_toggle_to_list_for_rename_and_delete(ready_page: Page):
     page.locator(".history-view-toggle button:visible").first.click()
     try:
         page.locator(".history-title:visible").first.wait_for()
-        assert page.locator("text=Today").first.is_visible()
+        expect(page.locator("text=Today").first).to_be_visible()
         assert page.locator(".history-title:visible").count() == 2
 
         page.locator(".history-rename").first.click()

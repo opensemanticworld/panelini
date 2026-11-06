@@ -82,7 +82,7 @@ class TestLoadConfig:
 
     def test_load_bundled_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Bundled default_config.yml can be parsed (env vars stubbed)."""
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "fake")
+        monkeypatch.setenv("ANTHROPIC_FOUNDRY_API_KEY", "fake")
         monkeypatch.setenv("ANTHROPIC_ENDPOINT", "https://localhost")
         monkeypatch.setenv("AZURE_OPENAI_API_KEY", "fake")
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://localhost")

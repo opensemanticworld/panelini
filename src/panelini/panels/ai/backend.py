@@ -52,6 +52,7 @@ class AiBackend:
         self.current_provider = self._config.default_provider
         self.current_model: ModelConfig = self.current_provider.models[0]
         self.current_temperature = 0.7
+        self.current_reasoning_effort = "high"
         self.current_tools: list[Any] = []
 
         # AI interface
@@ -106,6 +107,7 @@ class AiBackend:
             temperature=self.current_temperature,
             system_message=self._system_message,
             tools=self.current_tools,
+            reasoning_effort=self.current_reasoning_effort,
         )
 
         # Restore conversation history
@@ -149,13 +151,26 @@ class AiBackend:
         self._create_ai_interface(preserve_history=True)
         return model.value
 
-    def update_temperature(self, temperature: float) -> None:
-        """Update the temperature setting.
+    @property
+    def reasoning_effort_levels(self) -> tuple[str, ...]:
+        """Effort levels the current model accepts; empty if it has no effort control."""
+        return self.ai_interface.reasoning_effort_levels if self.ai_interface else ()
+
+    @property
+    def reasoning_effort(self) -> str | None:
+        """Effort level in effect for the current model, ``None`` if none is sent."""
+        return self.ai_interface.reasoning_effort if self.ai_interface else None
+
+    def update_reasoning_effort(self, level: str) -> None:
+        """Update the requested reasoning effort.
+
+        The choice is kept across model switches; a model that lacks the level
+        uses the nearest lower one, and one without effort control ignores it.
 
         Args:
-            temperature: New temperature value
+            level: Requested effort level (e.g. ``"high"``)
         """
-        self.current_temperature = temperature
+        self.current_reasoning_effort = level
         self._create_ai_interface(preserve_history=True)
 
     def update_tools(self, tools: list[Any]) -> int:
@@ -235,8 +250,7 @@ class AiBackend:
         self.conversation_id = conversation.id
         for message in self.ai_interface.conversation_history:
             role = "human" if isinstance(message, HumanMessage) else "ai"
-            content = message.content if isinstance(message.content, str) else str(message.content)
-            self.history_store.append_message(self.user_id, conversation.id, role, content)
+            self.history_store.append_message(self.user_id, conversation.id, role, message.text)
 
     def clear_history(self) -> None:
         """Clear the conversation history."""
@@ -339,7 +353,7 @@ class AiBackend:
             else:
                 # Subsequent iterations: invoke model with existing conversation history
                 response = await self.ai_interface.model.ainvoke(history)
-                response_text = response.content if isinstance(response.content, str) else str(response.content)
+                response_text = response.text
                 tool_calls = getattr(response, "tool_calls", [])
 
                 # Add AI response to history
@@ -472,7 +486,7 @@ class AiBackend:
                     conversation_id=record.id,
                     user_id="",
                     role="human" if isinstance(message, HumanMessage) else "ai",
-                    content=message.content if isinstance(message.content, str) else str(message.content),
+                    content=message.text,
                     extra=None,
                     parent_message_id=None,
                     created_at=now,

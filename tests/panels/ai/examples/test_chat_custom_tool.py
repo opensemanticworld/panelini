@@ -5,7 +5,7 @@ import time
 
 import panel as pn
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from panelini.testing import free_port, stop_server
 
@@ -44,11 +44,11 @@ def test_custom_tool_renders(ready_page: Page):
     # Chat and Preview cards are visible. Exact heading match: a plain
     # text=Chat/text=Preview locator also matches unrelated substrings
     # (the sidebar's "Update Preview" checkbox label).
-    assert page.get_by_role("heading", name="Chat", exact=True).is_visible()
-    assert page.get_by_role("heading", name="Preview", exact=True).is_visible()
+    expect(page.get_by_role("heading", name="Chat", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="Preview", exact=True)).to_be_visible()
 
     # The chat feed is ready for input
-    assert page.locator(".chat-interface textarea").first.is_visible()
+    expect(page.locator(".chat-interface textarea").first).to_be_visible()
 
 
 def test_local_storage_tool_toggle(ready_page: Page):
@@ -68,5 +68,5 @@ def test_local_storage_tool_toggle(ready_page: Page):
 
     # System message confirming the tool update should appear in the chat
     page.locator("text=Tools updated").first.wait_for(timeout=5000)
-    assert page.locator("text=Tools updated").first.is_visible()
-    assert page.locator("text=1 tool(s) now available").first.is_visible()
+    expect(page.locator("text=Tools updated").first).to_be_visible()
+    expect(page.locator("text=1 tool(s) now available").first).to_be_visible()

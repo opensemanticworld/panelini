@@ -35,7 +35,7 @@ DEFAULT_REPLY = (
 # Environment variables referenced by the packaged default_config.yml. Values are
 # placeholders; nothing is ever sent anywhere because the model is a stub.
 _PLACEHOLDER_ENV = {
-    "ANTHROPIC_API_KEY": "stub-key",
+    "ANTHROPIC_FOUNDRY_API_KEY": "stub-key",
     "ANTHROPIC_ENDPOINT": "https://localhost",
     "AZURE_OPENAI_API_KEY": "stub-key",
     "AZURE_OPENAI_ENDPOINT": "https://localhost",
@@ -51,6 +51,12 @@ class _Message:
         self.tool_calls = kwargs.pop("tool_calls", []) or []
         self.tool_call_id = kwargs.pop("tool_call_id", None)
         self.additional_kwargs = kwargs
+
+    @property
+    def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        return "".join(b.get("text", "") for b in self.content if isinstance(b, dict) and b.get("type") == "text")
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.content!r})"
@@ -81,6 +87,7 @@ class _Chunk:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        self.text = content
 
 
 class StubChatModel:
@@ -197,8 +204,6 @@ def install(reply: str = DEFAULT_REPLY) -> None:
     _module("langchain_core.language_models.chat_models", BaseChatModel=StubChatModel)
     _module("langchain_anthropic", ChatAnthropic=_model_factory)
     _module("langchain_openai", AzureChatOpenAI=_model_factory, ChatOpenAI=_model_factory)
-    _module("langchain", __version__="stub")
-    _module("langchain_community")
 
     # ``import langchain_core.messages`` works through sys.modules, but attribute access
     # on the parent package (``langchain_core.messages`` after ``import langchain_core``)
