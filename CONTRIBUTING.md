@@ -196,12 +196,14 @@ driven by your commit messages. Please write commits as
 - `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `style:` for everything
   else that shouldn't trigger a release on its own
 
+The commits in your PR must follow this format. GitHub's own merge
+commit (`Merge pull request ...`) is the one exception.
+
 You do not need to bump the version yourself or edit `CHANGELOG.md`.
-Once your pull request is open, CI posts a comment with the version
-that would be released if it's merged, so you can check the outcome
-before merging. `main` requires one approving review; once merged, CI
-bumps the version, updates the changelog, tags the release, publishes
-to PyPI, and deploys the docs automatically.
+CI comments on your PR with the version it would release. A review is
+recommended but not required. After the merge, CI bumps the version,
+updates the changelog, tags the release, publishes to PyPI, and deploys
+the docs.
 
 ## AI Guidelines
 
