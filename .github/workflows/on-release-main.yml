@@ -1,24 +1,28 @@
 name: release-main
 
-# Runs only after the Main workflow (tests) has finished successfully on main.
+# One sequence on every merge to main: tests, then release and PyPI, then docs.
 on:
-  workflow_run:
-    workflows: [Main]
-    types: [completed]
-    branches: [main]
+  push:
+    branches:
+      - main
   workflow_dispatch:
-
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 jobs:
 
+  tests:
+    # Called jobs may not request more than this; version-preview (skipped on a
+    # push) declares pull-requests: write.
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+
   release:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push')
+    needs: tests
+    concurrency:
+      group: release
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     environment:
       name: pypi
