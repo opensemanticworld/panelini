@@ -5,7 +5,7 @@ import time
 
 import panel as pn
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from panelini.testing import free_port, stop_server
 
@@ -41,8 +41,8 @@ def test_chat_renders_without_preview(ready_page: Page):
     """Chat card is visible; Preview card is absent."""
     page = ready_page
 
-    assert page.locator("text=Chat").first.is_visible()
-    assert page.locator(".chat-interface textarea").first.is_visible()
+    expect(page.locator("text=Chat").first).to_be_visible()
+    expect(page.locator(".chat-interface textarea").first).to_be_visible()
     assert page.get_by_text("Preview", exact=True).count() == 0
 
 
@@ -64,5 +64,5 @@ def test_provider_and_model_settings_present(ready_page: Page):
     page.locator(".left-navbar-button").first.click()
     page.locator("text=Provider Settings").first.wait_for()
 
-    assert page.locator("text=Provider Settings").first.is_visible()
-    assert page.locator("text=Model Settings").first.is_visible()
+    expect(page.locator("text=Provider Settings").first).to_be_visible()
+    expect(page.locator("text=Model Settings").first).to_be_visible()

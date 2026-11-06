@@ -12,7 +12,7 @@ import time
 
 import panel as pn
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from panelini.testing import stop_server
 
@@ -36,5 +36,5 @@ def test_drawai_media(page: Page, port, mock_langchain, mock_anthropic_sdk):
         page.goto(f"http://localhost:{port}")
         page.locator("text=Original").first.wait_for(timeout=20000)
         time.sleep(1.5)
-        assert page.locator("text=Original").first.is_visible()
+        expect(page.locator("text=Original").first).to_be_visible()
         stop_server(server)
