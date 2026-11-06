@@ -1,9 +1,11 @@
 name: release-main
 
+# Runs only after the Main workflow (tests) has finished successfully on main.
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [Main]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -13,6 +15,10 @@ concurrency:
 jobs:
 
   release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     environment:
       name: pypi

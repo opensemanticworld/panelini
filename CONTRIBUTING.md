@@ -201,7 +201,7 @@ commit (`Merge pull request ...`) is the one exception.
 
 You do not need to bump the version yourself or edit `CHANGELOG.md`.
 CI comments on your PR with the version it would release. A review is
-recommended but not required. After the merge, CI bumps the version,
+recommended but not required. After the merge and a green test run, CI bumps the version,
 updates the changelog, tags the release, publishes to PyPI, and deploys
 the docs.
 
