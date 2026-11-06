@@ -32,7 +32,7 @@ class CtrlDragDemo:
         ]
 
         # UI Controls
-        self.enable_postprocess = pn.widgets.Checkbox(name="Enable Post-Processing", value=True)
+        self.enable_postprocess = pn.widgets.Checkbox(label="Enable Post-Processing", value=True)
 
         self.log_output = pn.pane.Markdown(
             "**Post-Processing Log:**\n\n_No duplications yet._",

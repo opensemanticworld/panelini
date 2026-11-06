@@ -210,7 +210,7 @@ def preload(_event: Any) -> None:
     say(f"preloaded {len(loaded)} folders under `{start}` in one push")
 
 
-preload_button = pn.widgets.Button(name="Preload 2 levels", button_type="primary", width=150)
+preload_button = pn.widgets.Button(label="Preload 2 levels", color="primary", width=150)
 preload_button.on_click(preload)
 
 # --- Notes ----------------------------------------------------------------------

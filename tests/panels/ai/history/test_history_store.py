@@ -14,6 +14,7 @@ import sys
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -471,7 +472,7 @@ class TestSqliteSpecifics:
         conv = backend.create_conversation(USER)
         backend.append_message(USER, conv.id, "human", "hello")
         backend.delete_conversation(USER, conv.id)
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         assert count == 0
 
@@ -488,7 +489,7 @@ class TestSqliteSpecifics:
     def test_schema_version_is_set(self, tmp_path: Path) -> None:
         db_path = tmp_path / "history.sqlite3"
         SqliteHistoryStore(db_path)
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
         assert version == 2
 
@@ -498,7 +499,7 @@ class TestSqliteSpecifics:
         backend = SqliteHistoryStore(db_path)
         conv = backend.create_conversation(USER, title="doc shape")
         backend.append_message(USER, conv.id, "human", "hello")
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             body = conn.execute("SELECT body FROM documents WHERE id = ?", (conv.id,)).fetchone()[0]
         document = json.loads(body)
         assert document["schema_version"] == 2

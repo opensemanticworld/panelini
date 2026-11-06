@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "panel>=1.7.1",
+    "panel>=1.9.0",
     "param>=2.2.1",
 ]
 

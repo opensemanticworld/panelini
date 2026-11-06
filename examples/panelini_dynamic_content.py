@@ -31,7 +31,7 @@ app = Panelini(
 # Or set objects outside
 app.main_set(objects=panel_objects)
 # Add a widget to select the index to remove
-index_selector = pn.widgets.IntInput(name="Index to Remove", value=0, step=1, start=0)
+index_selector = pn.widgets.IntInput(label="Index to Remove", value=0, step=1, start=0)
 
 app.sidebar_set(
     objects=[
@@ -40,8 +40,8 @@ app.sidebar_set(
             objects=[
                 pn.pane.Markdown("Give me some control elements!"),
                 pn.widgets.Button(
-                    name="Add Card",
-                    button_type="primary",
+                    label="Add Card",
+                    color="primary",
                     on_click=lambda event: [
                         print(f"Before: {app.main_get()}"),
                         app.main_add(objects=[pn.Card(title=f"New Element {len(app.main_get())}")]),
@@ -51,8 +51,8 @@ app.sidebar_set(
                 ),
                 index_selector,
                 pn.widgets.Button(
-                    name="Remove Card by Index",
-                    button_type="primary",
+                    label="Remove Card by Index",
+                    color="primary",
                     on_click=lambda event: [
                         print(f"Before: {app.main_get()}"),
                         app.main_remove_index(index=index_selector.value or 0),

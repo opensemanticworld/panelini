@@ -4,14 +4,14 @@ from panelini import Panelini
 
 if __name__ == "__main__":
     checkbox_group_1 = pn.widgets.CheckBoxGroup(
-        name="Checkbox Group", value=["Apple", "Pear"], options=["Apple", "Banana", "Pear", "Strawberry"], inline=False
+        label="Checkbox Group", value=["Apple", "Pear"], options=["Apple", "Banana", "Pear", "Strawberry"], inline=False
     )
 
     right_container_1 = pn.Column(checkbox_group_1, pn.pane.Markdown("container 1"))
     right_container_2 = pn.Column(checkbox_group_1, pn.pane.Markdown("container 2"))
 
-    button_1 = pn.widgets.Button(name="load 1", button_type="primary")
-    button_2 = pn.widgets.Button(name="load 2", button_type="primary")
+    button_1 = pn.widgets.Button(label="load 1", color="primary")
+    button_2 = pn.widgets.Button(label="load 2", color="primary")
 
     my_panelini = Panelini()
     my_panelini.sidebar_set([button_1, button_2, checkbox_group_1])

@@ -57,7 +57,7 @@ def execute_step():
     step_index["value"] += 1
 
 
-step_btn = pn.widgets.Button(name="Next Step", button_type="primary")
+step_btn = pn.widgets.Button(label="Next Step", color="primary")
 step_btn.on_click(lambda e: execute_step())
 
 app = pn.Column(step_btn, vis)

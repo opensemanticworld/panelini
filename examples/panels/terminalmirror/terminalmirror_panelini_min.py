@@ -16,7 +16,7 @@ class TerminalMirrorDemo(pn.viewable.Viewer):
         self.terminal = TerminalMirror(mirror=False)
 
         self._count = 0
-        self.print_btn = pn.widgets.Button(css_classes=["print_btn"], name="Print to terminal", button_type="primary")
+        self.print_btn = pn.widgets.Button(css_classes=["print_btn"], label="Print to terminal", color="primary")
         pn.bind(self.on_print, self.print_btn, watch=True)
 
         self._view = pn.Column(

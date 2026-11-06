@@ -90,8 +90,8 @@ edges = [
 # alike; a `while True` loop would freeze the single-threaded WASM runtime.
 visnetwork_panel = VisNetwork(nodes=nodes, edges=edges, sizing_mode="stretch_both")
 
-vel_slider = pn.widgets.FloatSlider(name="Velocity", start=-20, end=20, value=1)
-radius_slider = pn.widgets.FloatSlider(name="Radius", start=0, end=500, value=r)
+vel_slider = pn.widgets.FloatSlider(label="Velocity", start=-20, end=20, value=1)
+radius_slider = pn.widgets.FloatSlider(label="Radius", start=0, end=500, value=r)
 
 app = pn.Column(visnetwork_panel, vel_slider, radius_slider)
 

@@ -369,13 +369,13 @@ def create_demo():
             time.sleep(1.5)
 
     # Control buttons
-    step_btn = pn.widgets.Button(name="Next Step", button_type="primary")
+    step_btn = pn.widgets.Button(label="Next Step", color="primary")
     step_btn.on_click(lambda e: execute_step())
 
-    reset_btn = pn.widgets.Button(name="Reset", button_type="danger")
+    reset_btn = pn.widgets.Button(label="Reset", color="danger")
     reset_btn.on_click(lambda e: reset_graph())
 
-    run_btn = pn.widgets.Button(name="Run All (blocking)", button_type="success")
+    run_btn = pn.widgets.Button(label="Run All (blocking)", color="success")
     run_btn.on_click(lambda e: run_all())
 
     # Layout
