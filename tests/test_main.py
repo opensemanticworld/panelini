@@ -106,6 +106,65 @@ def test_panelini_classvar_background_images_none():
         assert "background-image: url(data:image/" not in rule
 
 
+def _bundled() -> dict[str, Path]:
+    """Bundled images; the suite disables them by default (tests/conftest.py)."""
+    return {
+        "header_background_image": Path(_ASSETS_DIR) / "header.jpg",
+        "content_background_image": Path(_ASSETS_DIR) / "content.jpg",
+    }
+
+
+def _scoped_css(component: Viewable) -> str:
+    """Join the inline stylesheets a component carries itself."""
+    return "\n".join(s for s in component.stylesheets if isinstance(s, str))
+
+
+def test_panelini_background_images_not_in_global_raw_css():
+    """Data URLs in raw_css are copied into every component, so they must stay out."""
+    css_before = len(config.raw_css)
+    Panelini(**_bundled())
+    assert not any("data:image/" in rule for rule in config.raw_css[css_before:])
+
+
+def test_panelini_background_images_scoped_to_their_components():
+    """Header, footer and content carry their own image rule."""
+    instance = Panelini(footer_enabled=True, **_bundled())
+    for component, host in (
+        (instance._header, ":host(.navbar)"),
+        (instance._footer, ":host(.navbar)"),
+        (instance._content, ":host(.content)"),
+    ):
+        css = _scoped_css(component)
+        assert host in css
+        assert "data:image/" in css
+
+
+def test_panelini_background_images_none_scopes_nothing():
+    """Disabled images leave the components without an image rule."""
+    instance = Panelini(header_background_image=None, content_background_image=None, footer_enabled=True)
+    for component in (instance._header, instance._footer, instance._content):
+        assert "data:image/" not in _scoped_css(component)
+
+
+def test_panelini_background_images_survive_header_rebuild():
+    """A rebuilt header keeps its image."""
+    instance = Panelini(**_bundled())
+    instance._header_set()
+    assert "data:image/" in _scoped_css(instance._header)
+
+
+def test_panelini_default_document_stays_small():
+    """The bundled images may cost one copy each, not one copy per component."""
+    import json
+
+    from bokeh.document import Document
+
+    doc = Document()
+    doc.add_root(Row(Panelini(**_bundled()), Markdown("hello")).get_root(doc))
+    megabytes = len(json.dumps(doc.to_json(), default=str)) / 1e6
+    assert megabytes < 2
+
+
 def test_panelini_classvar_static_dir():
     """Test the assets as static directory."""
     instance = Panelini(static_dir="/assets")
