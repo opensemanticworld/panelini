@@ -437,6 +437,28 @@ def test_panelini_use_ai_false_no_import():
     assert not hasattr(instance, "_ai_frontend")
 
 
+def test_panelini_instances_do_not_stack_raw_css(tmp_path):
+    """Each instance would otherwise add its CSS to every component again."""
+    pytest.importorskip("langchain_core")
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(
+        "providers:\n"
+        "  test:\n"
+        '    display_name: "Test"\n'
+        '    client_type: "anthropic"\n'
+        "    env_vars:\n"
+        '      api_key: "fake-key"\n'
+        '      endpoint: "https://localhost"\n'
+        "    models:\n"
+        '      - name: "Test Model"\n'
+        '        value: "test-model"\n'
+    )
+    Panelini(use_ai=True, ai_config_path=str(cfg))
+    before = list(config.raw_css)
+    Panelini(use_ai=True, ai_config_path=str(cfg))
+    assert config.raw_css == before
+
+
 def test_panelini_use_ai_true_initializes(tmp_path):
     """Panelini(use_ai=True) initializes AI frontend into sidebar and main."""
     pytest.importorskip("langchain_core")

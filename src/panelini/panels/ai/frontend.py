@@ -284,7 +284,7 @@ class AiChat:
         self._active_session = self._new_session(welcome=True)
 
         # Add custom CSS to handle preview content overflow
-        pn.config.raw_css.append("""
+        css = """
         /* Hover tooltips (widget descriptions) must never swallow clicks
            meant for the UI below: a lingering popover otherwise blocks the
            action row after an icon was clicked */
@@ -315,7 +315,9 @@ class AiChat:
             word-wrap: break-word !important;
             overflow-wrap: break-word !important;
         }
-        """)
+        """
+        if css not in pn.config.raw_css:
+            pn.config.raw_css.append(css)
 
         # Build the sidebar and main objects
         _general_setup_items: list[pn.viewable.Viewable] = [
