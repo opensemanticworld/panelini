@@ -12,6 +12,7 @@ import pytest
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from openai import OpenAIError
 
 from panelini.panels.ai.utils.ai_interface import (
     AiInterface,
@@ -128,6 +129,33 @@ class TestAzureFactory:
         assert model.temperature is None
         tool = {"type": "function", "function": {"name": "t", "parameters": {"type": "object", "properties": {}}}}
         assert model._use_responses_api({"tools": [tool]})
+
+    def test_empty_env_vars_fall_back_to_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "env-key")
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://env.openai.azure.com")
+        monkeypatch.setenv("OPENAI_API_VERSION", "2024-10-21")
+        model = _create_azure_openai_client(_provider("azure_openai"), "gpt-4o", 0.5, 4096)
+        assert isinstance(model, AzureChatOpenAI)
+        assert str(model.root_client.base_url).startswith("https://env.openai.azure.com/")
+
+    def test_env_vars_win_over_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://env.openai.azure.com")
+        provider = _provider("azure_openai", api_key="k", endpoint="https://cfg.openai.azure.com", api_version="v")
+        model = _create_azure_openai_client(provider, "gpt-4o", 0.5, 4096)
+        assert isinstance(model, AzureChatOpenAI)
+        assert str(model.root_client.base_url).startswith("https://cfg.openai.azure.com/")
+
+    def test_missing_endpoint_raises_instead_of_hostless_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+        with pytest.raises(ValueError, match="base_url"):
+            _create_azure_openai_client(_provider("azure_openai", api_key="k", api_version="v"), "gpt-4o", 0.5, 4096)
+
+    def test_v1_never_uses_openai_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+        monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+        provider = _provider("azure_openai", endpoint="https://x.openai.azure.com/openai/v1")
+        with pytest.raises(OpenAIError, match="Missing credentials"):
+            _create_azure_openai_client(provider, "gpt-6-luna", 0.5, 4096)
 
 
 class TestResolveReasoningEffort:

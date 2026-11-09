@@ -1,5 +1,6 @@
 """AI interface for interacting with various LLM providers."""
 
+import os
 import re
 from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from typing import Any
@@ -18,7 +19,7 @@ from .config import ModelConfig, ProviderConfig, parse_model_value
 # Each factory receives (provider, model_name, temperature, max_tokens)
 # and returns a BaseChatModel.
 #
-# env_vars values are already resolved (no os.getenv needed here).
+# env_vars values are already resolved; the Azure factory also falls back to the environment.
 # ---------------------------------------------------------------------------
 
 _ClientFactory = Callable[[ProviderConfig, str, float, int], BaseChatModel]
@@ -110,10 +111,13 @@ def _create_azure_openai_client(
     """Create an AzureChatOpenAI instance from provider config."""
     _ = max_tokens  # Azure OpenAI does not use max_tokens at init
 
-    api_key = provider.env_vars.get("api_key", "")
-    endpoint = provider.env_vars.get("endpoint", "")
-    api_version = provider.env_vars.get("api_version", "")
+    # An empty value falls back to the Azure environment variables. Passing ``""``
+    # instead would block that fallback and yield a base URL without a host.
+    api_key = provider.env_vars.get("api_key") or os.getenv("AZURE_OPENAI_API_KEY") or ""
+    endpoint = provider.env_vars.get("endpoint") or os.getenv("AZURE_OPENAI_ENDPOINT") or ""
+    api_version = provider.env_vars.get("api_version") or os.getenv("OPENAI_API_VERSION") or ""
 
+    # The key is always passed explicitly, so a stray OPENAI_API_KEY is never sent to Azure.
     kwargs: dict[str, Any] = {"model": model_name, "openai_api_key": api_key}
     if _model_supports_temperature(model_name):
         kwargs["temperature"] = temperature
@@ -125,8 +129,8 @@ def _create_azure_openai_client(
     # ``model`` lets langchain-openai route GPT-6 tool calls to the Responses API.
     return AzureChatOpenAI(
         azure_deployment=model_name,
-        azure_endpoint=endpoint,
-        openai_api_version=api_version,
+        azure_endpoint=endpoint or None,
+        openai_api_version=api_version or None,
         **kwargs,
     )
 

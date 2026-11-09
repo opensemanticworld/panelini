@@ -230,3 +230,26 @@ providers:
         p.write_text(content)
         cfg = load_config(p)
         assert cfg.providers["my_provider"].client_type == "my_provider"
+
+
+class TestUnknownProviderKeys:
+    def test_top_level_credentials_rejected_without_leaking_values(self, tmp_path: Path) -> None:
+        p = tmp_path / "config.yml"
+        p.write_text(
+            'providers:\n  azure_openai:\n    api_key: "s3cret-value"\n    endpoint: "https://x.example"\n'
+            '    models:\n      - value: "azure_openai/gpt-4o"\n'
+        )
+        with pytest.raises(ValueError, match="env_vars") as exc:
+            load_config(p)
+        assert "api_key" in str(exc.value)
+        assert "endpoint" in str(exc.value)
+        assert "s3cret-value" not in str(exc.value)
+        assert "x.example" not in str(exc.value)
+
+    def test_known_keys_load(self, tmp_path: Path) -> None:
+        p = tmp_path / "config.yml"
+        p.write_text(
+            'providers:\n  a:\n    display_name: "A"\n    client_type: "anthropic"\n    env_vars:\n      api_key: "k"\n'
+            '    models:\n      - value: "anthropic/m"\n'
+        )
+        assert "a" in load_config(p).providers
