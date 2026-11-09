@@ -10,11 +10,13 @@ Importing from playwright auto-marks this module ``ui`` (see tests/conftest.py),
 it runs with ``make test-ui`` rather than with ``make test``.
 """
 
+from pathlib import Path
+
 import panel as pn
 import pytest
 from playwright.sync_api import Page
 
-from panelini.main import Panelini
+from panelini.main import _CONTENT_BACKGROUND_IMAGE, _HEADER_BACKGROUND_IMAGE, Panelini
 from panelini.panels.tanstack.table import TanstackTable
 from panelini.testing import free_port
 from tests.panels.tanstack.table.helpers import start
@@ -87,3 +89,24 @@ def test_a_button_inside_an_application_keeps_its_focus_ring(page: Page, port):
     assert width != "0px"
 
     server.stop()
+
+
+def test_background_images_are_painted_from_the_components_own_stylesheets(page: Page, port):
+    """The images no longer live in ``raw_css``, so they must still reach the screen.
+
+    The suite disables the bundled images by default, hence they are passed here.
+    """
+    app = Panelini(
+        title="backgrounds",
+        footer_enabled=True,
+        header_background_image=Path(_HEADER_BACKGROUND_IMAGE),
+        content_background_image=Path(_CONTENT_BACKGROUND_IMAGE),
+    )
+    server = start(app, page, port)
+    try:
+        for selector in (".header", ".footer", ".content"):
+            page.locator(selector).first.wait_for(state="attached", timeout=15000)
+            image = page.locator(selector).first.evaluate("el => getComputedStyle(el).backgroundImage")
+            assert image.startswith('url("data:image/'), f"{selector} has no background image"
+    finally:
+        server.stop()

@@ -78,10 +78,10 @@ The dashboard shell. Built on `param.Parameterized`, so every constructor argume
   - URL the logo links to (default: `"/"`).
 * - `header_background_image`
   - `str | Path | None`
-  - Header background. `None` disables it (skips ~530 KB of base64 CSS).
+  - Header and footer background, embedded once as base64. `None` disables it.
 * - `content_background_image`
   - `str | Path | None`
-  - Content background. Same `None` trick applies.
+  - Content background. `None` disables it.
 * - `static_dir`
   - `str | Path`
   - Directory served as static assets.

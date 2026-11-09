@@ -104,7 +104,7 @@ See {doc}`../examples/index` for complete runnable examples, or {doc}`../panels/
 
 ## Disabling the background images
 
-The bundled header and content background images look nice but add ~530 KB of base64 CSS on first paint. For lean deployments (and all the UI tests) pass `None`:
+The bundled header and content background images are embedded as base64 CSS (~0.7 MB, sent once per page). For lean deployments (and all the UI tests) pass `None`:
 
 ```python
 app = Panelini(
