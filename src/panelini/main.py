@@ -23,6 +23,7 @@ a left as well as right sidebar and also the main area.
 # $$$$$$$$$$$$$$$$$$$$$ FOOTER AREA $$$$$$$$$$$$$$$$$$$$$$
 
 import base64
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,12 @@ def image_to_base64(image_path: str) -> str:
         return f"data:image/{Path(image_path).suffix[1:]};base64,{encoded_string}"
     else:
         raise ImageFileNotFoundError(image_path)
+
+
+@lru_cache(maxsize=8)
+def _background_css(host_class: str, image_path: str) -> str:
+    """Image rule for the host element carrying ``host_class``."""
+    return f":host(.{host_class}) {{ background-image: url({image_to_base64(image_path)}); }}"
 
 
 class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
@@ -288,6 +295,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
 
         self._content = panel.Row(
             css_classes=["content"],
+            stylesheets=self._background_stylesheets("content", self.content_background_image),
             objects=[
                 self._header,
                 self._main,
@@ -365,19 +373,16 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
     # $$$$$$$$$$$$$$$$$$$$$$$$$$$ BEGIN PRIV DEF $$$$$$$$$$$$$$$$$$$$$$$$$$$
     def _css_main_load(self) -> None:
         """Load custom CSS for the application."""
-        # Convert background_image to base64 and embed in CSS
+        css = _MAIN_CSS.read_text()
+        if css not in panel.config.raw_css:
+            panel.config.raw_css.append(css)
 
-        panel.config.raw_css.append(_MAIN_CSS.read_text())
+    def _background_stylesheets(self, host_class: str, image: str | Path | None) -> list[str]:
+        """Image CSS for one component.
 
-        # Set navbar background image
-        if self.header_background_image is not None:
-            header_img_base64 = image_to_base64(str(self.header_background_image))
-            panel.config.raw_css.append(f".navbar {{ background-image: url({header_img_base64}); }}")
-
-        # Set content background image
-        if self.content_background_image is not None:
-            content_img_base64 = image_to_base64(str(self.content_background_image))
-            panel.config.raw_css.append(f".content {{ background-image: url({content_img_base64}); }}")
+        Kept off the global ``raw_css``: Panel copies that into every component.
+        """
+        return [] if image is None else [_background_css(host_class, str(image))]
 
     def _sidebar_config_set(self) -> None:
         """Set the configuration for the sidebars."""
@@ -456,6 +461,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         """Set the footer layout with objects."""
         self._footer = panel.Row(
             css_classes=["footer", "navbar"],
+            stylesheets=self._background_stylesheets("navbar", self.header_background_image),
             sizing_mode="stretch_width",
             objects=self._navbar,
         )
@@ -464,6 +470,7 @@ class Panelini(panel.viewable.Viewer):  # type: ignore[no-any-unimported]
         """Set the header layout with objects."""
         self._header = panel.Row(
             css_classes=["header", "navbar"],
+            stylesheets=self._background_stylesheets("navbar", self.header_background_image),
             sizing_mode="stretch_width",
             objects=self._navbar,
         )
