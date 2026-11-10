@@ -5,6 +5,28 @@ are not tracked here; see the git log for that history.
 
 <!-- version list -->
 
+## v1.3.1 (2026-11-10)
+
+### Bug Fixes
+
+- Scope background images to header, footer and content instead of raw_css
+  ([`46770ca`](https://github.com/opensemanticworld/panelini/commit/46770caefdade1f21c72b9c91109d3b20e22d895))
+
+- Stop repeated instances from stacking identical raw_css
+  ([`3e4e44c`](https://github.com/opensemanticworld/panelini/commit/3e4e44cce08363b38fe21e3f504feafe5532190c))
+
+### Testing
+
+- Paint background images from component stylesheets in the browser
+  ([`0ac6513`](https://github.com/opensemanticworld/panelini/commit/0ac6513986aa71bc2205fa241ea13bc06aa729fc))
+
+- Pin background images out of the global raw_css
+  ([`43d64dc`](https://github.com/opensemanticworld/panelini/commit/43d64dc16e2461963a3ad0ddbfaad6f960d2be32))
+
+- Wait for the row to hold focus before undoing
+  ([`53a06e8`](https://github.com/opensemanticworld/panelini/commit/53a06e88836efbd182c3eab7924df6c86653f271))
+
+
 ## v1.3.0 (2026-11-06)
 
 ### Chores
