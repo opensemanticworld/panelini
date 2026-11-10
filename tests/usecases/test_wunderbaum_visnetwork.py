@@ -35,7 +35,10 @@ _ORIGINAL_COUNTER = _counter["v"]
 def panel_server():
     """Serve the combined tree+graph demo once for the whole module."""
     port = free_port()
-    pn.serve(app, port=port, threaded=True, show=False)
+    # The components are module singletons that tests update from the pytest thread. Bokeh
+    # reaps the session of each closed page on a timer; an update landing mid-teardown hits
+    # a destroyed document ("no attribute '_change_callbacks'"). No reaping during the module.
+    pn.serve(app, port=port, threaded=True, show=False, unused_session_lifetime_milliseconds=600_000)
     time.sleep(0.2)
     yield port
     pn.state.kill_all_servers()

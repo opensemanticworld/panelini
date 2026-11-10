@@ -30,6 +30,9 @@ class SqliteHistoryStore(DocumentHistoryStore):
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
+        # threads queue here rather than on the file lock, whose busy timeout can
+        # expire on a slow disk; the file lock then only arbitrates between processes
+        self._write_lock = threading.RLock()
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -62,21 +65,25 @@ class SqliteHistoryStore(DocumentHistoryStore):
         if getattr(self._local, "conn", None) is not None:
             yield
             return
-        conn = sqlite3.connect(self._path, timeout=10, isolation_level=None)
-        conn.row_factory = sqlite3.Row
-        self._local.conn = conn
-        try:
-            # take the write lock up front: the read-modify-write in
-            # append_message must not lose updates across processes
-            conn.execute("BEGIN IMMEDIATE")
-            yield
-            conn.execute("COMMIT")
-        except BaseException:
-            conn.execute("ROLLBACK")
-            raise
-        finally:
-            self._local.conn = None
-            conn.close()
+        with self._write_lock:
+            conn = sqlite3.connect(self._path, timeout=10, isolation_level=None)
+            conn.row_factory = sqlite3.Row
+            self._local.conn = conn
+            try:
+                # take the write lock up front: the read-modify-write in
+                # append_message must not lose updates across processes
+                conn.execute("BEGIN IMMEDIATE")
+                yield
+                conn.execute("COMMIT")
+            except BaseException:
+                # BEGIN itself can fail (database locked); a rollback would then
+                # raise and hide that error
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                self._local.conn = None
+                conn.close()
 
     # -- document CRUD --------------------------------------------------------
 

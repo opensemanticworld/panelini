@@ -101,6 +101,7 @@ providers:
         value: "azure_openai/gpt-6.1-sol"
 ```
 
+- Credentials go under `env_vars`. Any other key on a provider, such as a top-level `api_key`, raises `ValueError`.
 - `client_type` is `anthropic` or `azure_openai`.
 - `${VAR}` is resolved from the environment at load time. A missing variable raises `ValueError`.
 - Model values are `provider/model-id`, as in [LiteLLM](https://docs.litellm.ai/docs/providers). The prefix is stripped before the name reaches LangChain, and `client_type` defaults to the first model's prefix.
@@ -109,7 +110,7 @@ providers:
 
 - **Temperature:** not sent to Claude models, which the Anthropic endpoint rejects, nor to OpenAI reasoning models.
 - **Reasoning effort:** the setup tab offers the levels the model supports (Low to Max, plus None where allowed) and starts at High. It is disabled for models without effort control. An unsupported level falls back to the nearest lower one.
-- **Azure OpenAI:** the model value must be the deployment name. An endpoint ending in `/openai/v1` uses Azure's v1 API and ignores the api version. Otherwise, GPT-6 and `gpt-5.6` tool calls use the Responses API, so `AZURE_OPENAI_API_VERSION` must support it.
+- **Azure OpenAI:** an empty `api_key`, `endpoint` or `api_version` falls back to `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` and `OPENAI_API_VERSION`. The model value must be the deployment name. An endpoint ending in `/openai/v1` uses Azure's v1 API and ignores the api version. Otherwise, GPT-6 and `gpt-5.6` tool calls use the Responses API, so `AZURE_OPENAI_API_VERSION` must support it.
 - **Replies:** only the text is shown and stored. Reasoning and tool-use blocks are dropped.
 
 ## Interface

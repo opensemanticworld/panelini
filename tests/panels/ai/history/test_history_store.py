@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
+from typing import Any, Literal
 
 import pytest
 
@@ -461,6 +462,18 @@ class TestDeriveTitle:
         assert derive_title("   ") == DEFAULT_TITLE
 
 
+def _use_busy_timeout(monkeypatch: pytest.MonkeyPatch, timeout: float) -> None:
+    """Make every sqlite3 connection use ``timeout`` instead of the store's own."""
+    real_connect = sqlite3.connect
+
+    def connect(
+        path: Path, isolation_level: Literal["DEFERRED", "EXCLUSIVE", "IMMEDIATE"] | None = "DEFERRED", **_: Any
+    ):
+        return real_connect(path, timeout=timeout, isolation_level=isolation_level)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+
+
 # ── sqlite specifics ──────────────────────────────────────────────────────
 
 
@@ -475,6 +488,37 @@ class TestSqliteSpecifics:
         with closing(sqlite3.connect(db_path)) as conn:
             count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         assert count == 0
+
+    def test_threads_never_contend_on_the_file_lock(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With no busy timeout at all, in-process writers must still never see "database is locked"."""
+        backend = SqliteHistoryStore(tmp_path / "history.sqlite3")
+        conv = backend.create_conversation(USER)
+        _use_busy_timeout(monkeypatch, 0)
+
+        def append_batch(batch: int) -> None:
+            for index in range(25):
+                backend.append_message(USER, conv.id, "human", f"{batch}-{index}")
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(append_batch, range(8)))
+        assert len(backend.load_messages(USER, conv.id)) == 200
+
+    def test_lock_timeout_surfaces_as_locked_not_rollback_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed BEGIN must raise "database is locked", not mask it with a rollback error."""
+        db_path = tmp_path / "history.sqlite3"
+        backend = SqliteHistoryStore(db_path)
+        conv = backend.create_conversation(USER)
+        real_connect = sqlite3.connect
+        _use_busy_timeout(monkeypatch, 0.05)
+        with closing(real_connect(db_path, isolation_level=None)) as blocker:
+            blocker.execute("BEGIN IMMEDIATE")
+            with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+                backend.append_message(USER, conv.id, "human", "hello")
+            blocker.execute("ROLLBACK")
+        backend.append_message(USER, conv.id, "human", "after")
+        assert [m.content for m in backend.load_messages(USER, conv.id)] == ["after"]
 
     def test_reopen_persists_data(self, tmp_path: Path) -> None:
         db_path = tmp_path / "history.sqlite3"

@@ -10,6 +10,7 @@ from pathlib import Path
 import yaml  # type: ignore[import-untyped]
 
 _ENV_VAR_RE = re.compile(r"\$\{([^}]+)}")
+_PROVIDER_KEYS = frozenset({"display_name", "client_type", "env_vars", "models"})
 
 # Bundled default configuration that ships with the package
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "default_config.yml"
@@ -165,6 +166,12 @@ def load_config(path: Path | None = None) -> AppConfig:
         if not isinstance(prov_data, dict):
             msg = f"Provider '{key}' must be a mapping"
             raise TypeError(msg)
+
+        unknown = sorted(str(k) for k in prov_data if k not in _PROVIDER_KEYS)
+        if unknown:
+            # Key names only: the values may be credentials.
+            msg = f"Provider '{key}' has unknown keys {unknown}. Credentials belong under 'env_vars'."
+            raise ValueError(msg)
 
         models = tuple(
             ModelConfig(name=m.get("name", m["value"]), value=m["value"]) for m in prov_data.get("models", [])
